@@ -1,0 +1,481 @@
+/* ============================================================
+   Jake Goldwasser — site styles
+   Bold CMY, ink on white.
+   ============================================================ */
+
+:root {
+  --paper: #ffffff;
+  --paper-dim: #f1f1ef;
+  --ink: #131313;
+  --ink-soft: #55554f;
+  --rule: #e3e2dd;
+
+  --cyan: #00AEEF;
+  --magenta: #E5007D;
+  --yellow: #FFD400;
+
+  --cyan-deep: #00789e;
+  --magenta-deep: #a0004f;
+
+  --cyan-tint: #d3f0fb;
+  --magenta-tint: #fad3e8;
+  --yellow-tint: #fff1b8;
+  --yellow-deep: #8a6a00;
+
+  --slab: "Zilla Slab", "Roboto Slab", Georgia, serif;
+  --sans: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --wordmark-font: "Outfit", "Sora", "Inter", sans-serif;
+
+  --measure: 64ch;
+}
+
+* { box-sizing: border-box; }
+
+::selection {
+  background: #ddc9f7;
+  color: var(--ink);
+}
+
+html {
+  scroll-behavior: smooth;
+  cursor: url("yad-cursor.svg") 9 33, auto;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+  cursor: url("yad-cursor.svg") 9 33, auto;
+  position: relative;
+}
+
+/* ---------- Bernie: sits by default, takes a few steps every so often ---------- */
+/* position/facing are set by dog-roam.js, which measures the text column
+   so he never runs over it; the .running class (added briefly during a
+   step burst) swaps the sitting pose for the running one */
+.dog-runner {
+  position: absolute;
+  top: 4%;
+  right: 22px;
+  z-index: 1;
+  pointer-events: auto;
+}
+.dog-runner svg { display: block; width: 138px; height: auto; }
+
+.dog-flip { position: relative; }
+
+/* sitting pose: default — tilted torso + straight front legs */
+.run-legs { display: none; }
+.torso-level { display: none; }
+.dog-runner.running .torso,
+.dog-runner.running .sit-legs { display: none; }
+.dog-runner.running .torso-level,
+.dog-runner.running .run-legs { display: inline; }
+
+.leg-back, .leg-front {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+.dog-runner.running .leg-back,
+.dog-runner.running .leg-front {
+  animation: legswing 0.32s ease-in-out infinite;
+}
+
+@keyframes legswing {
+  0%, 100% { transform: rotate(-16deg); }
+  50% { transform: rotate(16deg); }
+}
+
+.held-bone { opacity: 0; transition: opacity 0.08s ease; }
+.dog-runner.has-bone .held-bone { opacity: 1; }
+
+/* head-dip for grabbing a bone: nudges the whole sprite down as one piece
+   (legs, paw and body stay attached exactly as drawn) then eases back up
+   when .dipping is removed */
+.dog-runner { transition: transform 0.2s ease; }
+.dog-runner.dipping { transform: translateY(9px); }
+@media (max-width: 700px) {
+  .dog-runner svg { width: 68px; height: auto; }
+}
+
+a, button {
+  cursor: url("yad-cursor.svg") 9 33, pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+img { max-width: 100%; display: block; }
+
+/* over readable text the pencil becomes a highlighter (chisel tip) — the
+   pencil-trail script uses this same set of selectors to know when to
+   stop drawing lines */
+.prose p, li, .lede, .section-label, .entry-meta,
+.prose a, .lede a, ul.entry-list a {
+  cursor: url("highlighter-cursor.svg") 9 33, auto;
+}
+
+/* ---------- per-page accent (drives prose/lede link shading below) ---------- */
+body.theme-cyan { --page-accent: var(--cyan); --page-accent-deep: var(--cyan-deep); --page-accent-tint: var(--cyan-tint); }
+body.theme-magenta { --page-accent: var(--magenta); --page-accent-deep: var(--magenta-deep); --page-accent-tint: var(--magenta-tint); }
+body.theme-yellow { --page-accent: var(--yellow); --page-accent-deep: var(--yellow-deep); --page-accent-tint: var(--yellow-tint); }
+
+/* ---------- top triband ---------- */
+.triband {
+  display: flex;
+  height: 12px;
+  width: 100%;
+}
+.triband span { flex: 1; }
+.triband span:nth-child(1) { background: var(--cyan); flex: 0.18; }
+.triband span:nth-child(2) { background: var(--paper); flex: 0.15; }
+.triband span:nth-child(3) { background: var(--magenta); flex: 1.3; }
+.triband span:nth-child(4) { background: var(--paper); flex: 0.3; }
+.triband span:nth-child(5) { background: var(--yellow); flex: 0.9; }
+.triband span:nth-child(6) { background: var(--paper); flex: 0.25; }
+.triband span:nth-child(7) { background: var(--cyan); flex: 1.6; }
+
+/* ---------- Psalms marquee (Hebrew, top) ---------- */
+.poet-marquee {
+  background: var(--ink);
+  color: var(--paper);
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 18px 0;
+  border-bottom: 3px solid var(--magenta);
+}
+.poet-marquee-track {
+  display: inline-block;
+  white-space: nowrap;
+  animation: poet-marquee-slide 92s linear infinite;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+}
+.poet-marquee:hover .poet-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes poet-marquee-slide {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes poet-marquee-slide-reverse {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0%); }
+}
+
+/* ---------- KJV marquee (English, bottom) ---------- */
+.kjv-marquee {
+  background: var(--ink);
+  color: var(--paper);
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 18px 0;
+  border-top: 3px solid var(--magenta);
+}
+.kjv-marquee-track {
+  display: inline-block;
+  white-space: nowrap;
+  animation: poet-marquee-slide-reverse 92s linear infinite;
+  font-family: var(--slab);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
+}
+.kjv-marquee:hover .kjv-marquee-track {
+  animation-play-state: paused;
+}
+
+/* ---------- header ---------- */
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px 40px;
+  padding: 40px clamp(20px, 6vw, 80px) 26px;
+  border-bottom: 3px solid var(--ink);
+}
+.wordmark {
+  font-family: var(--wordmark-font);
+  font-weight: 700;
+  font-style: normal;
+  font-size: clamp(1.8rem, 3.6vw, 2.5rem);
+  letter-spacing: -0.01em;
+  text-transform: lowercase;
+  margin: 0;
+}
+.wordmark a { text-decoration: none; color: var(--ink); padding-bottom: 2px; }
+.wordmark.c-cyan a { border-bottom: 5px solid var(--cyan); }
+.wordmark.c-magenta a { border-bottom: 5px solid var(--magenta); }
+.wordmark.c-yellow a { border-bottom: 5px solid var(--yellow); }
+
+nav.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+nav.main-nav a {
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  color: var(--ink);
+}
+nav.main-nav a:hover { border-color: var(--ink); }
+nav.main-nav a.active.c-cyan { background: var(--cyan); border-color: var(--cyan); color: #ffffff; }
+nav.main-nav a.active.c-magenta { background: var(--magenta); border-color: var(--magenta); color: #ffffff; }
+nav.main-nav a.active.c-yellow { background: var(--yellow); border-color: var(--yellow); color: var(--ink); }
+
+.nav-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  color: var(--ink);
+  margin-left: 6px;
+}
+.nav-social svg { width: 16px; height: 16px; }
+.nav-social:hover { background: var(--ink); color: var(--paper); }
+
+/* ---------- layout shell ---------- */
+main {
+  padding: clamp(40px, 8vw, 90px) clamp(20px, 6vw, 80px) 40px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.lede {
+  max-width: var(--measure);
+  font-size: clamp(1.15rem, 1.7vw, 1.3rem);
+  font-weight: 500;
+  color: var(--ink-soft);
+  margin: 0 0 3rem;
+}
+
+/* ---------- prose ---------- */
+.prose {
+  max-width: var(--measure);
+  font-size: 1.08rem;
+  font-weight: 500;
+}
+.prose p {
+  margin: 0 0 1.4em;
+}
+.prose a,
+.lede a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--page-accent, var(--cyan));
+  text-underline-offset: 3px;
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s ease, text-decoration-color 0.15s ease;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.prose a:hover,
+.lede a:hover {
+  background: var(--page-accent-tint, var(--cyan-tint));
+  text-decoration-color: var(--page-accent-deep, var(--cyan-deep));
+}
+
+/* ---------- section blocks (writing/cartoons lists) ---------- */
+.section-block { margin-bottom: 3.6rem; }
+.section-block:last-child { margin-bottom: 0; }
+
+.section-label {
+  display: block;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0 0 1.4rem;
+  padding: 0 0 10px;
+  border-bottom: 5px solid;
+  max-width: var(--measure);
+}
+.section-block.magenta .section-label { color: var(--magenta); border-color: var(--magenta); }
+.section-block.cyan .section-label { color: var(--cyan-deep); border-color: var(--cyan); }
+.section-block.yellow .section-label { color: var(--ink); border-color: var(--yellow); }
+
+ul.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: var(--measure);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+ul.entry-list li {
+  position: relative;
+  padding: 0.5em 0 0.5em 1.6em;
+}
+ul.entry-list li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 1.0em;
+  width: 12px; height: 5px;
+  background: var(--accent, var(--magenta));
+}
+.section-block.magenta ul.entry-list li::before { --accent: var(--magenta); }
+.section-block.cyan ul.entry-list li::before { --accent: var(--cyan); }
+.section-block.yellow ul.entry-list li::before { --accent: var(--yellow); }
+
+ul.entry-list a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  font-weight: 700;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s ease, text-decoration-color 0.15s ease;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.section-block.magenta ul.entry-list a { text-decoration-color: var(--magenta); }
+.section-block.magenta ul.entry-list a:hover { background: var(--magenta-tint); text-decoration-color: var(--magenta-deep); }
+.section-block.cyan ul.entry-list a { text-decoration-color: var(--cyan); }
+.section-block.cyan ul.entry-list a:hover { background: var(--cyan-tint); text-decoration-color: var(--cyan-deep); }
+.section-block.yellow ul.entry-list a { text-decoration-color: var(--yellow); }
+.section-block.yellow ul.entry-list a:hover { background: var(--yellow-tint); text-decoration-color: #8a6a00; }
+
+.entry-meta {
+  display: block;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-top: 3px;
+}
+
+/* ---------- illustrations / cartoons gallery (stacked, uncropped) ----------
+   each item's width is set inline per-image (illustrations mirror the
+   relative sizes of the live jake-goldwasser.com/illustrations gallery) */
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.gallery a,
+.gallery .gallery-item {
+  position: relative;
+  display: block;
+  background: var(--paper-dim);
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+@media (max-width: 620px) {
+  .gallery a,
+  .gallery .gallery-item { width: 100% !important; }
+}
+.gallery img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.gallery a::after,
+.gallery .gallery-item::after {
+  content: "";
+  position: absolute; inset: 0;
+  border: 4px solid var(--accent, var(--magenta));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.gallery a:nth-child(3n+1),
+.gallery .gallery-item:nth-child(3n+1) { --accent: var(--magenta); }
+.gallery a:nth-child(3n+2),
+.gallery .gallery-item:nth-child(3n+2) { --accent: var(--cyan); }
+.gallery a:nth-child(3n+3),
+.gallery .gallery-item:nth-child(3n+3) { --accent: var(--yellow); }
+.gallery a:hover::after,
+.gallery .gallery-item:hover::after { opacity: 1; }
+
+/* ---------- lightbox ---------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10,10,10,0.92);
+  padding: 40px;
+}
+.lightbox.open { display: flex; }
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.lightbox-close {
+  position: fixed;
+  top: 22px;
+  right: 26px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: rgba(255,255,255,0.08);
+  color: #ffffff;
+  font-size: 1.6rem;
+  line-height: 1;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+.lightbox-close:hover { background: #ffffff; color: var(--ink); }
+body.lightbox-locked { overflow: hidden; }
+
+/* ---------- footer ---------- */
+footer.site-footer {
+  border-top: 3px solid var(--ink);
+  padding: 30px clamp(20px, 6vw, 80px) 50px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  color: var(--ink-soft);
+}
+footer.site-footer a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- responsive header ---------- */
+@media (max-width: 700px) {
+  .site-header { padding: 26px 20px 20px; }
+  nav.main-nav { gap: 8px; font-size: 0.95rem; }
+  main { padding-top: 40px; }
+  body { font-size: 19px; }
+}
