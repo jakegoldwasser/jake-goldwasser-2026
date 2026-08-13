@@ -43,9 +43,9 @@
   resize();
   window.addEventListener('resize', resize);
 
-  // cyan -> magenta, ping-ponging as you draw
-  var CYAN = [0, 174, 239];
-  var MAGENTA = [229, 0, 125];
+  // green -> rose, ping-ponging as you draw
+  var CYAN = [71, 163, 135];
+  var MAGENTA = [217, 76, 97];
   var hueT = 0;
   var hueDir = 1;
 
