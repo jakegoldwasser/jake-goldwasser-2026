@@ -4,8 +4,8 @@
   var flip = runner ? runner.querySelector('.dog-flip') : null;
   if (!runner || !main || !flip) return;
 
-  var DOG_WIDTH = 138; // full padded bounding box, used only for CSS-sizing-derived math
-  var DOG_VISIBLE_WIDTH = 65; // his actual drawn silhouette — most of the box is transparent viewBox padding, so this (not DOG_WIDTH) is what should count as "how much clearance he needs from the text"
+  var DOG_WIDTH = 156; // full padded bounding box, used only for CSS-sizing-derived math
+  var DOG_VISIBLE_WIDTH = 73; // his actual drawn silhouette — most of the box is transparent viewBox padding, so this (not DOG_WIDTH) is what should count as "how much clearance he needs from the text"
   var BUFFER = 2; // small gap kept from the text column
   var MIN_RIGHT = 8;
   var EDGE_THRESHOLD = 22; // never rest facing the outer window edge within this range
