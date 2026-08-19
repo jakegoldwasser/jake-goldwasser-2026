@@ -92,7 +92,14 @@
 
   document.addEventListener('mousedown', function (e) {
     drawing = true;
-    lastOverText = isOverText(e.target);
+    var overText = isOverText(e.target);
+    lastOverText = overText;
+    // starting a stroke with the pencil shouldn't also select text as you
+    // drag; starting with the highlighter (over text) should still let the
+    // browser's native selection happen, same lavender as the cursor itself
+    if (!overText) {
+      e.preventDefault();
+    }
     lastX = e.clientX;
     lastY = e.clientY;
   });
