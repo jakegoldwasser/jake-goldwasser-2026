@@ -13,11 +13,19 @@
   var dpr = Math.max(1, window.devicePixelRatio || 1);
   var lastX = null;
   var lastY = null;
+  var midX = null; // midpoint between the previous two raw points — the
+  var midY = null; // start of the next smoothed curve segment
   var drawing = false;
   var lastOverText = false;
+  var currentStroke = null;
 
   var RELEASE_FADE_MS = 1000;
-  var segments = []; // {x1,y1,x2,y2,hueT,releasedAt}
+  var SMOOTH = 0.25; // lower = smoother/laggier line, higher = more responsive
+  // each stroke is ONE continuous path (a run of quadratic curves sharing a
+  // single moveTo) — drawing it as one path, not one stroke() call per tiny
+  // segment, is what keeps the line clean: separate round-capped strokes
+  // bulge slightly at every join, which is what produced the tick marks
+  var strokes = []; // {points: [[cx,cy,x,y], ...], startX, startY, releasedAt}
 
   // same selector the CSS uses to swap the cursor to the highlighter — kept
   // in sync by hand so "can't draw here" always matches "cursor says so"
@@ -36,53 +44,44 @@
   resize();
   window.addEventListener('resize', resize);
 
-  // green -> rose, ping-ponging as you draw
-  var CYAN = [71, 163, 135];
-  var MAGENTA = [217, 76, 97];
-  var hueT = 0;
-  var hueDir = 1;
-
-  function colorAt(t, alpha) {
-    var r = Math.round(CYAN[0] + (MAGENTA[0] - CYAN[0]) * t);
-    var g = Math.round(CYAN[1] + (MAGENTA[1] - CYAN[1]) * t);
-    var b = Math.round(CYAN[2] + (MAGENTA[2] - CYAN[2]) * t);
-    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  var LAVENDER = [152, 110, 207];
+  function lavender(alpha) {
+    return 'rgba(' + LAVENDER[0] + ',' + LAVENDER[1] + ',' + LAVENDER[2] + ',' + alpha + ')';
   }
 
-  function addSegment(x1, y1, x2, y2) {
-    var dist = Math.hypot(x2 - x1, y2 - y1);
-    hueT += hueDir * Math.min(0.08, dist * 0.01);
-    if (hueT >= 1) { hueT = 1; hueDir = -1; }
-    if (hueT <= 0) { hueT = 0; hueDir = 1; }
-    segments.push({ x1: x1, y1: y1, x2: x2, y2: y2, hueT: hueT, releasedAt: null });
+  function startStroke(x, y) {
+    currentStroke = { startX: x, startY: y, points: [], releasedAt: null };
+    strokes.push(currentStroke);
+  }
+
+  // quadratic curve from the previous midpoint, through the actual point in
+  // between, to the new midpoint — the standard trick for turning a jagged
+  // point-to-point polyline into a smooth freehand-looking curve. Appended
+  // to the current stroke's own point list, not drawn as its own path.
+  function addPoint(cx, cy, x, y) {
+    if (currentStroke) currentStroke.points.push([cx, cy, x, y]);
   }
 
   function render() {
     var now = performance.now();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // segments hold at full life while still being drawn (releasedAt is
-    // null); only once the mouse comes up do they start their one-second
-    // fade, all together, from that moment
-    segments = segments.filter(function (s) {
+    strokes = strokes.filter(function (s) {
       return s.releasedAt === null || now - s.releasedAt < RELEASE_FADE_MS;
     });
 
-    for (var i = 0; i < segments.length; i++) {
-      var s = segments[i];
+    for (var i = 0; i < strokes.length; i++) {
+      var s = strokes[i];
+      if (!s.points.length) continue;
       var life = s.releasedAt === null ? 1 : 1 - (now - s.releasedAt) / RELEASE_FADE_MS;
 
-      ctx.strokeStyle = colorAt(s.hueT, 0.45 * life);
-      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = lavender(0.8 * life);
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(s.x1, s.y1);
-      ctx.lineTo(s.x2, s.y2);
-      ctx.stroke();
-
-      ctx.strokeStyle = colorAt(s.hueT, 0.22 * life);
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(s.x1 + 0.6, s.y1 - 0.6);
-      ctx.lineTo(s.x2 + 0.6, s.y2 - 0.6);
+      ctx.moveTo(s.startX, s.startY);
+      for (var j = 0; j < s.points.length; j++) {
+        var p = s.points[j];
+        ctx.quadraticCurveTo(p[0], p[1], p[2], p[3]);
+      }
       ctx.stroke();
     }
 
@@ -102,16 +101,22 @@
     }
     lastX = e.clientX;
     lastY = e.clientY;
+    midX = null;
+    midY = null;
+    currentStroke = null;
   });
 
   document.addEventListener('mouseup', function () {
     drawing = false;
     var now = performance.now();
-    segments.forEach(function (s) {
+    strokes.forEach(function (s) {
       if (s.releasedAt === null) s.releasedAt = now;
     });
     lastX = null;
     lastY = null;
+    midX = null;
+    midY = null;
+    currentStroke = null;
   });
 
   document.addEventListener('mousemove', function (e) {
@@ -121,7 +126,33 @@
       // so nothing draws across the boundary either
       var overText = isOverText(e.target);
       if (!overText && !lastOverText) {
-        addSegment(lastX, lastY, e.clientX, e.clientY);
+        // low-pass filter the raw point before curving through it — this
+        // lags behind small jitter instead of tracing it exactly, on top
+        // of the midpoint-curve smoothing below, for a noticeably calmer
+        // line without losing the overall gesture
+        var smX = lastX + (e.clientX - lastX) * SMOOTH;
+        var smY = lastY + (e.clientY - lastY) * SMOOTH;
+        var newMidX = (lastX + smX) / 2;
+        var newMidY = (lastY + smY) / 2;
+        // first segment of a stroke (or right after crossing back from a
+        // text boundary) has no previous midpoint yet — start a fresh
+        // continuous path from the point itself rather than skipping it
+        if (midX === null) {
+          midX = lastX;
+          midY = lastY;
+          startStroke(midX, midY);
+        }
+        addPoint(lastX, lastY, newMidX, newMidY);
+        midX = newMidX;
+        midY = newMidY;
+        lastOverText = overText;
+        lastX = smX;
+        lastY = smY;
+        return;
+      } else {
+        midX = null;
+        midY = null;
+        currentStroke = null;
       }
       lastOverText = overText;
     }
@@ -133,10 +164,15 @@
     drawing = false;
     lastX = null;
     lastY = null;
+    midX = null;
+    midY = null;
+    currentStroke = null;
   });
 
   window.addEventListener('scroll', function () {
-    segments = [];
+    strokes = [];
     lastX = null;
+    midX = null;
+    currentStroke = null;
   }, { passive: true });
 })();
