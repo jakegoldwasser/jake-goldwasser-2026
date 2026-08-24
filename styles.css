@@ -39,21 +39,22 @@
 html {
   scroll-behavior: smooth;
   cursor: url("yad-cursor.svg?v=2") 10 38, auto;
-  /* --page-accent isn't set until body's theme-* class is parsed, so this
-     falls back to magenta — matched by the ::-webkit-scrollbar rules below,
-     which read the same variable once body is available */
-  scrollbar-color: var(--magenta) var(--paper-dim);
+  /* the theme-* class lives on <html> (not <body>) specifically so this
+     inherits correctly — the document scrollbar pseudo-elements below are
+     rooted at <html>, and custom properties set only on <body> never reach
+     them, which is why this used to be stuck on magenta everywhere */
+  scrollbar-color: var(--page-accent, var(--magenta)) var(--paper-dim);
 }
 
 ::-webkit-scrollbar {
-  width: 18px;
+  width: 26px;
 }
 ::-webkit-scrollbar-track {
   background: var(--paper-dim);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--page-accent, var(--magenta));
-  border: 4px solid var(--paper-dim);
+  border: 6px solid var(--paper-dim);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -143,9 +144,9 @@ img { max-width: 100%; display: block; }
 }
 
 /* ---------- per-page accent (drives prose/lede link shading below) ---------- */
-body.theme-cyan { --page-accent: var(--cyan); --page-accent-deep: var(--cyan-deep); --page-accent-tint: var(--cyan-tint); }
-body.theme-magenta { --page-accent: var(--magenta); --page-accent-deep: var(--magenta-deep); --page-accent-tint: var(--magenta-tint); }
-body.theme-yellow { --page-accent: var(--yellow); --page-accent-deep: var(--yellow-deep); --page-accent-tint: var(--yellow-tint); }
+html.theme-cyan { --page-accent: var(--cyan); --page-accent-deep: var(--cyan-deep); --page-accent-tint: var(--cyan-tint); }
+html.theme-magenta { --page-accent: var(--magenta); --page-accent-deep: var(--magenta-deep); --page-accent-tint: var(--magenta-tint); }
+html.theme-yellow { --page-accent: var(--yellow); --page-accent-deep: var(--yellow-deep); --page-accent-tint: var(--yellow-tint); }
 
 /* ---------- top triband ---------- */
 .triband {
