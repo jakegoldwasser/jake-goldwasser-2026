@@ -130,6 +130,7 @@
     border-bottom: 1px solid var(--rule);
     background: transparent;
     font-family: "EB Garamond", Georgia, serif;
+    font-style: italic;
     font-size: 20px;
     color: var(--gray1);
     padding: 6px 2px 10px;
@@ -427,6 +428,22 @@
 <script>
   const answers = { pun: null, googled: null, disqualifying: null };
   const WEB3FORMS_ACCESS_KEY = "00a3df23-dbf9-4580-81cc-4508a6c03089";
+
+  const captionInput = document.getElementById("caption");
+  function stripCaptionQuotes(v) {
+    return v.replace(/^[“"]/, "").replace(/[”"]$/, "");
+  }
+  captionInput.addEventListener("input", () => {
+    const oldValue = captionInput.value;
+    const hadLeadingQuote = /^[“"]/.test(oldValue);
+    const core = stripCaptionQuotes(oldValue);
+    let cursor = captionInput.selectionStart - (hadLeadingQuote ? 1 : 0);
+    if (cursor < 0) cursor = 0;
+    if (cursor > core.length) cursor = core.length;
+    captionInput.value = core.length ? "“" + core + "”" : "";
+    const newCursor = core.length ? cursor + 1 : 0;
+    captionInput.setSelectionRange(newCursor, newCursor);
+  });
 
   document.querySelectorAll(".question").forEach((q) => {
     const key = q.dataset.q;
