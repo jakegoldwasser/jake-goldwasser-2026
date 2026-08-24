@@ -215,7 +215,7 @@
   .field:last-child { margin-bottom: 0; }
   .field label { display: block; margin-bottom: 0.32rem; }
 
-  input[type="text"], input[type="email"], textarea {
+  input[type="text"], input[type="email"], textarea, select {
     width: 100%;
     font-family: var(--font-display);
     font-weight: 700;
@@ -230,6 +230,17 @@
 
   textarea { min-height: 3.1em; line-height: 1.45; }
 
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink) 50%), linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+    background-position: calc(100% - 1.15rem) center, calc(100% - 0.8rem) center;
+    background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+    background-repeat: no-repeat;
+    padding-right: 2rem;
+    cursor: pointer;
+  }
+
   input[type="text"]::placeholder, textarea::placeholder, input[type="email"]::placeholder {
     color: var(--ink-soft);
     opacity: 0.75;
@@ -238,7 +249,7 @@
     font-style: normal;
   }
 
-  input[type="text"]:focus, input[type="email"]:focus, textarea:focus {
+  input[type="text"]:focus, input[type="email"]:focus, textarea:focus, select:focus {
     border-color: var(--red);
   }
 
@@ -504,6 +515,14 @@
         <input type="text" id="name" data-field="name" placeholder="e.g., Sylvester" />
       </div>
       <div class="field">
+        <label class="label" for="pronouns">Pronouns</label>
+        <select id="pronouns" data-field="pronouns">
+          <option value="they">They / them</option>
+          <option value="he">He / him</option>
+          <option value="she">She / her</option>
+        </select>
+      </div>
+      <div class="field">
         <label class="label" for="whoWhat">Who or what are they?</label>
         <input type="text" id="whoWhat" data-field="whoWhat" placeholder="e.g., a young donkey who collects unusual pebbles" />
       </div>
@@ -673,7 +692,7 @@
   var STORAGE_KEY = 'pictureBookMaker.v1';
 
   var fields = [
-    'title','name','whoWhat','charm','flaw','falseBelief',
+    'title','name','pronouns','whoWhat','charm','flaw','falseBelief',
     'want','stakes','obstacle',
     'try1Approach','try1Fail','try2Approach','try2Consequence','lowPointMoment','lowPointEmotion',
     'turnRealization','turnTrigger',
@@ -681,28 +700,47 @@
     'finalBelief','finalImage'
   ];
 
-  var blanks = {
-    name: 'our hero',
-    whoWhat: 'who/what they are',
-    charm: 'their charm — the thing that makes readers love them',
-    flaw: 'their flaw — what they get wrong, overdo, or misunderstand',
-    falseBelief: 'the false belief they hold',
-    want: 'one specific, visual, physical goal',
-    stakes: 'the small-but-enormous stake',
-    obstacle: 'the central obstacle',
-    try1Approach: 'their first approach',
-    try1Fail: 'how their flaw trips them up',
-    try2Approach: 'a second, bigger approach',
-    try2Consequence: 'a consequence that raises the stakes',
-    lowPointMoment: 'the moment all seems lost',
-    lowPointEmotion: 'what they feel here',
-    turnRealization: 'the new truth that replaces the false belief',
-    turnTrigger: 'what triggers the shift',
-    try3Approach: 'a new approach, possible now that they’ve grown',
-    resolution: 'what they get instead — maybe something better',
-    finalBelief: 'the transformed belief',
-    finalImage: 'a closing image that proves the change'
+  var PRONOUN_SETS = {
+    he:   { subject: 'he',   subjectCap: 'He',   object: 'him',  possessive: 'his',   be: 'is',  beContraction: 'he’s',   haveContraction: 'he’s',   thirdSingular: true },
+    she:  { subject: 'she',  subjectCap: 'She',  object: 'her',  possessive: 'her',   be: 'is',  beContraction: 'she’s',  haveContraction: 'she’s',  thirdSingular: true },
+    they: { subject: 'they', subjectCap: 'They', object: 'them', possessive: 'their', be: 'are', beContraction: 'they’re', haveContraction: 'they’ve', thirdSingular: false }
   };
+
+  function getPronouns(v) {
+    return PRONOUN_SETS[v.pronouns] || PRONOUN_SETS.they;
+  }
+
+  function conj(base, p) {
+    if (!p.thirdSingular) return base;
+    if (/[sxz]$|[cs]h$/.test(base)) return base + 'es';
+    if (/[^aeiou]y$/.test(base)) return base.slice(0, -1) + 'ies';
+    return base + 's';
+  }
+
+  function getBlanks(p) {
+    return {
+      name: 'our hero',
+      whoWhat: 'who/what ' + p.subject + ' ' + p.be,
+      charm: p.possessive + ' charm — the thing that makes readers love ' + p.object,
+      flaw: p.possessive + ' flaw — what ' + p.subject + ' ' + conj('get', p) + ' wrong, overdo, or misunderstand',
+      falseBelief: 'the false belief ' + p.subject + ' ' + conj('hold', p),
+      want: 'one specific, visual, physical goal',
+      stakes: 'the small-but-enormous stake',
+      obstacle: 'the central obstacle',
+      try1Approach: p.possessive + ' first approach',
+      try1Fail: 'how ' + p.possessive + ' flaw trips ' + p.object + ' up',
+      try2Approach: 'a second, bigger approach',
+      try2Consequence: 'a consequence that raises the stakes',
+      lowPointMoment: 'the moment all seems lost',
+      lowPointEmotion: 'what ' + p.subject + ' ' + conj('feel', p) + ' here',
+      turnRealization: 'the new truth that replaces the false belief',
+      turnTrigger: 'what triggers the shift',
+      try3Approach: 'a new approach, possible now that ' + p.haveContraction + ' grown',
+      resolution: 'what ' + p.subject + ' ' + conj('get', p) + ' instead — maybe something better',
+      finalBelief: 'the transformed belief',
+      finalImage: 'a closing image that proves the change'
+    };
+  }
 
   var actColors = ['var(--red)', 'var(--yellow)', 'var(--blue)', 'var(--green)', 'var(--red)', 'var(--blue)'];
 
@@ -719,12 +757,14 @@
   }
 
   function setValues(v) {
-    fields.forEach(function (f) { els[f].value = v[f] || ''; });
+    fields.forEach(function (f) {
+      els[f].value = v[f] || (f === 'pronouns' ? 'they' : '');
+    });
     render();
     save();
   }
 
-  function blank(field, v) {
+  function blank(field, v, blanks) {
     var val = v[field];
     if (val) return escapeHtml(val);
     return '<span class="blank">[' + blanks[field] + ']</span>';
@@ -736,26 +776,29 @@
 
   function render() {
     var v = getValues();
+    var p = getPronouns(v);
+    var blanks = getBlanks(p);
     var name = v.name ? escapeHtml(v.name) : '<span class="blank">[' + blanks.name + ']</span>';
+    function b(field) { return blank(field, v, blanks); }
 
     document.getElementById('pvTitle').textContent = v.title || 'Untitled Story';
     document.getElementById('pvByline').textContent = v.name ? 'starring ' + v.name : 'starring —';
 
     var acts = [
       { tag: 'Act 1 · The Setup', color: actColors[0], html:
-        '<p>' + name + ' is ' + blank('whoWhat', v) + ', and they’re charismatic because ' + blank('charm', v) + '. But ' + blank('flaw', v) + '. At the start, ' + name + ' believes ' + blank('falseBelief', v) + '.</p>' },
+        '<p>' + name + ' is ' + b('whoWhat') + ', and ' + p.beContraction + ' charismatic because ' + b('charm') + '. But ' + b('flaw') + '. At the start, ' + name + ' believes ' + b('falseBelief') + '.</p>' },
       { tag: 'Act 2 · The Want', color: actColors[1], html:
-        '<p>More than anything, ' + name + ' wants ' + blank('want', v) + '. This matters so much because ' + blank('stakes', v) + '. The thing standing in the way is ' + blank('obstacle', v) + '.</p>' },
+        '<p>More than anything, ' + name + ' wants ' + b('want') + '. This matters so much because ' + b('stakes') + '. The thing standing in the way is ' + b('obstacle') + '.</p>' },
       { tag: 'Act 3 · The Three Tries', color: actColors[2], html:
-        '<p>First, they try ' + blank('try1Approach', v) + '. It fails because ' + blank('try1Fail', v) + '.</p>' +
-        '<p>Now more desperate, they try ' + blank('try2Approach', v) + '. This fails worse because ' + blank('try2Consequence', v) + '.</p>' +
-        '<p>Everything falls apart when ' + blank('lowPointMoment', v) + '. Here ' + name + ' feels ' + blank('lowPointEmotion', v) + '.</p>' },
+        '<p>First, ' + p.subject + ' ' + conj('try', p) + ' ' + b('try1Approach') + '. It fails because ' + b('try1Fail') + '.</p>' +
+        '<p>Now more desperate, ' + p.subject + ' ' + conj('try', p) + ' ' + b('try2Approach') + '. This fails worse because ' + b('try2Consequence') + '.</p>' +
+        '<p>Everything falls apart when ' + b('lowPointMoment') + '. Here ' + name + ' feels ' + b('lowPointEmotion') + '.</p>' },
       { tag: 'Act 4 · The Turn', color: actColors[3], html:
-        '<p>Then ' + name + ' realizes ' + blank('turnRealization', v) + '. This is sparked by ' + blank('turnTrigger', v) + '.</p>' },
+        '<p>Then ' + name + ' realizes ' + b('turnRealization') + '. This is sparked by ' + b('turnTrigger') + '.</p>' },
       { tag: 'Act 5 · The Payoff', color: actColors[4], html:
-        '<p>Changed, ' + name + ' tries one last time by ' + blank('try3Approach', v) + '. They get what they truly needed: ' + blank('resolution', v) + '.</p>' },
+        '<p>Changed, ' + name + ' tries one last time by ' + b('try3Approach') + '. ' + p.subjectCap + ' ' + conj('get', p) + ' what ' + p.subject + ' truly needed: ' + b('resolution') + '.</p>' },
       { tag: 'Act 6 · The Landing', color: actColors[5], html:
-        '<p>By the end, ' + name + ' believes ' + blank('finalBelief', v) + '. The final image shows ' + blank('finalImage', v) + '.</p>' }
+        '<p>By the end, ' + name + ' believes ' + b('finalBelief') + '. The final image shows ' + b('finalImage') + '.</p>' }
     ];
 
     var page = document.getElementById('pvPage');
@@ -766,24 +809,25 @@
 
   function plainStory() {
     var v = getValues();
+    var p = getPronouns(v);
     var name = v.name || 'Our hero';
     function fill(field) { return v[field] || '…'; }
     var lines = [
       (v.title || 'Untitled Story').toUpperCase(),
       '',
-      name + ' is ' + fill('whoWhat') + ', and they’re charismatic because ' + fill('charm') + '. But ' + fill('flaw') + '. At the start, ' + name + ' believes ' + fill('falseBelief') + '.',
+      name + ' is ' + fill('whoWhat') + ', and ' + p.beContraction + ' charismatic because ' + fill('charm') + '. But ' + fill('flaw') + '. At the start, ' + name + ' believes ' + fill('falseBelief') + '.',
       '',
       'More than anything, ' + name + ' wants ' + fill('want') + '. This matters so much because ' + fill('stakes') + '. The thing standing in the way is ' + fill('obstacle') + '.',
       '',
-      'First, they try ' + fill('try1Approach') + '. It fails because ' + fill('try1Fail') + '.',
+      'First, ' + p.subject + ' ' + conj('try', p) + ' ' + fill('try1Approach') + '. It fails because ' + fill('try1Fail') + '.',
       '',
-      'Now more desperate, they try ' + fill('try2Approach') + '. This fails worse because ' + fill('try2Consequence') + '.',
+      'Now more desperate, ' + p.subject + ' ' + conj('try', p) + ' ' + fill('try2Approach') + '. This fails worse because ' + fill('try2Consequence') + '.',
       '',
       'Everything falls apart when ' + fill('lowPointMoment') + '. Here ' + name + ' feels ' + fill('lowPointEmotion') + '.',
       '',
       'Then ' + name + ' realizes ' + fill('turnRealization') + '. This is sparked by ' + fill('turnTrigger') + '.',
       '',
-      'Changed, ' + name + ' tries one last time by ' + fill('try3Approach') + '. They get what they truly needed: ' + fill('resolution') + '.',
+      'Changed, ' + name + ' tries one last time by ' + fill('try3Approach') + '. ' + p.subjectCap + ' ' + conj('get', p) + ' what ' + p.subject + ' truly needed: ' + fill('resolution') + '.',
       '',
       'By the end, ' + name + ' believes ' + fill('finalBelief') + '. The final image shows ' + fill('finalImage') + '.'
     ];
