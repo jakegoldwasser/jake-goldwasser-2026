@@ -39,22 +39,31 @@
 html {
   scroll-behavior: smooth;
   cursor: url("yad-cursor.svg?v=2") 10 38, auto;
-  /* the theme-* class lives on <html> (not <body>) specifically so this
-     inherits correctly — the document scrollbar pseudo-elements below are
-     rooted at <html>, and custom properties set only on <body> never reach
-     them, which is why this used to be stuck on magenta everywhere */
-  scrollbar-color: var(--page-accent, var(--magenta)) var(--paper-dim);
+}
+
+/* scrollbar-color is scoped to browsers without ::-webkit-scrollbar support
+   (i.e. Firefox) because Chrome 121+ lets a `scrollbar-color` declaration
+   silently override ::-webkit-scrollbar-* rules — including width — which
+   was the reason width/border edits below never visibly changed in Chrome */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    /* the theme-* class lives on <html> (not <body>) specifically so this
+       inherits correctly — the document scrollbar pseudo-elements below are
+       rooted at <html>, and custom properties set only on <body> never reach
+       them, which is why this used to be stuck on magenta everywhere */
+    scrollbar-color: var(--page-accent, var(--magenta)) var(--paper-dim);
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 40px;
+  width: 20px;
 }
 ::-webkit-scrollbar-track {
   background: var(--paper-dim);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--page-accent, var(--magenta));
-  border: 3px solid var(--paper-dim);
+  border: 2px solid var(--paper-dim);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
