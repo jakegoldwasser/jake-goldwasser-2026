@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Cartoon Desk</title>
+<meta name="description" content="Submit a cartoon idea to Jake Goldwasser.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+
+<style>
+  @font-face {
+    font-family: "UpperWestSide";
+    src: url("fonts/UpperWestSide.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #2c4a42;
+    --bg-edge: #203932;
+    --paper: #faf6ec;
+    --paper-2: #f1ebdc;
+    --gray1: #262624;
+    --gray2: #6f746c;
+    --gray3: #a9ac9f;
+    --rule: #ddd8c9;
+    --rust: #a6512a;
+    --teal: #2c4a42;
+    --teal-ink: #faf6ec;
+    --red: #b3392a;
+    --red-ink: #faf6ec;
+    --shadow: rgba(20, 24, 20, 0.28);
+    --focus: #2c4a42;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at top, var(--bg-edge), var(--bg) 70%);
+    color: var(--gray1);
+    font-family: "EB Garamond", Georgia, "Times New Roman", serif;
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 80px;
+  }
+
+  .page {
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .sheet {
+    display: flex;
+    align-items: stretch;
+    border-radius: 7px;
+    overflow: hidden;
+    box-shadow: 0 16px 32px -10px var(--shadow);
+  }
+
+  .spine {
+    flex: 0 0 46px;
+    background: var(--red);
+  }
+
+  .content {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 60px 60px 52px 60px;
+  }
+
+  @media (max-width: 520px) {
+    .spine { flex-basis: 28px; }
+    .content { padding: 36px 24px 28px 24px; }
+  }
+
+  .headline {
+    text-align: center;
+    font-family: "UpperWestSide", Georgia, serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    color: var(--gray1);
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.35;
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: 0.015em;
+  }
+
+  .ornament {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 22px auto 34px;
+  }
+
+  .ornament .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--rust);
+  }
+
+  .field { margin-bottom: 26px; }
+
+  .field label {
+    display: block;
+    font-family: "Poppins", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+    color: #000;
+    margin-bottom: 9px;
+  }
+
+  .field textarea,
+  .field input[type="text"] {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--rule);
+    background: transparent;
+    font-family: "EB Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--gray1);
+    padding: 6px 2px 10px;
+    resize: vertical;
+    min-height: 30px;
+  }
+
+  .field textarea { min-height: 64px; }
+
+  .field textarea::placeholder,
+  .field input::placeholder {
+    color: var(--gray3);
+    font-style: italic;
+  }
+
+  .field textarea:focus,
+  .field input:focus {
+    outline: none;
+    border-bottom: 2px solid var(--focus);
+    padding-bottom: 9px;
+  }
+
+  .rule-single {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 8px 0 28px;
+  }
+
+  .question {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 14px 0;
+  }
+
+  .question p {
+    margin: 0;
+    font-weight: 400;
+    font-size: 19px;
+    line-height: 1.4;
+    color: var(--gray1);
+  }
+
+  .pills {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .pill {
+    font-family: "UpperWestSide", Georgia, serif;
+    font-weight: 400;
+    font-size: 19px;
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    color: var(--red);
+    cursor: pointer;
+  }
+
+  .pill:hover {
+    background: #000;
+    color: var(--paper);
+  }
+
+  .pill.active {
+    background: #000;
+    color: var(--paper);
+  }
+
+  .pill:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  .send-wrap {
+    text-align: center;
+    margin-top: 40px;
+  }
+
+  .send-btn {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto;
+    padding: 8px;
+    border: none;
+    cursor: pointer;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--red) 0 10px,
+      var(--paper) 10px 14px,
+      var(--teal) 14px 24px,
+      var(--paper) 24px 28px
+    );
+    box-shadow: 0 14px 28px -16px var(--shadow);
+    transition: transform 0.15s ease;
+  }
+
+  .send-btn:hover { transform: translateY(-2px); }
+  .send-btn:active { transform: translateY(1px); }
+
+  .send-btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  .send-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+    transform: none;
+  }
+
+  .send-btn .body {
+    position: relative;
+    display: block;
+    background: var(--paper);
+    padding: 16px 20px;
+  }
+
+  .send-btn .label {
+    position: relative;
+    display: block;
+    font-family: "UpperWestSide", Georgia, serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 17px;
+    color: var(--gray1);
+  }
+
+  .fineprint {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--gray3);
+  }
+
+  .copyright {
+    text-align: left;
+    margin: 22px 0 0;
+    font-family: "EB Garamond", Georgia, serif;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    color: rgba(250, 246, 236, 0.55);
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 18, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 10;
+  }
+
+  .overlay.open { display: flex; }
+
+  .modal {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    box-shadow: 0 24px 48px -18px var(--shadow);
+    max-width: 380px;
+    width: 100%;
+    padding: 32px 30px 26px;
+    text-align: center;
+  }
+
+  .modal .stamp {
+    font-family: "EB Garamond", Georgia, serif;
+    font-weight: 600;
+    font-style: italic;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+
+  .modal .stamp.good {
+    color: var(--teal);
+    border: 2px solid var(--teal);
+  }
+
+  .modal .stamp.bad {
+    color: var(--red);
+    border: 2px solid var(--red);
+  }
+
+  .modal p.msg {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--gray1);
+    margin: 0 0 24px;
+  }
+
+  .modal button {
+    font-family: "EB Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--gray1);
+    color: var(--paper);
+    border: none;
+    padding: 11px 22px;
+    cursor: pointer;
+  }
+
+  .modal button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .send-btn, .send-btn:hover, .send-btn:active { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="sheet">
+    <div class="spine"></div>
+    <div class="content">
+    <h1 class="headline">So you want to send Jake a cartoon idea...</h1>
+    <div class="ornament"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+
+    <form id="cartoon-form">
+      <div class="field">
+        <label for="credentials">Name and Credentials</label>
+        <input id="credentials" type="text" placeholder="Jane Doe, unpublished but confident">
+      </div>
+      <div class="field">
+        <label for="image">The Image</label>
+        <textarea id="image" placeholder="A walrus at a job interview, straightening its tie with one flipper."></textarea>
+      </div>
+      <div class="field">
+        <label for="caption">The Caption</label>
+        <input id="caption" type="text" placeholder="“I have excellent people skills.”">
+      </div>
+
+      <hr class="rule-single">
+
+      <div class="question" data-q="pun">
+        <p>Does your idea hinge on a pun?</p>
+        <div class="pills">
+          <button type="button" class="pill" data-val="yes">Yes</button>
+          <button type="button" class="pill" data-val="no">No</button>
+        </div>
+      </div>
+      <div class="question" data-q="googled">
+        <p>Has someone already made a cartoon using your idea? (Google first!)</p>
+        <div class="pills">
+          <button type="button" class="pill" data-val="yes">Yes</button>
+          <button type="button" class="pill" data-val="no">No</button>
+        </div>
+      </div>
+      <div class="question" data-q="disqualifying">
+        <p>Does your idea have any disqualifying features, such as coarse language, stereotypes, or humor that is too specific for a general audience?</p>
+        <div class="pills">
+          <button type="button" class="pill" data-val="yes">Yes</button>
+          <button type="button" class="pill" data-val="no">No</button>
+        </div>
+      </div>
+
+      <div class="send-wrap">
+        <button type="button" class="send-btn" id="send-btn">
+          <span class="body">
+            <span class="label">Send to Jake</span>
+          </span>
+        </button>
+        <p class="fineprint" id="fineprint">Delivered straight to Jake's inbox.</p>
+      </div>
+    </form>
+    </div>
+  </div>
+  <p class="copyright">&copy; 2026 Jake Goldwasser</p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <p class="stamp" id="modal-stamp">Accepted</p>
+    <p class="msg" id="modal-msg"></p>
+    <button type="button" id="modal-close">Back to the drawing board</button>
+  </div>
+</div>
+
+<script>
+  const answers = { pun: null, googled: null, disqualifying: null };
+  const WEB3FORMS_ACCESS_KEY = "00a3df23-dbf9-4580-81cc-4508a6c03089";
+
+  const captionInput = document.getElementById("caption");
+  function stripCaptionQuotes(v) {
+    return v.replace(/^[“"]/, "").replace(/[”"]$/, "");
+  }
+  captionInput.addEventListener("input", () => {
+    const oldValue = captionInput.value;
+    const hadLeadingQuote = /^[“"]/.test(oldValue);
+    const core = stripCaptionQuotes(oldValue);
+    let cursor = captionInput.selectionStart - (hadLeadingQuote ? 1 : 0);
+    if (cursor < 0) cursor = 0;
+    if (cursor > core.length) cursor = core.length;
+    captionInput.value = core.length ? "“" + core + "”" : "";
+    const newCursor = core.length ? cursor + 1 : 0;
+    captionInput.setSelectionRange(newCursor, newCursor);
+  });
+
+  document.querySelectorAll(".question").forEach((q) => {
+    const key = q.dataset.q;
+    q.querySelectorAll(".pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        answers[key] = btn.dataset.val;
+        q.querySelectorAll(".pill").forEach((b) => b.classList.toggle("active", b === btn));
+      });
+    });
+  });
+
+  const overlay = document.getElementById("overlay");
+  const modalMsg = document.getElementById("modal-msg");
+  const modalStamp = document.getElementById("modal-stamp");
+
+  function openModal(kind, message) {
+    modalStamp.classList.toggle("good", kind === "good");
+    modalStamp.classList.toggle("bad", kind !== "good");
+    modalStamp.textContent = kind === "good" ? "Accepted" : kind === "error" ? "Try Again" : "Rejected";
+    modalMsg.textContent = message;
+    overlay.classList.add("open");
+  }
+
+  document.getElementById("modal-close").addEventListener("click", () => {
+    overlay.classList.remove("open");
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.classList.remove("open");
+  });
+
+  const sendBtn = document.getElementById("send-btn");
+
+  sendBtn.addEventListener("click", async () => {
+    const credentials = document.getElementById("credentials").value.trim();
+    const image = document.getElementById("image").value.trim();
+    const caption = document.getElementById("caption").value.trim();
+    const valid =
+      credentials.length > 0 &&
+      image.length > 0 &&
+      caption.length > 0 &&
+      answers.pun === "no" &&
+      answers.googled === "no" &&
+      answers.disqualifying === "no";
+
+    if (!valid) {
+      openModal("bad", "Womp womp. Your cartoon has one or more problems with it. Let's workshop it.");
+      return;
+    }
+
+    sendBtn.disabled = true;
+    try {
+      const res = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_ACCESS_KEY,
+          subject: "Cartoon idea for Jake",
+          from_name: credentials,
+          "Name and Credentials": credentials,
+          Image: image,
+          Caption: caption,
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.message || "Request failed");
+
+      openModal("good", "Congrats! You have submitted a valid cartoon idea. Let's workshop it. It has been emailed to Jake.");
+      document.getElementById("cartoon-form").reset();
+      document.querySelectorAll(".pill.active").forEach((b) => b.classList.remove("active"));
+      answers.pun = answers.googled = answers.disqualifying = null;
+    } catch (err) {
+      openModal("error", "Something went wrong sending that to Jake. Please try again in a moment.");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
