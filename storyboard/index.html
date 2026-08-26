@@ -441,6 +441,80 @@
   .export-btn:hover { background: var(--surface-2); }
   .export-btn:disabled { opacity: 0.6; cursor: default; }
   .export-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .export-btn[aria-expanded="true"] { background: var(--surface-2); }
+
+  .export-menu {
+    position: relative;
+  }
+
+  .export-panel {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 200px;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 8px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .export-panel[hidden] { display: none; }
+
+  .export-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 9px 10px;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .export-option-btn:hover { background: var(--surface-2); }
+  .export-option-btn:disabled { opacity: 0.6; cursor: default; }
+  .export-option-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  .export-option-btn .ext {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-faint);
+  }
+
+  .format-toggle {
+    display: flex;
+    gap: 6px;
+  }
+
+  .format-toggle button {
+    flex: 1;
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 6px 8px;
+    cursor: pointer;
+  }
+
+  .format-toggle button.active {
+    color: var(--accent-ink);
+    background: var(--teal);
+    border-color: var(--teal);
+  }
 
   .export-status {
     font-size: 12px;
@@ -622,6 +696,24 @@
   .save-library-btn:hover { background: var(--accent-soft); }
   .save-library-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
+  .clear-btn {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--danger);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+
+  .clear-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+  .clear-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 3px; }
+
   /* ---- Email storyboard ---- */
 
   .email-menu {
@@ -759,12 +851,20 @@
       Book size
       <select id="trim-select" class="trim-select"></select>
     </label>
-    <button class="export-btn" id="export-btn" type="button">
-      Export to Slides
-    </button>
+    <div class="export-menu" id="export-menu">
+      <button class="export-btn" id="export-btn" type="button" aria-expanded="false">Export As…</button>
+      <div class="export-panel" id="export-panel" hidden>
+        <button class="export-option-btn" id="export-pptx-btn" type="button">PowerPoint <span class="ext">.pptx</span></button>
+        <button class="export-option-btn" id="export-pdf-btn" type="button">PDF <span class="ext">.pdf</span></button>
+      </div>
+    </div>
     <div class="email-menu" id="email-menu">
-      <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email Storyboard</button>
+      <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email As…</button>
       <div class="email-panel" id="email-panel" hidden>
+        <div class="format-toggle" id="email-format-toggle">
+          <button type="button" class="active" data-format="pptx">PowerPoint</button>
+          <button type="button" data-format="pdf">PDF</button>
+        </div>
         <label class="email-panel-label" for="email-addr">Send to</label>
         <input type="email" id="email-addr" placeholder="you@example.com" required />
         <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
@@ -773,6 +873,9 @@
     </div>
     <button class="save-library-btn" id="save-library-btn" type="button">
       Save to My Storyboards
+    </button>
+    <button class="clear-btn" id="clear-btn" type="button">
+      Clear Storyboard
     </button>
     <span class="export-status" id="export-status"></span>
   </div>
@@ -1253,14 +1356,27 @@
       saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2000);
     });
 
+    var clearBtn = document.getElementById('clear-btn');
+    clearBtn.addEventListener('click', function () {
+      var ok = window.confirm('Clear this storyboard? This erases the title and all spreads — this can\'t be undone.');
+      if (!ok) return;
+      state.title = '';
+      state.rows = defaultRows();
+      save();
+      titleEl.value = state.title;
+      render();
+    });
+
     document.addEventListener('click', function (e) {
       if (!libraryPanel.hidden && !libraryMenu.contains(e.target)) closeLibraryPanel();
       if (!emailPanel.hidden && !emailMenu.contains(e.target)) closeEmailPanel();
+      if (!exportPanel.hidden && !exportMenu.contains(e.target)) closeExportPanel();
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (!libraryPanel.hidden) closeLibraryPanel();
       if (!emailPanel.hidden) closeEmailPanel();
+      if (!exportPanel.hidden) closeExportPanel();
     });
 
     // ---- Email storyboard ----
@@ -1271,6 +1387,22 @@
     var emailAddr = document.getElementById('email-addr');
     var emailSendBtn = document.getElementById('email-send-btn');
     var emailPanelStatus = document.getElementById('email-panel-status');
+    var emailFormatToggle = document.getElementById('email-format-toggle');
+    var emailFormat = 'pptx';
+
+    emailFormatToggle.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        emailFormat = btn.dataset.format;
+        emailFormatToggle.querySelectorAll('button').forEach(function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+      });
+    });
+
+    function bytesToFile(filename, bytes, mime) {
+      try { return new File([bytes], filename, { type: mime }); }
+      catch (e) { return new Blob([bytes], { type: mime }); }
+    }
 
     try {
       if (window.emailjs && typeof window.emailjs.init === 'function') {
@@ -1321,6 +1453,7 @@
       var email = emailAddr.value.trim();
       var subject = (state.title || 'Untitled Picture Book') + ' — Storyboard';
       var body = plainStoryboard();
+      var filename = slugify(state.title) + '.' + emailFormat;
 
       function fallbackToMailto(note) {
         emailPanelStatus.textContent = note;
@@ -1334,18 +1467,29 @@
       emailPanelStatus.textContent = '';
 
       if (window.emailjs && typeof window.emailjs.send === 'function') {
-        window.emailjs.send('service_ur7r6mv', 'template_k5wzlc6', {
-          to_email: email,
-          subject: subject,
-          message: body
-        }).then(function () {
-          emailPanelStatus.textContent = 'Sent! Check ' + email + '.';
-        }).catch(function () {
-          fallbackToMailto('Couldn’t send automatically — opening your mail app instead.');
-        }).then(function () {
-          emailSendBtn.disabled = false;
-          emailSendBtn.textContent = originalLabel;
-        });
+        var attachmentFile = null;
+        try {
+          if (emailFormat === 'pdf') {
+            attachmentFile = bytesToFile(filename, buildPdf(state.title, state.rows, state.trimSize), 'application/pdf');
+          } else {
+            attachmentFile = bytesToFile(filename, buildPptx(state.title, state.rows, state.trimSize), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+          }
+        } catch (e) {}
+
+        var params = { to_email: email, subject: subject, message: body };
+        if (attachmentFile) params.attachment = attachmentFile;
+
+        window.emailjs.send('service_ur7r6mv', 'template_k5wzlc6', params)
+          .then(function () {
+            emailPanelStatus.textContent = attachmentFile
+              ? 'Sent! Check ' + email + ' — the ' + emailFormat.toUpperCase() + ' should be attached (if the email template supports attachments).'
+              : 'Sent! Check ' + email + '.';
+          }).catch(function () {
+            fallbackToMailto('Couldn’t send automatically — opening your mail app instead.');
+          }).then(function () {
+            emailSendBtn.disabled = false;
+            emailSendBtn.textContent = originalLabel;
+          });
         return;
       }
 
@@ -1354,9 +1498,13 @@
       fallbackToMailto('Opening your mail app instead.');
     });
 
-    // ---- Export to Google Slides (.pptx) ----
+    // ---- Export As… (PowerPoint / PDF) ----
 
+    var exportMenu = document.getElementById('export-menu');
     var exportBtn = document.getElementById('export-btn');
+    var exportPanel = document.getElementById('export-panel');
+    var exportPptxBtn = document.getElementById('export-pptx-btn');
+    var exportPdfBtn = document.getElementById('export-pdf-btn');
     var exportStatus = document.getElementById('export-status');
     var exportStatusTimer = null;
 
@@ -1367,6 +1515,21 @@
         exportStatusTimer = setTimeout(function () { exportStatus.textContent = ''; }, 6000);
       }
     }
+
+    function openExportPanel() {
+      exportPanel.hidden = false;
+      exportBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeExportPanel() {
+      exportPanel.hidden = true;
+      exportBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    exportBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (exportPanel.hidden) openExportPanel(); else closeExportPanel();
+    });
 
     function escapeXml(s) {
       return String(s == null ? '' : s)
@@ -1740,8 +1903,290 @@
       return makeZip(files);
     }
 
-    function downloadBlob(filename, bytes) {
-      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    // ---- PDF builder (hand-rolled, no external library) ----
+
+    var HELVETICA_WIDTHS = {
+      32: 278, 33: 278, 34: 355, 35: 556, 36: 556, 37: 889, 38: 667, 39: 191,
+      40: 333, 41: 333, 42: 389, 43: 584, 44: 278, 45: 333, 46: 278, 47: 278,
+      48: 556, 49: 556, 50: 556, 51: 556, 52: 556, 53: 556, 54: 556, 55: 556, 56: 556, 57: 556,
+      58: 278, 59: 278, 60: 584, 61: 584, 62: 584, 63: 556, 64: 1015,
+      65: 667, 66: 667, 67: 722, 68: 722, 69: 667, 70: 611, 71: 778, 72: 722, 73: 278,
+      74: 500, 75: 667, 76: 556, 77: 833, 78: 722, 79: 778, 80: 667, 81: 778, 82: 722,
+      83: 667, 84: 611, 85: 722, 86: 667, 87: 944, 88: 667, 89: 667, 90: 611,
+      91: 278, 92: 278, 93: 278, 94: 469, 95: 556, 96: 333,
+      97: 556, 98: 556, 99: 500, 100: 556, 101: 556, 102: 278, 103: 556, 104: 556,
+      105: 222, 106: 222, 107: 500, 108: 222, 109: 833, 110: 556, 111: 556, 112: 556,
+      113: 556, 114: 333, 115: 500, 116: 278, 117: 556, 118: 500, 119: 722, 120: 500,
+      121: 500, 122: 500, 123: 334, 124: 260, 125: 334, 126: 584
+    };
+
+    var WINANSI_MAP = {
+      0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94,
+      0x2013: 0x96, 0x2014: 0x97, 0x2026: 0x85, 0x2022: 0x95
+    };
+
+    function toWinAnsiBytes(str) {
+      var bytes = [];
+      for (var i = 0; i < str.length; i++) {
+        var code = str.charCodeAt(i);
+        var b;
+        if (code < 0x80) b = code;
+        else if (WINANSI_MAP[code] !== undefined) b = WINANSI_MAP[code];
+        else if (code >= 0xA0 && code <= 0xFF) b = code;
+        else b = 0x3F;
+        bytes.push(b);
+      }
+      return bytes;
+    }
+
+    function pdfLiteralStringBytes(str) {
+      var out = [0x28];
+      toWinAnsiBytes(str).forEach(function (b) {
+        if (b === 0x28 || b === 0x29 || b === 0x5C) out.push(0x5C, b);
+        else out.push(b);
+      });
+      out.push(0x29);
+      return out;
+    }
+
+    // Document /Info strings use PDFDocEncoding by default, not the WinAnsi
+    // mapping content-stream text uses via the fonts' /Encoding -- so keep
+    // metadata strictly ASCII to avoid the two encodings disagreeing.
+    function toAsciiSafe(str) {
+      return String(str || '')
+        .replace(/[‘’]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/[–—]/g, '-')
+        .replace(/…/g, '...')
+        .replace(/[^\x20-\x7E]/g, '?');
+    }
+
+    function textWidth(str, fontSize) {
+      var total = 0;
+      for (var i = 0; i < str.length; i++) {
+        var code = str.charCodeAt(i);
+        total += (HELVETICA_WIDTHS[code] !== undefined ? HELVETICA_WIDTHS[code] : 556);
+      }
+      return total / 1000 * fontSize;
+    }
+
+    function wrapText(text, maxWidth, fontSize, maxLines) {
+      var paragraphs = String(text || '').split(/\r\n|\r|\n/);
+      var lines = [];
+      paragraphs.forEach(function (para) {
+        if (!para) { lines.push(''); return; }
+        var words = para.split(' ');
+        var current = '';
+        words.forEach(function (word) {
+          var test = current ? current + ' ' + word : word;
+          if (!current || textWidth(test, fontSize) <= maxWidth) {
+            current = test;
+          } else {
+            lines.push(current);
+            current = word;
+          }
+        });
+        lines.push(current);
+      });
+      if (maxLines && lines.length > maxLines) {
+        lines = lines.slice(0, maxLines);
+        var last = lines[maxLines - 1];
+        while (last.length > 0 && textWidth(last + '…', fontSize) > maxWidth) {
+          last = last.slice(0, -1);
+        }
+        lines[maxLines - 1] = last + '…';
+      }
+      return lines;
+    }
+
+    function pushAsciiPdf(arr, str) {
+      for (var i = 0; i < str.length; i++) arr.push(str.charCodeAt(i) & 0xFF);
+    }
+
+    function pushBytesPdf(arr, bytes) {
+      for (var i = 0; i < bytes.length; i++) arr.push(bytes[i]);
+    }
+
+    function pdfDrawText(c, x, yBottom, str, fontKey, fontSize, rgb) {
+      if (!str) return;
+      pushAsciiPdf(c, 'BT\n/' + fontKey + ' ' + fontSize + ' Tf\n' +
+        rgb[0] + ' ' + rgb[1] + ' ' + rgb[2] + ' rg\n' +
+        x.toFixed(2) + ' ' + yBottom.toFixed(2) + ' Td\n');
+      pushBytesPdf(c, pdfLiteralStringBytes(str));
+      pushAsciiPdf(c, ' Tj\nET\n');
+    }
+
+    function pdfDrawLines(c, x, startYBottom, lines, fontKey, fontSize, lineHeight, rgb) {
+      lines.forEach(function (line, i) {
+        pdfDrawText(c, x, startYBottom - i * lineHeight, line, fontKey, fontSize, rgb);
+      });
+    }
+
+    function pdfDashedRect(c, x, yBottom, w, h, gray) {
+      pushAsciiPdf(c, gray + ' G\n[6 3] 0 d\n3 w\n' +
+        x.toFixed(2) + ' ' + yBottom.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n');
+    }
+
+    function pdfDashedLine(c, x1, y1, x2, y2, gray) {
+      pushAsciiPdf(c, gray + ' G\n[6 3] 0 d\n3 w\n' +
+        x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n');
+    }
+
+    var PDF_INK = [0.086, 0.196, 0.251];
+    var PDF_MUTED = [0.31, 0.45, 0.5];
+    var PDF_BORDER_GRAY = '0.6';
+
+    function buildPdfPageContent(spreadIndex, row, pageW, pageH, title) {
+      var MARGIN = 36, GUTTER_HALF_GAP = 9, BOTTOM_MARGIN = 18, PAD = 8;
+      var half = pageW / 2;
+      var sideW = half - MARGIN - GUTTER_HALF_GAP;
+      var versoX = MARGIN, rectoX = half + GUTTER_HALF_GAP;
+      var boxW = sideW * 0.8;
+      var boxH = pageH * 0.25 - BOTTOM_MARGIN;
+      var bottomTopY = pageH * 0.75;
+      var halfTopY = (pageH - boxH) / 2;
+      var versoBoxX = versoX + (sideW - boxW) / 2;
+      var rectoBoxX = rectoX + (sideW - boxW) / 2;
+
+      function topToBottom(topDist, h) { return pageH - topDist - h; }
+
+      var c = [];
+
+      pdfDrawText(c, MARGIN, pageH - 28,
+        'Spread ' + (spreadIndex + 1) + (title ? ' — ' + title : ''), 'F1B', 10, PDF_MUTED);
+
+      if (row.illustration) {
+        var notesWidth = pageW - MARGIN * 2;
+        pdfDrawText(c, MARGIN, pageH - 46, 'Illustration notes', 'F1B', 8, PDF_MUTED);
+        var noteLines = wrapText(row.illustration, notesWidth, 9, 4);
+        pdfDrawLines(c, MARGIN, pageH - 58, noteLines, 'F2', 9, 12, PDF_MUTED);
+      }
+
+      pdfDashedLine(c, half, 0, half, pageH, PDF_BORDER_GRAY);
+
+      function drawBox(x, topDist, text) {
+        var yBottom = topToBottom(topDist, boxH);
+        pdfDashedRect(c, x, yBottom, boxW, boxH, PDF_BORDER_GRAY);
+        var lines = wrapText(text, boxW - PAD * 2, 11, Math.max(1, Math.floor((boxH - PAD * 2) / 14)));
+        var textBlockH = lines.length * 14;
+        var firstBaseline = yBottom + (boxH + textBlockH) / 2 - 11;
+        pdfDrawLines(c, x + PAD, firstBaseline, lines, 'F1', 11, 14, PDF_INK);
+      }
+
+      function drawSide(x, prefix) {
+        if (row[prefix + 'Split']) {
+          drawBox(x, halfTopY, row[prefix]);
+          drawBox(x, bottomTopY, row[prefix + '2']);
+        } else {
+          drawBox(x, bottomTopY, row[prefix]);
+        }
+      }
+
+      drawSide(versoBoxX, 'verso');
+      drawSide(rectoBoxX, 'recto');
+
+      return c;
+    }
+
+    function pad10(n) {
+      var s = String(n);
+      while (s.length < 10) s = '0' + s;
+      return s;
+    }
+
+    function buildPdf(title, rows, trimKey) {
+      var trim = getTrimSize(trimKey);
+      var pageW = Math.round(trim.pageW * 2 * 72);
+      var pageH = Math.round(trim.pageH * 72);
+      var n = rows.length;
+
+      var parts = [];
+      var offsets = [];
+      var pos = 0;
+
+      function pushPart(chunk) {
+        var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
+        parts.push(u8);
+        pos += u8.length;
+      }
+      function beginObj(num) { offsets[num] = pos; pushPart(num + ' 0 obj\n'); }
+      function endObj() { pushPart('endobj\n'); }
+
+      var pageObjStart = 3;
+      var contentObjStart = pageObjStart + n;
+      var fontRegularNum = contentObjStart + n;
+      var fontBoldNum = fontRegularNum + 1;
+      var fontObliqueNum = fontBoldNum + 1;
+      var infoNum = fontObliqueNum + 1;
+
+      pushPart('%PDF-1.4\n');
+
+      beginObj(1);
+      pushPart('<< /Type /Catalog /Pages 2 0 R >>\n');
+      endObj();
+
+      var kids = [];
+      for (var i = 0; i < n; i++) kids.push((pageObjStart + i) + ' 0 R');
+      beginObj(2);
+      pushPart('<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + n + ' >>\n');
+      endObj();
+
+      for (var p = 0; p < n; p++) {
+        var contentBytes = buildPdfPageContent(p, rows[p], pageW, pageH, title);
+        var contentU8 = new Uint8Array(contentBytes);
+
+        beginObj(pageObjStart + p);
+        pushPart('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pageW + ' ' + pageH + ']' +
+          ' /Resources << /Font << /F1 ' + fontRegularNum + ' 0 R /F1B ' + fontBoldNum + ' 0 R /F2 ' + fontObliqueNum + ' 0 R >> >>' +
+          ' /Contents ' + (contentObjStart + p) + ' 0 R >>\n');
+        endObj();
+
+        beginObj(contentObjStart + p);
+        pushPart('<< /Length ' + contentU8.length + ' >>\nstream\n');
+        pushPart(contentU8);
+        pushPart('\nendstream\n');
+        endObj();
+      }
+
+      beginObj(fontRegularNum);
+      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\n');
+      endObj();
+
+      beginObj(fontBoldNum);
+      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\n');
+      endObj();
+
+      beginObj(fontObliqueNum);
+      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>\n');
+      endObj();
+
+      beginObj(infoNum);
+      pushPart('<< /Title ');
+      pushPart(pdfLiteralStringBytes(toAsciiSafe(title || 'Untitled Picture Book')));
+      pushPart(' /Producer (Book Dummy) >>\n');
+      endObj();
+
+      var xrefOffset = pos;
+      var totalObjs = infoNum + 1;
+      var xrefLines = ['0000000000 65535 f \n'];
+      for (var num = 1; num <= infoNum; num++) {
+        xrefLines.push(pad10(offsets[num]) + ' 00000 n \n');
+      }
+      pushPart('xref\n0 ' + totalObjs + '\n' + xrefLines.join(''));
+      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root 1 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
+
+      var total = 0;
+      parts.forEach(function (part) { total += part.length; });
+      var result = new Uint8Array(total);
+      var o = 0;
+      parts.forEach(function (part) { result.set(part, o); o += part.length; });
+      return result;
+    }
+
+    // ---- Export As… wiring ----
+
+    function downloadBlob(filename, bytes, mime) {
+      var blob = new Blob([bytes], { type: mime });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
@@ -1752,40 +2197,54 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
     }
 
-    exportBtn.addEventListener('click', function () {
+    function exportFile(kind) {
+      closeExportPanel();
       exportBtn.disabled = true;
       setExportStatus('Preparing file…', true);
 
       try {
-        var pptxBytes = buildPptx(state.title, state.rows, state.trimSize);
-        var filename = slugify(state.title) + '.pptx';
+        var bytes, filename, mime;
+        if (kind === 'pdf') {
+          bytes = buildPdf(state.title, state.rows, state.trimSize);
+          filename = slugify(state.title) + '.pdf';
+          mime = 'application/pdf';
+        } else {
+          bytes = buildPptx(state.title, state.rows, state.trimSize);
+          filename = slugify(state.title) + '.pptx';
+          mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        }
 
+        var successNote = kind === 'pdf' ? '.' : ' — in Google Slides, use File → Import slides, or open it from Drive.';
         var useClaudeDownloads = typeof window.claude !== 'undefined' && typeof window.claude.use === 'function';
+
         if (useClaudeDownloads) {
           window.claude.use('downloads').then(function (downloads) {
             if (downloads) {
-              return downloads.save({ filename: filename, data: pptxBytes }).then(function () {
-                setExportStatus('Saved ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+              return downloads.save({ filename: filename, data: bytes }).then(function () {
+                setExportStatus('Saved ' + filename + successNote, true);
               });
             }
-            downloadBlob(filename, pptxBytes);
-            setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+            downloadBlob(filename, bytes, mime);
+            setExportStatus('Downloaded ' + filename + successNote, true);
           }).catch(function () {
-            downloadBlob(filename, pptxBytes);
-            setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+            downloadBlob(filename, bytes, mime);
+            setExportStatus('Downloaded ' + filename + successNote, true);
           }).then(function () {
             exportBtn.disabled = false;
           });
         } else {
-          downloadBlob(filename, pptxBytes);
-          setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+          downloadBlob(filename, bytes, mime);
+          setExportStatus('Downloaded ' + filename + successNote, true);
           exportBtn.disabled = false;
         }
       } catch (err) {
         setExportStatus('Couldn’t export: ' + (err && err.message ? err.message : 'unknown error'));
         exportBtn.disabled = false;
       }
-    });
+    }
+
+    exportPptxBtn.addEventListener('click', function () { exportFile('pptx'); });
+    exportPdfBtn.addEventListener('click', function () { exportFile('pdf'); });
   })();
 </script>
 
