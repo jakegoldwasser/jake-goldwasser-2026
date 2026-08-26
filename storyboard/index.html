@@ -763,19 +763,13 @@
         .replace(/'/g, '&apos;');
     }
 
-    function textToParagraphs(text, sz) {
+    function textToParagraphs(text, sz, algn) {
       var lines = String(text || '').split(/\r\n|\r|\n/);
+      var pPr = algn ? '<a:pPr algn="' + algn + '"/>' : '';
       return lines.map(function (line) {
-        if (!line) return '<a:p/>';
-        return '<a:p><a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
+        if (!line) return '<a:p>' + pPr + '</a:p>';
+        return '<a:p>' + pPr + '<a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"><a:latin typeface="Poppins"/></a:rPr><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
       }).join('');
-    }
-
-    function combinedSide(row, prefix) {
-      var part1 = row[prefix] || '';
-      var part2 = row[prefix + '2'] || '';
-      if (row[prefix + 'Split'] && part2) return part1 ? part1 + '\n\n' + part2 : part2;
-      return part1;
     }
 
     function slugify(s) {
@@ -899,7 +893,7 @@
       '</a:clrScheme>' +
       '<a:fontScheme name="Book Dummy">' +
       '<a:majorFont><a:latin typeface="Poppins"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
-      '<a:minorFont><a:latin typeface="EB Garamond"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
+      '<a:minorFont><a:latin typeface="Poppins"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
       '</a:fontScheme>' +
       '<a:fmtScheme name="Book Dummy">' +
       '<a:fillStyleLst>' +
@@ -926,25 +920,40 @@
       '</a:themeElements>' +
       '</a:theme>';
 
-    function slideXml(spreadNum, versoText, rectoText) {
-      var leftX = 457200, rightX = 6210300, boxW = 5524500, boxY = 800100, boxH = 5829300;
+    function makeTextBoxSp(id, name, x, y, w, h, text) {
+      return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+        '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+        '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill></a:ln></p:spPr>' +
+        '<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(text, 1800, 'l') + '</p:txBody></p:sp>';
+    }
+
+    function slideXml(row) {
+      var SIDE_W = 5524500, VERSO_X = 457200, RECTO_X = 6210300;
+      var BOX_W = 4500000, BOX_H = 1485900;
+      var BOTTOM_Y = 5143500, HALF_Y = 2700000;
+      var versoX = VERSO_X + (SIDE_W - BOX_W) / 2;
+      var rectoX = RECTO_X + (SIDE_W - BOX_W) / 2;
+
+      var shapes = '';
+      var shapeId = 2;
+
+      function addSide(x, prefix, label) {
+        if (row[prefix + 'Split']) {
+          shapes += makeTextBoxSp(shapeId++, label + ' 1', x, HALF_Y, BOX_W, BOX_H, row[prefix]);
+          shapes += makeTextBoxSp(shapeId++, label + ' 2', x, BOTTOM_Y, BOX_W, BOX_H, row[prefix + '2']);
+        } else {
+          shapes += makeTextBoxSp(shapeId++, label, x, BOTTOM_Y, BOX_W, BOX_H, row[prefix]);
+        }
+      }
+
+      addSide(versoX, 'verso', 'Verso');
+      addSide(rectoX, 'recto', 'Recto');
+
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
         '<p:cSld><p:spTree>' +
         '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
-        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Spread Label"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
-        '<p:spPr><a:xfrm><a:off x="457200" y="228600"/><a:ext cx="2286000" cy="400050"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>' +
-        '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/>' +
-        '<a:p><a:r><a:rPr lang="en-US" sz="1400" b="1" dirty="0"><a:solidFill><a:srgbClr val="4F7480"/></a:solidFill></a:rPr><a:t>Spread ' + spreadNum + '</a:t></a:r></a:p>' +
-        '</p:txBody></p:sp>' +
-        '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Verso"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
-        '<p:spPr><a:xfrm><a:off x="' + leftX + '" y="' + boxY + '"/><a:ext cx="' + boxW + '" cy="' + boxH + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-        '<a:ln><a:solidFill><a:srgbClr val="B7D6D8"/></a:solidFill></a:ln></p:spPr>' +
-        '<p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(versoText, 1800) + '</p:txBody></p:sp>' +
-        '<p:sp><p:nvSpPr><p:cNvPr id="4" name="Recto"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
-        '<p:spPr><a:xfrm><a:off x="' + rightX + '" y="' + boxY + '"/><a:ext cx="' + boxW + '" cy="' + boxH + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-        '<a:ln><a:solidFill><a:srgbClr val="B7D6D8"/></a:solidFill></a:ln></p:spPr>' +
-        '<p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(rectoText, 1800) + '</p:txBody></p:sp>' +
+        shapes +
         '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
     }
 
@@ -1067,7 +1076,7 @@
 
       for (var i3 = 1; i3 <= n; i3++) {
         var row = rows[i3 - 1];
-        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(i3, combinedSide(row, 'verso'), combinedSide(row, 'recto')));
+        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(row));
         addXml('ppt/slides/_rels/slide' + i3 + '.xml.rels',
           '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
