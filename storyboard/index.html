@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root {
     --paper: #F5FAFB;
@@ -471,6 +472,246 @@
 
   .trim-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  /* ---- My Storyboards menu ---- */
+
+  .library-menu {
+    position: relative;
+  }
+
+  .library-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+  }
+
+  .library-btn:hover,
+  .library-btn[aria-expanded="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .library-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .library-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 270px;
+    max-width: 80vw;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 10px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .library-panel[hidden] { display: none; }
+
+  .new-storyboard-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: none;
+    border-radius: 999px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+
+  .new-storyboard-btn:hover { opacity: 0.9; }
+  .new-storyboard-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .library-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .library-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .library-entry:hover { background: var(--surface-2); }
+
+  .library-entry.current {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+    cursor: default;
+  }
+
+  .library-entry-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .library-entry-delete {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--danger);
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .library-entry:hover .library-entry-delete { display: flex; }
+  .library-entry-delete:hover { background: var(--danger-soft); }
+
+  .library-empty {
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    color: var(--ink-faint);
+    text-align: center;
+    padding: 12px 4px;
+  }
+
+  .save-library-btn {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  .save-library-btn:hover { background: var(--accent-soft); }
+  .save-library-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* ---- Email storyboard ---- */
+
+  .email-menu {
+    position: relative;
+  }
+
+  .email-btn {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--teal);
+    background: var(--surface);
+    border: 2px solid var(--teal);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  .email-btn:hover,
+  .email-btn[aria-expanded="true"] { background: var(--surface-2); }
+  .email-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  .email-panel {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: 260px;
+    max-width: 80vw;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 12px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .email-panel[hidden] { display: none; }
+
+  .email-panel-label {
+    font-family: "Poppins", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .email-panel input[type="email"] {
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--paper);
+    border: 2px solid var(--line-strong);
+    border-radius: 8px;
+    padding: 8px 10px;
+    width: 100%;
+  }
+
+  .email-panel input[type="email"]:focus {
+    outline: none;
+    border-color: var(--teal);
+  }
+
+  .email-send-btn {
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--teal);
+    border: none;
+    border-radius: 999px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+
+  .email-send-btn:hover { opacity: 0.9; }
+  .email-send-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .email-panel-status {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -485,6 +726,13 @@
       <input id="title-input" type="text" placeholder="Untitled Picture Book" autocomplete="off" />
     </div>
     <div class="meta-panel">
+      <div class="library-menu" id="library-menu">
+        <button class="library-btn" id="library-btn" type="button" aria-expanded="false">My Storyboards ▾</button>
+        <div class="library-panel" id="library-panel" hidden>
+          <button class="new-storyboard-btn" id="new-storyboard-btn" type="button">+ New Storyboard</button>
+          <div class="library-list" id="library-list"></div>
+        </div>
+      </div>
       <span class="spread-count"><strong id="spread-total">14</strong> spreads</span>
       <span class="save-status" id="save-status">Saved</span>
     </div>
@@ -514,6 +762,18 @@
     <button class="export-btn" id="export-btn" type="button">
       Export to Slides
     </button>
+    <div class="email-menu" id="email-menu">
+      <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email Storyboard</button>
+      <div class="email-panel" id="email-panel" hidden>
+        <label class="email-panel-label" for="email-addr">Send to</label>
+        <input type="email" id="email-addr" placeholder="you@example.com" required />
+        <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
+        <p class="email-panel-status" id="email-panel-status"></p>
+      </div>
+    </div>
+    <button class="save-library-btn" id="save-library-btn" type="button">
+      Save to My Storyboards
+    </button>
     <span class="export-status" id="export-status"></span>
   </div>
 </div>
@@ -521,7 +781,11 @@
 <script>
   (function () {
     var STORAGE_KEY = 'book-dummy-script-v1';
+    var INDEX_KEY = 'book-dummy-index-v1';
+    var STORY_PREFIX = 'book-dummy-story-';
+    var CURRENT_KEY = 'book-dummy-current-v1';
     var INITIAL_ROWS = 14;
+    var currentId = null;
     var sheetEl = document.getElementById('sheet');
     var titleEl = document.getElementById('title-input');
     var addBtn = document.getElementById('add-row-btn');
@@ -565,29 +829,111 @@
       };
     }
 
-    function load() {
+    function defaultRows() {
+      var rows = [];
+      for (var i = 0; i < INITIAL_ROWS; i++) rows.push(blankRow());
+      return rows;
+    }
+
+    function makeId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function loadIndex() {
+      try {
+        var raw = localStorage.getItem(INDEX_KEY);
+        var arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) { return []; }
+    }
+
+    function saveIndex(list) {
+      try { localStorage.setItem(INDEX_KEY, JSON.stringify(list)); } catch (e) {}
+    }
+
+    function upsertIndexEntry(id, title) {
+      var list = loadIndex();
+      var found = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === id) { found = list[i]; break; }
+      }
+      var displayTitle = title && title.trim() ? title.trim() : 'Untitled Picture Book';
+      if (found) {
+        found.title = displayTitle;
+        found.updatedAt = Date.now();
+      } else {
+        list.push({ id: id, title: displayTitle, updatedAt: Date.now() });
+      }
+      saveIndex(list);
+    }
+
+    function removeIndexEntry(id) {
+      var list = loadIndex().filter(function (e) { return e.id !== id; });
+      saveIndex(list);
+      try { localStorage.removeItem(STORY_PREFIX + id); } catch (e) {}
+    }
+
+    function loadStory(id) {
+      try {
+        var raw = localStorage.getItem(STORY_PREFIX + id);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        return {
+          title: parsed.title || '',
+          rows: Array.isArray(parsed.rows) && parsed.rows.length ? parsed.rows.map(normalizeRow) : defaultRows(),
+          trimSize: getTrimSize(parsed.trimSize).key
+        };
+      } catch (e) { return null; }
+    }
+
+    function saveStory(id, data) {
+      try { localStorage.setItem(STORY_PREFIX + id, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function initLibrary() {
+      var savedCurrent = null;
+      try { savedCurrent = localStorage.getItem(CURRENT_KEY); } catch (e) {}
+
+      if (savedCurrent) {
+        var existing = loadStory(savedCurrent);
+        if (existing) {
+          currentId = savedCurrent;
+          state.title = existing.title;
+          state.rows = existing.rows;
+          state.trimSize = existing.trimSize;
+          return;
+        }
+      }
+
+      // First run, or the pointed-to story vanished: migrate the old
+      // single-storyboard data if present, otherwise start fresh.
+      var legacy = null;
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          var parsed = JSON.parse(raw);
-          if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
-            state.title = parsed.title || '';
-            state.rows = parsed.rows.map(normalizeRow);
-            state.trimSize = getTrimSize(parsed.trimSize).key;
-            return;
-          }
-        }
+        if (raw) legacy = JSON.parse(raw);
       } catch (e) {}
-      state.title = '';
-      state.rows = [];
-      state.trimSize = DEFAULT_TRIM;
-      for (var i = 0; i < INITIAL_ROWS; i++) state.rows.push(blankRow());
+
+      currentId = makeId();
+      if (legacy && Array.isArray(legacy.rows) && legacy.rows.length) {
+        state.title = legacy.title || '';
+        state.rows = legacy.rows.map(normalizeRow);
+        state.trimSize = getTrimSize(legacy.trimSize).key;
+      } else {
+        state.title = '';
+        state.rows = defaultRows();
+        state.trimSize = DEFAULT_TRIM;
+      }
+
+      saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
+      upsertIndexEntry(currentId, state.title);
+      try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
     }
 
     var saveTimer = null;
     function save() {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
+        upsertIndexEntry(currentId, state.title);
       } catch (e) {}
       statusEl.textContent = 'Saved';
       statusEl.classList.add('visible');
@@ -783,7 +1129,7 @@
       insertRowAt(state.rows.length);
     });
 
-    load();
+    initLibrary();
     titleEl.value = state.title;
     render();
 
@@ -798,6 +1144,214 @@
     trimSelect.addEventListener('change', function () {
       state.trimSize = trimSelect.value;
       save();
+    });
+
+    // ---- My Storyboards library ----
+
+    var libraryMenu = document.getElementById('library-menu');
+    var libraryBtn = document.getElementById('library-btn');
+    var libraryPanel = document.getElementById('library-panel');
+    var libraryList = document.getElementById('library-list');
+    var newStoryboardBtn = document.getElementById('new-storyboard-btn');
+    var saveLibraryBtn = document.getElementById('save-library-btn');
+
+    function renderLibraryList() {
+      var list = loadIndex().slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+      libraryList.innerHTML = '';
+      if (!list.length) {
+        var empty = document.createElement('div');
+        empty.className = 'library-empty';
+        empty.textContent = 'No saved storyboards yet.';
+        libraryList.appendChild(empty);
+        return;
+      }
+      list.forEach(function (entry) {
+        var item = document.createElement('div');
+        item.className = 'library-entry' + (entry.id === currentId ? ' current' : '');
+
+        var titleSpan = document.createElement('span');
+        titleSpan.className = 'library-entry-title';
+        titleSpan.textContent = entry.title;
+        item.appendChild(titleSpan);
+
+        if (entry.id !== currentId) {
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'library-entry-delete';
+          del.draggable = false;
+          del.setAttribute('aria-label', 'Delete "' + entry.title + '"');
+          del.textContent = '×';
+          del.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (window.confirm('Delete "' + entry.title + '"? This can\'t be undone.')) {
+              removeIndexEntry(entry.id);
+              renderLibraryList();
+            }
+          });
+          item.appendChild(del);
+          item.addEventListener('click', function () { switchTo(entry.id); });
+        }
+
+        libraryList.appendChild(item);
+      });
+    }
+
+    function openLibraryPanel() {
+      renderLibraryList();
+      libraryPanel.hidden = false;
+      libraryBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeLibraryPanel() {
+      libraryPanel.hidden = true;
+      libraryBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function switchTo(id) {
+      if (id === currentId) { closeLibraryPanel(); return; }
+      save();
+      var data = loadStory(id);
+      if (!data) return;
+      currentId = id;
+      try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+      state.title = data.title;
+      state.rows = data.rows;
+      state.trimSize = data.trimSize;
+      titleEl.value = state.title;
+      trimSelect.value = state.trimSize;
+      render();
+      closeLibraryPanel();
+    }
+
+    function createNewStoryboard() {
+      save();
+      currentId = makeId();
+      try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+      state.title = '';
+      state.rows = defaultRows();
+      state.trimSize = DEFAULT_TRIM;
+      saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
+      upsertIndexEntry(currentId, state.title);
+      titleEl.value = state.title;
+      trimSelect.value = state.trimSize;
+      render();
+      closeLibraryPanel();
+      titleEl.focus();
+    }
+
+    libraryBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (libraryPanel.hidden) openLibraryPanel(); else closeLibraryPanel();
+    });
+    newStoryboardBtn.addEventListener('click', createNewStoryboard);
+
+    saveLibraryBtn.addEventListener('click', function () {
+      save();
+      statusEl.textContent = 'Saved to My Storyboards';
+      statusEl.classList.add('visible');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2000);
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!libraryPanel.hidden && !libraryMenu.contains(e.target)) closeLibraryPanel();
+      if (!emailPanel.hidden && !emailMenu.contains(e.target)) closeEmailPanel();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (!libraryPanel.hidden) closeLibraryPanel();
+      if (!emailPanel.hidden) closeEmailPanel();
+    });
+
+    // ---- Email storyboard ----
+
+    var emailMenu = document.getElementById('email-menu');
+    var emailBtn = document.getElementById('email-btn');
+    var emailPanel = document.getElementById('email-panel');
+    var emailAddr = document.getElementById('email-addr');
+    var emailSendBtn = document.getElementById('email-send-btn');
+    var emailPanelStatus = document.getElementById('email-panel-status');
+
+    try {
+      if (window.emailjs && typeof window.emailjs.init === 'function') {
+        window.emailjs.init({ publicKey: 'Vb5AmJRuwdKkbSlH4' });
+      }
+    } catch (e) {}
+
+    function openEmailPanel() {
+      emailPanel.hidden = false;
+      emailBtn.setAttribute('aria-expanded', 'true');
+      emailAddr.focus();
+    }
+
+    function closeEmailPanel() {
+      emailPanel.hidden = true;
+      emailBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function sideText(row, prefix) {
+      var part1 = row[prefix] || '';
+      var part2 = row[prefix + '2'] || '';
+      if (row[prefix + 'Split'] && part2) return part1 ? part1 + ' / ' + part2 : part2;
+      return part1;
+    }
+
+    function plainStoryboard() {
+      var lines = [state.title || 'Untitled Picture Book', ''];
+      state.rows.forEach(function (row, i) {
+        lines.push('Spread ' + (i + 1));
+        lines.push('Verso: ' + sideText(row, 'verso'));
+        lines.push('Recto: ' + sideText(row, 'recto'));
+        if (row.illustration) lines.push('Illustration notes: ' + row.illustration);
+        lines.push('');
+      });
+      return lines.join('\n');
+    }
+
+    emailBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (emailPanel.hidden) openEmailPanel(); else closeEmailPanel();
+    });
+
+    emailSendBtn.addEventListener('click', function () {
+      if (!emailAddr.checkValidity() || !emailAddr.value.trim()) {
+        emailAddr.reportValidity();
+        return;
+      }
+      var email = emailAddr.value.trim();
+      var subject = (state.title || 'Untitled Picture Book') + ' — Storyboard';
+      var body = plainStoryboard();
+
+      function fallbackToMailto(note) {
+        emailPanelStatus.textContent = note;
+        window.location.href = 'mailto:' + encodeURIComponent(email) +
+          '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      }
+
+      emailSendBtn.disabled = true;
+      var originalLabel = emailSendBtn.textContent;
+      emailSendBtn.textContent = 'Sending…';
+      emailPanelStatus.textContent = '';
+
+      if (window.emailjs && typeof window.emailjs.send === 'function') {
+        window.emailjs.send('service_ur7r6mv', 'template_k5wzlc6', {
+          to_email: email,
+          subject: subject,
+          message: body
+        }).then(function () {
+          emailPanelStatus.textContent = 'Sent! Check ' + email + '.';
+        }).catch(function () {
+          fallbackToMailto('Couldn’t send automatically — opening your mail app instead.');
+        }).then(function () {
+          emailSendBtn.disabled = false;
+          emailSendBtn.textContent = originalLabel;
+        });
+        return;
+      }
+
+      emailSendBtn.disabled = false;
+      emailSendBtn.textContent = originalLabel;
+      fallbackToMailto('Opening your mail app instead.');
     });
 
     // ---- Export to Google Slides (.pptx) ----
