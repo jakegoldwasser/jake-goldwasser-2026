@@ -1696,23 +1696,25 @@
       return part1;
     }
 
-    function tsvCell(text) {
-      return String(text || '').replace(/[\t\r\n]+/g, ' ').trim();
+    function csvCell(text) {
+      var s = String(text || '').replace(/[\r\n]+/g, ' ').trim();
+      if (/[",]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+      return s;
     }
 
     function plainStoryboard() {
       var lines = [state.title || 'Untitled Picture Book', ''];
-      lines.push(['Spread', 'Verso', 'Recto', 'Illustration Notes'].join('\t'));
+      lines.push(['Spread', 'Verso', 'Recto', 'Illustration Notes'].join(','));
       state.rows.forEach(function (row, i) {
         lines.push([
           String(i + 1),
-          tsvCell(sideText(row, 'verso')),
-          tsvCell(sideText(row, 'recto')),
-          tsvCell(row.illustration)
-        ].join('\t'));
+          csvCell(sideText(row, 'verso')),
+          csvCell(sideText(row, 'recto')),
+          csvCell(row.illustration)
+        ].join(','));
       });
       lines.push('');
-      lines.push('(Paste the table above into a spreadsheet — it’s tab-separated, so it splits into columns automatically.)');
+      lines.push('(Paste the table above into a spreadsheet, or save it as a .csv file — it’s comma-separated.)');
       return lines.join('\n');
     }
 
