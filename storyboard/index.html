@@ -305,8 +305,16 @@
     box-shadow: 0 0 0 3px var(--accent-soft);
   }
 
-  .spread-pair textarea.cell {
+  .pair-side {
     flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .spread-pair textarea.cell {
+    flex: 1 1 auto;
     min-width: 0;
     border: none;
     border-radius: 0;
@@ -329,6 +337,46 @@
       transparent 10px,
       transparent 17px
     );
+  }
+
+  .pair-divider-h {
+    flex: none;
+    height: 3px;
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--line-strong) 0,
+      var(--line-strong) 10px,
+      transparent 10px,
+      transparent 17px
+    );
+  }
+
+  .split-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-family: "Poppins", sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 2px 9px;
+    cursor: pointer;
+    opacity: 0;
+    z-index: 2;
+    transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+
+  .pair-side:hover .split-toggle,
+  .split-toggle:focus-visible { opacity: 1; }
+
+  .split-toggle:hover {
+    background: var(--surface-2);
+    color: var(--accent);
+    border-color: var(--accent);
   }
 
   /* ---- Footer / add row ---- */
@@ -455,7 +503,22 @@
 
     var state = { title: '', rows: [] };
 
-    function blankRow() { return { verso: '', recto: '', illustration: '' }; }
+    function blankRow() {
+      return { verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '' };
+    }
+
+    function normalizeRow(row) {
+      row = row || {};
+      return {
+        verso: row.verso || '',
+        verso2: row.verso2 || '',
+        versoSplit: !!row.versoSplit,
+        recto: row.recto || '',
+        recto2: row.recto2 || '',
+        rectoSplit: !!row.rectoSplit,
+        illustration: row.illustration || ''
+      };
+    }
 
     function load() {
       try {
@@ -464,7 +527,7 @@
           var parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
             state.title = parsed.title || '';
-            state.rows = parsed.rows;
+            state.rows = parsed.rows.map(normalizeRow);
             return;
           }
         }
@@ -505,6 +568,50 @@
       });
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
+    }
+
+    function toggleSplit(rowIndex, prefix) {
+      var row = state.rows[rowIndex];
+      var splitField = prefix + 'Split';
+      var field2 = prefix + '2';
+      if (row[splitField]) {
+        row[prefix] = row[field2] ? (row[prefix] ? row[prefix] + '\n\n' + row[field2] : row[field2]) : row[prefix];
+        row[field2] = '';
+        row[splitField] = false;
+      } else {
+        row[splitField] = true;
+      }
+      save();
+      render();
+    }
+
+    function makeSide(rowIndex, prefix, label) {
+      var row = state.rows[rowIndex];
+      var splitField = prefix + 'Split';
+      var field2 = prefix + '2';
+
+      var side = document.createElement('div');
+      side.className = 'pair-side';
+
+      side.appendChild(makeTextarea(prefix, rowIndex, label));
+      if (row[splitField]) {
+        var hDivider = document.createElement('div');
+        hDivider.className = 'pair-divider-h';
+        side.appendChild(hDivider);
+        side.appendChild(makeTextarea(field2, rowIndex, label + ', continued'));
+      }
+
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'split-toggle';
+      toggle.textContent = row[splitField] ? 'Merge' : 'Split';
+      toggle.setAttribute('aria-label', (row[splitField] ? 'Merge ' : 'Split ') + label.toLowerCase() + ' — spread ' + (rowIndex + 1));
+      toggle.addEventListener('click', function () {
+        toggleSplit(rowIndex, prefix);
+      });
+      side.appendChild(toggle);
+
+      return side;
     }
 
     function makeRowGap(gapIndex) {
@@ -607,9 +714,9 @@
 
         var pair = document.createElement('div');
         pair.className = 'spread-pair';
-        pair.appendChild(makeTextarea('verso', i, 'Verso text'));
+        pair.appendChild(makeSide(i, 'verso', 'Verso text'));
         pair.appendChild(divider);
-        pair.appendChild(makeTextarea('recto', i, 'Recto text'));
+        pair.appendChild(makeSide(i, 'recto', 'Recto text'));
         sheetEl.appendChild(pair);
 
         sheetEl.appendChild(makeTextarea('illustration', i, 'Illustration notes', 'illustration'));
@@ -662,6 +769,13 @@
         if (!line) return '<a:p/>';
         return '<a:p><a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
       }).join('');
+    }
+
+    function combinedSide(row, prefix) {
+      var part1 = row[prefix] || '';
+      var part2 = row[prefix + '2'] || '';
+      if (row[prefix + 'Split'] && part2) return part1 ? part1 + '\n\n' + part2 : part2;
+      return part1;
     }
 
     function slugify(s) {
@@ -953,7 +1067,7 @@
 
       for (var i3 = 1; i3 <= n; i3++) {
         var row = rows[i3 - 1];
-        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(i3, row.verso, row.recto));
+        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(i3, combinedSide(row, 'verso'), combinedSide(row, 'recto')));
         addXml('ppt/slides/_rels/slide' + i3 + '.xml.rels',
           '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
