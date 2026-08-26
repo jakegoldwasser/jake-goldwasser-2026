@@ -85,16 +85,6 @@
     color: var(--red);
   }
 
-  .back-home {
-    display: inline-block;
-    margin: 0 0 0.9rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--ink-soft);
-    text-decoration: none;
-  }
-  .back-home:hover { color: var(--red); text-decoration: underline; }
-
   .nameplate {
     margin: 0;
     font-size: clamp(1.9rem, 3.6vw, 2.75rem);
@@ -479,7 +469,6 @@
 <header class="top">
   <div class="top-inner">
     <div class="brand">
-      <a class="back-home" href="/">&larr; Back to Jake&rsquo;s Website</a>
       <p class="kicker">A story-spine workshop</p>
       <h1 class="nameplate">Story Plotter</h1>
       <p class="tagline">A simple tool for authors and illustrators to sketch out picture book ideas.</p>
@@ -676,7 +665,7 @@
         <label class="label" for="emailAddr">Email address</label>
         <input type="email" id="emailAddr" required placeholder="you@example.com" />
       </div>
-      <button class="btn-primary" type="submit" id="emailSubmitBtn">Email me this story</button>
+      <button class="btn-primary" type="submit" id="emailSubmitBtn">Send</button>
     </form>
     <p class="email-status" id="emailStatus" aria-live="polite"></p>
     <a href="#" class="email-fallback-link" id="emailFallbackLink">Open in your mail app instead</a>
@@ -727,6 +716,34 @@
     if (/[sxz]$|[cs]h$/.test(base)) return base + 'es';
     if (/[^aeiou]y$/.test(base)) return base.slice(0, -1) + 'ies';
     return base + 's';
+  }
+
+  function cap(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  var LABEL_TEMPLATES = {
+    whoWhat: function (p) { return 'Who or what ' + p.be + ' ' + p.subject + '?'; },
+    charm: function (p) { return 'Why ' + p.be + ' ' + p.subject + ' charismatic? (the thing readers love)'; },
+    flaw: function (p) { return cap(p.possessive) + ' one flaw (what ' + p.subject + ' ' + conj('get', p) + ' wrong, overdo, or misunderstand)'; },
+    falseBelief: function (p) { return 'The false belief ' + p.subject + ' ' + conj('hold', p) + ', going in'; },
+    try1Approach: function (p) { return 'Try 1: ' + p.possessive + ' first approach'; },
+    try1Fail: function (p) { return 'Why it fails (' + p.possessive + ' flaw trips ' + p.object + ' up)'; },
+    lowPointEmotion: function (p) { return 'What ' + p.subject + ' ' + conj('feel', p) + ', here'; },
+    turnRealization: function (p) { return 'What ' + p.subject + ' ' + conj('realize', p) + ' (the new truth, replacing the false belief)'; },
+    try3Approach: function (p) { return cap(p.possessive) + ' new approach (possible now, because ' + p.haveContraction + ' grown)'; },
+    resolution: function (p) { return 'What ' + p.subject + ' ' + conj('get', p) + ' (may not be the original want — something better)'; }
+  };
+
+  var labelEls = {};
+  Object.keys(LABEL_TEMPLATES).forEach(function (f) {
+    labelEls[f] = document.querySelector('label[for="' + f + '"]');
+  });
+
+  function updateLabels(p) {
+    Object.keys(LABEL_TEMPLATES).forEach(function (f) {
+      if (labelEls[f]) labelEls[f].textContent = LABEL_TEMPLATES[f](p);
+    });
   }
 
   function getBlanks(p) {
@@ -789,6 +806,7 @@
   function render() {
     var v = getValues();
     var p = getPronouns(v);
+    updateLabels(p);
     var blanks = getBlanks(p);
     var name = v.name ? escapeHtml(v.name) : '<span class="blank">[' + blanks.name + ']</span>';
     function b(field) { return blank(field, v, blanks); }
@@ -997,5 +1015,6 @@
   render();
 })();
 </script>
+
 
 
