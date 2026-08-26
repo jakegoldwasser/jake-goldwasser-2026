@@ -75,6 +75,15 @@
     color: var(--ink-faint);
   }
 
+  .back-home {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .back-home:hover { color: var(--accent); text-decoration: underline; }
+
   #title-input {
     font-family: "EB Garamond", ui-serif, Georgia, serif;
     font-weight: 500;
@@ -814,6 +823,7 @@
 <div class="page">
   <header class="masthead">
     <div class="title-block">
+      <a class="back-home" href="/">&larr; Back to Jake&rsquo;s Website</a>
       <span class="eyebrow">Picture Book Manuscript</span>
       <input id="title-input" type="text" placeholder="Untitled Picture Book" autocomplete="off" />
     </div>
@@ -1904,21 +1914,13 @@
     }
 
     // ---- PDF builder (hand-rolled, no external library) ----
-
-    var HELVETICA_WIDTHS = {
-      32: 278, 33: 278, 34: 355, 35: 556, 36: 556, 37: 889, 38: 667, 39: 191,
-      40: 333, 41: 333, 42: 389, 43: 584, 44: 278, 45: 333, 46: 278, 47: 278,
-      48: 556, 49: 556, 50: 556, 51: 556, 52: 556, 53: 556, 54: 556, 55: 556, 56: 556, 57: 556,
-      58: 278, 59: 278, 60: 584, 61: 584, 62: 584, 63: 556, 64: 1015,
-      65: 667, 66: 667, 67: 722, 68: 722, 69: 667, 70: 611, 71: 778, 72: 722, 73: 278,
-      74: 500, 75: 667, 76: 556, 77: 833, 78: 722, 79: 778, 80: 667, 81: 778, 82: 722,
-      83: 667, 84: 611, 85: 722, 86: 667, 87: 944, 88: 667, 89: 667, 90: 611,
-      91: 278, 92: 278, 93: 278, 94: 469, 95: 556, 96: 333,
-      97: 556, 98: 556, 99: 500, 100: 556, 101: 556, 102: 278, 103: 556, 104: 556,
-      105: 222, 106: 222, 107: 500, 108: 222, 109: 833, 110: 556, 111: 556, 112: 556,
-      113: 556, 114: 333, 115: 500, 116: 278, 117: 556, 118: 500, 119: 722, 120: 500,
-      121: 500, 122: 500, 123: 334, 124: 260, 125: 334, 126: 584
-    };
+    //
+    // Poppins isn't one of the PDF standard 14 fonts, and embedding a real
+    // TrueType font from scratch (parsing WOFF2/Brotli, building CID tables)
+    // is well past what's reasonable here. Instead: render each text block
+    // with Canvas using the Poppins face already loaded on the page, read
+    // back the pixels, and embed them as small grayscale images. Vector
+    // drawing (box borders, gutter line) stays native PDF.
 
     var WINANSI_MAP = {
       0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94,
@@ -1954,23 +1956,48 @@
     // metadata strictly ASCII to avoid the two encodings disagreeing.
     function toAsciiSafe(str) {
       return String(str || '')
-        .replace(/[‘’]/g, "'")
-        .replace(/[“”]/g, '"')
-        .replace(/[–—]/g, '-')
-        .replace(/…/g, '...')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\u2026/g, '...')
         .replace(/[^\x20-\x7E]/g, '?');
     }
 
-    function textWidth(str, fontSize) {
-      var total = 0;
-      for (var i = 0; i < str.length; i++) {
-        var code = str.charCodeAt(i);
-        total += (HELVETICA_WIDTHS[code] !== undefined ? HELVETICA_WIDTHS[code] : 556);
-      }
-      return total / 1000 * fontSize;
+    function pushAscii(arr, str) {
+      for (var i = 0; i < str.length; i++) arr.push(str.charCodeAt(i) & 0xFF);
     }
 
-    function wrapText(text, maxWidth, fontSize, maxLines) {
+    var PDF_INK_HEX = '#163240';
+    var PDF_MUTED_HEX = '#4F7480';
+    var PDF_BORDER_GRAY = '0.6';
+    var PDF_RASTER_SCALE = 2;
+
+    function ensureFontsReady() {
+      var specs = ['400 16px Poppins', '600 16px Poppins'];
+      return Promise.all(specs.map(function (s) {
+        try { return document.fonts.load(s); } catch (e) { return Promise.resolve(); }
+      })).then(function () {
+        return document.fonts.ready;
+      }).catch(function () { return null; });
+    }
+
+    var __measureCtx = null;
+    function getMeasureCtx() {
+      if (!__measureCtx) { __measureCtx = document.createElement('canvas').getContext('2d'); }
+      return __measureCtx;
+    }
+
+    function canvasFont(weight, sizePt) {
+      return weight + ' ' + sizePt + 'px Poppins, sans-serif';
+    }
+
+    function measureCanvasText(str, weight, sizePt) {
+      var ctx = getMeasureCtx();
+      ctx.font = canvasFont(weight, sizePt);
+      return ctx.measureText(str).width;
+    }
+
+    function wrapCanvasText(text, maxWidth, weight, sizePt, maxLines) {
       var paragraphs = String(text || '').split(/\r\n|\r|\n/);
       var lines = [];
       paragraphs.forEach(function (para) {
@@ -1979,7 +2006,7 @@
         var current = '';
         words.forEach(function (word) {
           var test = current ? current + ' ' + word : word;
-          if (!current || textWidth(test, fontSize) <= maxWidth) {
+          if (!current || measureCanvasText(test, weight, sizePt) <= maxWidth) {
             current = test;
           } else {
             lines.push(current);
@@ -1991,7 +2018,7 @@
       if (maxLines && lines.length > maxLines) {
         lines = lines.slice(0, maxLines);
         var last = lines[maxLines - 1];
-        while (last.length > 0 && textWidth(last + '…', fontSize) > maxWidth) {
+        while (last.length > 0 && measureCanvasText(last + '…', weight, sizePt) > maxWidth) {
           last = last.slice(0, -1);
         }
         lines[maxLines - 1] = last + '…';
@@ -1999,93 +2026,139 @@
       return lines;
     }
 
-    function pushAsciiPdf(arr, str) {
-      for (var i = 0; i < str.length; i++) arr.push(str.charCodeAt(i) & 0xFF);
-    }
+    // Rasterize a wrapped text block with the real Poppins face (loaded on
+    // the page already) at PDF_RASTER_SCALE density, returning single-channel
+    // grayscale pixel bytes ready for RunLengthDecode + a DeviceGray image.
+    function renderTextBlockGray(lines, weight, sizePt, lineHeightPt, colorHex, widthPt) {
+      var heightPt = Math.max(1, lines.length * lineHeightPt);
+      var wPx = Math.max(1, Math.ceil(widthPt * PDF_RASTER_SCALE));
+      var hPx = Math.max(1, Math.ceil(heightPt * PDF_RASTER_SCALE));
 
-    function pushBytesPdf(arr, bytes) {
-      for (var i = 0; i < bytes.length; i++) arr.push(bytes[i]);
-    }
+      var canvas = document.createElement('canvas');
+      canvas.width = wPx;
+      canvas.height = hPx;
+      var ctx = canvas.getContext('2d');
+      ctx.scale(PDF_RASTER_SCALE, PDF_RASTER_SCALE);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, widthPt, heightPt);
+      ctx.font = canvasFont(weight, sizePt);
+      ctx.fillStyle = colorHex;
+      ctx.textBaseline = 'alphabetic';
 
-    function pdfDrawText(c, x, yBottom, str, fontKey, fontSize, rgb) {
-      if (!str) return;
-      pushAsciiPdf(c, 'BT\n/' + fontKey + ' ' + fontSize + ' Tf\n' +
-        rgb[0] + ' ' + rgb[1] + ' ' + rgb[2] + ' rg\n' +
-        x.toFixed(2) + ' ' + yBottom.toFixed(2) + ' Td\n');
-      pushBytesPdf(c, pdfLiteralStringBytes(str));
-      pushAsciiPdf(c, ' Tj\nET\n');
-    }
-
-    function pdfDrawLines(c, x, startYBottom, lines, fontKey, fontSize, lineHeight, rgb) {
       lines.forEach(function (line, i) {
-        pdfDrawText(c, x, startYBottom - i * lineHeight, line, fontKey, fontSize, rgb);
+        if (!line) return;
+        ctx.fillText(line, 0, i * lineHeightPt + lineHeightPt * 0.82);
       });
+
+      var data = ctx.getImageData(0, 0, wPx, hPx).data;
+      var gray = new Uint8Array(wPx * hPx);
+      for (var i = 0, j = 0; i < data.length; i += 4, j++) {
+        gray[j] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+      }
+
+      return { widthPt: widthPt, heightPt: heightPt, widthPx: wPx, heightPx: hPx, gray: gray };
     }
 
-    function pdfDashedRect(c, x, yBottom, w, h, gray) {
-      pushAsciiPdf(c, gray + ' G\n[6 3] 0 d\n3 w\n' +
-        x.toFixed(2) + ' ' + yBottom.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n');
+    // PDF RunLengthDecode encoder (ISO 32000-1 section 7.4.5): repeat-runs of
+    // 2-128 identical bytes, or literal runs of up to 128 bytes; byte 128 ends
+    // the stream. Mostly-white text renders compress very well under this.
+    function rleEncode(bytes) {
+      var out = [];
+      var i = 0, n = bytes.length;
+      while (i < n) {
+        var runLen = 1;
+        while (i + runLen < n && bytes[i + runLen] === bytes[i] && runLen < 128) runLen++;
+        if (runLen >= 2) {
+          out.push(257 - runLen);
+          out.push(bytes[i]);
+          i += runLen;
+        } else {
+          var start = i;
+          var count = 0;
+          while (i < n && count < 128) {
+            if (i + 1 < n && bytes[i] === bytes[i + 1]) break;
+            count++;
+            i++;
+          }
+          if (count === 0) { count = 1; i++; }
+          out.push(count - 1);
+          for (var k = 0; k < count; k++) out.push(bytes[start + k]);
+        }
+      }
+      out.push(128);
+      return out;
     }
 
-    function pdfDashedLine(c, x1, y1, x2, y2, gray) {
-      pushAsciiPdf(c, gray + ' G\n[6 3] 0 d\n3 w\n' +
-        x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n');
+    function pdfDashedRectStr(x, y, w, h) {
+      return PDF_BORDER_GRAY + ' G\n[6 3] 0 d\n3 w\n' +
+        x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n';
     }
 
-    var PDF_INK = [0.086, 0.196, 0.251];
-    var PDF_MUTED = [0.31, 0.45, 0.5];
-    var PDF_BORDER_GRAY = '0.6';
+    function pdfDashedLineStr(x1, y1, x2, y2) {
+      return PDF_BORDER_GRAY + ' G\n[6 3] 0 d\n3 w\n' +
+        x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
+    }
 
-    function buildPdfPageContent(spreadIndex, row, pageW, pageH, title) {
+    // Builds one page's draw operations: vector rects/lines plus rasterized
+    // text blocks (each an { type: 'image', ... } op carrying its own pixel
+    // data), left for buildPdf() to turn into PDF objects with real numbers.
+    function buildPdfPageOps(spreadIndex, row, pageW, pageH, title) {
       var MARGIN = 36, GUTTER_HALF_GAP = 9, BOTTOM_MARGIN = 18, PAD = 8;
       var half = pageW / 2;
       var sideW = half - MARGIN - GUTTER_HALF_GAP;
       var versoX = MARGIN, rectoX = half + GUTTER_HALF_GAP;
       var boxW = sideW * 0.8;
-      var boxH = pageH * 0.25 - BOTTOM_MARGIN;
-      var bottomTopY = pageH * 0.75;
-      var halfTopY = (pageH - boxH) / 2;
+      var boxH = (pageH * 0.25 - BOTTOM_MARGIN) * 0.85;
+      var splitBoxH = boxH * 0.72;
       var versoBoxX = versoX + (sideW - boxW) / 2;
       var rectoBoxX = rectoX + (sideW - boxW) / 2;
 
-      function topToBottom(topDist, h) { return pageH - topDist - h; }
+      var ops = [];
 
-      var c = [];
+      function addTextBlock(x, yBottom, lines, weight, sizePt, lineHeightPt, colorHex, widthPt) {
+        if (!lines.some(function (l) { return l; })) return;
+        var rendered = renderTextBlockGray(lines, weight, sizePt, lineHeightPt, colorHex, widthPt);
+        ops.push({
+          type: 'image', x: x, y: yBottom,
+          widthPt: rendered.widthPt, heightPt: rendered.heightPt,
+          widthPx: rendered.widthPx, heightPx: rendered.heightPx,
+          rle: rleEncode(rendered.gray)
+        });
+      }
 
-      pdfDrawText(c, MARGIN, pageH - 28,
-        'Spread ' + (spreadIndex + 1) + (title ? ' — ' + title : ''), 'F1B', 10, PDF_MUTED);
+      var headerText = 'Spread ' + (spreadIndex + 1) + (title ? ' \u2014 ' + title : '');
+      var headerLines = wrapCanvasText(headerText, pageW - MARGIN * 2, 600, 11, 1);
+      addTextBlock(MARGIN, pageH - 22 - headerLines.length * 14, headerLines, 600, 11, 14, PDF_MUTED_HEX, pageW - MARGIN * 2);
 
       if (row.illustration) {
         var notesWidth = pageW - MARGIN * 2;
-        pdfDrawText(c, MARGIN, pageH - 46, 'Illustration notes', 'F1B', 8, PDF_MUTED);
-        var noteLines = wrapText(row.illustration, notesWidth, 9, 4);
-        pdfDrawLines(c, MARGIN, pageH - 58, noteLines, 'F2', 9, 12, PDF_MUTED);
+        addTextBlock(MARGIN, pageH - 38 - 11, ['Illustration notes'], 600, 9, 11, PDF_MUTED_HEX, notesWidth);
+        var noteLines = wrapCanvasText(row.illustration, notesWidth, 400, 10, 4);
+        addTextBlock(MARGIN, pageH - 51 - noteLines.length * 13, noteLines, 400, 10, 13, PDF_MUTED_HEX, notesWidth);
       }
 
-      pdfDashedLine(c, half, 0, half, pageH, PDF_BORDER_GRAY);
+      ops.push({ type: 'line', x1: half, y1: 0, x2: half, y2: pageH });
 
-      function drawBox(x, topDist, text) {
-        var yBottom = topToBottom(topDist, boxH);
-        pdfDashedRect(c, x, yBottom, boxW, boxH, PDF_BORDER_GRAY);
-        var lines = wrapText(text, boxW - PAD * 2, 11, Math.max(1, Math.floor((boxH - PAD * 2) / 14)));
-        var textBlockH = lines.length * 14;
-        var firstBaseline = yBottom + (boxH + textBlockH) / 2 - 11;
-        pdfDrawLines(c, x + PAD, firstBaseline, lines, 'F1', 11, 14, PDF_INK);
+      function drawBox(x, yBottom, text, h) {
+        ops.push({ type: 'rect', x: x, y: yBottom, w: boxW, h: h });
+        var lines = wrapCanvasText(text, boxW - PAD * 2, 400, 13, Math.max(1, Math.floor((h - PAD * 2) / 17)));
+        var textBlockH = lines.length * 17;
+        addTextBlock(x + PAD, yBottom + (h - textBlockH) / 2, lines, 400, 13, 17, PDF_INK_HEX, boxW - PAD * 2);
       }
 
       function drawSide(x, prefix) {
         if (row[prefix + 'Split']) {
-          drawBox(x, halfTopY, row[prefix]);
-          drawBox(x, bottomTopY, row[prefix + '2']);
+          drawBox(x, pageH / 2 - splitBoxH / 2, row[prefix], splitBoxH);
+          drawBox(x, BOTTOM_MARGIN, row[prefix + '2'], splitBoxH);
         } else {
-          drawBox(x, bottomTopY, row[prefix]);
+          drawBox(x, BOTTOM_MARGIN, row[prefix], boxH);
         }
       }
 
       drawSide(versoBoxX, 'verso');
       drawSide(rectoBoxX, 'recto');
 
-      return c;
+      return ops;
     }
 
     function pad10(n) {
@@ -2094,7 +2167,9 @@
       return s;
     }
 
-    function buildPdf(title, rows, trimKey) {
+    async function buildPdf(title, rows, trimKey) {
+      await ensureFontsReady();
+
       var trim = getTrimSize(trimKey);
       var pageW = Math.round(trim.pageW * 2 * 72);
       var pageH = Math.round(trim.pageH * 72);
@@ -2103,63 +2178,84 @@
       var parts = [];
       var offsets = [];
       var pos = 0;
+      var nextObj = 1;
 
       function pushPart(chunk) {
         var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
         parts.push(u8);
         pos += u8.length;
       }
+      function allocObj() { return nextObj++; }
       function beginObj(num) { offsets[num] = pos; pushPart(num + ' 0 obj\n'); }
       function endObj() { pushPart('endobj\n'); }
 
-      var pageObjStart = 3;
-      var contentObjStart = pageObjStart + n;
-      var fontRegularNum = contentObjStart + n;
-      var fontBoldNum = fontRegularNum + 1;
-      var fontObliqueNum = fontBoldNum + 1;
-      var infoNum = fontObliqueNum + 1;
-
       pushPart('%PDF-1.4\n');
 
-      beginObj(1);
-      pushPart('<< /Type /Catalog /Pages 2 0 R >>\n');
-      endObj();
-
+      var catalogNum = allocObj();
+      var pagesNum = allocObj();
       var kids = [];
-      for (var i = 0; i < n; i++) kids.push((pageObjStart + i) + ' 0 R');
-      beginObj(2);
-      pushPart('<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + n + ' >>\n');
-      endObj();
 
       for (var p = 0; p < n; p++) {
-        var contentBytes = buildPdfPageContent(p, rows[p], pageW, pageH, title);
-        var contentU8 = new Uint8Array(contentBytes);
+        var ops = buildPdfPageOps(p, rows[p], pageW, pageH, title);
+        var pageNum = allocObj();
+        var contentNum = allocObj();
+        var imageOps = ops.filter(function (o) { return o.type === 'image'; });
+        var imgNums = imageOps.map(function () { return allocObj(); });
+        kids.push(pageNum);
 
-        beginObj(pageObjStart + p);
-        pushPart('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pageW + ' ' + pageH + ']' +
-          ' /Resources << /Font << /F1 ' + fontRegularNum + ' 0 R /F1B ' + fontBoldNum + ' 0 R /F2 ' + fontObliqueNum + ' 0 R >> >>' +
-          ' /Contents ' + (contentObjStart + p) + ' 0 R >>\n');
+        var contentBytes = [];
+        var xobjEntries = [];
+        var imgIdx = 0;
+        ops.forEach(function (op) {
+          if (op.type === 'rect') {
+            pushAscii(contentBytes, pdfDashedRectStr(op.x, op.y, op.w, op.h));
+          } else if (op.type === 'line') {
+            pushAscii(contentBytes, pdfDashedLineStr(op.x1, op.y1, op.x2, op.y2));
+          } else if (op.type === 'image') {
+            var num = imgNums[imgIdx++];
+            var key = 'Im' + num;
+            xobjEntries.push('/' + key + ' ' + num + ' 0 R');
+            pushAscii(contentBytes, 'q\n' + op.widthPt.toFixed(2) + ' 0 0 ' + op.heightPt.toFixed(2) + ' ' +
+              op.x.toFixed(2) + ' ' + op.y.toFixed(2) + ' cm\n/' + key + ' Do\nQ\n');
+          }
+        });
+
+        beginObj(pageNum);
+        pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + pageW + ' ' + pageH + ']' +
+          ' /Resources << /XObject << ' + xobjEntries.join(' ') + ' >> >>' +
+          ' /Contents ' + contentNum + ' 0 R >>\n');
         endObj();
 
-        beginObj(contentObjStart + p);
+        var contentU8 = new Uint8Array(contentBytes);
+        beginObj(contentNum);
         pushPart('<< /Length ' + contentU8.length + ' >>\nstream\n');
         pushPart(contentU8);
         pushPart('\nendstream\n');
         endObj();
+
+        imgIdx = 0;
+        ops.forEach(function (op) {
+          if (op.type !== 'image') return;
+          var num = imgNums[imgIdx++];
+          var rleU8 = new Uint8Array(op.rle);
+          beginObj(num);
+          pushPart('<< /Type /XObject /Subtype /Image /Width ' + op.widthPx + ' /Height ' + op.heightPx +
+            ' /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode /Length ' + rleU8.length + ' >>\nstream\n');
+          pushPart(rleU8);
+          pushPart('\nendstream\n');
+          endObj();
+        });
       }
 
-      beginObj(fontRegularNum);
-      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\n');
+      beginObj(catalogNum);
+      pushPart('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n');
       endObj();
 
-      beginObj(fontBoldNum);
-      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>\n');
+      beginObj(pagesNum);
+      pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + n + ' >>\n');
       endObj();
 
-      beginObj(fontObliqueNum);
-      pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>\n');
-      endObj();
-
+      var infoNum = allocObj();
       beginObj(infoNum);
       pushPart('<< /Title ');
       pushPart(pdfLiteralStringBytes(toAsciiSafe(title || 'Untitled Picture Book')));
@@ -2167,13 +2263,13 @@
       endObj();
 
       var xrefOffset = pos;
-      var totalObjs = infoNum + 1;
+      var totalObjs = nextObj;
       var xrefLines = ['0000000000 65535 f \n'];
-      for (var num = 1; num <= infoNum; num++) {
-        xrefLines.push(pad10(offsets[num]) + ' 00000 n \n');
+      for (var num = 1; num < totalObjs; num++) {
+        xrefLines.push(pad10(offsets[num] || 0) + ' 00000 n \n');
       }
       pushPart('xref\n0 ' + totalObjs + '\n' + xrefLines.join(''));
-      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root 1 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
+      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root ' + catalogNum + ' 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
 
       var total = 0;
       parts.forEach(function (part) { total += part.length; });
