@@ -101,6 +101,24 @@
   #title-input::placeholder { color: var(--ink-faint); }
   #title-input:focus { border-bottom-color: var(--accent); }
 
+  #author-input {
+    font-family: "Poppins", sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--ink-soft);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    padding: 2px 2px 6px;
+    width: 100%;
+    max-width: 280px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  #author-input::placeholder { color: var(--ink-faint); }
+  #author-input:focus { border-bottom-color: var(--accent); }
+
   .meta-panel {
     display: flex;
     flex-direction: column;
@@ -393,6 +411,13 @@
 
   .sheet-footer {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .footer-actions {
+    display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: 12px;
@@ -623,6 +648,25 @@
   .new-storyboard-btn:hover { opacity: 0.9; }
   .new-storyboard-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  .delete-library-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--danger);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+
+  .delete-library-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
+  .delete-library-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+
   .library-list {
     display: flex;
     flex-direction: column;
@@ -704,6 +748,24 @@
 
   .save-library-btn:hover { background: var(--accent-soft); }
   .save-library-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .duplicate-btn {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--teal);
+    background: var(--surface);
+    border: 2px solid var(--teal);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  .duplicate-btn:hover { background: var(--surface-2); }
+  .duplicate-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
   .clear-btn {
     display: inline-flex;
@@ -873,6 +935,12 @@
     margin: 0;
   }
 
+  .page-footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -886,6 +954,7 @@
       <a class="back-home" href="/">&larr; Back to Jake&rsquo;s Website</a>
       <span class="eyebrow">Picture Book Manuscript</span>
       <input id="title-input" type="text" placeholder="Untitled Picture Book" autocomplete="off" />
+      <input id="author-input" type="text" placeholder="Author name" autocomplete="off" />
     </div>
     <div class="meta-panel">
       <div class="library-menu" id="library-menu">
@@ -893,6 +962,7 @@
         <div class="library-panel" id="library-panel" hidden>
           <button class="new-storyboard-btn" id="new-storyboard-btn" type="button">+ New Storyboard</button>
           <div class="library-list" id="library-list"></div>
+          <button class="delete-library-btn" id="delete-library-btn" type="button">Delete Storyboard</button>
         </div>
       </div>
       <span class="spread-count"><strong id="spread-total">14</strong> spreads</span>
@@ -917,43 +987,52 @@
       <span class="plus">+</span>
       Add Spread
     </button>
-    <label class="trim-label" for="trim-select">
-      Book size
-      <select id="trim-select" class="trim-select"></select>
-    </label>
-    <div class="export-menu" id="export-menu">
-      <button class="export-btn" id="export-btn" type="button" aria-expanded="false">Export As…</button>
-      <div class="export-panel" id="export-panel" hidden>
-        <button class="export-option-btn" id="export-pptx-btn" type="button">PowerPoint <span class="ext">.pptx</span></button>
-        <button class="export-option-btn" id="export-pdf-btn" type="button">PDF <span class="ext">.pdf</span></button>
-      </div>
-    </div>
-    <div class="email-menu" id="email-menu">
-      <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email As…</button>
-      <div class="email-panel" id="email-panel" hidden>
-        <div class="format-toggle" id="email-format-toggle">
-          <button type="button" class="active" data-format="pptx">PowerPoint</button>
-          <button type="button" data-format="pdf">PDF</button>
+    <div class="footer-actions">
+      <label class="trim-label" for="trim-select">
+        Book size
+        <select id="trim-select" class="trim-select"></select>
+      </label>
+      <div class="export-menu" id="export-menu">
+        <button class="export-btn" id="export-btn" type="button" aria-expanded="false">Export As…</button>
+        <div class="export-panel" id="export-panel" hidden>
+          <button class="export-option-btn" id="export-pptx-btn" type="button">PowerPoint <span class="ext">.pptx</span></button>
+          <button class="export-option-btn" id="export-pdf-btn" type="button">PDF <span class="ext">.pdf</span></button>
         </div>
-        <label class="email-panel-label" for="email-addr">Send to</label>
-        <input type="email" id="email-addr" placeholder="you@example.com" required />
-        <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
-        <p class="email-panel-status" id="email-panel-status"></p>
       </div>
+      <div class="email-menu" id="email-menu">
+        <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email As…</button>
+        <div class="email-panel" id="email-panel" hidden>
+          <div class="format-toggle" id="email-format-toggle">
+            <button type="button" class="active" data-format="pptx">PowerPoint</button>
+            <button type="button" data-format="pdf">PDF</button>
+          </div>
+          <label class="email-panel-label" for="email-addr">Send to</label>
+          <input type="email" id="email-addr" placeholder="you@example.com" required />
+          <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
+          <p class="email-panel-status" id="email-panel-status"></p>
+        </div>
+      </div>
+      <button class="save-library-btn" id="save-library-btn" type="button">
+        Save
+      </button>
+      <button class="duplicate-btn" id="duplicate-btn" type="button">
+        Duplicate Storyboard
+      </button>
+      <button class="clear-btn" id="clear-btn" type="button">
+        Clear Storyboard
+      </button>
+      <span class="export-status" id="export-status"></span>
     </div>
-    <button class="save-library-btn" id="save-library-btn" type="button">
-      Save to My Storyboards
-    </button>
-    <button class="clear-btn" id="clear-btn" type="button">
-      Clear Storyboard
-    </button>
-    <span class="export-status" id="export-status"></span>
   </div>
 </div>
 
+<footer class="page-footer">
+  <span id="copyright-line"></span>
+</footer>
+
 <div class="confirm-overlay" id="confirm-overlay" hidden>
   <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-text">
-    <p id="confirm-dialog-text">Clear this storyboard? This erases the title and all spreads — this can't be undone.</p>
+    <p id="confirm-dialog-text">Clear this storyboard? This erases all spreads — this can't be undone.</p>
     <div class="confirm-actions">
       <button class="confirm-cancel-btn" id="confirm-cancel-btn" type="button">Cancel</button>
       <button class="confirm-ok-btn" id="confirm-ok-btn" type="button">Clear</button>
@@ -971,6 +1050,8 @@
     var currentId = null;
     var sheetEl = document.getElementById('sheet');
     var titleEl = document.getElementById('title-input');
+    var authorEl = document.getElementById('author-input');
+    var copyrightEl = document.getElementById('copyright-line');
     var addBtn = document.getElementById('add-row-btn');
     var totalEl = document.getElementById('spread-total');
     var statusEl = document.getElementById('save-status');
@@ -993,7 +1074,13 @@
       return TRIM_SIZES[0];
     }
 
-    var state = { title: '', rows: [], trimSize: DEFAULT_TRIM };
+    var state = { title: '', author: '', rows: [], trimSize: DEFAULT_TRIM };
+
+    function updateCopyright() {
+      var year = new Date().getFullYear();
+      var author = (state.author || '').trim();
+      copyrightEl.textContent = author ? ('© ' + year + ' ' + author) : ('© ' + year);
+    }
 
     function blankRow() {
       return { verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '' };
@@ -1063,6 +1150,7 @@
         var parsed = JSON.parse(raw);
         return {
           title: parsed.title || '',
+          author: parsed.author || '',
           rows: Array.isArray(parsed.rows) && parsed.rows.length ? parsed.rows.map(normalizeRow) : defaultRows(),
           trimSize: getTrimSize(parsed.trimSize).key
         };
@@ -1082,6 +1170,7 @@
         if (existing) {
           currentId = savedCurrent;
           state.title = existing.title;
+          state.author = existing.author;
           state.rows = existing.rows;
           state.trimSize = existing.trimSize;
           return;
@@ -1099,15 +1188,17 @@
       currentId = makeId();
       if (legacy && Array.isArray(legacy.rows) && legacy.rows.length) {
         state.title = legacy.title || '';
+        state.author = legacy.author || '';
         state.rows = legacy.rows.map(normalizeRow);
         state.trimSize = getTrimSize(legacy.trimSize).key;
       } else {
         state.title = '';
+        state.author = '';
         state.rows = defaultRows();
         state.trimSize = DEFAULT_TRIM;
       }
 
-      saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
+      saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize });
       upsertIndexEntry(currentId, state.title);
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
     }
@@ -1115,7 +1206,7 @@
     var saveTimer = null;
     function save() {
       try {
-        saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
+        saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize });
         upsertIndexEntry(currentId, state.title);
       } catch (e) {}
       statusEl.textContent = 'Saved';
@@ -1245,6 +1336,7 @@
     }
 
     function render() {
+      var scrollX = window.scrollX, scrollY = window.scrollY;
       var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap');
       nodes.forEach(function (n) { n.remove(); });
 
@@ -1301,11 +1393,18 @@
       });
 
       totalEl.textContent = state.rows.length;
+      window.scrollTo(scrollX, scrollY);
     }
 
     titleEl.addEventListener('input', function () {
       state.title = titleEl.value;
       save();
+    });
+
+    authorEl.addEventListener('input', function () {
+      state.author = authorEl.value;
+      save();
+      updateCopyright();
     });
 
     addBtn.addEventListener('click', function () {
@@ -1314,6 +1413,8 @@
 
     initLibrary();
     titleEl.value = state.title;
+    authorEl.value = state.author;
+    updateCopyright();
     render();
 
     var trimSelect = document.getElementById('trim-select');
@@ -1336,7 +1437,9 @@
     var libraryPanel = document.getElementById('library-panel');
     var libraryList = document.getElementById('library-list');
     var newStoryboardBtn = document.getElementById('new-storyboard-btn');
+    var deleteLibraryBtn = document.getElementById('delete-library-btn');
     var saveLibraryBtn = document.getElementById('save-library-btn');
+    var duplicateBtn = document.getElementById('duplicate-btn');
 
     function renderLibraryList() {
       var list = loadIndex().slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; });
@@ -1390,6 +1493,18 @@
       libraryBtn.setAttribute('aria-expanded', 'false');
     }
 
+    function applyState(data) {
+      state.title = data.title;
+      state.author = data.author;
+      state.rows = data.rows;
+      state.trimSize = data.trimSize;
+      titleEl.value = state.title;
+      authorEl.value = state.author;
+      updateCopyright();
+      trimSelect.value = state.trimSize;
+      render();
+    }
+
     function switchTo(id) {
       if (id === currentId) { closeLibraryPanel(); return; }
       save();
@@ -1397,12 +1512,7 @@
       if (!data) return;
       currentId = id;
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
-      state.title = data.title;
-      state.rows = data.rows;
-      state.trimSize = data.trimSize;
-      titleEl.value = state.title;
-      trimSelect.value = state.trimSize;
-      render();
+      applyState(data);
       closeLibraryPanel();
     }
 
@@ -1410,16 +1520,60 @@
       save();
       currentId = makeId();
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
-      state.title = '';
-      state.rows = defaultRows();
-      state.trimSize = DEFAULT_TRIM;
-      saveStory(currentId, { title: state.title, rows: state.rows, trimSize: state.trimSize });
-      upsertIndexEntry(currentId, state.title);
-      titleEl.value = state.title;
-      trimSelect.value = state.trimSize;
-      render();
+      var data = { title: '', author: '', rows: defaultRows(), trimSize: DEFAULT_TRIM };
+      saveStory(currentId, data);
+      upsertIndexEntry(currentId, data.title);
+      applyState(data);
       closeLibraryPanel();
       titleEl.focus();
+    }
+
+    function duplicateStoryboard() {
+      save();
+      currentId = makeId();
+      try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+      var data = {
+        title: (state.title || 'Untitled Picture Book') + ' COPY',
+        author: state.author,
+        rows: state.rows.map(normalizeRow),
+        trimSize: state.trimSize
+      };
+      saveStory(currentId, data);
+      upsertIndexEntry(currentId, data.title);
+      applyState(data);
+      statusEl.textContent = 'Duplicated';
+      statusEl.classList.add('visible');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2000);
+    }
+
+    function deleteCurrentStoryboard() {
+      showConfirm('Delete "' + (state.title || 'Untitled Picture Book') + '"? This can\'t be undone.', 'Delete', function () {
+        var deletedId = currentId;
+        var remaining = loadIndex().filter(function (e) { return e.id !== deletedId; })
+          .sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+
+        if (remaining.length) {
+          var data = loadStory(remaining[0].id);
+          if (data) {
+            removeIndexEntry(deletedId);
+            currentId = remaining[0].id;
+            try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+            applyState(data);
+            closeLibraryPanel();
+            return;
+          }
+        }
+
+        removeIndexEntry(deletedId);
+        currentId = makeId();
+        try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+        var fresh = { title: '', author: '', rows: defaultRows(), trimSize: DEFAULT_TRIM };
+        saveStory(currentId, fresh);
+        upsertIndexEntry(currentId, fresh.title);
+        applyState(fresh);
+        closeLibraryPanel();
+      });
     }
 
     libraryBtn.addEventListener('click', function (e) {
@@ -1427,6 +1581,7 @@
       if (libraryPanel.hidden) openLibraryPanel(); else closeLibraryPanel();
     });
     newStoryboardBtn.addEventListener('click', createNewStoryboard);
+    deleteLibraryBtn.addEventListener('click', deleteCurrentStoryboard);
 
     saveLibraryBtn.addEventListener('click', function () {
       save();
@@ -1435,6 +1590,8 @@
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2000);
     });
+
+    duplicateBtn.addEventListener('click', duplicateStoryboard);
 
     var clearBtn = document.getElementById('clear-btn');
     var confirmOverlay = document.getElementById('confirm-overlay');
@@ -1457,11 +1614,9 @@
     }
 
     clearBtn.addEventListener('click', function () {
-      showConfirm('Clear this storyboard? This erases the title and all spreads — this can\'t be undone.', 'Clear', function () {
-        state.title = '';
+      showConfirm('Clear this storyboard? This erases all spreads (the title and author are kept) — this can\'t be undone.', 'Clear', function () {
         state.rows = defaultRows();
         save();
-        titleEl.value = state.title;
         render();
       });
     });
