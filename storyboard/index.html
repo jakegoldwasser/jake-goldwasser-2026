@@ -447,6 +447,30 @@
     max-width: 320px;
   }
 
+  .trim-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .trim-select {
+    font-family: "Poppins", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+
+  .trim-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -483,6 +507,10 @@
       <span class="plus">+</span>
       Add Spread
     </button>
+    <label class="trim-label" for="trim-select">
+      Book size
+      <select id="trim-select" class="trim-select"></select>
+    </label>
     <button class="export-btn" id="export-btn" type="button">
       Export to Slides
     </button>
@@ -501,7 +529,24 @@
     var statusEl = document.getElementById('save-status');
     var draggedIndex = null;
 
-    var state = { title: '', rows: [] };
+    var TRIM_SIZES = [
+      { key: '8.5x8.5', label: '8.5" × 8.5" (Square)', pageW: 8.5, pageH: 8.5 },
+      { key: '8x8', label: '8" × 8" (Square)', pageW: 8, pageH: 8 },
+      { key: '8.5x11', label: '8.5" × 11" (Portrait)', pageW: 8.5, pageH: 11 },
+      { key: '7x10', label: '7" × 10" (Portrait)', pageW: 7, pageH: 10 },
+      { key: '10x8', label: '10" × 8" (Landscape)', pageW: 10, pageH: 8 },
+      { key: '11x8.5', label: '11" × 8.5" (Landscape)', pageW: 11, pageH: 8.5 }
+    ];
+    var DEFAULT_TRIM = '8.5x8.5';
+
+    function getTrimSize(key) {
+      for (var i = 0; i < TRIM_SIZES.length; i++) {
+        if (TRIM_SIZES[i].key === key) return TRIM_SIZES[i];
+      }
+      return TRIM_SIZES[0];
+    }
+
+    var state = { title: '', rows: [], trimSize: DEFAULT_TRIM };
 
     function blankRow() {
       return { verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '' };
@@ -528,12 +573,14 @@
           if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
             state.title = parsed.title || '';
             state.rows = parsed.rows.map(normalizeRow);
+            state.trimSize = getTrimSize(parsed.trimSize).key;
             return;
           }
         }
       } catch (e) {}
       state.title = '';
       state.rows = [];
+      state.trimSize = DEFAULT_TRIM;
       for (var i = 0; i < INITIAL_ROWS; i++) state.rows.push(blankRow());
     }
 
@@ -740,6 +787,19 @@
     titleEl.value = state.title;
     render();
 
+    var trimSelect = document.getElementById('trim-select');
+    TRIM_SIZES.forEach(function (t) {
+      var opt = document.createElement('option');
+      opt.value = t.key;
+      opt.textContent = t.label;
+      trimSelect.appendChild(opt);
+    });
+    trimSelect.value = state.trimSize;
+    trimSelect.addEventListener('change', function () {
+      state.trimSize = trimSelect.value;
+      save();
+    });
+
     // ---- Export to Google Slides (.pptx) ----
 
     var exportBtn = document.getElementById('export-btn');
@@ -923,19 +983,34 @@
     function makeTextBoxSp(id, name, x, y, w, h, text) {
       return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
         '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
-        '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill></a:ln></p:spPr>' +
+        '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill><a:prstDash val="dot"/></a:ln></p:spPr>' +
         '<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(text, 1800, 'l') + '</p:txBody></p:sp>';
     }
 
-    function slideXml(row) {
-      var SIDE_W = 5524500, VERSO_X = 457200, RECTO_X = 6210300;
-      var BOX_W = 4500000, BOX_H = 1485900;
-      var BOTTOM_Y = 5143500, HALF_Y = 2700000;
-      var versoX = VERSO_X + (SIDE_W - BOX_W) / 2;
-      var rectoX = RECTO_X + (SIDE_W - BOX_W) / 2;
+    function makeGutterLine(id, slideW, slideH) {
+      var gutterX = Math.round(slideW / 2);
+      return '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="' + id + '" name="Gutter"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>' +
+        '<p:spPr><a:xfrm><a:off x="' + gutterX + '" y="0"/><a:ext cx="0" cy="' + slideH + '"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>' +
+        '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill><a:prstDash val="dot"/></a:ln></p:spPr>' +
+        '</p:cxnSp>';
+    }
+
+    function slideXml(row, SLIDE_W, SLIDE_H) {
+      var MARGIN = 457200, GUTTER_HALF_GAP = 114300, BOTTOM_MARGIN = 228600;
+      var half = SLIDE_W / 2;
+      var SIDE_W = half - MARGIN - GUTTER_HALF_GAP;
+      var VERSO_X = MARGIN, RECTO_X = half + GUTTER_HALF_GAP;
+      var BOX_W = Math.round(SIDE_W * 0.8);
+      var BOTTOM_Y = Math.round(SLIDE_H * 0.75);
+      var BOX_H = Math.round(SLIDE_H * 0.25 - BOTTOM_MARGIN);
+      var HALF_Y = Math.round((SLIDE_H - BOX_H) / 2);
+      var versoX = Math.round(VERSO_X + (SIDE_W - BOX_W) / 2);
+      var rectoX = Math.round(RECTO_X + (SIDE_W - BOX_W) / 2);
 
       var shapes = '';
       var shapeId = 2;
+
+      shapes += makeGutterLine(shapeId++, SLIDE_W, SLIDE_H);
 
       function addSide(x, prefix, label) {
         if (row[prefix + 'Split']) {
@@ -968,7 +1043,10 @@
         '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>';
     }
 
-    function buildPptx(title, rows) {
+    function buildPptx(title, rows, trimKey) {
+      var trim = getTrimSize(trimKey);
+      var SLIDE_W = Math.round(trim.pageW * 2 * 914400);
+      var SLIDE_H = Math.round(trim.pageH * 914400);
       var n = rows.length;
       var files = [];
       function addXml(name, xmlStr) { files.push({ name: name, data: strToBytes(xmlStr) }); }
@@ -1017,7 +1095,7 @@
         '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
         '<p:notesMasterIdLst><p:notesMasterId r:id="' + notesMasterRid + '"/></p:notesMasterIdLst>' +
         '<p:sldIdLst>' + sldIdEntries + '</p:sldIdLst>' +
-        '<p:sldSz cx="12192000" cy="6858000" type="screen16x9"/>' +
+        '<p:sldSz cx="' + SLIDE_W + '" cy="' + SLIDE_H + '"/>' +
         '<p:notesSz cx="6858000" cy="9144000"/>' +
         '</p:presentation>');
 
@@ -1076,7 +1154,7 @@
 
       for (var i3 = 1; i3 <= n; i3++) {
         var row = rows[i3 - 1];
-        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(row));
+        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(row, SLIDE_W, SLIDE_H));
         addXml('ppt/slides/_rels/slide' + i3 + '.xml.rels',
           '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
           '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -1125,7 +1203,7 @@
       setExportStatus('Preparing file…', true);
 
       try {
-        var pptxBytes = buildPptx(state.title, state.rows);
+        var pptxBytes = buildPptx(state.title, state.rows, state.trimSize);
         var filename = slugify(state.title) + '.pptx';
 
         var useClaudeDownloads = typeof window.claude !== 'undefined' && typeof window.claude.use === 'function';
