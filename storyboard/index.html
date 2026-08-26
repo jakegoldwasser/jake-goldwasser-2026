@@ -723,6 +723,66 @@
   .clear-btn:hover { background: var(--danger-soft); border-color: var(--danger); }
   .clear-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 3px; }
 
+  /* ---- Confirm dialog ---- */
+
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(22, 50, 64, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+  }
+
+  .confirm-overlay[hidden] { display: none; }
+
+  .confirm-dialog {
+    width: min(360px, 100%);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 16px 40px var(--shadow);
+    padding: 22px;
+  }
+
+  .confirm-dialog p {
+    margin: 0 0 20px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .confirm-cancel-btn, .confirm-ok-btn {
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+  }
+
+  .confirm-cancel-btn {
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+  }
+  .confirm-cancel-btn:hover { background: var(--surface-2); }
+
+  .confirm-ok-btn {
+    color: #FFFFFF;
+    background: var(--danger);
+    border: 2px solid var(--danger);
+  }
+  .confirm-ok-btn:hover { opacity: 0.9; }
+
   /* ---- Email storyboard ---- */
 
   .email-menu {
@@ -888,6 +948,16 @@
       Clear Storyboard
     </button>
     <span class="export-status" id="export-status"></span>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="confirm-overlay" hidden>
+  <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-text">
+    <p id="confirm-dialog-text">Clear this storyboard? This erases the title and all spreads — this can't be undone.</p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel-btn" id="confirm-cancel-btn" type="button">Cancel</button>
+      <button class="confirm-ok-btn" id="confirm-ok-btn" type="button">Clear</button>
+    </div>
   </div>
 </div>
 
@@ -1296,10 +1366,10 @@
           del.textContent = '×';
           del.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (window.confirm('Delete "' + entry.title + '"? This can\'t be undone.')) {
+            showConfirm('Delete "' + entry.title + '"? This can\'t be undone.', 'Delete', function () {
               removeIndexEntry(entry.id);
               renderLibraryList();
-            }
+            });
           });
           item.appendChild(del);
           item.addEventListener('click', function () { switchTo(entry.id); });
@@ -1367,14 +1437,47 @@
     });
 
     var clearBtn = document.getElementById('clear-btn');
+    var confirmOverlay = document.getElementById('confirm-overlay');
+    var confirmDialogText = document.getElementById('confirm-dialog-text');
+    var confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+    var confirmOkBtn = document.getElementById('confirm-ok-btn');
+    var confirmPending = null;
+
+    function closeConfirmDialog() {
+      confirmOverlay.hidden = true;
+      confirmPending = null;
+    }
+
+    function showConfirm(message, okLabel, onConfirm) {
+      confirmDialogText.textContent = message;
+      confirmOkBtn.textContent = okLabel;
+      confirmPending = onConfirm;
+      confirmOverlay.hidden = false;
+      confirmOkBtn.focus();
+    }
+
     clearBtn.addEventListener('click', function () {
-      var ok = window.confirm('Clear this storyboard? This erases the title and all spreads — this can\'t be undone.');
-      if (!ok) return;
-      state.title = '';
-      state.rows = defaultRows();
-      save();
-      titleEl.value = state.title;
-      render();
+      showConfirm('Clear this storyboard? This erases the title and all spreads — this can\'t be undone.', 'Clear', function () {
+        state.title = '';
+        state.rows = defaultRows();
+        save();
+        titleEl.value = state.title;
+        render();
+      });
+    });
+
+    confirmCancelBtn.addEventListener('click', closeConfirmDialog);
+    confirmOverlay.addEventListener('click', function (e) {
+      if (e.target === confirmOverlay) closeConfirmDialog();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !confirmOverlay.hidden) closeConfirmDialog();
+    });
+
+    confirmOkBtn.addEventListener('click', function () {
+      var fn = confirmPending;
+      closeConfirmDialog();
+      if (fn) fn();
     });
 
     document.addEventListener('click', function (e) {
