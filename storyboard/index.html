@@ -167,7 +167,15 @@
     font-weight: 700;
     color: var(--teal);
     font-variant-numeric: tabular-nums;
+    cursor: grab;
+    user-select: none;
+    border-radius: var(--radius);
+    transition: background-color 0.12s ease;
   }
+
+  .num-cell:hover { background: var(--surface-2); }
+  .num-cell.dragging { opacity: 0.35; }
+  .num-cell:active { cursor: grabbing; }
 
   .num-cell .n { font-size: 28px; }
 
@@ -190,8 +198,62 @@
     padding: 0;
   }
 
-  .num-cell.removable:hover .remove-row { display: flex; }
+  .num-cell:hover .remove-row { display: flex; }
   .num-cell .remove-row:hover { background: var(--danger-soft); }
+
+  /* insert-spread gaps between rows */
+
+  .row-gap {
+    grid-column: 1 / -1;
+    position: relative;
+    height: 8px;
+    cursor: pointer;
+    z-index: 1;
+  }
+
+  .row-gap::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    transform: translateY(-50%);
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.12s ease, background-color 0.12s ease;
+  }
+
+  .row-gap .insert-pill {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-family: "Poppins", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+  }
+
+  .row-gap:hover::before,
+  .row-gap.drag-target::before { opacity: 1; }
+
+  .row-gap:hover .insert-pill,
+  .row-gap.drag-target .insert-pill { opacity: 1; }
+
+  .row-gap.drag-target::before {
+    background: var(--teal);
+    height: 3px;
+  }
+
+  .row-gap.drag-target .insert-pill { background: var(--teal); }
 
   textarea.cell {
     font-family: "EB Garamond", ui-serif, Georgia, serif;
@@ -383,12 +445,13 @@
 <script>
   (function () {
     var STORAGE_KEY = 'book-dummy-script-v1';
-    var CORE_ROWS = 14;
+    var INITIAL_ROWS = 14;
     var sheetEl = document.getElementById('sheet');
     var titleEl = document.getElementById('title-input');
     var addBtn = document.getElementById('add-row-btn');
     var totalEl = document.getElementById('spread-total');
     var statusEl = document.getElementById('save-status');
+    var draggedIndex = null;
 
     var state = { title: '', rows: [] };
 
@@ -408,7 +471,7 @@
       } catch (e) {}
       state.title = '';
       state.rows = [];
-      for (var i = 0; i < CORE_ROWS; i++) state.rows.push(blankRow());
+      for (var i = 0; i < INITIAL_ROWS; i++) state.rows.push(blankRow());
     }
 
     var saveTimer = null;
@@ -444,30 +507,99 @@
       return ta;
     }
 
+    function makeRowGap(gapIndex) {
+      var gap = document.createElement('div');
+      gap.className = 'row-gap';
+
+      var pill = document.createElement('span');
+      pill.className = 'insert-pill';
+      pill.textContent = '+ Add spread';
+      gap.appendChild(pill);
+
+      gap.addEventListener('click', function () {
+        insertRowAt(gapIndex);
+      });
+
+      gap.addEventListener('dragover', function (e) {
+        if (draggedIndex === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        gap.classList.add('drag-target');
+      });
+      gap.addEventListener('dragleave', function () {
+        gap.classList.remove('drag-target');
+      });
+      gap.addEventListener('drop', function (e) {
+        e.preventDefault();
+        gap.classList.remove('drag-target');
+        if (draggedIndex === null) return;
+        moveRow(draggedIndex, gapIndex);
+        draggedIndex = null;
+      });
+
+      return gap;
+    }
+
+    function insertRowAt(gapIndex) {
+      state.rows.splice(gapIndex, 0, blankRow());
+      save();
+      render();
+      var textareas = sheetEl.querySelectorAll('textarea.cell');
+      var target = textareas[gapIndex * 3];
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.focus();
+      }
+    }
+
+    function moveRow(from, to) {
+      if (to > from) to -= 1;
+      if (to === from) return;
+      var row = state.rows.splice(from, 1)[0];
+      state.rows.splice(to, 0, row);
+      save();
+      render();
+    }
+
     function render() {
-      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell');
+      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap');
       nodes.forEach(function (n) { n.remove(); });
+
+      sheetEl.appendChild(makeRowGap(0));
 
       state.rows.forEach(function (row, i) {
         var num = document.createElement('div');
-        num.className = 'num-cell' + (i >= CORE_ROWS ? ' removable' : '');
+        num.className = 'num-cell';
+        num.draggable = true;
         var n = document.createElement('span');
         n.className = 'n';
         n.textContent = i + 1;
         num.appendChild(n);
-        if (i >= CORE_ROWS) {
+        if (state.rows.length > 1) {
           var del = document.createElement('button');
           del.type = 'button';
           del.className = 'remove-row';
-          del.setAttribute('aria-label', 'Remove spread ' + (i + 1));
+          del.draggable = false;
+          del.setAttribute('aria-label', 'Delete spread ' + (i + 1));
           del.textContent = '×';
-          del.addEventListener('click', function () {
+          del.addEventListener('click', function (e) {
+            e.stopPropagation();
             state.rows.splice(i, 1);
             save();
             render();
           });
           num.appendChild(del);
         }
+        num.addEventListener('dragstart', function (e) {
+          draggedIndex = i;
+          num.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', String(i)); } catch (err) {}
+        });
+        num.addEventListener('dragend', function () {
+          num.classList.remove('dragging');
+          draggedIndex = null;
+        });
         sheetEl.appendChild(num);
 
         var divider = document.createElement('div');
@@ -481,6 +613,8 @@
         sheetEl.appendChild(pair);
 
         sheetEl.appendChild(makeTextarea('illustration', i, 'Illustration notes', 'illustration'));
+
+        sheetEl.appendChild(makeRowGap(i + 1));
       });
 
       totalEl.textContent = state.rows.length;
@@ -492,15 +626,7 @@
     });
 
     addBtn.addEventListener('click', function () {
-      state.rows.push(blankRow());
-      save();
-      render();
-      var textareas = sheetEl.querySelectorAll('textarea.cell');
-      var last = textareas[textareas.length - 3];
-      if (last) {
-        last.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        last.focus();
-      }
+      insertRowAt(state.rows.length);
     });
 
     load();
