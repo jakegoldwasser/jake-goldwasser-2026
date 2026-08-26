@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storyboard — Jake Goldwasser</title>
+<meta name="description" content="A 14-spread grid for drafting picture book text and illustration notes.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper: #F5FAFB;
+    --surface: #FFFFFF;
+    --surface-2: #E7F5F3;
+    --ink: #163240;
+    --ink-soft: #4F7480;
+    --ink-faint: #93AFB6;
+    --line: #D7E8EA;
+    --line-strong: #A9CCD0;
+    --accent: #1E4FDB;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #DEE6FC;
+    --teal: #00A99A;
+    --danger: #BD5138;
+    --danger-soft: #FAEAE4;
+    --shadow: rgba(20, 45, 56, 0.08);
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Poppins", ui-sans-serif, system-ui, sans-serif;
+    padding: 40px clamp(16px, 4vw, 56px) 80px;
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  /* ---- Header ---- */
+
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 360px;
+    min-width: 0;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  #title-input {
+    font-family: "EB Garamond", ui-serif, Georgia, serif;
+    font-weight: 500;
+    font-size: clamp(30px, 4vw, 44px);
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--line-strong);
+    padding: 2px 2px 10px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  #title-input::placeholder { color: var(--ink-faint); }
+  #title-input:focus { border-bottom-color: var(--accent); }
+
+  .meta-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+  }
+
+  .spread-count {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    letter-spacing: 0.03em;
+  }
+
+  .spread-count strong {
+    color: var(--ink);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .save-status {
+    font-size: 11px;
+    color: var(--ink-faint);
+    height: 14px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .save-status.visible { opacity: 1; }
+
+  /* ---- Sheet ---- */
+
+  .sheet-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .sheet {
+    display: grid;
+    grid-template-columns: 64px minmax(340px, 2fr) minmax(220px, 1fr);
+    gap: 10px;
+    min-width: 680px;
+  }
+
+  .col-head {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 4px 6px;
+    align-self: end;
+  }
+
+  .col-head.head-num { text-align: center; }
+
+  .col-head-pair {
+    display: flex;
+    padding: 0;
+  }
+
+  .col-head-pair span {
+    flex: 1 1 50%;
+    padding: 0 4px 6px 14px;
+  }
+
+  /* spread number */
+
+  .num-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--teal);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .num-cell .n { font-size: 28px; }
+
+  .num-cell .remove-row {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--danger);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .num-cell.removable:hover .remove-row { display: flex; }
+  .num-cell .remove-row:hover { background: var(--danger-soft); }
+
+  textarea.cell {
+    font-family: "EB Garamond", ui-serif, Georgia, serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    resize: none;
+    overflow: hidden;
+    min-height: 64px;
+    width: 100%;
+    box-shadow: 0 1px 2px var(--shadow);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  textarea.cell::placeholder { color: var(--ink-faint); }
+
+  textarea.cell:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  textarea.illustration {
+    background: var(--surface-2);
+    color: var(--ink-soft);
+  }
+
+  textarea.illustration:focus { color: var(--ink); }
+
+  /* verso + recto: one connected unit, split only by a dotted rule */
+
+  .spread-pair {
+    display: flex;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px var(--shadow);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .spread-pair:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .spread-pair textarea.cell {
+    flex: 1 1 50%;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .spread-pair textarea.cell:focus {
+    box-shadow: none;
+  }
+
+  .pair-divider {
+    align-self: stretch;
+    width: 3px;
+    flex: none;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--line-strong) 0,
+      var(--line-strong) 10px,
+      transparent 10px,
+      transparent 17px
+    );
+  }
+
+  /* ---- Footer / add row ---- */
+
+  .sheet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .add-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent);
+    border: none;
+    border-radius: 999px;
+    padding: 11px 20px 11px 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px var(--shadow);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+
+  .add-row:hover { box-shadow: 0 4px 10px var(--shadow); transform: translateY(-1px); }
+  .add-row:active { transform: translateY(0); }
+  .add-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .add-row .plus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .export-btn {
+    display: inline-flex;
+    align-items: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--teal);
+    background: var(--surface);
+    border: 2px solid var(--teal);
+    border-radius: 999px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .export-btn:hover { background: var(--surface-2); }
+  .export-btn:disabled { opacity: 0.6; cursor: default; }
+  .export-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  .export-status {
+    font-size: 12px;
+    color: var(--ink-soft);
+    max-width: 320px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="masthead">
+    <div class="title-block">
+      <span class="eyebrow">Picture Book Manuscript</span>
+      <input id="title-input" type="text" placeholder="Untitled Picture Book" autocomplete="off" />
+    </div>
+    <div class="meta-panel">
+      <span class="spread-count"><strong id="spread-total">14</strong> spreads</span>
+      <span class="save-status" id="save-status">Saved</span>
+    </div>
+  </header>
+
+  <div class="sheet-scroll">
+    <div class="sheet" id="sheet">
+      <span class="col-head head-num">Spread</span>
+      <div class="col-head col-head-pair">
+        <span>Verso Text</span>
+        <span>Recto Text</span>
+      </div>
+      <span class="col-head">Illustration</span>
+      <!-- rows injected here -->
+    </div>
+  </div>
+
+  <div class="sheet-footer">
+    <button class="add-row" id="add-row-btn" type="button">
+      <span class="plus">+</span>
+      Add Spread
+    </button>
+    <button class="export-btn" id="export-btn" type="button">
+      Export to Slides
+    </button>
+    <span class="export-status" id="export-status"></span>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var STORAGE_KEY = 'book-dummy-script-v1';
+    var CORE_ROWS = 14;
+    var sheetEl = document.getElementById('sheet');
+    var titleEl = document.getElementById('title-input');
+    var addBtn = document.getElementById('add-row-btn');
+    var totalEl = document.getElementById('spread-total');
+    var statusEl = document.getElementById('save-status');
+
+    var state = { title: '', rows: [] };
+
+    function blankRow() { return { verso: '', recto: '', illustration: '' }; }
+
+    function load() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
+            state.title = parsed.title || '';
+            state.rows = parsed.rows;
+            return;
+          }
+        }
+      } catch (e) {}
+      state.title = '';
+      state.rows = [];
+      for (var i = 0; i < CORE_ROWS; i++) state.rows.push(blankRow());
+    }
+
+    var saveTimer = null;
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {}
+      statusEl.textContent = 'Saved';
+      statusEl.classList.add('visible');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        statusEl.classList.remove('visible');
+      }, 1500);
+    }
+
+    function autoGrow(el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+
+    function makeTextarea(field, rowIndex, placeholder, extraClass) {
+      var ta = document.createElement('textarea');
+      ta.className = 'cell' + (extraClass ? ' ' + extraClass : '');
+      ta.placeholder = placeholder;
+      ta.value = state.rows[rowIndex][field] || '';
+      ta.setAttribute('aria-label', placeholder + ' — spread ' + (rowIndex + 1));
+      ta.addEventListener('input', function () {
+        state.rows[rowIndex][field] = ta.value;
+        autoGrow(ta);
+        save();
+      });
+      requestAnimationFrame(function () { autoGrow(ta); });
+      return ta;
+    }
+
+    function render() {
+      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell');
+      nodes.forEach(function (n) { n.remove(); });
+
+      state.rows.forEach(function (row, i) {
+        var num = document.createElement('div');
+        num.className = 'num-cell' + (i >= CORE_ROWS ? ' removable' : '');
+        var n = document.createElement('span');
+        n.className = 'n';
+        n.textContent = i + 1;
+        num.appendChild(n);
+        if (i >= CORE_ROWS) {
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'remove-row';
+          del.setAttribute('aria-label', 'Remove spread ' + (i + 1));
+          del.textContent = '×';
+          del.addEventListener('click', function () {
+            state.rows.splice(i, 1);
+            save();
+            render();
+          });
+          num.appendChild(del);
+        }
+        sheetEl.appendChild(num);
+
+        var divider = document.createElement('div');
+        divider.className = 'pair-divider';
+
+        var pair = document.createElement('div');
+        pair.className = 'spread-pair';
+        pair.appendChild(makeTextarea('verso', i, 'Verso text'));
+        pair.appendChild(divider);
+        pair.appendChild(makeTextarea('recto', i, 'Recto text'));
+        sheetEl.appendChild(pair);
+
+        sheetEl.appendChild(makeTextarea('illustration', i, 'Illustration notes', 'illustration'));
+      });
+
+      totalEl.textContent = state.rows.length;
+    }
+
+    titleEl.addEventListener('input', function () {
+      state.title = titleEl.value;
+      save();
+    });
+
+    addBtn.addEventListener('click', function () {
+      state.rows.push(blankRow());
+      save();
+      render();
+      var textareas = sheetEl.querySelectorAll('textarea.cell');
+      var last = textareas[textareas.length - 3];
+      if (last) {
+        last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        last.focus();
+      }
+    });
+
+    load();
+    titleEl.value = state.title;
+    render();
+
+    // ---- Export to Google Slides (.pptx) ----
+
+    var exportBtn = document.getElementById('export-btn');
+    var exportStatus = document.getElementById('export-status');
+    var exportStatusTimer = null;
+
+    function setExportStatus(msg, persist) {
+      exportStatus.textContent = msg;
+      clearTimeout(exportStatusTimer);
+      if (!persist) {
+        exportStatusTimer = setTimeout(function () { exportStatus.textContent = ''; }, 6000);
+      }
+    }
+
+    function escapeXml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    function textToParagraphs(text, sz) {
+      var lines = String(text || '').split(/\r\n|\r|\n/);
+      return lines.map(function (line) {
+        if (!line) return '<a:p/>';
+        return '<a:p><a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"/><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
+      }).join('');
+    }
+
+    function slugify(s) {
+      var out = String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      return out || 'book-dummy';
+    }
+
+    // ---- minimal ZIP (stored, uncompressed) writer ----
+
+    var crc32Table = null;
+    function crc32(bytes) {
+      if (!crc32Table) {
+        crc32Table = new Uint32Array(256);
+        for (var n = 0; n < 256; n++) {
+          var c = n;
+          for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          crc32Table[n] = c >>> 0;
+        }
+      }
+      var crc = 0xFFFFFFFF;
+      for (var i = 0; i < bytes.length; i++) {
+        crc = (crc >>> 8) ^ crc32Table[(crc ^ bytes[i]) & 0xFF];
+      }
+      return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    function strToBytes(str) { return new TextEncoder().encode(str); }
+
+    function makeZip(files) {
+      var localParts = [];
+      var centralParts = [];
+      var offset = 0;
+
+      files.forEach(function (f) {
+        var nameBytes = strToBytes(f.name);
+        var data = f.data;
+        var crc = crc32(data);
+        var size = data.length;
+
+        var local = new Uint8Array(30 + nameBytes.length);
+        var dv = new DataView(local.buffer);
+        dv.setUint32(0, 0x04034b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 0, true);
+        dv.setUint16(8, 0, true);
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0x21, true);
+        dv.setUint32(14, crc, true);
+        dv.setUint32(18, size, true);
+        dv.setUint32(22, size, true);
+        dv.setUint16(26, nameBytes.length, true);
+        dv.setUint16(28, 0, true);
+        local.set(nameBytes, 30);
+        localParts.push(local, data);
+
+        var central = new Uint8Array(46 + nameBytes.length);
+        var dvc = new DataView(central.buffer);
+        dvc.setUint32(0, 0x02014b50, true);
+        dvc.setUint16(4, 20, true);
+        dvc.setUint16(6, 20, true);
+        dvc.setUint16(8, 0, true);
+        dvc.setUint16(10, 0, true);
+        dvc.setUint16(12, 0, true);
+        dvc.setUint16(14, 0x21, true);
+        dvc.setUint32(16, crc, true);
+        dvc.setUint32(20, size, true);
+        dvc.setUint32(24, size, true);
+        dvc.setUint16(28, nameBytes.length, true);
+        dvc.setUint16(30, 0, true);
+        dvc.setUint16(32, 0, true);
+        dvc.setUint16(34, 0, true);
+        dvc.setUint16(36, 0, true);
+        dvc.setUint32(38, 0, true);
+        dvc.setUint32(42, offset, true);
+        central.set(nameBytes, 46);
+        centralParts.push(central);
+
+        offset += local.length + data.length;
+      });
+
+      var centralStart = offset;
+      var centralSize = centralParts.reduce(function (a, p) { return a + p.length; }, 0);
+
+      var eocd = new Uint8Array(22);
+      var dve = new DataView(eocd.buffer);
+      dve.setUint32(0, 0x06054b50, true);
+      dve.setUint16(4, 0, true);
+      dve.setUint16(6, 0, true);
+      dve.setUint16(8, files.length, true);
+      dve.setUint16(10, files.length, true);
+      dve.setUint32(12, centralSize, true);
+      dve.setUint32(16, centralStart, true);
+      dve.setUint16(20, 0, true);
+
+      var allParts = localParts.concat(centralParts, [eocd]);
+      var totalLen = allParts.reduce(function (a, p) { return a + p.length; }, 0);
+      var result = new Uint8Array(totalLen);
+      var pos = 0;
+      allParts.forEach(function (p) { result.set(p, pos); pos += p.length; });
+      return result;
+    }
+
+    // ---- OOXML (.pptx) part builders ----
+
+    var THEME_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Book Dummy">' +
+      '<a:themeElements>' +
+      '<a:clrScheme name="Book Dummy">' +
+      '<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>' +
+      '<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
+      '<a:dk2><a:srgbClr val="163240"/></a:dk2>' +
+      '<a:lt2><a:srgbClr val="E7F5F3"/></a:lt2>' +
+      '<a:accent1><a:srgbClr val="1E4FDB"/></a:accent1>' +
+      '<a:accent2><a:srgbClr val="00A99A"/></a:accent2>' +
+      '<a:accent3><a:srgbClr val="4F7480"/></a:accent3>' +
+      '<a:accent4><a:srgbClr val="B7D6D8"/></a:accent4>' +
+      '<a:accent5><a:srgbClr val="93AFB6"/></a:accent5>' +
+      '<a:accent6><a:srgbClr val="BD5138"/></a:accent6>' +
+      '<a:hlink><a:srgbClr val="1E4FDB"/></a:hlink>' +
+      '<a:folHlink><a:srgbClr val="00A99A"/></a:folHlink>' +
+      '</a:clrScheme>' +
+      '<a:fontScheme name="Book Dummy">' +
+      '<a:majorFont><a:latin typeface="Poppins"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="EB Garamond"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
+      '</a:fontScheme>' +
+      '<a:fmtScheme name="Book Dummy">' +
+      '<a:fillStyleLst>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '</a:fillStyleLst>' +
+      '<a:lnStyleLst>' +
+      '<a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>' +
+      '<a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>' +
+      '<a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>' +
+      '</a:lnStyleLst>' +
+      '<a:effectStyleLst>' +
+      '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+      '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+      '<a:effectStyle><a:effectLst/></a:effectStyle>' +
+      '</a:effectStyleLst>' +
+      '<a:bgFillStyleLst>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>' +
+      '</a:bgFillStyleLst>' +
+      '</a:fmtScheme>' +
+      '</a:themeElements>' +
+      '</a:theme>';
+
+    function slideXml(spreadNum, versoText, rectoText) {
+      var leftX = 457200, rightX = 6210300, boxW = 5524500, boxY = 800100, boxH = 5829300;
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:cSld><p:spTree>' +
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Spread Label"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+        '<p:spPr><a:xfrm><a:off x="457200" y="228600"/><a:ext cx="2286000" cy="400050"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>' +
+        '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0"/><a:lstStyle/>' +
+        '<a:p><a:r><a:rPr lang="en-US" sz="1400" b="1" dirty="0"><a:solidFill><a:srgbClr val="4F7480"/></a:solidFill></a:rPr><a:t>Spread ' + spreadNum + '</a:t></a:r></a:p>' +
+        '</p:txBody></p:sp>' +
+        '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Verso"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+        '<p:spPr><a:xfrm><a:off x="' + leftX + '" y="' + boxY + '"/><a:ext cx="' + boxW + '" cy="' + boxH + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+        '<a:ln><a:solidFill><a:srgbClr val="B7D6D8"/></a:solidFill></a:ln></p:spPr>' +
+        '<p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(versoText, 1800) + '</p:txBody></p:sp>' +
+        '<p:sp><p:nvSpPr><p:cNvPr id="4" name="Recto"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+        '<p:spPr><a:xfrm><a:off x="' + rightX + '" y="' + boxY + '"/><a:ext cx="' + boxW + '" cy="' + boxH + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+        '<a:ln><a:solidFill><a:srgbClr val="B7D6D8"/></a:solidFill></a:ln></p:spPr>' +
+        '<p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + textToParagraphs(rectoText, 1800) + '</p:txBody></p:sp>' +
+        '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
+    }
+
+    function notesSlideXml(notesText) {
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:cSld><p:spTree>' +
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+        '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>' +
+        '<p:spPr/>' +
+        '<p:txBody><a:bodyPr/><a:lstStyle/>' + textToParagraphs(notesText, 1200) + '</p:txBody></p:sp>' +
+        '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>';
+    }
+
+    function buildPptx(title, rows) {
+      var n = rows.length;
+      var files = [];
+      function addXml(name, xmlStr) { files.push({ name: name, data: strToBytes(xmlStr) }); }
+
+      var overrides =
+        '<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>' +
+        '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>' +
+        '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>' +
+        '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/>' +
+        '<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>';
+      for (var i = 1; i <= n; i++) {
+        overrides += '<Override PartName="/ppt/slides/slide' + i + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>';
+        overrides += '<Override PartName="/ppt/notesSlides/notesSlide' + i + '.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>';
+      }
+      overrides +=
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+        '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>';
+
+      addXml('[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' + overrides + '</Types>');
+
+      addXml('_rels/.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>' +
+        '</Relationships>');
+
+      var sldIdEntries = '';
+      var relEntries = '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>';
+      for (var i2 = 1; i2 <= n; i2++) {
+        var rid = 'rId' + (i2 + 1);
+        sldIdEntries += '<p:sldId id="' + (255 + i2) + '" r:id="' + rid + '"/>';
+        relEntries += '<Relationship Id="' + rid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide' + i2 + '.xml"/>';
+      }
+      var notesMasterRid = 'rId' + (n + 2);
+      relEntries += '<Relationship Id="' + notesMasterRid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>';
+
+      addXml('ppt/presentation.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
+        '<p:notesMasterIdLst><p:notesMasterId r:id="' + notesMasterRid + '"/></p:notesMasterIdLst>' +
+        '<p:sldIdLst>' + sldIdEntries + '</p:sldIdLst>' +
+        '<p:sldSz cx="12192000" cy="6858000" type="screen16x9"/>' +
+        '<p:notesSz cx="6858000" cy="9144000"/>' +
+        '</p:presentation>');
+
+      addXml('ppt/_rels/presentation.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + relEntries + '</Relationships>');
+
+      addXml('ppt/theme/theme1.xml', THEME_XML);
+
+      addXml('ppt/slideMasters/slideMaster1.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree>' +
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+        '</p:spTree></p:cSld>' +
+        '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
+        '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>' +
+        '</p:sldMaster>');
+
+      addXml('ppt/slideMasters/_rels/slideMaster1.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>' +
+        '</Relationships>');
+
+      addXml('ppt/slideLayouts/slideLayout1.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1">' +
+        '<p:cSld name="Blank"><p:spTree>' +
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+        '</p:spTree></p:cSld>' +
+        '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>' +
+        '</p:sldLayout>');
+
+      addXml('ppt/slideLayouts/_rels/slideLayout1.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>' +
+        '</Relationships>');
+
+      addXml('ppt/notesMasters/notesMaster1.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">' +
+        '<p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg><p:spTree>' +
+        '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+        '</p:spTree></p:cSld>' +
+        '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>' +
+        '</p:notesMaster>');
+
+      addXml('ppt/notesMasters/_rels/notesMaster1.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>' +
+        '</Relationships>');
+
+      for (var i3 = 1; i3 <= n; i3++) {
+        var row = rows[i3 - 1];
+        addXml('ppt/slides/slide' + i3 + '.xml', slideXml(i3, row.verso, row.recto));
+        addXml('ppt/slides/_rels/slide' + i3 + '.xml.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>' +
+          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide' + i3 + '.xml"/>' +
+          '</Relationships>');
+        addXml('ppt/notesSlides/notesSlide' + i3 + '.xml', notesSlideXml(row.illustration));
+        addXml('ppt/notesSlides/_rels/notesSlide' + i3 + '.xml.rels',
+          '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>' +
+          '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide' + i3 + '.xml"/>' +
+          '</Relationships>');
+      }
+
+      addXml('docProps/core.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+        '<dc:title>' + escapeXml(title || 'Untitled Picture Book') + '</dc:title>' +
+        '<dc:creator>Book Dummy</dc:creator>' +
+        '</cp:coreProperties>');
+
+      addXml('docProps/app.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">' +
+        '<Application>Book Dummy</Application><Slides>' + n + '</Slides>' +
+        '</Properties>');
+
+      return makeZip(files);
+    }
+
+    function downloadBlob(filename, bytes) {
+      var blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    }
+
+    exportBtn.addEventListener('click', function () {
+      exportBtn.disabled = true;
+      setExportStatus('Preparing file…', true);
+
+      try {
+        var pptxBytes = buildPptx(state.title, state.rows);
+        var filename = slugify(state.title) + '.pptx';
+
+        var useClaudeDownloads = typeof window.claude !== 'undefined' && typeof window.claude.use === 'function';
+        if (useClaudeDownloads) {
+          window.claude.use('downloads').then(function (downloads) {
+            if (downloads) {
+              return downloads.save({ filename: filename, data: pptxBytes }).then(function () {
+                setExportStatus('Saved ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+              });
+            }
+            downloadBlob(filename, pptxBytes);
+            setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+          }).catch(function () {
+            downloadBlob(filename, pptxBytes);
+            setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+          }).then(function () {
+            exportBtn.disabled = false;
+          });
+        } else {
+          downloadBlob(filename, pptxBytes);
+          setExportStatus('Downloaded ' + filename + ' — in Google Slides, use File → Import slides, or open it from Drive.', true);
+          exportBtn.disabled = false;
+        }
+      } catch (err) {
+        setExportStatus('Couldn’t export: ' + (err && err.message ? err.message : 'unknown error'));
+        exportBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
