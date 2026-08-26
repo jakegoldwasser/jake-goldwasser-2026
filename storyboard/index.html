@@ -1438,15 +1438,23 @@
       return part1;
     }
 
+    function tsvCell(text) {
+      return String(text || '').replace(/[\t\r\n]+/g, ' ').trim();
+    }
+
     function plainStoryboard() {
       var lines = [state.title || 'Untitled Picture Book', ''];
+      lines.push(['Spread', 'Verso', 'Recto', 'Illustration Notes'].join('\t'));
       state.rows.forEach(function (row, i) {
-        lines.push('Spread ' + (i + 1));
-        lines.push('Verso: ' + sideText(row, 'verso'));
-        lines.push('Recto: ' + sideText(row, 'recto'));
-        if (row.illustration) lines.push('Illustration notes: ' + row.illustration);
-        lines.push('');
+        lines.push([
+          String(i + 1),
+          tsvCell(sideText(row, 'verso')),
+          tsvCell(sideText(row, 'recto')),
+          tsvCell(row.illustration)
+        ].join('\t'));
       });
+      lines.push('');
+      lines.push('(Paste the table above into a spreadsheet — it’s tab-separated, so it splits into columns automatically.)');
       return lines.join('\n');
     }
 
@@ -1455,7 +1463,7 @@
       if (emailPanel.hidden) openEmailPanel(); else closeEmailPanel();
     });
 
-    emailSendBtn.addEventListener('click', function () {
+    emailSendBtn.addEventListener('click', async function () {
       if (!emailAddr.checkValidity() || !emailAddr.value.trim()) {
         emailAddr.reportValidity();
         return;
@@ -1480,7 +1488,7 @@
         var attachmentFile = null;
         try {
           if (emailFormat === 'pdf') {
-            attachmentFile = bytesToFile(filename, buildPdf(state.title, state.rows, state.trimSize), 'application/pdf');
+            attachmentFile = bytesToFile(filename, await buildPdf(state.title, state.rows, state.trimSize), 'application/pdf');
           } else {
             attachmentFile = bytesToFile(filename, buildPptx(state.title, state.rows, state.trimSize), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
           }
@@ -2293,7 +2301,7 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
     }
 
-    function exportFile(kind) {
+    async function exportFile(kind) {
       closeExportPanel();
       exportBtn.disabled = true;
       setExportStatus('Preparing file…', true);
@@ -2301,7 +2309,7 @@
       try {
         var bytes, filename, mime;
         if (kind === 'pdf') {
-          bytes = buildPdf(state.title, state.rows, state.trimSize);
+          bytes = await buildPdf(state.title, state.rows, state.trimSize);
           filename = slugify(state.title) + '.pdf';
           mime = 'application/pdf';
         } else {
@@ -2314,20 +2322,20 @@
         var useClaudeDownloads = typeof window.claude !== 'undefined' && typeof window.claude.use === 'function';
 
         if (useClaudeDownloads) {
-          window.claude.use('downloads').then(function (downloads) {
+          try {
+            var downloads = await window.claude.use('downloads');
             if (downloads) {
-              return downloads.save({ filename: filename, data: bytes }).then(function () {
-                setExportStatus('Saved ' + filename + successNote, true);
-              });
+              await downloads.save({ filename: filename, data: bytes });
+              setExportStatus('Saved ' + filename + successNote, true);
+            } else {
+              downloadBlob(filename, bytes, mime);
+              setExportStatus('Downloaded ' + filename + successNote, true);
             }
+          } catch (err2) {
             downloadBlob(filename, bytes, mime);
             setExportStatus('Downloaded ' + filename + successNote, true);
-          }).catch(function () {
-            downloadBlob(filename, bytes, mime);
-            setExportStatus('Downloaded ' + filename + successNote, true);
-          }).then(function () {
-            exportBtn.disabled = false;
-          });
+          }
+          exportBtn.disabled = false;
         } else {
           downloadBlob(filename, bytes, mime);
           setExportStatus('Downloaded ' + filename + successNote, true);
