@@ -1540,10 +1540,25 @@
       });
     }
 
+    function clampPanelToViewport(panel) {
+      panel.style.transform = '';
+      var rect = panel.getBoundingClientRect();
+      // documentElement.clientWidth is the true layout viewport width; window.innerWidth
+      // can balloon to match content that's already overflowing (e.g. this panel's own
+      // unclamped position), which would make the overflow check below see no problem.
+      var viewportWidth = document.documentElement.clientWidth;
+      var margin = 8;
+      var shift = 0;
+      if (rect.left < margin) shift = margin - rect.left;
+      else if (rect.right > viewportWidth - margin) shift = (viewportWidth - margin) - rect.right;
+      if (shift) panel.style.transform = 'translateX(' + shift + 'px)';
+    }
+
     function openLibraryPanel() {
       renderLibraryList();
       libraryPanel.hidden = false;
       libraryBtn.setAttribute('aria-expanded', 'true');
+      clampPanelToViewport(libraryPanel);
     }
 
     function closeLibraryPanel() {
@@ -1741,6 +1756,7 @@
     function openEmailPanel() {
       emailPanel.hidden = false;
       emailBtn.setAttribute('aria-expanded', 'true');
+      clampPanelToViewport(emailPanel);
       emailAddr.focus();
     }
 
@@ -1886,6 +1902,7 @@
       refreshGithubView();
       githubPanel.hidden = false;
       githubBtn.setAttribute('aria-expanded', 'true');
+      clampPanelToViewport(githubPanel);
     }
     function closeGithubPanel() {
       githubPanel.hidden = true;
@@ -2123,6 +2140,7 @@
     function openExportPanel() {
       exportPanel.hidden = false;
       exportBtn.setAttribute('aria-expanded', 'true');
+      clampPanelToViewport(exportPanel);
     }
 
     function closeExportPanel() {
