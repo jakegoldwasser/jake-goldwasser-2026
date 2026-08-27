@@ -1061,6 +1061,7 @@
               <span class="github-connected-dot">Connected</span>
               <button class="library-entry-delete" id="github-disconnect-btn" type="button" aria-label="Disconnect GitHub" style="display:flex;">×</button>
             </div>
+            <p class="github-help">Auto-syncs a few seconds after you stop editing, and pulls other devices’ changes when this page loads. Use these to force it right now.</p>
             <button class="email-send-btn" id="github-push-btn" type="button">Push this storyboard</button>
             <button class="duplicate-btn" id="github-pull-btn" type="button" style="padding:8px 12px; font-size:12px;">Pull library</button>
           </div>
@@ -1259,6 +1260,7 @@
     }
 
     var saveTimer = null;
+    var ghSyncTimer = null;
     function save() {
       try {
         saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize });
@@ -1270,6 +1272,7 @@
       saveTimer = setTimeout(function () {
         statusEl.classList.remove('visible');
       }, 1500);
+      scheduleGithubAutoSync();
     }
 
     function autoGrow(el) {
@@ -1961,6 +1964,24 @@
       upsertIndexEntry(id, payload.title);
     }
 
+    var GH_AUTO_PUSH_DELAY = 8000;
+    function scheduleGithubAutoSync() {
+      if (!getGhToken()) return;
+      clearTimeout(ghSyncTimer);
+      ghSyncTimer = setTimeout(function () {
+        var id = currentId;
+        pushStoryboardToGithub(id).then(function () {
+          if (id !== currentId) return;
+          statusEl.textContent = 'Synced to GitHub';
+          statusEl.classList.add('visible');
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 1500);
+        }).catch(function (err) {
+          setGithubStatus(err && err.message ? err.message : 'Auto-sync failed.', true);
+        });
+      }, GH_AUTO_PUSH_DELAY);
+    }
+
     async function pullLibraryFromGithub() {
       var indexFile = await ghGetFile('storyboards/index.json');
       var remoteList = (indexFile && Array.isArray(indexFile.data)) ? indexFile.data : [];
@@ -2011,6 +2032,7 @@
         githubTokenInput.value = '';
         setGithubStatus('Connected.');
         refreshGithubView();
+        runAutoPull();
       } catch (err) {
         setGhToken(prevValue);
         var msg = err && err.message ? err.message : 'Could not connect.';
@@ -2065,6 +2087,20 @@
     });
 
     refreshGithubView();
+
+    function runAutoPull() {
+      if (!getGhToken()) return;
+      pullLibraryFromGithub().then(function (result) {
+        if (!result.pulled) return;
+        statusEl.textContent = 'Synced ' + result.pulled + ' storyboard' + (result.pulled === 1 ? '' : 's') + ' from GitHub';
+        statusEl.classList.add('visible');
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2500);
+      }).catch(function (err) {
+        setGithubStatus(err && err.message ? err.message : 'Auto-pull failed.', true);
+      });
+    }
+    runAutoPull();
 
     // ---- Export As… (PowerPoint / PDF) ----
 
