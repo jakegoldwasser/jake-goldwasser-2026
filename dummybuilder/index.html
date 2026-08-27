@@ -354,6 +354,84 @@
 
   textarea.illustration:focus { color: var(--ink); }
 
+  /* per-side control for where text sits on the printed dummy page —
+     mirrors .split-toggle, opposite corner, revealed the same way */
+
+  /* vertical strip on the left edge — each button sits where it points:
+     Top at the top, Bottom at the bottom, Mid centered between them */
+  /* a vertical 3-stop slider, reveal-on-hover — the textarea reserves a
+     dedicated gutter (see padding-left below) so this never sits on top
+     of the text, hovering or not */
+  .text-position-control {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 8px;
+    width: 16px;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    cursor: grab;
+    touch-action: none;
+    transition: opacity 0.12s ease;
+  }
+
+  .text-position-control:active { cursor: grabbing; }
+
+  .pair-side-box:hover .text-position-control,
+  .pair-side-box:focus-within .text-position-control,
+  .title-page-box:hover .text-position-control,
+  .title-page-box:focus-within .text-position-control,
+  .end-page-box:hover .text-position-control,
+  .end-page-box:focus-within .text-position-control,
+  .text-position-control:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .text-position-track {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    transform: translateX(-50%);
+    background: var(--line-strong);
+    border-radius: 999px;
+  }
+
+  .text-position-thumb {
+    position: absolute;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--teal);
+    border: 2px solid var(--surface);
+    box-shadow: 0 1px 3px var(--shadow);
+    transform: translate(-50%, -50%);
+    transition: top 0.15s ease;
+    pointer-events: none;
+  }
+
+  .text-position-zone {
+    position: absolute;
+    left: 0;
+    width: 16px;
+    height: 34%;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .text-position-zone[data-pos="top"] { top: 0; }
+  .text-position-zone[data-pos="middle"] { top: 33%; }
+  .text-position-zone[data-pos="bottom"] { top: 66%; }
+
+  .text-position-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   /* verso + recto: one connected unit, split only by a dotted rule */
 
   .spread-pair {
@@ -379,6 +457,17 @@
     position: relative;
   }
 
+  /* wraps a single textarea (primary or split-continuation) together with
+     its own text-position slider, so each box gets independent placement */
+  .pair-side-box {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
   .spread-pair textarea.cell {
     flex: 1 1 auto;
     min-width: 0;
@@ -386,6 +475,10 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    transition: transform 0.2s ease;
+    /* reserves a gutter for the text-position slider so it never sits on
+       top of the text, whether the slider is showing or not */
+    padding-left: 32px;
   }
 
   .spread-pair textarea.cell:focus {
@@ -412,6 +505,7 @@
     flex: 1 1 0;
     min-width: 160px;
     display: flex;
+    position: relative;
     background: var(--surface);
     border: 2px solid var(--line-strong);
     border-radius: var(--radius);
@@ -432,6 +526,7 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    padding-left: 32px;
   }
 
   .title-page-box textarea.cell:focus { box-shadow: none; }
@@ -469,6 +564,7 @@
     flex: 1 1 0;
     min-width: 160px;
     display: flex;
+    position: relative;
     background: var(--surface);
     border: 2px solid var(--line-strong);
     border-radius: var(--radius);
@@ -489,6 +585,7 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    padding-left: 32px;
   }
 
   .end-page-box textarea.cell:focus { box-shadow: none; }
@@ -700,30 +797,6 @@
     font-size: 11px;
     font-weight: 500;
     color: var(--ink-faint);
-  }
-
-  .format-toggle {
-    display: flex;
-    gap: 6px;
-  }
-
-  .format-toggle button {
-    flex: 1;
-    font-family: "Poppins", sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-soft);
-    background: var(--paper);
-    border: 2px solid var(--line-strong);
-    border-radius: 999px;
-    padding: 6px 8px;
-    cursor: pointer;
-  }
-
-  .format-toggle button.active {
-    color: var(--accent-ink);
-    background: var(--teal);
-    border-color: var(--teal);
   }
 
   .export-status {
@@ -1190,6 +1263,7 @@
         </div>
       </div>
       <span class="spread-count"><strong id="spread-total">14</strong> spreads</span>
+      <span class="spread-count"><strong id="word-total">0</strong> words</span>
       <span class="save-status" id="save-status">Saved</span>
     </div>
   </header>
@@ -1217,16 +1291,13 @@
         <div class="export-panel" id="export-panel" hidden>
           <button class="export-option-btn" id="export-dummy-btn" type="button">Printable Dummy <span class="ext">.pdf</span></button>
           <button class="export-option-btn" id="export-pptx-btn" type="button">PowerPoint <span class="ext">.pptx</span></button>
-          <button class="export-option-btn" id="export-pdf-btn" type="button">PDF <span class="ext">.pdf</span></button>
+          <button class="export-option-btn" id="export-digital-dummy-btn" type="button">Digital Dummy <span class="ext">.pdf</span></button>
         </div>
       </div>
       <div class="email-menu" id="email-menu">
-        <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email As…</button>
+        <button class="email-btn" id="email-btn" type="button" aria-expanded="false">Email</button>
         <div class="email-panel" id="email-panel" hidden>
-          <div class="format-toggle" id="email-format-toggle">
-            <button type="button" class="active" data-format="pptx">PowerPoint</button>
-            <button type="button" data-format="pdf">PDF</button>
-          </div>
+          <p class="github-help">Sends the spreads as a comma-separated table in the email body — not an actual PowerPoint or PDF file.</p>
           <label class="email-panel-label" for="email-addr">Send to</label>
           <input type="email" id="email-addr" placeholder="you@example.com" required />
           <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
@@ -1287,6 +1358,7 @@
     var authorEl = document.getElementById('author-input');
     var copyrightEl = document.getElementById('copyright-line');
     var totalEl = document.getElementById('spread-total');
+    var wordTotalEl = document.getElementById('word-total');
     var statusEl = document.getElementById('save-status');
     var draggedIndex = null;
 
@@ -1307,7 +1379,8 @@
       return TRIM_SIZES[0];
     }
 
-    var state = { title: '', author: '', rows: [], trimSize: DEFAULT_TRIM, titlePage: '', endPage: '', graveyard: [] };
+    var TEXT_POSITIONS = ['top', 'middle', 'bottom'];
+    var DEFAULT_TEXT_POSITION = 'bottom';
 
     function updateCopyright() {
       var year = new Date().getFullYear();
@@ -1316,11 +1389,21 @@
     }
 
     function blankRow() {
-      return { verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '' };
+      return {
+        verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '',
+        versoTextPosition: DEFAULT_TEXT_POSITION, verso2TextPosition: DEFAULT_TEXT_POSITION,
+        rectoTextPosition: DEFAULT_TEXT_POSITION, recto2TextPosition: DEFAULT_TEXT_POSITION
+      };
     }
 
     function normalizeRow(row) {
       row = row || {};
+      // Rows saved by an earlier version had one textPosition for the whole
+      // spread; carry it over as the fallback for every side/continuation.
+      var legacyPos = TEXT_POSITIONS.indexOf(row.textPosition) !== -1 ? row.textPosition : DEFAULT_TEXT_POSITION;
+      function pos(field) {
+        return TEXT_POSITIONS.indexOf(row[field]) !== -1 ? row[field] : legacyPos;
+      }
       return {
         verso: row.verso || '',
         verso2: row.verso2 || '',
@@ -1328,7 +1411,11 @@
         recto: row.recto || '',
         recto2: row.recto2 || '',
         rectoSplit: !!row.rectoSplit,
-        illustration: row.illustration || ''
+        illustration: row.illustration || '',
+        versoTextPosition: pos('versoTextPosition'),
+        verso2TextPosition: pos('verso2TextPosition'),
+        rectoTextPosition: pos('rectoTextPosition'),
+        recto2TextPosition: pos('recto2TextPosition')
       };
     }
 
@@ -1337,6 +1424,29 @@
       for (var i = 0; i < INITIAL_ROWS; i++) rows.push(blankRow());
       return rows;
     }
+
+    // Every field that makes up a saved storyboard, defaulted the same way
+    // regardless of where it's loaded from (localStorage, legacy migration,
+    // GitHub pull, duplicate) — the one place that needs to know about a
+    // new top-level field.
+    function normalizeStoryFields(d) {
+      d = d || {};
+      return {
+        title: d.title || '',
+        author: d.author || '',
+        rows: Array.isArray(d.rows) && d.rows.length ? d.rows.map(normalizeRow) : defaultRows(),
+        trimSize: getTrimSize(d.trimSize).key,
+        titlePage: d.titlePage || '',
+        endPage: d.endPage || '',
+        titlePageTextPosition: TEXT_POSITIONS.indexOf(d.titlePageTextPosition) !== -1 ? d.titlePageTextPosition : DEFAULT_TEXT_POSITION,
+        endPageTextPosition: TEXT_POSITIONS.indexOf(d.endPageTextPosition) !== -1 ? d.endPageTextPosition : DEFAULT_TEXT_POSITION,
+        titlePageIllustration: d.titlePageIllustration || '',
+        endPageIllustration: d.endPageIllustration || '',
+        graveyard: Array.isArray(d.graveyard) ? d.graveyard.map(normalizeRow) : []
+      };
+    }
+
+    var state = normalizeStoryFields();
 
     function makeId() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -1380,21 +1490,24 @@
       try {
         var raw = localStorage.getItem(STORY_PREFIX + id);
         if (!raw) return null;
-        var parsed = JSON.parse(raw);
-        return {
-          title: parsed.title || '',
-          author: parsed.author || '',
-          rows: Array.isArray(parsed.rows) && parsed.rows.length ? parsed.rows.map(normalizeRow) : defaultRows(),
-          trimSize: getTrimSize(parsed.trimSize).key,
-          titlePage: parsed.titlePage || '',
-          endPage: parsed.endPage || '',
-          graveyard: Array.isArray(parsed.graveyard) ? parsed.graveyard.map(normalizeRow) : []
-        };
+        return normalizeStoryFields(JSON.parse(raw));
       } catch (e) { return null; }
     }
 
     function saveStory(id, data) {
       try { localStorage.setItem(STORY_PREFIX + id, JSON.stringify(data)); } catch (e) {}
+    }
+
+    // The subset of `state` that gets persisted — same shape everywhere
+    // saveStory() is called.
+    function currentStoryData() {
+      return {
+        title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize,
+        titlePage: state.titlePage, endPage: state.endPage,
+        titlePageTextPosition: state.titlePageTextPosition, endPageTextPosition: state.endPageTextPosition,
+        titlePageIllustration: state.titlePageIllustration, endPageIllustration: state.endPageIllustration,
+        graveyard: state.graveyard
+      };
     }
 
     function initLibrary() {
@@ -1405,13 +1518,7 @@
         var existing = loadStory(savedCurrent);
         if (existing) {
           currentId = savedCurrent;
-          state.title = existing.title;
-          state.author = existing.author;
-          state.rows = existing.rows;
-          state.trimSize = existing.trimSize;
-          state.titlePage = existing.titlePage;
-          state.endPage = existing.endPage;
-          state.graveyard = existing.graveyard;
+          Object.assign(state, existing);
           return;
         }
       }
@@ -1425,36 +1532,35 @@
       } catch (e) {}
 
       currentId = makeId();
-      if (legacy && Array.isArray(legacy.rows) && legacy.rows.length) {
-        state.title = legacy.title || '';
-        state.author = legacy.author || '';
-        state.rows = legacy.rows.map(normalizeRow);
-        state.trimSize = getTrimSize(legacy.trimSize).key;
-        state.titlePage = legacy.titlePage || '';
-        state.endPage = legacy.endPage || '';
-        state.graveyard = Array.isArray(legacy.graveyard) ? legacy.graveyard.map(normalizeRow) : [];
-      } else {
-        state.title = '';
-        state.author = '';
-        state.rows = defaultRows();
-        state.trimSize = DEFAULT_TRIM;
-        state.titlePage = '';
-        state.endPage = '';
-        state.graveyard = [];
-      }
+      var hasLegacyRows = legacy && Array.isArray(legacy.rows) && legacy.rows.length;
+      Object.assign(state, normalizeStoryFields(hasLegacyRows ? legacy : null));
 
-      saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard });
+      saveStory(currentId, currentStoryData());
       upsertIndexEntry(currentId, state.title);
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
+    }
+
+    function countWords(str) {
+      str = (str || '').trim();
+      return str ? str.split(/\s+/).length : 0;
+    }
+
+    function updateWordCount() {
+      var total = countWords(state.titlePage) + countWords(state.endPage);
+      state.rows.forEach(function (row) {
+        total += countWords(row.verso) + countWords(row.verso2) + countWords(row.recto) + countWords(row.recto2);
+      });
+      wordTotalEl.textContent = total;
     }
 
     var saveTimer = null;
     var ghSyncTimer = null;
     function save() {
       try {
-        saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard });
+        saveStory(currentId, currentStoryData());
         upsertIndexEntry(currentId, state.title);
       } catch (e) {}
+      updateWordCount();
       statusEl.textContent = 'Saved';
       statusEl.classList.add('visible');
       clearTimeout(saveTimer);
@@ -1469,19 +1575,154 @@
       el.style.height = el.scrollHeight + 'px';
     }
 
+    // Slides the actual text within its box to preview print placement.
+    // Uses transform (not padding) so it never feeds back into autoGrow's
+    // own scrollHeight-based sizing — a padding-based version would inflate
+    // scrollHeight, which would inflate the height autoGrow sets, which
+    // would inflate the "free space" this computes next time, growing the
+    // box forever.
+    function applyTextSlide(ta, position) {
+      if (!position) return;
+      var availableH = ta.clientHeight;
+      // scrollHeight only exceeds clientHeight when content overflows a
+      // *constrained* height — but flex-grow keeps this box stretched to
+      // fill the row, so it never overflows and scrollHeight would just
+      // equal clientHeight. Briefly turn off the grow AND the explicit
+      // height autoGrow() baked in (which itself was measured while the
+      // box was stretched, so it's just as unreliable) to read the box's
+      // true unstretched content height instead.
+      var prevFlexGrow = ta.style.flexGrow;
+      var prevHeight = ta.style.height;
+      ta.style.flexGrow = '0';
+      ta.style.height = 'auto';
+      var contentH = ta.scrollHeight;
+      // scrollHeight includes the textarea's own bottom padding, so sliding
+      // by freeSpace alone lands that padding — not the text itself —
+      // flush with the box's bottom edge. Push the extra padBottom too so
+      // the last line of text is what actually touches bottom.
+      var padBottom = parseFloat(getComputedStyle(ta).paddingBottom) || 0;
+      ta.style.flexGrow = prevFlexGrow;
+      ta.style.height = prevHeight;
+      var freeSpace = Math.max(0, availableH - contentH);
+      var offset = position === 'bottom' ? freeSpace + padBottom : position === 'middle' ? freeSpace / 2 : 0;
+      ta.style.transform = offset ? 'translateY(' + Math.round(offset) + 'px)' : '';
+    }
+
+    // Recomputes text-slide offsets for every side in a spread together,
+    // after their heights have all settled — a single side can't know its
+    // own free space until its sibling's autoGrow has also run, since
+    // that's what stretches the shorter side to match the taller one.
+    function refreshRowTextPositions(pairEl) {
+      if (!pairEl) return;
+      pairEl.querySelectorAll('textarea.cell').forEach(function (t) {
+        if (t._applyTextPosition) t._applyTextPosition();
+      });
+    }
+
     function makeTextarea(field, rowIndex, placeholder, extraClass) {
       var ta = document.createElement('textarea');
       ta.className = 'cell' + (extraClass ? ' ' + extraClass : '');
       ta.placeholder = placeholder;
       ta.value = state.rows[rowIndex][field] || '';
       ta.setAttribute('aria-label', placeholder + ' — spread ' + (rowIndex + 1));
+      var positionField = (field === 'verso' || field === 'verso2') ? 'versoTextPosition'
+        : (field === 'recto' || field === 'recto2') ? 'rectoTextPosition'
+        : null;
+      ta._applyTextPosition = function () {
+        applyTextSlide(ta, positionField && state.rows[rowIndex][positionField]);
+      };
       ta.addEventListener('input', function () {
         state.rows[rowIndex][field] = ta.value;
         autoGrow(ta);
+        refreshRowTextPositions(ta.closest('.spread-pair'));
         save();
       });
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
+    }
+
+    var TEXT_POSITION_LABELS_FULL = { top: 'Top', middle: 'Middle', bottom: 'Bottom' };
+    var TEXT_POSITION_THUMB_TOP = { top: '0%', middle: '50%', bottom: '100%' };
+
+    var TEXT_POSITION_TOOLTIP = 'Select where the text will sit on the page';
+
+    // Generic — works for a spread's verso/recto/verso2/recto2, or for the
+    // title/end page's own single side. `getPos`/`setPos` read and write
+    // wherever the caller's position value actually lives; `onChange` runs
+    // after every update (typically: re-slide the affected textarea(s) and
+    // save()).
+    function makeTextPositionControl(getPos, setPos, ariaLabel, onChange) {
+      var wrap = document.createElement('div');
+      wrap.className = 'text-position-control';
+      wrap.setAttribute('role', 'group');
+      wrap.title = TEXT_POSITION_TOOLTIP;
+      wrap.setAttribute('aria-label', ariaLabel);
+
+      var track = document.createElement('div');
+      track.className = 'text-position-track';
+      wrap.appendChild(track);
+
+      var thumb = document.createElement('div');
+      thumb.className = 'text-position-thumb';
+      thumb.style.top = TEXT_POSITION_THUMB_TOP[getPos()] || TEXT_POSITION_THUMB_TOP[DEFAULT_TEXT_POSITION];
+      wrap.appendChild(thumb);
+
+      var zoneEls = {};
+
+      function setPosition(pos) {
+        setPos(pos);
+        // Update in place (no render()) so the slide actually animates
+        // instead of the box being torn down and rebuilt at rest.
+        thumb.style.top = TEXT_POSITION_THUMB_TOP[pos];
+        TEXT_POSITIONS.forEach(function (p) {
+          zoneEls[p].setAttribute('aria-pressed', p === pos ? 'true' : 'false');
+        });
+        onChange();
+      }
+
+      TEXT_POSITIONS.forEach(function (pos) {
+        var zone = document.createElement('button');
+        zone.type = 'button';
+        zone.className = 'text-position-zone';
+        zone.dataset.pos = pos;
+        zone.title = TEXT_POSITION_TOOLTIP;
+        zone.setAttribute('aria-label', TEXT_POSITION_LABELS_FULL[pos] + ' — ' + ariaLabel);
+        var isActive = getPos() === pos;
+        zone.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        zone.addEventListener('click', function () { setPosition(pos); });
+        zoneEls[pos] = zone;
+        wrap.appendChild(zone);
+      });
+
+      // Click-and-drag: press anywhere on the control and move the pointer
+      // to slide the thumb between stops, snapping to whichever third of
+      // the track it's currently over.
+      var dragging = false;
+      function positionForClientY(clientY) {
+        var rect = track.getBoundingClientRect();
+        var ratio = rect.height ? (clientY - rect.top) / rect.height : 0;
+        ratio = Math.max(0, Math.min(1, ratio));
+        return ratio < 1 / 3 ? 'top' : ratio < 2 / 3 ? 'middle' : 'bottom';
+      }
+      wrap.addEventListener('pointerdown', function (e) {
+        dragging = true;
+        try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
+        setPosition(positionForClientY(e.clientY));
+        e.preventDefault();
+      });
+      wrap.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        setPosition(positionForClientY(e.clientY));
+      });
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        try { wrap.releasePointerCapture(e.pointerId); } catch (err) {}
+      }
+      wrap.addEventListener('pointerup', endDrag);
+      wrap.addEventListener('pointercancel', endDrag);
+
+      return wrap;
     }
 
     function toggleSplit(rowIndex, prefix) {
@@ -1507,12 +1748,33 @@
       var side = document.createElement('div');
       side.className = 'pair-side';
 
-      side.appendChild(makeTextarea(prefix, rowIndex, label));
+      function onPositionChange() {
+        refreshRowTextPositions(side.closest('.spread-pair'));
+        save();
+      }
+
+      // A box gets its own slider — when a side is split into two stacked
+      // boxes, each one needs an independent placement, not one shared
+      // setting for both.
+      function makeBoxWrap(field, placeholder) {
+        var boxWrap = document.createElement('div');
+        boxWrap.className = 'pair-side-box';
+        boxWrap.appendChild(makeTextarea(field, rowIndex, placeholder));
+        boxWrap.appendChild(makeTextPositionControl(
+          function () { return state.rows[rowIndex][field + 'TextPosition']; },
+          function (pos) { state.rows[rowIndex][field + 'TextPosition'] = pos; },
+          'Text position — ' + placeholder.toLowerCase() + ' — spread ' + (rowIndex + 1),
+          onPositionChange
+        ));
+        return boxWrap;
+      }
+
+      side.appendChild(makeBoxWrap(prefix, label));
       if (row[splitField]) {
         var hDivider = document.createElement('div');
         hDivider.className = 'pair-divider-h';
         side.appendChild(hDivider);
-        side.appendChild(makeTextarea(field2, rowIndex, label + ', continued'));
+        side.appendChild(makeBoxWrap(field2, label + ', continued'));
       }
 
       var toggle = document.createElement('button');
@@ -1593,8 +1855,27 @@
       ta.placeholder = 'Recto text';
       ta.value = state.titlePage || '';
       ta.setAttribute('aria-label', 'Recto text — title page');
+      ta._applyTextPosition = function () {
+        applyTextSlide(ta, state.titlePageTextPosition);
+      };
       ta.addEventListener('input', function () {
         state.titlePage = ta.value;
+        autoGrow(ta);
+        ta._applyTextPosition();
+        save();
+      });
+      requestAnimationFrame(function () { autoGrow(ta); ta._applyTextPosition(); });
+      return ta;
+    }
+
+    function makeTitleIllustrationTextarea() {
+      var ta = document.createElement('textarea');
+      ta.className = 'cell illustration';
+      ta.placeholder = 'Illustration notes';
+      ta.value = state.titlePageIllustration || '';
+      ta.setAttribute('aria-label', 'Illustration notes — title page');
+      ta.addEventListener('input', function () {
+        state.titlePageIllustration = ta.value;
         autoGrow(ta);
         save();
       });
@@ -1619,13 +1900,18 @@
       pair.appendChild(empty);
       var box = document.createElement('div');
       box.className = 'title-page-box';
-      box.appendChild(makeTitlePageTextarea());
+      var ta = makeTitlePageTextarea();
+      box.appendChild(ta);
+      box.appendChild(makeTextPositionControl(
+        function () { return state.titlePageTextPosition; },
+        function (pos) { state.titlePageTextPosition = pos; },
+        'Text position — title page',
+        function () { ta._applyTextPosition(); save(); }
+      ));
       pair.appendChild(box);
       sheetEl.appendChild(pair);
 
-      var filler = document.createElement('div');
-      filler.className = 'illustration title-page-filler';
-      sheetEl.appendChild(filler);
+      sheetEl.appendChild(makeTitleIllustrationTextarea());
     }
 
     function makeEndPageTextarea() {
@@ -1634,8 +1920,27 @@
       ta.placeholder = 'Verso text';
       ta.value = state.endPage || '';
       ta.setAttribute('aria-label', 'Verso text — end page');
+      ta._applyTextPosition = function () {
+        applyTextSlide(ta, state.endPageTextPosition);
+      };
       ta.addEventListener('input', function () {
         state.endPage = ta.value;
+        autoGrow(ta);
+        ta._applyTextPosition();
+        save();
+      });
+      requestAnimationFrame(function () { autoGrow(ta); ta._applyTextPosition(); });
+      return ta;
+    }
+
+    function makeEndIllustrationTextarea() {
+      var ta = document.createElement('textarea');
+      ta.className = 'cell illustration';
+      ta.placeholder = 'Illustration notes';
+      ta.value = state.endPageIllustration || '';
+      ta.setAttribute('aria-label', 'Illustration notes — end page');
+      ta.addEventListener('input', function () {
+        state.endPageIllustration = ta.value;
         autoGrow(ta);
         save();
       });
@@ -1656,7 +1961,14 @@
       pair.className = 'end-page-pair';
       var box = document.createElement('div');
       box.className = 'end-page-box';
-      box.appendChild(makeEndPageTextarea());
+      var ta = makeEndPageTextarea();
+      box.appendChild(ta);
+      box.appendChild(makeTextPositionControl(
+        function () { return state.endPageTextPosition; },
+        function (pos) { state.endPageTextPosition = pos; },
+        'Text position — end page',
+        function () { ta._applyTextPosition(); save(); }
+      ));
       pair.appendChild(box);
       var empty = document.createElement('div');
       empty.className = 'half-spread-empty';
@@ -1664,9 +1976,7 @@
       pair.appendChild(empty);
       sheetEl.appendChild(pair);
 
-      var filler = document.createElement('div');
-      filler.className = 'illustration end-page-filler';
-      sheetEl.appendChild(filler);
+      sheetEl.appendChild(makeEndIllustrationTextarea());
     }
 
     function graveyardSideText(row, prefix) {
@@ -1729,7 +2039,7 @@
 
     function render() {
       var scrollX = window.scrollX, scrollY = window.scrollY;
-      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap, .title-page-filler, .end-page-filler, .title-page-pair, .end-page-pair, .graveyard-section');
+      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap, .title-page-pair, .end-page-pair, .graveyard-section');
       nodes.forEach(function (n) { n.remove(); });
 
       renderTitlePage();
@@ -1792,6 +2102,9 @@
         pair.appendChild(divider);
         pair.appendChild(makeSide(i, 'recto', 'Recto text'));
         sheetEl.appendChild(pair);
+        // Queued after both sides' own autoGrow rAFs (registered above),
+        // so it runs once their heights have actually settled.
+        requestAnimationFrame(function () { refreshRowTextPositions(pair); });
 
         sheetEl.appendChild(makeTextarea('illustration', i, 'Illustration notes', 'illustration'));
 
@@ -1820,6 +2133,7 @@
     titleEl.value = state.title;
     authorEl.value = state.author;
     updateCopyright();
+    updateWordCount();
     render();
 
     var trimSelect = document.getElementById('trim-select');
@@ -1914,16 +2228,11 @@
     }
 
     function applyState(data) {
-      state.title = data.title;
-      state.author = data.author;
-      state.rows = data.rows;
-      state.trimSize = data.trimSize;
-      state.titlePage = data.titlePage || '';
-      state.endPage = data.endPage || '';
-      state.graveyard = Array.isArray(data.graveyard) ? data.graveyard : [];
+      Object.assign(state, normalizeStoryFields(data));
       titleEl.value = state.title;
       authorEl.value = state.author;
       updateCopyright();
+      updateWordCount();
       trimSelect.value = state.trimSize;
       render();
     }
@@ -1943,7 +2252,7 @@
       save();
       currentId = makeId();
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
-      var data = { title: '', author: '', rows: defaultRows(), trimSize: DEFAULT_TRIM, titlePage: '', endPage: '', graveyard: [] };
+      var data = normalizeStoryFields();
       saveStory(currentId, data);
       upsertIndexEntry(currentId, data.title);
       applyState(data);
@@ -1955,15 +2264,8 @@
       save();
       currentId = makeId();
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
-      var data = {
-        title: (state.title || 'Untitled Picture Book') + ' COPY',
-        author: state.author,
-        rows: state.rows.map(normalizeRow),
-        trimSize: state.trimSize,
-        titlePage: state.titlePage,
-        endPage: state.endPage,
-        graveyard: state.graveyard.map(normalizeRow)
-      };
+      var data = normalizeStoryFields(state);
+      data.title = (state.title || 'Untitled Picture Book') + ' COPY';
       saveStory(currentId, data);
       upsertIndexEntry(currentId, data.title);
       applyState(data);
@@ -2094,22 +2396,6 @@
     var emailAddr = document.getElementById('email-addr');
     var emailSendBtn = document.getElementById('email-send-btn');
     var emailPanelStatus = document.getElementById('email-panel-status');
-    var emailFormatToggle = document.getElementById('email-format-toggle');
-    var emailFormat = 'pptx';
-
-    emailFormatToggle.querySelectorAll('button').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        emailFormat = btn.dataset.format;
-        emailFormatToggle.querySelectorAll('button').forEach(function (b) {
-          b.classList.toggle('active', b === btn);
-        });
-      });
-    });
-
-    function bytesToFile(filename, bytes, mime) {
-      try { return new File([bytes], filename, { type: mime }); }
-      catch (e) { return new Blob([bytes], { type: mime }); }
-    }
 
     try {
       if (window.emailjs && typeof window.emailjs.init === 'function') {
@@ -2171,7 +2457,6 @@
       var email = emailAddr.value.trim();
       var subject = (state.title || 'Untitled Picture Book') + ' — Dummy';
       var body = plainStoryboard();
-      var filename = slugify(state.title) + '.' + emailFormat;
 
       function fallbackToMailto(note) {
         emailPanelStatus.textContent = note;
@@ -2185,23 +2470,11 @@
       emailPanelStatus.textContent = '';
 
       if (window.emailjs && typeof window.emailjs.send === 'function') {
-        var attachmentFile = null;
-        try {
-          if (emailFormat === 'pdf') {
-            attachmentFile = bytesToFile(filename, await buildPdf(state.title, state.rows, state.trimSize), 'application/pdf');
-          } else {
-            attachmentFile = bytesToFile(filename, buildPptx(state.title, state.rows, state.trimSize), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-          }
-        } catch (e) {}
-
         var params = { to_email: email, subject: subject, message: body };
-        if (attachmentFile) params.attachment = attachmentFile;
 
         window.emailjs.send('service_ur7r6mv', 'template_k5wzlc6', params)
           .then(function () {
-            emailPanelStatus.textContent = attachmentFile
-              ? 'Sent! Check ' + email + ' — the ' + emailFormat.toUpperCase() + ' should be attached (if the email template supports attachments).'
-              : 'Sent! Check ' + email + '.';
+            emailPanelStatus.textContent = 'Sent! Check ' + email + '.';
           }).catch(function () {
             fallbackToMailto('Couldn’t send automatically — opening your mail app instead.');
           }).then(function () {
@@ -2324,13 +2597,11 @@
     }
 
     async function pushStoryboardToGithub(id) {
-      var data = (id === currentId)
-        ? { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard }
-        : loadStory(id);
+      var data = (id === currentId) ? currentStoryData() : loadStory(id);
       if (!data) throw new Error('Nothing to push');
 
       var updatedAt = Date.now();
-      var payload = { id: id, title: data.title, author: data.author, rows: data.rows, trimSize: data.trimSize, titlePage: data.titlePage, endPage: data.endPage, graveyard: data.graveyard, updatedAt: updatedAt };
+      var payload = Object.assign({ id: id }, data, { updatedAt: updatedAt });
       await ghPutFile('storyboards/' + id + '.json', payload, 'Save "' + (payload.title || 'Untitled Picture Book') + '"');
 
       var indexFile = await ghGetFile('storyboards/index.json');
@@ -2378,15 +2649,7 @@
         var file = await ghGetFile('storyboards/' + entry.id + '.json');
         if (!file) continue;
         var d = file.data;
-        saveStory(entry.id, {
-          title: d.title || '',
-          author: d.author || '',
-          rows: Array.isArray(d.rows) && d.rows.length ? d.rows.map(normalizeRow) : defaultRows(),
-          trimSize: getTrimSize(d.trimSize).key,
-          titlePage: d.titlePage || '',
-          endPage: d.endPage || '',
-          graveyard: Array.isArray(d.graveyard) ? d.graveyard.map(normalizeRow) : []
-        });
+        saveStory(entry.id, normalizeStoryFields(d));
         upsertIndexEntry(entry.id, d.title);
         pulled++;
       }
@@ -2493,7 +2756,7 @@
     var exportPanel = document.getElementById('export-panel');
     var exportDummyBtn = document.getElementById('export-dummy-btn');
     var exportPptxBtn = document.getElementById('export-pptx-btn');
-    var exportPdfBtn = document.getElementById('export-pdf-btn');
+    var exportDigitalDummyBtn = document.getElementById('export-digital-dummy-btn');
     var exportStatus = document.getElementById('export-status');
     var exportStatusTimer = null;
 
@@ -3079,184 +3342,10 @@
         x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
     }
 
-    // Builds one page's draw operations: vector rects/lines plus rasterized
-    // text blocks (each an { type: 'image', ... } op carrying its own pixel
-    // data), left for buildPdf() to turn into PDF objects with real numbers.
-    function buildPdfPageOps(spreadIndex, row, pageW, pageH, title) {
-      var MARGIN = 36, GUTTER_HALF_GAP = 9, BOTTOM_MARGIN = 18, PAD = 8;
-      var half = pageW / 2;
-      var sideW = half - MARGIN - GUTTER_HALF_GAP;
-      var versoX = MARGIN, rectoX = half + GUTTER_HALF_GAP;
-      var boxW = sideW * 0.8;
-      var boxH = (pageH * 0.25 - BOTTOM_MARGIN) * 0.85;
-      var splitBoxH = boxH * 0.72;
-      var versoBoxX = versoX + (sideW - boxW) / 2;
-      var rectoBoxX = rectoX + (sideW - boxW) / 2;
-
-      var ops = [];
-
-      function addTextBlock(x, yBottom, lines, weight, sizePt, lineHeightPt, colorHex, widthPt) {
-        if (!lines.some(function (l) { return l; })) return;
-        var rendered = renderTextBlockGray(lines, weight, sizePt, lineHeightPt, colorHex, widthPt);
-        ops.push({
-          type: 'image', x: x, y: yBottom,
-          widthPt: rendered.widthPt, heightPt: rendered.heightPt,
-          widthPx: rendered.widthPx, heightPx: rendered.heightPx,
-          rle: rleEncode(rendered.gray)
-        });
-      }
-
-      var headerText = 'Spread ' + (spreadIndex + 1) + (title ? ' \u2014 ' + title : '');
-      var headerLines = wrapCanvasText(headerText, pageW - MARGIN * 2, 600, 11, 1);
-      addTextBlock(MARGIN, pageH - 22 - headerLines.length * 14, headerLines, 600, 11, 14, PDF_MUTED_HEX, pageW - MARGIN * 2);
-
-      if (row.illustration) {
-        var notesWidth = pageW - MARGIN * 2;
-        addTextBlock(MARGIN, pageH - 38 - 11, ['Illustration notes'], 600, 9, 11, PDF_MUTED_HEX, notesWidth);
-        var noteLines = wrapCanvasText(row.illustration, notesWidth, 400, 10, 4);
-        addTextBlock(MARGIN, pageH - 51 - noteLines.length * 13, noteLines, 400, 10, 13, PDF_MUTED_HEX, notesWidth);
-      }
-
-      ops.push({ type: 'line', x1: half, y1: 0, x2: half, y2: pageH });
-
-      function drawBox(x, yBottom, text, h) {
-        ops.push({ type: 'rect', x: x, y: yBottom, w: boxW, h: h });
-        var lines = wrapCanvasText(text, boxW - PAD * 2, 400, 13, Math.max(1, Math.floor((h - PAD * 2) / 17)));
-        var textBlockH = lines.length * 17;
-        addTextBlock(x + PAD, yBottom + (h - textBlockH) / 2, lines, 400, 13, 17, PDF_INK_HEX, boxW - PAD * 2);
-      }
-
-      function drawSide(x, prefix) {
-        if (row[prefix + 'Split']) {
-          drawBox(x, pageH / 2 - splitBoxH / 2, row[prefix], splitBoxH);
-          drawBox(x, BOTTOM_MARGIN, row[prefix + '2'], splitBoxH);
-        } else {
-          drawBox(x, BOTTOM_MARGIN, row[prefix], boxH);
-        }
-      }
-
-      drawSide(versoBoxX, 'verso');
-      drawSide(rectoBoxX, 'recto');
-
-      return ops;
-    }
-
     function pad10(n) {
       var s = String(n);
       while (s.length < 10) s = '0' + s;
       return s;
-    }
-
-    async function buildPdf(title, rows, trimKey) {
-      await ensureFontsReady();
-
-      var trim = getTrimSize(trimKey);
-      var pageW = Math.round(trim.pageW * 2 * 72);
-      var pageH = Math.round(trim.pageH * 72);
-      var n = rows.length;
-
-      var parts = [];
-      var offsets = [];
-      var pos = 0;
-      var nextObj = 1;
-
-      function pushPart(chunk) {
-        var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
-        parts.push(u8);
-        pos += u8.length;
-      }
-      function allocObj() { return nextObj++; }
-      function beginObj(num) { offsets[num] = pos; pushPart(num + ' 0 obj\n'); }
-      function endObj() { pushPart('endobj\n'); }
-
-      pushPart('%PDF-1.4\n');
-
-      var catalogNum = allocObj();
-      var pagesNum = allocObj();
-      var kids = [];
-
-      for (var p = 0; p < n; p++) {
-        var ops = buildPdfPageOps(p, rows[p], pageW, pageH, title);
-        var pageNum = allocObj();
-        var contentNum = allocObj();
-        var imageOps = ops.filter(function (o) { return o.type === 'image'; });
-        var imgNums = imageOps.map(function () { return allocObj(); });
-        kids.push(pageNum);
-
-        var contentBytes = [];
-        var xobjEntries = [];
-        var imgIdx = 0;
-        ops.forEach(function (op) {
-          if (op.type === 'rect') {
-            pushAscii(contentBytes, pdfDashedRectStr(op.x, op.y, op.w, op.h));
-          } else if (op.type === 'line') {
-            pushAscii(contentBytes, pdfDashedLineStr(op.x1, op.y1, op.x2, op.y2));
-          } else if (op.type === 'image') {
-            var num = imgNums[imgIdx++];
-            var key = 'Im' + num;
-            xobjEntries.push('/' + key + ' ' + num + ' 0 R');
-            pushAscii(contentBytes, 'q\n' + op.widthPt.toFixed(2) + ' 0 0 ' + op.heightPt.toFixed(2) + ' ' +
-              op.x.toFixed(2) + ' ' + op.y.toFixed(2) + ' cm\n/' + key + ' Do\nQ\n');
-          }
-        });
-
-        beginObj(pageNum);
-        pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + pageW + ' ' + pageH + ']' +
-          ' /Resources << /XObject << ' + xobjEntries.join(' ') + ' >> >>' +
-          ' /Contents ' + contentNum + ' 0 R >>\n');
-        endObj();
-
-        var contentU8 = new Uint8Array(contentBytes);
-        beginObj(contentNum);
-        pushPart('<< /Length ' + contentU8.length + ' >>\nstream\n');
-        pushPart(contentU8);
-        pushPart('\nendstream\n');
-        endObj();
-
-        imgIdx = 0;
-        ops.forEach(function (op) {
-          if (op.type !== 'image') return;
-          var num = imgNums[imgIdx++];
-          var rleU8 = new Uint8Array(op.rle);
-          beginObj(num);
-          pushPart('<< /Type /XObject /Subtype /Image /Width ' + op.widthPx + ' /Height ' + op.heightPx +
-            ' /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode /Length ' + rleU8.length + ' >>\nstream\n');
-          pushPart(rleU8);
-          pushPart('\nendstream\n');
-          endObj();
-        });
-      }
-
-      beginObj(catalogNum);
-      pushPart('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n');
-      endObj();
-
-      beginObj(pagesNum);
-      pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + n + ' >>\n');
-      endObj();
-
-      var infoNum = allocObj();
-      beginObj(infoNum);
-      pushPart('<< /Title ');
-      pushPart(pdfLiteralStringBytes(toAsciiSafe(title || 'Untitled Picture Book')));
-      pushPart(' /Producer (Book Dummy) >>\n');
-      endObj();
-
-      var xrefOffset = pos;
-      var totalObjs = nextObj;
-      var xrefLines = ['0000000000 65535 f \n'];
-      for (var num = 1; num < totalObjs; num++) {
-        xrefLines.push(pad10(offsets[num] || 0) + ' 00000 n \n');
-      }
-      pushPart('xref\n0 ' + totalObjs + '\n' + xrefLines.join(''));
-      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root ' + catalogNum + ' 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
-
-      var total = 0;
-      parts.forEach(function (part) { total += part.length; });
-      var result = new Uint8Array(total);
-      var o = 0;
-      parts.forEach(function (part) { result.set(part, o); o += part.length; });
-      return result;
     }
 
     // ---- Printable Dummy (booklet imposition) ----
@@ -3276,19 +3365,23 @@
 
     var DUMMY_PAGE_W = 792, DUMMY_PAGE_H = 612, DUMMY_OUTER_MARGIN = 36;
 
-    function printableDummyPageText(pageNum, totalPages, titlePage, effectiveRows, endPage) {
-      if (pageNum === 1) return titlePage || '';
-      if (pageNum === totalPages) return endPage || '';
-      if (pageNum % 2 === 0) return sideText(effectiveRows[pageNum / 2 - 1], 'verso');
-      return sideText(effectiveRows[(pageNum - 1) / 2 - 1], 'recto');
+    function printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo) {
+      if (!pageNum) return { text: '', position: DEFAULT_TEXT_POSITION };
+      if (pageNum === 1) return { text: titlePageInfo.text || '', position: titlePageInfo.position || DEFAULT_TEXT_POSITION };
+      if (pageNum === totalPages) return { text: endPageInfo.text || '', position: endPageInfo.position || DEFAULT_TEXT_POSITION };
+      var isVerso = pageNum % 2 === 0;
+      var row = effectiveRows[(isVerso ? pageNum / 2 : (pageNum - 1) / 2) - 1];
+      var field = isVerso ? 'versoTextPosition' : 'rectoTextPosition';
+      return {
+        text: sideText(row, isVerso ? 'verso' : 'recto'),
+        position: (row && row[field]) || DEFAULT_TEXT_POSITION
+      };
     }
 
-    function buildDummyFaceOps(leftPage, rightPage, totalPages, titlePage, effectiveRows, endPage, sheetLabel, trim) {
+    function buildDummyFaceOps(leftPage, rightPage, totalPages, titlePageInfo, effectiveRows, endPageInfo, sheetLabel, trim, scale) {
       var availW = DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2;
       var availH = DUMMY_PAGE_H - DUMMY_OUTER_MARGIN * 2;
-      var trimWpt = trim.pageW * 72, trimHpt = trim.pageH * 72;
-      var scale = Math.min(availW / (2 * trimWpt), availH / trimHpt, 1);
-      var boxW = trimWpt * scale, boxH = trimHpt * scale;
+      var boxW = trim.pageW * 72 * scale, boxH = trim.pageH * 72 * scale;
       var startX = DUMMY_OUTER_MARGIN + (availW - boxW * 2) / 2;
       var startY = DUMMY_OUTER_MARGIN + (availH - boxH) / 2;
 
@@ -3305,20 +3398,49 @@
         });
       }
 
+      function addCenteredLabel(centerX, yBottom, text, weight, sizePt, colorHex) {
+        var w = measureCanvasText(text, weight, sizePt);
+        addTextBlock(centerX - w / 2, yBottom, [text], weight, sizePt, sizePt + 3, colorHex, w + 2);
+      }
+
       ops.push({ type: 'rect', x: startX, y: startY, w: boxW * 2, h: boxH });
       ops.push({ type: 'line', x1: startX + boxW, y1: startY, x2: startX + boxW, y2: startY + boxH });
 
       var pad = Math.max(10, boxW * 0.09);
-      var fontSize = Math.max(6, 13 * scale);
-      var lineHeight = Math.max(8, 17 * scale);
+      var fontSize = Math.max(8, 17 * scale);
+      var lineHeight = Math.max(11, 22 * scale);
 
       function drawHalf(x, pageNum) {
-        var text = printableDummyPageText(pageNum, totalPages, titlePage, effectiveRows, endPage);
-        var textWidth = boxW - pad * 2;
+        if (!pageNum) return; // no page on this side (digital dummy's title/end spreads)
+        var info = printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo);
+        // Wrap to a column about half the half-page's width — a narrow
+        // measure reads more like an actual book page than text stretched
+        // edge to edge. But size and center the drawn block to the actual
+        // longest line (not the full wrap width), and keep lines
+        // left-aligned within it: a centered block, ragged right, so a
+        // single short word lands dead-center instead of stuck to one
+        // side of an oversized column.
+        var wrapWidth = boxW * 0.5;
         var maxLines = Math.max(1, Math.floor((boxH - pad * 2) / lineHeight));
-        var lines = wrapCanvasText(text, textWidth, 400, fontSize, maxLines);
+        var lines = wrapCanvasText(info.text, wrapWidth, 400, fontSize, maxLines);
+        var blockW = 0;
+        lines.forEach(function (line) {
+          blockW = Math.max(blockW, measureCanvasText(line, 400, fontSize));
+        });
+        blockW = Math.min(wrapWidth, Math.max(blockW, 1));
+        var textX = x + (boxW - blockW) / 2;
         var textBlockH = lines.length * lineHeight;
-        addTextBlock(x + pad, startY + (boxH - textBlockH) / 2, lines, 400, fontSize, lineHeight, PDF_INK_HEX, textWidth);
+        var yBottom;
+        if (info.position === 'top') {
+          yBottom = startY + boxH - pad - textBlockH;
+        } else if (info.position === 'middle') {
+          yBottom = startY + (boxH - textBlockH) / 2;
+        } else {
+          yBottom = startY + pad;
+        }
+        addTextBlock(textX, yBottom, lines, 400, fontSize, lineHeight, PDF_INK_HEX, blockW);
+        // Page number, just under the cut line for this half.
+        addCenteredLabel(x + boxW / 2, startY - 16, 'p. ' + pageNum, 600, 9, PDF_MUTED_HEX);
       }
 
       drawHalf(startX, leftPage);
@@ -3330,22 +3452,11 @@
       return ops;
     }
 
-    async function buildPrintableDummyPdf(title, titlePage, rows, endPage, trimKey) {
+    // Shared PDF-assembly loop used by both the Printable Dummy (imposed,
+    // for folding/stapling) and the Digital Dummy (natural reading order,
+    // for viewing on screen) — they only differ in how `faces` is built.
+    async function assembleDummyPdf(metaTitle, titlePageInfo, effectiveRows, endPageInfo, totalPages, trim, scale, faces) {
       await ensureFontsReady();
-      var trim = getTrimSize(trimKey);
-
-      var effectiveRows = rows.slice();
-      if (effectiveRows.length % 2 === 0) effectiveRows.push(blankRow());
-      var totalPages = effectiveRows.length * 2 + 2;
-      var numSheets = totalPages / 4;
-
-      var faces = [];
-      for (var i = 1; i <= numSheets; i++) {
-        var frontLeft = totalPages - 2 * i + 2, frontRight = 2 * i - 1;
-        var backLeft = 2 * i, backRight = totalPages - 2 * i + 1;
-        faces.push({ left: frontLeft, right: frontRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Front · pp. ' + frontLeft + ', ' + frontRight });
-        faces.push({ left: backLeft, right: backRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Back · pp. ' + backLeft + ', ' + backRight });
-      }
 
       var parts = [];
       var offsets = [];
@@ -3368,7 +3479,7 @@
       var kids = [];
 
       faces.forEach(function (face) {
-        var ops = buildDummyFaceOps(face.left, face.right, totalPages, titlePage, effectiveRows, endPage, face.label, trim);
+        var ops = buildDummyFaceOps(face.left, face.right, totalPages, titlePageInfo, effectiveRows, endPageInfo, face.label, trim, scale);
         var pageNum = allocObj();
         var contentNum = allocObj();
         var imageOps = ops.filter(function (o) { return o.type === 'image'; });
@@ -3430,7 +3541,7 @@
       var infoNum = allocObj();
       beginObj(infoNum);
       pushPart('<< /Title ');
-      pushPart(pdfLiteralStringBytes(toAsciiSafe((title || 'Untitled Picture Book') + ' - Printable Dummy')));
+      pushPart(pdfLiteralStringBytes(toAsciiSafe(metaTitle)));
       pushPart(' /Producer (Book Dummy) >>\n');
       endObj();
 
@@ -3449,6 +3560,58 @@
       var o = 0;
       parts.forEach(function (part) { result.set(part, o); o += part.length; });
       return result;
+    }
+
+    function scaledDimLabel(trim, scale) {
+      return (trim.pageW * scale).toFixed(2) + '" × ' + (trim.pageH * scale).toFixed(2) + '" per page';
+    }
+
+    async function buildPrintableDummyPdf(title, titlePageInfo, rows, endPageInfo, trimKey) {
+      var trim = getTrimSize(trimKey);
+      var availW = DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2;
+      var availH = DUMMY_PAGE_H - DUMMY_OUTER_MARGIN * 2;
+      var scale = Math.min(availW / (2 * trim.pageW * 72), availH / (trim.pageH * 72), 1);
+      var scaledDim = scaledDimLabel(trim, scale);
+
+      var effectiveRows = rows.slice();
+      if (effectiveRows.length % 2 === 0) effectiveRows.push(blankRow());
+      var totalPages = effectiveRows.length * 2 + 2;
+      var numSheets = totalPages / 4;
+
+      var faces = [];
+      for (var i = 1; i <= numSheets; i++) {
+        var frontLeft = totalPages - 2 * i + 2, frontRight = 2 * i - 1;
+        var backLeft = 2 * i, backRight = totalPages - 2 * i + 1;
+        faces.push({ left: frontLeft, right: frontRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Front · pp. ' + frontLeft + ', ' + frontRight + ' · ' + scaledDim });
+        faces.push({ left: backLeft, right: backRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Back · pp. ' + backLeft + ', ' + backRight + ' · ' + scaledDim });
+      }
+
+      var metaTitle = (title || 'Untitled Picture Book') + ' - Printable Dummy';
+      return assembleDummyPdf(metaTitle, titlePageInfo, effectiveRows, endPageInfo, totalPages, trim, scale, faces);
+    }
+
+    // Same look as the Printable Dummy, but pages run in plain reading
+    // order (title spread, 1&2, 3&4, ... , end spread) instead of the
+    // saddle-stitch imposition order — meant for viewing on screen, not
+    // folding, so there's no need to pad to a multiple of 4 either.
+    async function buildDigitalDummyPdf(title, titlePageInfo, rows, endPageInfo, trimKey) {
+      var trim = getTrimSize(trimKey);
+      var availW = DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2;
+      var availH = DUMMY_PAGE_H - DUMMY_OUTER_MARGIN * 2;
+      var scale = Math.min(availW / (2 * trim.pageW * 72), availH / (trim.pageH * 72), 1);
+      var scaledDim = scaledDimLabel(trim, scale);
+
+      var totalPages = rows.length * 2 + 2;
+
+      var faces = [{ left: null, right: 1, label: 'Title spread · p. 1 · ' + scaledDim }];
+      for (var s = 1; s <= rows.length; s++) {
+        var v = 2 * s, r = 2 * s + 1;
+        faces.push({ left: v, right: r, label: 'Spread ' + s + ' of ' + rows.length + ' · pp. ' + v + ', ' + r + ' · ' + scaledDim });
+      }
+      faces.push({ left: totalPages, right: null, label: 'End spread · p. ' + totalPages + ' · ' + scaledDim });
+
+      var metaTitle = (title || 'Untitled Picture Book') + ' - Digital Dummy';
+      return assembleDummyPdf(metaTitle, titlePageInfo, rows, endPageInfo, totalPages, trim, scale, faces);
     }
 
     // ---- Export As… wiring ----
@@ -3472,12 +3635,14 @@
 
       try {
         var bytes, filename, mime;
-        if (kind === 'pdf') {
-          bytes = await buildPdf(state.title, state.rows, state.trimSize);
-          filename = slugify(state.title) + '.pdf';
+        var titlePageInfo = { text: state.titlePage, position: state.titlePageTextPosition };
+        var endPageInfo = { text: state.endPage, position: state.endPageTextPosition };
+        if (kind === 'digital-dummy') {
+          bytes = await buildDigitalDummyPdf(state.title, titlePageInfo, state.rows, endPageInfo, state.trimSize);
+          filename = slugify(state.title) + '-digital-dummy.pdf';
           mime = 'application/pdf';
         } else if (kind === 'printable-dummy') {
-          bytes = await buildPrintableDummyPdf(state.title, state.titlePage, state.rows, state.endPage, state.trimSize);
+          bytes = await buildPrintableDummyPdf(state.title, titlePageInfo, state.rows, endPageInfo, state.trimSize);
           filename = slugify(state.title) + '-printable-dummy.pdf';
           mime = 'application/pdf';
         } else {
@@ -3517,7 +3682,7 @@
 
     exportDummyBtn.addEventListener('click', function () { exportFile('printable-dummy'); });
     exportPptxBtn.addEventListener('click', function () { exportFile('pptx'); });
-    exportPdfBtn.addEventListener('click', function () { exportFile('pdf'); });
+    exportDigitalDummyBtn.addEventListener('click', function () { exportFile('digital-dummy'); });
   })();
 </script>
 
