@@ -443,7 +443,10 @@
   }
 
   /* wraps a single textarea (primary or split-continuation) together with
-     its own text-position slider, so each box gets independent placement */
+     its own text-position slider, so each box gets independent placement.
+     A split box has no slider — its placement (top of the page, or the
+     page's vertical midpoint) is implied by which half it is — so it
+     skips the slider gutter too. */
   .pair-side-box {
     flex: 1 1 auto;
     min-width: 0;
@@ -463,6 +466,11 @@
     /* reserves a gutter for the text-position slider so it never sits on
        top of the text */
     padding-left: 32px;
+    transition: transform 0.2s ease;
+  }
+
+  .pair-side-box.no-slider textarea.cell {
+    padding-left: 14px;
   }
 
   .spread-pair textarea.cell:focus {
@@ -511,6 +519,7 @@
     background: transparent;
     box-shadow: none;
     padding-left: 32px;
+    transition: transform 0.2s ease;
   }
 
   .title-page-box textarea.cell:focus { box-shadow: none; }
@@ -570,6 +579,7 @@
     background: transparent;
     box-shadow: none;
     padding-left: 32px;
+    transition: transform 0.2s ease;
   }
 
   .end-page-box textarea.cell:focus { box-shadow: none; }
@@ -1568,10 +1578,49 @@
       ta.addEventListener('input', function () {
         state.rows[rowIndex][field] = ta.value;
         autoGrow(ta);
+        if (ta._applyPosition) ta._applyPosition();
         save();
       });
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
+    }
+
+    // Shared canvas 2d context for measuring on-screen text width — reused
+    // rather than allocated per call.
+    var onScreenMeasureCtx = document.createElement('canvas').getContext('2d');
+
+    // True only when the box's current value is short enough to render as
+    // a single unwrapped line at its current width. Multi-line content
+    // (explicit newlines, or long enough to wrap) isn't previewed — how
+    // many lines it wraps to depends on layout in ways that aren't safe to
+    // recompute from here without measurement races (see applySingleLineSlide).
+    function isSingleLineFit(ta) {
+      var value = ta.value;
+      if (!value || value.indexOf('\n') !== -1) return false;
+      var style = getComputedStyle(ta);
+      onScreenMeasureCtx.font = style.font || (style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily);
+      var textWidth = onScreenMeasureCtx.measureText(value).width;
+      var availableWidth = ta.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+      return textWidth <= availableWidth;
+    }
+
+    // Slides single-line text to preview print placement. Unlike the old
+    // general-purpose version, this never needs to measure "natural"
+    // content height by toggling flex-grow/height — a single line's height
+    // is just line-height + padding, a fixed CSS value — so there's no
+    // scrollHeight/flex-grow race to get wrong. Multi-line content is left
+    // where it naturally sits (no slide).
+    function applySingleLineSlide(ta, position) {
+      if (!position || !isSingleLineFit(ta)) {
+        ta.style.transform = '';
+        return;
+      }
+      var style = getComputedStyle(ta);
+      var lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+      var oneLineH = lineHeight + (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      var freeSpace = Math.max(0, ta.clientHeight - oneLineH);
+      var offset = position === 'bottom' ? freeSpace : position === 'middle' ? freeSpace / 2 : 0;
+      ta.style.transform = offset ? 'translateY(' + Math.round(offset) + 'px)' : '';
     }
 
     var TEXT_POSITION_LABELS_FULL = { top: 'Top', middle: 'Middle', bottom: 'Bottom' };
@@ -1681,28 +1730,36 @@
       var side = document.createElement('div');
       side.className = 'pair-side';
 
-      // A box gets its own slider — when a side is split into two stacked
-      // boxes, each one needs an independent placement, not one shared
-      // setting for both.
-      function makeBoxWrap(field, placeholder) {
+      // A box gets its own slider — except when the side is split into two
+      // stacked boxes, where placement isn't a choice any more: the top
+      // box always sits at the top of the page and the bottom box always
+      // starts at the page's vertical midpoint, so there's nothing to slide.
+      function makeBoxWrap(field, placeholder, showSlider) {
         var boxWrap = document.createElement('div');
-        boxWrap.className = 'pair-side-box';
-        boxWrap.appendChild(makeTextarea(field, rowIndex, placeholder));
-        boxWrap.appendChild(makeTextPositionControl(
-          function () { return state.rows[rowIndex][field + 'TextPosition']; },
-          function (pos) { state.rows[rowIndex][field + 'TextPosition'] = pos; },
-          'Text position — ' + placeholder.toLowerCase() + ' — spread ' + (rowIndex + 1),
-          save
-        ));
+        boxWrap.className = 'pair-side-box' + (showSlider ? '' : ' no-slider');
+        var ta = makeTextarea(field, rowIndex, placeholder);
+        boxWrap.appendChild(ta);
+        if (showSlider) {
+          ta._applyPosition = function () {
+            applySingleLineSlide(ta, state.rows[rowIndex][field + 'TextPosition']);
+          };
+          boxWrap.appendChild(makeTextPositionControl(
+            function () { return state.rows[rowIndex][field + 'TextPosition']; },
+            function (pos) { state.rows[rowIndex][field + 'TextPosition'] = pos; },
+            'Text position — ' + placeholder.toLowerCase() + ' — spread ' + (rowIndex + 1),
+            function () { ta._applyPosition(); save(); }
+          ));
+          requestAnimationFrame(function () { ta._applyPosition(); });
+        }
         return boxWrap;
       }
 
-      side.appendChild(makeBoxWrap(prefix, label));
+      side.appendChild(makeBoxWrap(prefix, label, !row[splitField]));
       if (row[splitField]) {
         var hDivider = document.createElement('div');
         hDivider.className = 'pair-divider-h';
         side.appendChild(hDivider);
-        side.appendChild(makeBoxWrap(field2, label + ', continued'));
+        side.appendChild(makeBoxWrap(field2, label + ', continued', false));
       }
 
       var toggle = document.createElement('button');
@@ -1783,12 +1840,16 @@
       ta.placeholder = 'Recto text';
       ta.value = state.titlePage || '';
       ta.setAttribute('aria-label', 'Recto text — title page');
+      ta._applyPosition = function () {
+        applySingleLineSlide(ta, state.titlePageTextPosition);
+      };
       ta.addEventListener('input', function () {
         state.titlePage = ta.value;
         autoGrow(ta);
+        ta._applyPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); });
+      requestAnimationFrame(function () { autoGrow(ta); ta._applyPosition(); });
       return ta;
     }
 
@@ -1830,7 +1891,7 @@
         function () { return state.titlePageTextPosition; },
         function (pos) { state.titlePageTextPosition = pos; },
         'Text position — title page',
-        save
+        function () { ta._applyPosition(); save(); }
       ));
       pair.appendChild(box);
       sheetEl.appendChild(pair);
@@ -1844,12 +1905,16 @@
       ta.placeholder = 'Verso text';
       ta.value = state.endPage || '';
       ta.setAttribute('aria-label', 'Verso text — end page');
+      ta._applyPosition = function () {
+        applySingleLineSlide(ta, state.endPageTextPosition);
+      };
       ta.addEventListener('input', function () {
         state.endPage = ta.value;
         autoGrow(ta);
+        ta._applyPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); });
+      requestAnimationFrame(function () { autoGrow(ta); ta._applyPosition(); });
       return ta;
     }
 
@@ -1887,7 +1952,7 @@
         function () { return state.endPageTextPosition; },
         function (pos) { state.endPageTextPosition = pos; },
         'Text position — end page',
-        save
+        function () { ta._applyPosition(); save(); }
       ));
       pair.appendChild(box);
       var empty = document.createElement('div');
@@ -3282,15 +3347,23 @@
 
     var DUMMY_PAGE_W = 792, DUMMY_PAGE_H = 612, DUMMY_OUTER_MARGIN = 36;
 
+    // For a split side, placement isn't a slider choice any more — the top
+    // box always renders at the top of the page and the bottom box always
+    // starts at the page's vertical midpoint — so this returns the two
+    // parts directly instead of pre-joining them into one string.
     function printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo) {
       if (!pageNum) return { text: '', position: DEFAULT_TEXT_POSITION };
       if (pageNum === 1) return { text: titlePageInfo.text || '', position: titlePageInfo.position || DEFAULT_TEXT_POSITION };
       if (pageNum === totalPages) return { text: endPageInfo.text || '', position: endPageInfo.position || DEFAULT_TEXT_POSITION };
       var isVerso = pageNum % 2 === 0;
+      var prefix = isVerso ? 'verso' : 'recto';
       var row = effectiveRows[(isVerso ? pageNum / 2 : (pageNum - 1) / 2) - 1];
-      var field = isVerso ? 'versoTextPosition' : 'rectoTextPosition';
+      if (row && row[prefix + 'Split']) {
+        return { split: true, text: row[prefix] || '', text2: row[prefix + '2'] || '' };
+      }
+      var field = prefix + 'TextPosition';
       return {
-        text: sideText(row, isVerso ? 'verso' : 'recto'),
+        text: (row && row[prefix]) || '',
         position: (row && row[field]) || DEFAULT_TEXT_POSITION
       };
     }
@@ -3327,19 +3400,37 @@
       var fontSize = Math.max(8, 17 * scale);
       var lineHeight = Math.max(11, 22 * scale);
 
-      function drawHalf(x, pageNum) {
-        if (!pageNum) return; // no page on this side (digital dummy's title/end spreads)
-        var info = printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo);
-        // Wrap to a column about half the half-page's width — a narrow
-        // measure reads more like an actual book page than text stretched
-        // edge to edge. But size and center the drawn block to the actual
-        // longest line (not the full wrap width), and keep lines
-        // left-aligned within it: a centered block, ragged right, so a
-        // single short word lands dead-center instead of stuck to one
-        // side of an oversized column.
-        var wrapWidth = boxW * 0.5;
-        var maxLines = Math.max(1, Math.floor((boxH - pad * 2) / lineHeight));
-        var lines = wrapCanvasText(info.text, wrapWidth, 400, fontSize, maxLines);
+      // Wrap to a column that's at least half the half-page's width,
+      // widening in steps up to three-quarters when the text needs more
+      // room to fit without truncating — a narrow measure still reads
+      // more like an actual book page than text stretched edge to edge,
+      // but short text shouldn't get stretched into a tall, cramped column
+      // just to stay narrow.
+      function chooseWrapWidth(text, maxLines) {
+        var minW = boxW * 0.5, maxW = boxW * 0.75;
+        if (wrapCanvasText(text, minW, 400, fontSize, 0).length <= maxLines) return minW;
+        for (var i = 1; i <= 6; i++) {
+          var w = minW + (maxW - minW) * (i / 6);
+          if (wrapCanvasText(text, w, 400, fontSize, 0).length <= maxLines) return w;
+        }
+        return maxW;
+      }
+
+      // Renders one text block into a vertical region of the page (the
+      // full page for a normal box, or half of it for a split box).
+      // `regionYTop` is the PDF y-coordinate of the region's top edge;
+      // `position` is only meaningful for a full-page region — a half
+      // region is always anchored 'top', since for a split box that's the
+      // whole point: the top box sits at the page's top, and the bottom
+      // box's 'top' is the page's own vertical midpoint.
+      function renderRegion(text, x, regionYTop, regionH, position) {
+        var maxLines = Math.max(1, Math.floor((regionH - pad * 2) / lineHeight));
+        var wrapWidth = chooseWrapWidth(text, maxLines);
+        var lines = wrapCanvasText(text, wrapWidth, 400, fontSize, maxLines);
+        // Size and center the drawn block to the actual longest line (not
+        // the full wrap width), and keep lines left-aligned within it: a
+        // centered block, ragged right, so a single short word lands
+        // dead-center instead of stuck to one side of an oversized column.
         var blockW = 0;
         lines.forEach(function (line) {
           blockW = Math.max(blockW, measureCanvasText(line, 400, fontSize));
@@ -3348,14 +3439,25 @@
         var textX = x + (boxW - blockW) / 2;
         var textBlockH = lines.length * lineHeight;
         var yBottom;
-        if (info.position === 'top') {
-          yBottom = startY + boxH - pad - textBlockH;
-        } else if (info.position === 'middle') {
-          yBottom = startY + (boxH - textBlockH) / 2;
+        if (position === 'top') {
+          yBottom = regionYTop - pad - textBlockH;
+        } else if (position === 'middle') {
+          yBottom = regionYTop - regionH / 2 - textBlockH / 2;
         } else {
-          yBottom = startY + pad;
+          yBottom = regionYTop - regionH + pad;
         }
         addTextBlock(textX, yBottom, lines, 400, fontSize, lineHeight, PDF_INK_HEX, blockW);
+      }
+
+      function drawHalf(x, pageNum) {
+        if (!pageNum) return; // no page on this side (digital dummy's title/end spreads)
+        var info = printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo);
+        if (info.split) {
+          renderRegion(info.text, x, startY + boxH, boxH / 2, 'top');
+          renderRegion(info.text2, x, startY + boxH / 2, boxH / 2, 'top');
+        } else {
+          renderRegion(info.text, x, startY + boxH, boxH, info.position);
+        }
         // Page number, just under the cut line for this half.
         addCenteredLabel(x + boxW / 2, startY - 16, 'p. ' + pageNum, 600, 9, PDF_MUTED_HEX);
       }
