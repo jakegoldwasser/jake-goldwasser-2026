@@ -355,13 +355,12 @@
   textarea.illustration:focus { color: var(--ink); }
 
   /* per-side control for where text sits on the printed dummy page —
-     mirrors .split-toggle, opposite corner, revealed the same way */
+     always visible so placement stays legible without hovering */
 
   /* vertical strip on the left edge — each button sits where it points:
      Top at the top, Bottom at the bottom, Mid centered between them */
-  /* a vertical 3-stop slider, reveal-on-hover — the textarea reserves a
-     dedicated gutter (see padding-left below) so this never sits on top
-     of the text, hovering or not */
+  /* a vertical 3-stop slider — the textarea reserves a dedicated gutter
+     (see padding-left below) so this never sits on top of the text */
   .text-position-control {
     position: absolute;
     top: 10px;
@@ -369,25 +368,11 @@
     left: 8px;
     width: 16px;
     z-index: 2;
-    opacity: 0;
-    pointer-events: none;
     cursor: grab;
     touch-action: none;
-    transition: opacity 0.12s ease;
   }
 
   .text-position-control:active { cursor: grabbing; }
-
-  .pair-side-box:hover .text-position-control,
-  .pair-side-box:focus-within .text-position-control,
-  .title-page-box:hover .text-position-control,
-  .title-page-box:focus-within .text-position-control,
-  .end-page-box:hover .text-position-control,
-  .end-page-box:focus-within .text-position-control,
-  .text-position-control:focus-within {
-    opacity: 1;
-    pointer-events: auto;
-  }
 
   .text-position-track {
     position: absolute;
@@ -475,9 +460,8 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    transition: transform 0.2s ease;
     /* reserves a gutter for the text-position slider so it never sits on
-       top of the text, whether the slider is showing or not */
+       top of the text */
     padding-left: 32px;
   }
 
@@ -1575,66 +1559,15 @@
       el.style.height = el.scrollHeight + 'px';
     }
 
-    // Slides the actual text within its box to preview print placement.
-    // Uses transform (not padding) so it never feeds back into autoGrow's
-    // own scrollHeight-based sizing — a padding-based version would inflate
-    // scrollHeight, which would inflate the height autoGrow sets, which
-    // would inflate the "free space" this computes next time, growing the
-    // box forever.
-    function applyTextSlide(ta, position) {
-      if (!position) return;
-      var availableH = ta.clientHeight;
-      // scrollHeight only exceeds clientHeight when content overflows a
-      // *constrained* height — but flex-grow keeps this box stretched to
-      // fill the row, so it never overflows and scrollHeight would just
-      // equal clientHeight. Briefly turn off the grow AND the explicit
-      // height autoGrow() baked in (which itself was measured while the
-      // box was stretched, so it's just as unreliable) to read the box's
-      // true unstretched content height instead.
-      var prevFlexGrow = ta.style.flexGrow;
-      var prevHeight = ta.style.height;
-      ta.style.flexGrow = '0';
-      ta.style.height = 'auto';
-      var contentH = ta.scrollHeight;
-      // scrollHeight includes the textarea's own bottom padding, so sliding
-      // by freeSpace alone lands that padding — not the text itself —
-      // flush with the box's bottom edge. Push the extra padBottom too so
-      // the last line of text is what actually touches bottom.
-      var padBottom = parseFloat(getComputedStyle(ta).paddingBottom) || 0;
-      ta.style.flexGrow = prevFlexGrow;
-      ta.style.height = prevHeight;
-      var freeSpace = Math.max(0, availableH - contentH);
-      var offset = position === 'bottom' ? freeSpace + padBottom : position === 'middle' ? freeSpace / 2 : 0;
-      ta.style.transform = offset ? 'translateY(' + Math.round(offset) + 'px)' : '';
-    }
-
-    // Recomputes text-slide offsets for every side in a spread together,
-    // after their heights have all settled — a single side can't know its
-    // own free space until its sibling's autoGrow has also run, since
-    // that's what stretches the shorter side to match the taller one.
-    function refreshRowTextPositions(pairEl) {
-      if (!pairEl) return;
-      pairEl.querySelectorAll('textarea.cell').forEach(function (t) {
-        if (t._applyTextPosition) t._applyTextPosition();
-      });
-    }
-
     function makeTextarea(field, rowIndex, placeholder, extraClass) {
       var ta = document.createElement('textarea');
       ta.className = 'cell' + (extraClass ? ' ' + extraClass : '');
       ta.placeholder = placeholder;
       ta.value = state.rows[rowIndex][field] || '';
       ta.setAttribute('aria-label', placeholder + ' — spread ' + (rowIndex + 1));
-      var positionField = (field === 'verso' || field === 'verso2') ? 'versoTextPosition'
-        : (field === 'recto' || field === 'recto2') ? 'rectoTextPosition'
-        : null;
-      ta._applyTextPosition = function () {
-        applyTextSlide(ta, positionField && state.rows[rowIndex][positionField]);
-      };
       ta.addEventListener('input', function () {
         state.rows[rowIndex][field] = ta.value;
         autoGrow(ta);
-        refreshRowTextPositions(ta.closest('.spread-pair'));
         save();
       });
       requestAnimationFrame(function () { autoGrow(ta); });
@@ -1748,11 +1681,6 @@
       var side = document.createElement('div');
       side.className = 'pair-side';
 
-      function onPositionChange() {
-        refreshRowTextPositions(side.closest('.spread-pair'));
-        save();
-      }
-
       // A box gets its own slider — when a side is split into two stacked
       // boxes, each one needs an independent placement, not one shared
       // setting for both.
@@ -1764,7 +1692,7 @@
           function () { return state.rows[rowIndex][field + 'TextPosition']; },
           function (pos) { state.rows[rowIndex][field + 'TextPosition'] = pos; },
           'Text position — ' + placeholder.toLowerCase() + ' — spread ' + (rowIndex + 1),
-          onPositionChange
+          save
         ));
         return boxWrap;
       }
@@ -1855,16 +1783,12 @@
       ta.placeholder = 'Recto text';
       ta.value = state.titlePage || '';
       ta.setAttribute('aria-label', 'Recto text — title page');
-      ta._applyTextPosition = function () {
-        applyTextSlide(ta, state.titlePageTextPosition);
-      };
       ta.addEventListener('input', function () {
         state.titlePage = ta.value;
         autoGrow(ta);
-        ta._applyTextPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); ta._applyTextPosition(); });
+      requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
 
@@ -1906,7 +1830,7 @@
         function () { return state.titlePageTextPosition; },
         function (pos) { state.titlePageTextPosition = pos; },
         'Text position — title page',
-        function () { ta._applyTextPosition(); save(); }
+        save
       ));
       pair.appendChild(box);
       sheetEl.appendChild(pair);
@@ -1920,16 +1844,12 @@
       ta.placeholder = 'Verso text';
       ta.value = state.endPage || '';
       ta.setAttribute('aria-label', 'Verso text — end page');
-      ta._applyTextPosition = function () {
-        applyTextSlide(ta, state.endPageTextPosition);
-      };
       ta.addEventListener('input', function () {
         state.endPage = ta.value;
         autoGrow(ta);
-        ta._applyTextPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); ta._applyTextPosition(); });
+      requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
 
@@ -1967,7 +1887,7 @@
         function () { return state.endPageTextPosition; },
         function (pos) { state.endPageTextPosition = pos; },
         'Text position — end page',
-        function () { ta._applyTextPosition(); save(); }
+        save
       ));
       pair.appendChild(box);
       var empty = document.createElement('div');
@@ -2102,9 +2022,6 @@
         pair.appendChild(divider);
         pair.appendChild(makeSide(i, 'recto', 'Recto text'));
         sheetEl.appendChild(pair);
-        // Queued after both sides' own autoGrow rAFs (registered above),
-        // so it runs once their heights have actually settled.
-        requestAnimationFrame(function () { refreshRowTextPositions(pair); });
 
         sheetEl.appendChild(makeTextarea('illustration', i, 'Illustration notes', 'illustration'));
 
