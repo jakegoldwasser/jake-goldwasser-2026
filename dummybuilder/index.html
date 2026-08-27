@@ -898,7 +898,8 @@
     color: var(--ink-soft);
   }
 
-  .email-panel input[type="email"] {
+  .email-panel input[type="email"],
+  .email-panel input[type="password"] {
     font-family: "Poppins", sans-serif;
     font-size: 13px;
     color: var(--ink);
@@ -909,9 +910,43 @@
     width: 100%;
   }
 
-  .email-panel input[type="email"]:focus {
+  .email-panel input[type="email"]:focus,
+  .email-panel input[type="password"]:focus {
     outline: none;
     border-color: var(--teal);
+  }
+
+  .github-help {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--ink-faint);
+    margin: 0;
+  }
+
+  .github-help a { color: var(--ink-soft); }
+
+  .github-connected-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .github-connected-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--teal);
+  }
+
+  .github-connected-dot::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
   }
 
   .email-send-btn {
@@ -1010,6 +1045,26 @@
           <input type="email" id="email-addr" placeholder="you@example.com" required />
           <button class="email-send-btn" id="email-send-btn" type="button">Send</button>
           <p class="email-panel-status" id="email-panel-status"></p>
+        </div>
+      </div>
+      <div class="email-menu" id="github-menu">
+        <button class="email-btn" id="github-btn" type="button" aria-expanded="false">GitHub ▾</button>
+        <div class="email-panel" id="github-panel" hidden>
+          <div id="github-connect-view">
+            <label class="email-panel-label" for="github-token-input">Personal access token</label>
+            <input type="password" id="github-token-input" placeholder="github_pat_…" autocomplete="off" />
+            <p class="github-help">Fine-grained token scoped to just the <strong>jake-goldwasser-2026-dummies</strong> repo, Contents: Read and write. Stored only in this browser — never sent anywhere but the GitHub API.</p>
+            <button class="email-send-btn" id="github-connect-btn" type="button">Connect</button>
+          </div>
+          <div id="github-connected-view" hidden>
+            <div class="github-connected-row">
+              <span class="github-connected-dot">Connected</span>
+              <button class="library-entry-delete" id="github-disconnect-btn" type="button" aria-label="Disconnect GitHub" style="display:flex;">×</button>
+            </div>
+            <button class="email-send-btn" id="github-push-btn" type="button">Push this storyboard</button>
+            <button class="duplicate-btn" id="github-pull-btn" type="button" style="padding:8px 12px; font-size:12px;">Pull library</button>
+          </div>
+          <p class="email-panel-status" id="github-status"></p>
         </div>
       </div>
       <button class="save-library-btn" id="save-library-btn" type="button">
@@ -1639,12 +1694,14 @@
       if (!libraryPanel.hidden && !libraryMenu.contains(e.target)) closeLibraryPanel();
       if (!emailPanel.hidden && !emailMenu.contains(e.target)) closeEmailPanel();
       if (!exportPanel.hidden && !exportMenu.contains(e.target)) closeExportPanel();
+      if (!githubPanel.hidden && !githubMenu.contains(e.target)) closeGithubPanel();
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (!libraryPanel.hidden) closeLibraryPanel();
       if (!emailPanel.hidden) closeEmailPanel();
       if (!exportPanel.hidden) closeExportPanel();
+      if (!githubPanel.hidden) closeGithubPanel();
     });
 
     // ---- Email storyboard ----
@@ -1775,6 +1832,226 @@
       emailSendBtn.textContent = originalLabel;
       fallbackToMailto('Opening your mail app instead.');
     });
+
+    // ---- GitHub sync (personal cross-device save) ----
+
+    var GH_OWNER = 'jakegoldwasser';
+    var GH_REPO = 'jake-goldwasser-2026-dummies';
+    var GH_BRANCH = 'main';
+    var GH_TOKEN_KEY = 'book-dummy-github-token-v1';
+
+    var githubMenu = document.getElementById('github-menu');
+    var githubBtn = document.getElementById('github-btn');
+    var githubPanel = document.getElementById('github-panel');
+    var githubConnectView = document.getElementById('github-connect-view');
+    var githubConnectedView = document.getElementById('github-connected-view');
+    var githubTokenInput = document.getElementById('github-token-input');
+    var githubConnectBtn = document.getElementById('github-connect-btn');
+    var githubDisconnectBtn = document.getElementById('github-disconnect-btn');
+    var githubPushBtn = document.getElementById('github-push-btn');
+    var githubPullBtn = document.getElementById('github-pull-btn');
+    var githubStatusEl = document.getElementById('github-status');
+
+    function getGhToken() {
+      try { return localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) { return ''; }
+    }
+    function setGhToken(token) {
+      try { localStorage.setItem(GH_TOKEN_KEY, token); } catch (e) {}
+    }
+    function clearGhToken() {
+      try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {}
+    }
+
+    function setGithubStatus(msg, isError) {
+      githubStatusEl.textContent = msg;
+      githubStatusEl.style.color = isError ? 'var(--danger)' : '';
+    }
+
+    function refreshGithubView() {
+      var connected = !!getGhToken();
+      githubConnectView.hidden = connected;
+      githubConnectedView.hidden = !connected;
+    }
+
+    function openGithubPanel() {
+      refreshGithubView();
+      githubPanel.hidden = false;
+      githubBtn.setAttribute('aria-expanded', 'true');
+    }
+    function closeGithubPanel() {
+      githubPanel.hidden = true;
+      githubBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    function bytesToBase64(bytes) {
+      var binary = '';
+      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+    function base64ToBytes(b64) {
+      var binary = atob(b64.replace(/\n/g, ''));
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    function jsonToBase64(obj) { return bytesToBase64(strToBytes(JSON.stringify(obj, null, 2))); }
+    function base64ToJson(b64) { return JSON.parse(new TextDecoder().decode(base64ToBytes(b64))); }
+
+    function ghApiFetch(urlSuffix, options) {
+      var token = getGhToken();
+      var url = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + urlSuffix;
+      options = options || {};
+      options.headers = Object.assign({
+        'Authorization': 'token ' + token,
+        'Accept': 'application/vnd.github+json'
+      }, options.headers || {});
+      return fetch(url, options);
+    }
+    function ghFetch(path, options) { return ghApiFetch('/contents/' + path, options); }
+
+    async function ghGetFile(path) {
+      var res = await ghFetch(path);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('GitHub read failed (' + res.status + ')');
+      var json = await res.json();
+      return { sha: json.sha, data: base64ToJson(json.content) };
+    }
+
+    async function ghPutFile(path, obj, message) {
+      var existing = await ghGetFile(path);
+      var body = { message: message, content: jsonToBase64(obj), branch: GH_BRANCH };
+      if (existing) body.sha = existing.sha;
+      var res = await ghFetch(path, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        var errBody = await res.json().catch(function () { return {}; });
+        throw new Error(errBody.message || ('GitHub write failed (' + res.status + ')'));
+      }
+      return res.json();
+    }
+
+    async function pushStoryboardToGithub(id) {
+      var data = (id === currentId)
+        ? { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize }
+        : loadStory(id);
+      if (!data) throw new Error('Nothing to push');
+
+      var updatedAt = Date.now();
+      var payload = { id: id, title: data.title, author: data.author, rows: data.rows, trimSize: data.trimSize, updatedAt: updatedAt };
+      await ghPutFile('storyboards/' + id + '.json', payload, 'Save "' + (payload.title || 'Untitled Picture Book') + '"');
+
+      var indexFile = await ghGetFile('storyboards/index.json');
+      var list = (indexFile && Array.isArray(indexFile.data)) ? indexFile.data : [];
+      var found = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === id) { list[i].title = payload.title; list[i].updatedAt = updatedAt; found = true; break; }
+      }
+      if (!found) list.push({ id: id, title: payload.title, updatedAt: updatedAt });
+      await ghPutFile('storyboards/index.json', list, 'Update storyboard index');
+
+      upsertIndexEntry(id, payload.title);
+    }
+
+    async function pullLibraryFromGithub() {
+      var indexFile = await ghGetFile('storyboards/index.json');
+      var remoteList = (indexFile && Array.isArray(indexFile.data)) ? indexFile.data : [];
+      var localById = {};
+      loadIndex().forEach(function (e) { localById[e.id] = e; });
+
+      var pulled = 0, skippedCurrent = 0;
+      for (var i = 0; i < remoteList.length; i++) {
+        var entry = remoteList[i];
+        if (entry.id === currentId) { skippedCurrent++; continue; }
+        var local = localById[entry.id];
+        if (local && local.updatedAt >= entry.updatedAt) continue;
+        var file = await ghGetFile('storyboards/' + entry.id + '.json');
+        if (!file) continue;
+        var d = file.data;
+        saveStory(entry.id, {
+          title: d.title || '',
+          author: d.author || '',
+          rows: Array.isArray(d.rows) && d.rows.length ? d.rows.map(normalizeRow) : defaultRows(),
+          trimSize: getTrimSize(d.trimSize).key
+        });
+        upsertIndexEntry(entry.id, d.title);
+        pulled++;
+      }
+      return { pulled: pulled, skippedCurrent: skippedCurrent };
+    }
+
+    githubBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (githubPanel.hidden) openGithubPanel(); else closeGithubPanel();
+    });
+
+    githubConnectBtn.addEventListener('click', async function () {
+      var token = githubTokenInput.value.trim();
+      if (!token) { setGithubStatus('Paste a token first.', true); return; }
+      githubConnectBtn.disabled = true;
+      githubConnectBtn.textContent = 'Checking…';
+      setGithubStatus('');
+      var prevValue = getGhToken();
+      setGhToken(token);
+      try {
+        var res = await ghApiFetch('');
+        if (res.status === 401) throw new Error('Token rejected — check it was copied correctly.');
+        if (!res.ok) throw new Error('Token doesn’t have access to ' + GH_OWNER + '/' + GH_REPO + ' (status ' + res.status + ').');
+        githubTokenInput.value = '';
+        setGithubStatus('Connected.');
+        refreshGithubView();
+      } catch (err) {
+        setGhToken(prevValue);
+        setGithubStatus(err.message || 'Could not connect.', true);
+      } finally {
+        githubConnectBtn.disabled = false;
+        githubConnectBtn.textContent = 'Connect';
+      }
+    });
+
+    githubDisconnectBtn.addEventListener('click', function () {
+      clearGhToken();
+      setGithubStatus('Disconnected.');
+      refreshGithubView();
+    });
+
+    githubPushBtn.addEventListener('click', async function () {
+      githubPushBtn.disabled = true;
+      var original = githubPushBtn.textContent;
+      githubPushBtn.textContent = 'Pushing…';
+      setGithubStatus('');
+      try {
+        await pushStoryboardToGithub(currentId);
+        setGithubStatus('Pushed "' + (state.title || 'Untitled Picture Book') + '" to GitHub.');
+      } catch (err) {
+        setGithubStatus(err.message || 'Push failed.', true);
+      } finally {
+        githubPushBtn.disabled = false;
+        githubPushBtn.textContent = original;
+      }
+    });
+
+    githubPullBtn.addEventListener('click', async function () {
+      githubPullBtn.disabled = true;
+      var original = githubPullBtn.textContent;
+      githubPullBtn.textContent = 'Pulling…';
+      setGithubStatus('');
+      try {
+        var result = await pullLibraryFromGithub();
+        var msg = result.pulled ? ('Pulled ' + result.pulled + ' storyboard' + (result.pulled === 1 ? '' : 's') + '.') : 'Already up to date.';
+        if (result.skippedCurrent) msg += ' (Skipped the one you have open — push it first if you edited it elsewhere.)';
+        setGithubStatus(msg);
+      } catch (err) {
+        setGithubStatus(err.message || 'Pull failed.', true);
+      } finally {
+        githubPullBtn.disabled = false;
+        githubPullBtn.textContent = original;
+      }
+    });
+
+    refreshGithubView();
 
     // ---- Export As… (PowerPoint / PDF) ----
 
