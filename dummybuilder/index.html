@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Storyboard — Jake Goldwasser</title>
+<title>Dummy — Jake Goldwasser</title>
 <meta name="description" content="A 14-spread grid for drafting picture book text and illustration notes.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -110,7 +110,7 @@
     border: none;
     border-bottom: 1px solid var(--line);
     padding: 2px 2px 6px;
-    width: 100%;
+    flex: 1 1 200px;
     max-width: 280px;
     outline: none;
     transition: border-color 0.15s ease;
@@ -119,11 +119,25 @@
   #author-input::placeholder { color: var(--ink-faint); }
   #author-input:focus { border-bottom-color: var(--accent); }
 
+  .author-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
   .meta-panel {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 10px;
+  }
+
+  .meta-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   .spread-count {
@@ -228,6 +242,30 @@
 
   .num-cell:hover .remove-row { display: flex; }
   .num-cell .remove-row:hover { background: var(--danger-soft); }
+
+  .num-cell .add-below-row {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--teal);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .num-cell:hover .add-below-row { display: flex; }
+  .num-cell .add-below-row:hover { background: var(--surface-2); }
 
   /* insert-spread gaps between rows */
 
@@ -354,6 +392,177 @@
     box-shadow: none;
   }
 
+  /* title page: a fixed, non-draggable row with a recto-only half spread */
+
+  .title-page-num { cursor: default; }
+  .title-page-num:hover { background: none; }
+  .title-page-num .n {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .title-page-pair {
+    display: flex;
+    gap: 10px;
+  }
+
+  .title-page-box {
+    flex: 1 1 0;
+    min-width: 160px;
+    display: flex;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px var(--shadow);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .title-page-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .title-page-box textarea.cell {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .title-page-box textarea.cell:focus { box-shadow: none; }
+
+  /* the non-existent half of a title/end page row: crossed out with an X */
+
+  .half-spread-empty {
+    flex: 1 1 0;
+    min-width: 160px;
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    background-color: var(--surface-2);
+    background-image:
+      linear-gradient(to top right, transparent calc(50% - 1px), var(--ink-faint) calc(50% - 1px), var(--ink-faint) calc(50% + 1px), transparent calc(50% + 1px)),
+      linear-gradient(to top left, transparent calc(50% - 1px), var(--ink-faint) calc(50% - 1px), var(--ink-faint) calc(50% + 1px), transparent calc(50% + 1px));
+  }
+
+  /* end page: mirrors the title page, but verso-only on the left */
+
+  .end-page-num { cursor: default; }
+  .end-page-num:hover { background: none; }
+  .end-page-num .n {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .end-page-pair {
+    display: flex;
+    gap: 10px;
+  }
+
+  .end-page-box {
+    flex: 1 1 0;
+    min-width: 160px;
+    display: flex;
+    background: var(--surface);
+    border: 2px solid var(--line-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px var(--shadow);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .end-page-box:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .end-page-box textarea.cell {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .end-page-box textarea.cell:focus { box-shadow: none; }
+
+  /* graveyard: read-only record of deleted spreads, below the end page */
+
+  .graveyard-section {
+    grid-column: 1 / -1;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--line-strong);
+  }
+
+  .graveyard-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+  }
+
+  .graveyard-heading {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0;
+  }
+
+  .graveyard-clear-btn {
+    font-family: "Poppins", sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--danger);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color 0.12s ease;
+  }
+
+  .graveyard-clear-btn:hover { text-decoration-color: var(--danger); }
+  .graveyard-clear-btn:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
+
+  .graveyard-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .graveyard-item-side {
+    flex: 1 1 50%;
+    min-width: 0;
+    font-family: "EB Garamond", ui-serif, Georgia, serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .graveyard-item-side.empty {
+    color: var(--ink-faint);
+    font-style: italic;
+  }
+
   .pair-divider {
     align-self: stretch;
     width: 3px;
@@ -422,39 +631,6 @@
     justify-content: flex-start;
     gap: 12px;
     flex-wrap: wrap;
-  }
-
-  .add-row {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: "Poppins", sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--accent-ink);
-    background: var(--accent);
-    border: none;
-    border-radius: 999px;
-    padding: 11px 20px 11px 16px;
-    cursor: pointer;
-    box-shadow: 0 2px 6px var(--shadow);
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-  }
-
-  .add-row:hover { box-shadow: 0 4px 10px var(--shadow); transform: translateY(-1px); }
-  .add-row:active { transform: translateY(0); }
-  .add-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-
-  .add-row .plus {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.25);
-    font-size: 13px;
-    line-height: 1;
   }
 
   .export-btn {
@@ -589,15 +765,15 @@
   .library-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-family: "Poppins", sans-serif;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--ink-soft);
     background: var(--surface);
     border: 2px solid var(--line-strong);
     border-radius: 999px;
-    padding: 7px 14px;
+    padding: 12px 22px;
     cursor: pointer;
     transition: border-color 0.12s ease, color 0.12s ease;
   }
@@ -989,15 +1165,28 @@
       <a class="back-home" href="/">&larr; Back to Jake&rsquo;s Website</a>
       <span class="eyebrow">Picture Book Manuscript</span>
       <input id="title-input" type="text" placeholder="Untitled Picture Book" autocomplete="off" />
-      <input id="author-input" type="text" placeholder="Author name" autocomplete="off" />
+      <div class="author-row">
+        <input id="author-input" type="text" placeholder="Author name" autocomplete="off" />
+        <div class="meta-actions">
+          <button class="save-library-btn" id="save-library-btn" type="button">
+            Save
+          </button>
+          <button class="duplicate-btn" id="duplicate-btn" type="button">
+            Duplicate Dummy
+          </button>
+          <button class="clear-btn" id="clear-btn" type="button">
+            Clear Dummy
+          </button>
+        </div>
+      </div>
     </div>
     <div class="meta-panel">
       <div class="library-menu" id="library-menu">
-        <button class="library-btn" id="library-btn" type="button" aria-expanded="false">My Storyboards ▾</button>
+        <button class="library-btn" id="library-btn" type="button" aria-expanded="false">My Dummies ▾</button>
         <div class="library-panel" id="library-panel" hidden>
-          <button class="new-storyboard-btn" id="new-storyboard-btn" type="button">+ New Storyboard</button>
+          <button class="new-storyboard-btn" id="new-storyboard-btn" type="button">+ New Dummy</button>
           <div class="library-list" id="library-list"></div>
-          <button class="delete-library-btn" id="delete-library-btn" type="button">Delete Storyboard</button>
+          <button class="delete-library-btn" id="delete-library-btn" type="button">Delete Dummy</button>
         </div>
       </div>
       <span class="spread-count"><strong id="spread-total">14</strong> spreads</span>
@@ -1018,10 +1207,6 @@
   </div>
 
   <div class="sheet-footer">
-    <button class="add-row" id="add-row-btn" type="button">
-      <span class="plus">+</span>
-      Add Spread
-    </button>
     <div class="footer-actions">
       <label class="trim-label" for="trim-select">
         Book size
@@ -1030,6 +1215,7 @@
       <div class="export-menu" id="export-menu">
         <button class="export-btn" id="export-btn" type="button" aria-expanded="false">Export As…</button>
         <div class="export-panel" id="export-panel" hidden>
+          <button class="export-option-btn" id="export-dummy-btn" type="button">Printable Dummy <span class="ext">.pdf</span></button>
           <button class="export-option-btn" id="export-pptx-btn" type="button">PowerPoint <span class="ext">.pptx</span></button>
           <button class="export-option-btn" id="export-pdf-btn" type="button">PDF <span class="ext">.pdf</span></button>
         </div>
@@ -1062,21 +1248,12 @@
               <button class="library-entry-delete" id="github-disconnect-btn" type="button" aria-label="Disconnect GitHub" style="display:flex;">×</button>
             </div>
             <p class="github-help">Auto-syncs a few seconds after you stop editing, and pulls other devices’ changes when this page loads. Use these to force it right now.</p>
-            <button class="email-send-btn" id="github-push-btn" type="button">Push this storyboard</button>
+            <button class="email-send-btn" id="github-push-btn" type="button">Push this dummy</button>
             <button class="duplicate-btn" id="github-pull-btn" type="button" style="padding:8px 12px; font-size:12px;">Pull library</button>
           </div>
           <p class="email-panel-status" id="github-status"></p>
         </div>
       </div>
-      <button class="save-library-btn" id="save-library-btn" type="button">
-        Save
-      </button>
-      <button class="duplicate-btn" id="duplicate-btn" type="button">
-        Duplicate Storyboard
-      </button>
-      <button class="clear-btn" id="clear-btn" type="button">
-        Clear Storyboard
-      </button>
       <span class="export-status" id="export-status"></span>
     </div>
   </div>
@@ -1088,7 +1265,7 @@
 
 <div class="confirm-overlay" id="confirm-overlay" hidden>
   <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-text">
-    <p id="confirm-dialog-text">Clear this storyboard? This erases all spreads — this can't be undone.</p>
+    <p id="confirm-dialog-text">Clear this dummy? This erases all spreads — this can't be undone.</p>
     <div class="confirm-actions">
       <button class="confirm-cancel-btn" id="confirm-cancel-btn" type="button">Cancel</button>
       <button class="confirm-ok-btn" id="confirm-ok-btn" type="button">Clear</button>
@@ -1102,13 +1279,13 @@
     var INDEX_KEY = 'book-dummy-index-v1';
     var STORY_PREFIX = 'book-dummy-story-';
     var CURRENT_KEY = 'book-dummy-current-v1';
-    var INITIAL_ROWS = 14;
+    var INITIAL_ROWS = 15;
+    var MAX_ROWS = 15;
     var currentId = null;
     var sheetEl = document.getElementById('sheet');
     var titleEl = document.getElementById('title-input');
     var authorEl = document.getElementById('author-input');
     var copyrightEl = document.getElementById('copyright-line');
-    var addBtn = document.getElementById('add-row-btn');
     var totalEl = document.getElementById('spread-total');
     var statusEl = document.getElementById('save-status');
     var draggedIndex = null;
@@ -1130,7 +1307,7 @@
       return TRIM_SIZES[0];
     }
 
-    var state = { title: '', author: '', rows: [], trimSize: DEFAULT_TRIM };
+    var state = { title: '', author: '', rows: [], trimSize: DEFAULT_TRIM, titlePage: '', endPage: '', graveyard: [] };
 
     function updateCopyright() {
       var year = new Date().getFullYear();
@@ -1208,7 +1385,10 @@
           title: parsed.title || '',
           author: parsed.author || '',
           rows: Array.isArray(parsed.rows) && parsed.rows.length ? parsed.rows.map(normalizeRow) : defaultRows(),
-          trimSize: getTrimSize(parsed.trimSize).key
+          trimSize: getTrimSize(parsed.trimSize).key,
+          titlePage: parsed.titlePage || '',
+          endPage: parsed.endPage || '',
+          graveyard: Array.isArray(parsed.graveyard) ? parsed.graveyard.map(normalizeRow) : []
         };
       } catch (e) { return null; }
     }
@@ -1229,6 +1409,9 @@
           state.author = existing.author;
           state.rows = existing.rows;
           state.trimSize = existing.trimSize;
+          state.titlePage = existing.titlePage;
+          state.endPage = existing.endPage;
+          state.graveyard = existing.graveyard;
           return;
         }
       }
@@ -1247,14 +1430,20 @@
         state.author = legacy.author || '';
         state.rows = legacy.rows.map(normalizeRow);
         state.trimSize = getTrimSize(legacy.trimSize).key;
+        state.titlePage = legacy.titlePage || '';
+        state.endPage = legacy.endPage || '';
+        state.graveyard = Array.isArray(legacy.graveyard) ? legacy.graveyard.map(normalizeRow) : [];
       } else {
         state.title = '';
         state.author = '';
         state.rows = defaultRows();
         state.trimSize = DEFAULT_TRIM;
+        state.titlePage = '';
+        state.endPage = '';
+        state.graveyard = [];
       }
 
-      saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize });
+      saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard });
       upsertIndexEntry(currentId, state.title);
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
     }
@@ -1263,7 +1452,7 @@
     var ghSyncTimer = null;
     function save() {
       try {
-        saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize });
+        saveStory(currentId, { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard });
         upsertIndexEntry(currentId, state.title);
       } catch (e) {}
       statusEl.textContent = 'Saved';
@@ -1373,11 +1562,16 @@
     }
 
     function insertRowAt(gapIndex) {
+      if (state.rows.length >= MAX_ROWS) {
+        showAlert('You have reached the spread maximum. Send one spread to the graveyard.');
+        return;
+      }
       state.rows.splice(gapIndex, 0, blankRow());
       save();
       render();
       var textareas = sheetEl.querySelectorAll('textarea.cell');
-      var target = textareas[gapIndex * 3];
+      // +1 skips the title page's own textarea, which precedes every spread's.
+      var target = textareas[gapIndex * 3 + 1];
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         target.focus();
@@ -1393,10 +1587,152 @@
       render();
     }
 
+    function makeTitlePageTextarea() {
+      var ta = document.createElement('textarea');
+      ta.className = 'cell';
+      ta.placeholder = 'Recto text';
+      ta.value = state.titlePage || '';
+      ta.setAttribute('aria-label', 'Recto text — title page');
+      ta.addEventListener('input', function () {
+        state.titlePage = ta.value;
+        autoGrow(ta);
+        save();
+      });
+      requestAnimationFrame(function () { autoGrow(ta); });
+      return ta;
+    }
+
+    function renderTitlePage() {
+      var num = document.createElement('div');
+      num.className = 'num-cell title-page-num';
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = 'Title Page';
+      num.appendChild(n);
+      sheetEl.appendChild(num);
+
+      var pair = document.createElement('div');
+      pair.className = 'title-page-pair';
+      var empty = document.createElement('div');
+      empty.className = 'half-spread-empty';
+      empty.setAttribute('aria-hidden', 'true');
+      pair.appendChild(empty);
+      var box = document.createElement('div');
+      box.className = 'title-page-box';
+      box.appendChild(makeTitlePageTextarea());
+      pair.appendChild(box);
+      sheetEl.appendChild(pair);
+
+      var filler = document.createElement('div');
+      filler.className = 'illustration title-page-filler';
+      sheetEl.appendChild(filler);
+    }
+
+    function makeEndPageTextarea() {
+      var ta = document.createElement('textarea');
+      ta.className = 'cell';
+      ta.placeholder = 'Verso text';
+      ta.value = state.endPage || '';
+      ta.setAttribute('aria-label', 'Verso text — end page');
+      ta.addEventListener('input', function () {
+        state.endPage = ta.value;
+        autoGrow(ta);
+        save();
+      });
+      requestAnimationFrame(function () { autoGrow(ta); });
+      return ta;
+    }
+
+    function renderEndPage() {
+      var num = document.createElement('div');
+      num.className = 'num-cell end-page-num';
+      var n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = 'End Page';
+      num.appendChild(n);
+      sheetEl.appendChild(num);
+
+      var pair = document.createElement('div');
+      pair.className = 'end-page-pair';
+      var box = document.createElement('div');
+      box.className = 'end-page-box';
+      box.appendChild(makeEndPageTextarea());
+      pair.appendChild(box);
+      var empty = document.createElement('div');
+      empty.className = 'half-spread-empty';
+      empty.setAttribute('aria-hidden', 'true');
+      pair.appendChild(empty);
+      sheetEl.appendChild(pair);
+
+      var filler = document.createElement('div');
+      filler.className = 'illustration end-page-filler';
+      sheetEl.appendChild(filler);
+    }
+
+    function graveyardSideText(row, prefix) {
+      var main = row[prefix] || '';
+      var extra = row[prefix + '2'] || '';
+      return extra ? (main ? main + '\n\n' + extra : extra) : main;
+    }
+
+    function renderGraveyard() {
+      if (!state.graveyard.length) return;
+
+      var section = document.createElement('div');
+      section.className = 'graveyard-section';
+
+      var headingRow = document.createElement('div');
+      headingRow.className = 'graveyard-heading-row';
+
+      var heading = document.createElement('p');
+      heading.className = 'graveyard-heading';
+      heading.textContent = 'Graveyard (' + state.graveyard.length + ')';
+      headingRow.appendChild(heading);
+
+      var clearGraveyardBtn = document.createElement('button');
+      clearGraveyardBtn.type = 'button';
+      clearGraveyardBtn.className = 'graveyard-clear-btn';
+      clearGraveyardBtn.textContent = 'Clear graveyard';
+      clearGraveyardBtn.addEventListener('click', function () {
+        var count = state.graveyard.length;
+        showConfirm('Permanently delete ' + count + ' spread' + (count === 1 ? '' : 's') + ' from the graveyard? This can\'t be undone.', 'Clear', function () {
+          state.graveyard = [];
+          save();
+          render();
+        });
+      });
+      headingRow.appendChild(clearGraveyardBtn);
+
+      section.appendChild(headingRow);
+
+      state.graveyard.forEach(function (row) {
+        var item = document.createElement('div');
+        item.className = 'graveyard-item';
+
+        var versoText = graveyardSideText(row, 'verso');
+        var versoSide = document.createElement('div');
+        versoSide.className = 'graveyard-item-side' + (versoText ? '' : ' empty');
+        versoSide.textContent = versoText || '(blank)';
+        item.appendChild(versoSide);
+
+        var rectoText = graveyardSideText(row, 'recto');
+        var rectoSide = document.createElement('div');
+        rectoSide.className = 'graveyard-item-side' + (rectoText ? '' : ' empty');
+        rectoSide.textContent = rectoText || '(blank)';
+        item.appendChild(rectoSide);
+
+        section.appendChild(item);
+      });
+
+      sheetEl.appendChild(section);
+    }
+
     function render() {
       var scrollX = window.scrollX, scrollY = window.scrollY;
-      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap');
+      var nodes = sheetEl.querySelectorAll('.num-cell, .spread-pair, textarea.cell, .row-gap, .title-page-filler, .end-page-filler, .title-page-pair, .end-page-pair, .graveyard-section');
       nodes.forEach(function (n) { n.remove(); });
+
+      renderTitlePage();
 
       sheetEl.appendChild(makeRowGap(0));
 
@@ -1417,12 +1753,24 @@
           del.textContent = '×';
           del.addEventListener('click', function (e) {
             e.stopPropagation();
-            state.rows.splice(i, 1);
+            var removed = state.rows.splice(i, 1)[0];
+            state.graveyard.unshift(removed);
             save();
             render();
           });
           num.appendChild(del);
         }
+        var addBelow = document.createElement('button');
+        addBelow.type = 'button';
+        addBelow.className = 'add-below-row';
+        addBelow.draggable = false;
+        addBelow.setAttribute('aria-label', 'Add spread below ' + (i + 1));
+        addBelow.textContent = '+';
+        addBelow.addEventListener('click', function (e) {
+          e.stopPropagation();
+          insertRowAt(i + 1);
+        });
+        num.appendChild(addBelow);
         num.addEventListener('dragstart', function (e) {
           draggedIndex = i;
           num.classList.add('dragging');
@@ -1450,6 +1798,9 @@
         sheetEl.appendChild(makeRowGap(i + 1));
       });
 
+      renderEndPage();
+      renderGraveyard();
+
       totalEl.textContent = state.rows.length;
       window.scrollTo(scrollX, scrollY);
     }
@@ -1463,10 +1814,6 @@
       state.author = authorEl.value;
       save();
       updateCopyright();
-    });
-
-    addBtn.addEventListener('click', function () {
-      insertRowAt(state.rows.length);
     });
 
     initLibrary();
@@ -1505,7 +1852,7 @@
       if (!list.length) {
         var empty = document.createElement('div');
         empty.className = 'library-empty';
-        empty.textContent = 'No saved storyboards yet.';
+        empty.textContent = 'No saved dummies yet.';
         libraryList.appendChild(empty);
         return;
       }
@@ -1571,6 +1918,9 @@
       state.author = data.author;
       state.rows = data.rows;
       state.trimSize = data.trimSize;
+      state.titlePage = data.titlePage || '';
+      state.endPage = data.endPage || '';
+      state.graveyard = Array.isArray(data.graveyard) ? data.graveyard : [];
       titleEl.value = state.title;
       authorEl.value = state.author;
       updateCopyright();
@@ -1593,7 +1943,7 @@
       save();
       currentId = makeId();
       try { localStorage.setItem(CURRENT_KEY, currentId); } catch (e) {}
-      var data = { title: '', author: '', rows: defaultRows(), trimSize: DEFAULT_TRIM };
+      var data = { title: '', author: '', rows: defaultRows(), trimSize: DEFAULT_TRIM, titlePage: '', endPage: '', graveyard: [] };
       saveStory(currentId, data);
       upsertIndexEntry(currentId, data.title);
       applyState(data);
@@ -1609,7 +1959,10 @@
         title: (state.title || 'Untitled Picture Book') + ' COPY',
         author: state.author,
         rows: state.rows.map(normalizeRow),
-        trimSize: state.trimSize
+        trimSize: state.trimSize,
+        titlePage: state.titlePage,
+        endPage: state.endPage,
+        graveyard: state.graveyard.map(normalizeRow)
       };
       saveStory(currentId, data);
       upsertIndexEntry(currentId, data.title);
@@ -1658,7 +2011,7 @@
 
     saveLibraryBtn.addEventListener('click', function () {
       save();
-      statusEl.textContent = 'Saved to My Storyboards';
+      statusEl.textContent = 'Saved to My Dummies';
       statusEl.classList.add('visible');
       clearTimeout(saveTimer);
       saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2000);
@@ -1681,14 +2034,25 @@
     function showConfirm(message, okLabel, onConfirm) {
       confirmDialogText.textContent = message;
       confirmOkBtn.textContent = okLabel;
+      confirmCancelBtn.hidden = false;
       confirmPending = onConfirm;
       confirmOverlay.hidden = false;
       confirmOkBtn.focus();
     }
 
+    function showAlert(message) {
+      confirmDialogText.textContent = message;
+      confirmOkBtn.textContent = 'OK';
+      confirmCancelBtn.hidden = true;
+      confirmPending = null;
+      confirmOverlay.hidden = false;
+      confirmOkBtn.focus();
+    }
+
     clearBtn.addEventListener('click', function () {
-      showConfirm('Clear this storyboard? This erases all spreads (the title and author are kept) — this can\'t be undone.', 'Clear', function () {
+      showConfirm('Clear this dummy? This erases all spreads and the graveyard (the title and author are kept) — this can\'t be undone.', 'Clear', function () {
         state.rows = defaultRows();
+        state.graveyard = [];
         save();
         render();
       });
@@ -1805,7 +2169,7 @@
         return;
       }
       var email = emailAddr.value.trim();
-      var subject = (state.title || 'Untitled Picture Book') + ' — Storyboard';
+      var subject = (state.title || 'Untitled Picture Book') + ' — Dummy';
       var body = plainStoryboard();
       var filename = slugify(state.title) + '.' + emailFormat;
 
@@ -1961,12 +2325,12 @@
 
     async function pushStoryboardToGithub(id) {
       var data = (id === currentId)
-        ? { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize }
+        ? { title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize, titlePage: state.titlePage, endPage: state.endPage, graveyard: state.graveyard }
         : loadStory(id);
       if (!data) throw new Error('Nothing to push');
 
       var updatedAt = Date.now();
-      var payload = { id: id, title: data.title, author: data.author, rows: data.rows, trimSize: data.trimSize, updatedAt: updatedAt };
+      var payload = { id: id, title: data.title, author: data.author, rows: data.rows, trimSize: data.trimSize, titlePage: data.titlePage, endPage: data.endPage, graveyard: data.graveyard, updatedAt: updatedAt };
       await ghPutFile('storyboards/' + id + '.json', payload, 'Save "' + (payload.title || 'Untitled Picture Book') + '"');
 
       var indexFile = await ghGetFile('storyboards/index.json');
@@ -2018,7 +2382,10 @@
           title: d.title || '',
           author: d.author || '',
           rows: Array.isArray(d.rows) && d.rows.length ? d.rows.map(normalizeRow) : defaultRows(),
-          trimSize: getTrimSize(d.trimSize).key
+          trimSize: getTrimSize(d.trimSize).key,
+          titlePage: d.titlePage || '',
+          endPage: d.endPage || '',
+          graveyard: Array.isArray(d.graveyard) ? d.graveyard.map(normalizeRow) : []
         });
         upsertIndexEntry(entry.id, d.title);
         pulled++;
@@ -2092,7 +2459,7 @@
       setGithubStatus('');
       try {
         var result = await pullLibraryFromGithub();
-        var msg = result.pulled ? ('Pulled ' + result.pulled + ' storyboard' + (result.pulled === 1 ? '' : 's') + '.') : 'Already up to date.';
+        var msg = result.pulled ? ('Pulled ' + result.pulled + ' ' + (result.pulled === 1 ? 'dummy' : 'dummies') + '.') : 'Already up to date.';
         if (result.skippedCurrent) msg += ' (Skipped the one you have open — push it first if you edited it elsewhere.)';
         setGithubStatus(msg);
       } catch (err) {
@@ -2109,7 +2476,7 @@
       if (!getGhToken()) return;
       pullLibraryFromGithub().then(function (result) {
         if (!result.pulled) return;
-        statusEl.textContent = 'Synced ' + result.pulled + ' storyboard' + (result.pulled === 1 ? '' : 's') + ' from GitHub';
+        statusEl.textContent = 'Synced ' + result.pulled + ' ' + (result.pulled === 1 ? 'dummy' : 'dummies') + ' from GitHub';
         statusEl.classList.add('visible');
         clearTimeout(saveTimer);
         saveTimer = setTimeout(function () { statusEl.classList.remove('visible'); }, 2500);
@@ -2124,6 +2491,7 @@
     var exportMenu = document.getElementById('export-menu');
     var exportBtn = document.getElementById('export-btn');
     var exportPanel = document.getElementById('export-panel');
+    var exportDummyBtn = document.getElementById('export-dummy-btn');
     var exportPptxBtn = document.getElementById('export-pptx-btn');
     var exportPdfBtn = document.getElementById('export-pdf-btn');
     var exportStatus = document.getElementById('export-status');
@@ -2891,6 +3259,198 @@
       return result;
     }
 
+    // ---- Printable Dummy (booklet imposition) ----
+    //
+    // 15 spreads (30 pages) + the recto-only Title Page (page 1) + the
+    // verso-only End Page (last page) = 32 pages = 8 saddle-stitch sheets.
+    // If a spread has been sent to the graveyard, book page count can drop
+    // below 32; since imposition needs page count divisible by 4 and
+    // 2*rows+2 is only divisible by 4 when rows is odd, one blank spread is
+    // appended (export-only, never touching state) whenever rows is even.
+    //
+    // Each output PDF page is one physical sheet FACE (front or back) on
+    // landscape US Letter, with the two book pages scaled down to fit side
+    // by side, a dashed cut line around their outer edge, and a dashed fold
+    // line down the middle. Pages come out interleaved
+    // [front1, back1, front2, back2, ...] for a double-sided printer.
+
+    var DUMMY_PAGE_W = 792, DUMMY_PAGE_H = 612, DUMMY_OUTER_MARGIN = 36;
+
+    function printableDummyPageText(pageNum, totalPages, titlePage, effectiveRows, endPage) {
+      if (pageNum === 1) return titlePage || '';
+      if (pageNum === totalPages) return endPage || '';
+      if (pageNum % 2 === 0) return sideText(effectiveRows[pageNum / 2 - 1], 'verso');
+      return sideText(effectiveRows[(pageNum - 1) / 2 - 1], 'recto');
+    }
+
+    function buildDummyFaceOps(leftPage, rightPage, totalPages, titlePage, effectiveRows, endPage, sheetLabel, trim) {
+      var availW = DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2;
+      var availH = DUMMY_PAGE_H - DUMMY_OUTER_MARGIN * 2;
+      var trimWpt = trim.pageW * 72, trimHpt = trim.pageH * 72;
+      var scale = Math.min(availW / (2 * trimWpt), availH / trimHpt, 1);
+      var boxW = trimWpt * scale, boxH = trimHpt * scale;
+      var startX = DUMMY_OUTER_MARGIN + (availW - boxW * 2) / 2;
+      var startY = DUMMY_OUTER_MARGIN + (availH - boxH) / 2;
+
+      var ops = [];
+
+      function addTextBlock(x, yBottom, lines, weight, sizePt, lineHeightPt, colorHex, widthPt) {
+        if (!lines.some(function (l) { return l; })) return;
+        var rendered = renderTextBlockGray(lines, weight, sizePt, lineHeightPt, colorHex, widthPt);
+        ops.push({
+          type: 'image', x: x, y: yBottom,
+          widthPt: rendered.widthPt, heightPt: rendered.heightPt,
+          widthPx: rendered.widthPx, heightPx: rendered.heightPx,
+          rle: rleEncode(rendered.gray)
+        });
+      }
+
+      ops.push({ type: 'rect', x: startX, y: startY, w: boxW * 2, h: boxH });
+      ops.push({ type: 'line', x1: startX + boxW, y1: startY, x2: startX + boxW, y2: startY + boxH });
+
+      var pad = Math.max(10, boxW * 0.09);
+      var fontSize = Math.max(6, 13 * scale);
+      var lineHeight = Math.max(8, 17 * scale);
+
+      function drawHalf(x, pageNum) {
+        var text = printableDummyPageText(pageNum, totalPages, titlePage, effectiveRows, endPage);
+        var textWidth = boxW - pad * 2;
+        var maxLines = Math.max(1, Math.floor((boxH - pad * 2) / lineHeight));
+        var lines = wrapCanvasText(text, textWidth, 400, fontSize, maxLines);
+        var textBlockH = lines.length * lineHeight;
+        addTextBlock(x + pad, startY + (boxH - textBlockH) / 2, lines, 400, fontSize, lineHeight, PDF_INK_HEX, textWidth);
+      }
+
+      drawHalf(startX, leftPage);
+      drawHalf(startX + boxW, rightPage);
+
+      var labelLines = wrapCanvasText(sheetLabel, DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2, 600, 8, 1);
+      addTextBlock(DUMMY_OUTER_MARGIN, 14, labelLines, 600, 8, 10, PDF_MUTED_HEX, DUMMY_PAGE_W - DUMMY_OUTER_MARGIN * 2);
+
+      return ops;
+    }
+
+    async function buildPrintableDummyPdf(title, titlePage, rows, endPage, trimKey) {
+      await ensureFontsReady();
+      var trim = getTrimSize(trimKey);
+
+      var effectiveRows = rows.slice();
+      if (effectiveRows.length % 2 === 0) effectiveRows.push(blankRow());
+      var totalPages = effectiveRows.length * 2 + 2;
+      var numSheets = totalPages / 4;
+
+      var faces = [];
+      for (var i = 1; i <= numSheets; i++) {
+        var frontLeft = totalPages - 2 * i + 2, frontRight = 2 * i - 1;
+        var backLeft = 2 * i, backRight = totalPages - 2 * i + 1;
+        faces.push({ left: frontLeft, right: frontRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Front · pp. ' + frontLeft + ', ' + frontRight });
+        faces.push({ left: backLeft, right: backRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Back · pp. ' + backLeft + ', ' + backRight });
+      }
+
+      var parts = [];
+      var offsets = [];
+      var pos = 0;
+      var nextObj = 1;
+
+      function pushPart(chunk) {
+        var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
+        parts.push(u8);
+        pos += u8.length;
+      }
+      function allocObj() { return nextObj++; }
+      function beginObj(num) { offsets[num] = pos; pushPart(num + ' 0 obj\n'); }
+      function endObj() { pushPart('endobj\n'); }
+
+      pushPart('%PDF-1.4\n');
+
+      var catalogNum = allocObj();
+      var pagesNum = allocObj();
+      var kids = [];
+
+      faces.forEach(function (face) {
+        var ops = buildDummyFaceOps(face.left, face.right, totalPages, titlePage, effectiveRows, endPage, face.label, trim);
+        var pageNum = allocObj();
+        var contentNum = allocObj();
+        var imageOps = ops.filter(function (o) { return o.type === 'image'; });
+        var imgNums = imageOps.map(function () { return allocObj(); });
+        kids.push(pageNum);
+
+        var contentBytes = [];
+        var xobjEntries = [];
+        var imgIdx = 0;
+        ops.forEach(function (op) {
+          if (op.type === 'rect') {
+            pushAscii(contentBytes, pdfDashedRectStr(op.x, op.y, op.w, op.h));
+          } else if (op.type === 'line') {
+            pushAscii(contentBytes, pdfDashedLineStr(op.x1, op.y1, op.x2, op.y2));
+          } else if (op.type === 'image') {
+            var num = imgNums[imgIdx++];
+            var key = 'Im' + num;
+            xobjEntries.push('/' + key + ' ' + num + ' 0 R');
+            pushAscii(contentBytes, 'q\n' + op.widthPt.toFixed(2) + ' 0 0 ' + op.heightPt.toFixed(2) + ' ' +
+              op.x.toFixed(2) + ' ' + op.y.toFixed(2) + ' cm\n/' + key + ' Do\nQ\n');
+          }
+        });
+
+        beginObj(pageNum);
+        pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + DUMMY_PAGE_W + ' ' + DUMMY_PAGE_H + ']' +
+          ' /Resources << /XObject << ' + xobjEntries.join(' ') + ' >> >>' +
+          ' /Contents ' + contentNum + ' 0 R >>\n');
+        endObj();
+
+        var contentU8 = new Uint8Array(contentBytes);
+        beginObj(contentNum);
+        pushPart('<< /Length ' + contentU8.length + ' >>\nstream\n');
+        pushPart(contentU8);
+        pushPart('\nendstream\n');
+        endObj();
+
+        imgIdx = 0;
+        ops.forEach(function (op) {
+          if (op.type !== 'image') return;
+          var num = imgNums[imgIdx++];
+          var rleU8 = new Uint8Array(op.rle);
+          beginObj(num);
+          pushPart('<< /Type /XObject /Subtype /Image /Width ' + op.widthPx + ' /Height ' + op.heightPx +
+            ' /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode /Length ' + rleU8.length + ' >>\nstream\n');
+          pushPart(rleU8);
+          pushPart('\nendstream\n');
+          endObj();
+        });
+      });
+
+      beginObj(catalogNum);
+      pushPart('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n');
+      endObj();
+
+      beginObj(pagesNum);
+      pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
+      endObj();
+
+      var infoNum = allocObj();
+      beginObj(infoNum);
+      pushPart('<< /Title ');
+      pushPart(pdfLiteralStringBytes(toAsciiSafe((title || 'Untitled Picture Book') + ' - Printable Dummy')));
+      pushPart(' /Producer (Book Dummy) >>\n');
+      endObj();
+
+      var xrefOffset = pos;
+      var totalObjs = nextObj;
+      var xrefLines = ['0000000000 65535 f \n'];
+      for (var num = 1; num < totalObjs; num++) {
+        xrefLines.push(pad10(offsets[num] || 0) + ' 00000 n \n');
+      }
+      pushPart('xref\n0 ' + totalObjs + '\n' + xrefLines.join(''));
+      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root ' + catalogNum + ' 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
+
+      var total = 0;
+      parts.forEach(function (part) { total += part.length; });
+      var result = new Uint8Array(total);
+      var o = 0;
+      parts.forEach(function (part) { result.set(part, o); o += part.length; });
+      return result;
+    }
+
     // ---- Export As… wiring ----
 
     function downloadBlob(filename, bytes, mime) {
@@ -2916,13 +3476,17 @@
           bytes = await buildPdf(state.title, state.rows, state.trimSize);
           filename = slugify(state.title) + '.pdf';
           mime = 'application/pdf';
+        } else if (kind === 'printable-dummy') {
+          bytes = await buildPrintableDummyPdf(state.title, state.titlePage, state.rows, state.endPage, state.trimSize);
+          filename = slugify(state.title) + '-printable-dummy.pdf';
+          mime = 'application/pdf';
         } else {
           bytes = buildPptx(state.title, state.rows, state.trimSize);
           filename = slugify(state.title) + '.pptx';
           mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
         }
 
-        var successNote = kind === 'pdf' ? '.' : ' — in Google Slides, use File → Import slides, or open it from Drive.';
+        var successNote = kind === 'pptx' ? ' — in Google Slides, use File → Import slides, or open it from Drive.' : '.';
         var useClaudeDownloads = typeof window.claude !== 'undefined' && typeof window.claude.use === 'function';
 
         if (useClaudeDownloads) {
@@ -2951,6 +3515,7 @@
       }
     }
 
+    exportDummyBtn.addEventListener('click', function () { exportFile('printable-dummy'); });
     exportPptxBtn.addEventListener('click', function () { exportFile('pptx'); });
     exportPdfBtn.addEventListener('click', function () { exportFile('pdf'); });
   })();
