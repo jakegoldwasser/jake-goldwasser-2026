@@ -1852,8 +1852,14 @@
     var githubPullBtn = document.getElementById('github-pull-btn');
     var githubStatusEl = document.getElementById('github-status');
 
+    function sanitizeToken(raw) {
+      // fetch() headers must be plain ASCII; strip anything else (smart quotes,
+      // zero-width chars, stray whitespace) that can sneak in from a paste.
+      return String(raw || '').replace(/[^\x21-\x7E]/g, '');
+    }
+
     function getGhToken() {
-      try { return localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) { return ''; }
+      try { return sanitizeToken(localStorage.getItem(GH_TOKEN_KEY)); } catch (e) { return ''; }
     }
     function setGhToken(token) {
       try { localStorage.setItem(GH_TOKEN_KEY, token); } catch (e) {}
@@ -1988,11 +1994,14 @@
     });
 
     githubConnectBtn.addEventListener('click', async function () {
-      var token = githubTokenInput.value.trim();
+      var rawToken = githubTokenInput.value.trim();
+      var token = sanitizeToken(rawToken);
       if (!token) { setGithubStatus('Paste a token first.', true); return; }
+      if (token !== rawToken.replace(/^\s+|\s+$/g, '')) {
+        setGithubStatus('Note: stripped a stray character from the pasted token (invisible or non-standard) before connecting.');
+      }
       githubConnectBtn.disabled = true;
       githubConnectBtn.textContent = 'Checking…';
-      setGithubStatus('');
       var prevValue = getGhToken();
       setGhToken(token);
       try {
@@ -2004,7 +2013,11 @@
         refreshGithubView();
       } catch (err) {
         setGhToken(prevValue);
-        setGithubStatus(err.message || 'Could not connect.', true);
+        var msg = err && err.message ? err.message : 'Could not connect.';
+        if (/non ISO-8859-1|Failed to execute 'fetch'/.test(msg)) {
+          msg = 'That token has a character your browser can’t send in a request header — try copying it again from GitHub (avoid retyping or pasting from a source that adds smart quotes).';
+        }
+        setGithubStatus(msg, true);
       } finally {
         githubConnectBtn.disabled = false;
         githubConnectBtn.textContent = 'Connect';
