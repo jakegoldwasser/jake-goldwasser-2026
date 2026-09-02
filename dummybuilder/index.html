@@ -3524,6 +3524,7 @@
 
         beginObj(pageNum);
         pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + DUMMY_PAGE_W + ' ' + DUMMY_PAGE_H + ']' +
+          (face.rotate180 ? ' /Rotate 180' : '') +
           ' /Resources << /XObject << ' + xobjEntries.join(' ') + ' >> >>' +
           ' /Contents ' + contentNum + ' 0 R >>\n');
         endObj();
@@ -3602,7 +3603,10 @@
         var frontLeft = totalPages - 2 * i + 2, frontRight = 2 * i - 1;
         var backLeft = 2 * i, backRight = totalPages - 2 * i + 1;
         faces.push({ left: frontLeft, right: frontRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Front · pp. ' + frontLeft + ', ' + frontRight + ' · ' + scaledDim });
-        faces.push({ left: backLeft, right: backRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Back · pp. ' + backLeft + ', ' + backRight + ' · ' + scaledDim });
+        // Duplex printing flips the sheet over to print its back face, so the
+        // back's content needs to be pre-rotated 180° here — otherwise it
+        // comes out upside-down once the physical sheet is flipped.
+        faces.push({ left: backLeft, right: backRight, label: 'Sheet ' + i + ' of ' + numSheets + ' — Back · pp. ' + backLeft + ', ' + backRight + ' · ' + scaledDim, rotate180: true });
       }
 
       var metaTitle = (title || 'Untitled Picture Book') + ' - Printable Dummy';
