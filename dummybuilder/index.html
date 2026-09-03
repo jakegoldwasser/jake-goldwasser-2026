@@ -3449,14 +3449,56 @@
         addTextBlock(textX, yBottom, lines, 400, fontSize, lineHeight, PDF_INK_HEX, blockW);
       }
 
+      // Book title (large) + author (smaller), anchored to the top of the
+      // title page's half — only ever drawn for page 1. Returns the height
+      // consumed, including trailing gap, so the recto text below it can
+      // start clear of this header instead of overlapping it.
+      function drawTitleAuthorHeader(x, regionYTop) {
+        var bookTitle = (titlePageInfo.bookTitle || '').trim();
+        var author = (titlePageInfo.author || '').trim();
+        if (!bookTitle && !author) return 0;
+        var maxW = boxW - pad * 2;
+        var titleSize = Math.max(13, 24 * scale);
+        var titleLineH = titleSize + 5;
+        var authorSize = Math.max(9, 13 * scale);
+        var authorLineH = authorSize + 4;
+        var y = regionYTop - pad;
+
+        if (bookTitle) {
+          var titleLines = wrapCanvasText(bookTitle, maxW, 600, titleSize, 3);
+          var titleW = 0;
+          titleLines.forEach(function (l) { titleW = Math.max(titleW, measureCanvasText(l, 600, titleSize)); });
+          titleW = Math.min(maxW, Math.max(titleW, 1));
+          var titleH = titleLines.length * titleLineH;
+          addTextBlock(x + (boxW - titleW) / 2, y - titleH, titleLines, 600, titleSize, titleLineH, PDF_INK_HEX, titleW);
+          y -= titleH + 4;
+        }
+        if (author) {
+          var authorLines = wrapCanvasText(author, maxW, 400, authorSize, 2);
+          var authorW = 0;
+          authorLines.forEach(function (l) { authorW = Math.max(authorW, measureCanvasText(l, 400, authorSize)); });
+          authorW = Math.min(maxW, Math.max(authorW, 1));
+          var authorH = authorLines.length * authorLineH;
+          addTextBlock(x + (boxW - authorW) / 2, y - authorH, authorLines, 400, authorSize, authorLineH, PDF_MUTED_HEX, authorW);
+          y -= authorH;
+        }
+        return (regionYTop - y) + pad;
+      }
+
       function drawHalf(x, pageNum) {
         if (!pageNum) return; // no page on this side (digital dummy's title/end spreads)
         var info = printableDummyPageInfo(pageNum, totalPages, titlePageInfo, effectiveRows, endPageInfo);
+        var regionYTop = startY + boxH, regionH = boxH;
+        if (pageNum === 1) {
+          var headerH = drawTitleAuthorHeader(x, regionYTop);
+          regionYTop -= headerH;
+          regionH -= headerH;
+        }
         if (info.split) {
           renderRegion(info.text, x, startY + boxH, boxH / 2, 'top');
           renderRegion(info.text2, x, startY + boxH / 2, boxH / 2, 'top');
         } else {
-          renderRegion(info.text, x, startY + boxH, boxH, info.position);
+          renderRegion(info.text, x, regionYTop, regionH, info.position);
         }
         // Page number, just under the cut line for this half.
         addCenteredLabel(x + boxW / 2, startY - 16, 'p. ' + pageNum, 600, 9, PDF_MUTED_HEX);
@@ -3658,7 +3700,7 @@
 
       try {
         var bytes, filename, mime;
-        var titlePageInfo = { text: state.titlePage, position: state.titlePageTextPosition };
+        var titlePageInfo = { text: state.titlePage, position: state.titlePageTextPosition, bookTitle: state.title, author: state.author };
         var endPageInfo = { text: state.endPage, position: state.endPageTextPosition };
         if (kind === 'digital-dummy') {
           bytes = await buildDigitalDummyPdf(state.title, titlePageInfo, state.rows, endPageInfo, state.trimSize);
