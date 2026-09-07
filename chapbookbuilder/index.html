@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root {
     --paper: #F7F1EE;
@@ -55,7 +56,9 @@
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
-  .top-actions { display: flex; gap: 10px; align-items: center; }
+  .top-actions { display: flex; gap: 14px; align-items: center; }
+  .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .account-area .status-line { min-height: 0; margin-top: 0; text-align: right; }
 
   button, select, input[type="text"], input[type="number"], textarea {
     font-family: inherit; color: inherit;
@@ -326,6 +329,10 @@
       <div class="tagline">Bring in poems from a neatly formatted Google Doc — Heading for the title, Normal text for the poem — and export a paginated, print-ready PDF with one poem per page.</div>
     </div>
     <div class="top-actions">
+      <div class="account-area">
+        <div id="googleSignInBtn"></div>
+        <div class="status-line" id="accountStatus" style="margin:0;"></div>
+      </div>
       <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
     </div>
   </div>
@@ -646,9 +653,101 @@
     saveTimer = setTimeout(function () {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
     }, 300);
+    scheduleCloudSync();
   }
 
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // ---------------------------------------------------------------------
+  // Cloud sync (Google sign-in + a small AWS backend). Entirely optional:
+  // localStorage above is always the instant local cache and keeps
+  // working with no sign-in at all. Signing in additionally pulls your
+  // saved state once, then pushes local edits up on a short debounce.
+  // Not available inside a Claude Artifact (no window.google there, and
+  // its sandbox blocks the network call anyway) -- this only runs on the
+  // plain hosted page.
+  // ---------------------------------------------------------------------
+  var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
+  var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
+  var googleIdToken = null;
+  var googleUserEmail = '';
+  var cloudSyncTimer = null;
+
+  function setAccountStatus(msg, isError) {
+    var el = document.getElementById('accountStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('error', !!isError);
+  }
+
+  function decodeJwtPayload(token) {
+    try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); }
+    catch (e) { return {}; }
+  }
+
+  async function handleGoogleCredential(response) {
+    googleIdToken = response.credential;
+    googleUserEmail = decodeJwtPayload(googleIdToken).email || 'your account';
+    var btn = document.getElementById('googleSignInBtn');
+    if (btn) btn.style.display = 'none';
+    setAccountStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
+    await pullFromCloud();
+  }
+
+  async function pullFromCloud() {
+    if (!googleIdToken) return;
+    try {
+      var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
+      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
+      var data = await res.json();
+      if (data.state) {
+        var ok = await confirmDialog('Load your saved poems from the cloud? This replaces what’s currently loaded here.');
+        if (ok) {
+          state = data.state;
+          persist();
+          renderAll();
+        }
+        setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
+      } else {
+        setAccountStatus('Signed in as ' + googleUserEmail + ' — saving your current poems to the cloud…');
+        await pushToCloud();
+      }
+    } catch (e) {
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', true);
+    }
+  }
+
+  function scheduleCloudSync() {
+    if (!googleIdToken) return;
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer = setTimeout(pushToCloud, 2500);
+  }
+
+  async function pushToCloud() {
+    if (!googleIdToken) return;
+    setAccountStatus('Signed in as ' + googleUserEmail + ' — saving…');
+    try {
+      var res = await fetch(CLOUD_API_URL, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify(state)
+      });
+      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
+    } catch (e) {
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', true);
+    }
+  }
+
+  function waitForGoogleIdentity(retriesLeft) {
+    if (window.google && google.accounts && google.accounts.id) {
+      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+      google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
+      return;
+    }
+    if (retriesLeft <= 0) return;
+    setTimeout(function () { waitForGoogleIdentity(retriesLeft - 1); }, 200);
+  }
 
   // ---------------------------------------------------------------------
   // Text cleanup for markdown-ish import text
@@ -2081,6 +2180,7 @@
   });
 
   renderAll();
+  waitForGoogleIdentity(25);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
       document.querySelectorAll('.poem-text').forEach(autoGrow);
