@@ -1826,35 +1826,19 @@
     importGoogleDoc(doc.id, doc.name);
   }
 
-  // Reconstructs the same "### Heading" / blank-line-separated markdown
-  // text parseDocText already expects, straight from the Docs API's
-  // structural JSON -- see the module notes above parseDocText.
-  function docsJsonToText(doc) {
-    var body = (doc.body && doc.body.content) || [];
-    var paras = [];
-    body.forEach(function (el) {
-      if (!el.paragraph) return;
-      var style = (el.paragraph.paragraphStyle && el.paragraph.paragraphStyle.namedStyleType) || '';
-      var isHeading = /^(HEADING_\d|TITLE|SUBTITLE)$/.test(style);
-      var text = (el.paragraph.elements || []).map(function (pe) {
-        return (pe.textRun && pe.textRun.content) || '';
-      }).join('');
-      text = text.replace(/\n$/, '').replace(/\v/g, '\n');
-      if (isHeading && text.trim() !== '') text = '### ' + text.trim();
-      paras.push(text);
-    });
-    return paras.join('\n\n');
-  }
-
+  // The drive.file scope Picker grants only authorizes the Drive API for
+  // the picked file, not the separate Docs API -- so read it back through
+  // Drive's own markdown export, which already gives us the same
+  // "### Heading" / blank-line-separated shape parseDocText expects.
   async function importGoogleDoc(fileId, title) {
     setDriveStatus('Fetching “' + title + '”…');
     try {
-      var res = await fetch('https://docs.googleapis.com/v1/documents/' + fileId, {
+      var res = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/export?mimeType=text%2Fmarkdown', {
         headers: { Authorization: 'Bearer ' + driveAccessToken }
       });
       if (!res.ok) throw new Error('http_' + res.status);
-      var docJson = await res.json();
-      addImportedPoems(parseDocText(docsJsonToText(docJson)), title);
+      var text = await res.text();
+      addImportedPoems(parseDocText(text), title);
     } catch (err) {
       setDriveStatus('Couldn’t read that document.', true);
     }
