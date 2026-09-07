@@ -312,7 +312,38 @@
     background: var(--surface); border-radius: 10px; padding: 22px 24px; max-width: 380px;
     box-shadow: 0 8px 30px var(--shadow); border: 1px solid var(--line);
   }
-  .modal-box p { font-size: 13.5px; line-height: 1.55; margin: 0 0 18px; color: var(--ink); }
+  .modal-box p { font-size: 13.5px; line-height: 1.55; margin: 0 0 12px; color: var(--ink); }
+  .prompt-input {
+    width: 100%; margin: 0 0 18px; border: 1px solid var(--line-strong); border-radius: 7px;
+    padding: 9px 11px; font-size: 13.5px; background: var(--surface-2); color: var(--ink); outline: none;
+  }
+  .prompt-input:focus { border-color: var(--accent); }
+
+  .chapbooks-menu { position: relative; }
+  .chapbooks-dropdown {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 280px; max-height: 360px;
+    overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 8px 24px var(--shadow); padding: 6px;
+  }
+  .chapbooks-dropdown[hidden] { display: none; }
+  .chapbooks-new {
+    display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px;
+    padding: 9px 10px; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer;
+  }
+  .chapbooks-new:hover { background: var(--accent-soft); }
+  .chapbooks-divider { border-top: 1px solid var(--line); margin: 4px 2px; }
+  .chapbooks-empty { padding: 10px; font-size: 12.5px; color: var(--ink-faint); }
+  .chapbook-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .chapbook-row:hover { background: var(--surface-2); }
+  .chapbook-row.current { background: var(--accent-soft); }
+  .chapbook-row .chapbook-title {
+    flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chapbook-row .chapbook-meta { font-size: 10.5px; color: var(--ink-faint); flex: 0 0 auto; white-space: nowrap; }
+  .chapbook-row .chapbook-del {
+    flex: 0 0 auto; background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 15px; padding: 2px 4px; line-height: 1;
+  }
+  .chapbook-row .chapbook-del:hover { color: var(--danger); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
   ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -329,6 +360,15 @@
       <div class="tagline">Bring in poems from a neatly formatted Google Doc — Heading for the title, Normal text for the poem — and export a paginated, print-ready PDF with one poem per page.</div>
     </div>
     <div class="top-actions">
+      <div class="chapbooks-menu">
+        <button class="btn" id="chapbooksMenuBtn" type="button">My Chapbooks ▾</button>
+        <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
+          <button class="chapbooks-new" id="newChapbookBtn" type="button">+ New chapbook</button>
+          <div class="chapbooks-divider"></div>
+          <div id="chapbooksList"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="saveChapbookBtn" type="button">Save chapbook</button>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
         <div class="status-line" id="accountStatus" style="margin:0;"></div>
@@ -541,6 +581,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="promptOverlay">
+  <div class="modal-box">
+    <p id="promptMessage"></p>
+    <input type="text" id="promptInput" class="prompt-input">
+    <div class="modal-actions">
+      <button class="btn" id="promptCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="promptOkBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
 
@@ -567,6 +618,36 @@
   modalOverlay.addEventListener('click', function (e) { if (e.target === modalOverlay) closeModal(false); });
 
   // ---------------------------------------------------------------------
+  // Prompt modal -- confirmDialog with a text field, used for naming a
+  // chapbook when saving it.
+  // ---------------------------------------------------------------------
+  var promptOverlay = document.getElementById('promptOverlay');
+  var promptMessage = document.getElementById('promptMessage');
+  var promptInput = document.getElementById('promptInput');
+  var promptOkBtn = document.getElementById('promptOkBtn');
+  var promptCancelBtn = document.getElementById('promptCancelBtn');
+  var promptResolve = null;
+
+  function promptDialog(message, defaultValue) {
+    promptMessage.textContent = message;
+    promptInput.value = defaultValue || '';
+    promptOverlay.classList.add('open');
+    setTimeout(function () { promptInput.focus(); promptInput.select(); }, 0);
+    return new Promise(function (resolve) { promptResolve = resolve; });
+  }
+  function closePrompt(result) {
+    promptOverlay.classList.remove('open');
+    if (promptResolve) { promptResolve(result); promptResolve = null; }
+  }
+  promptOkBtn.addEventListener('click', function () { closePrompt(promptInput.value); });
+  promptCancelBtn.addEventListener('click', function () { closePrompt(null); });
+  promptOverlay.addEventListener('click', function (e) { if (e.target === promptOverlay) closePrompt(null); });
+  promptInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); closePrompt(promptInput.value); }
+    if (e.key === 'Escape') { closePrompt(null); }
+  });
+
+  // ---------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------
   var TRIM_SIZES = [
@@ -582,7 +663,7 @@
 
   var STORAGE_KEY = 'poetryBooklet.v1';
 
-  function exampleState() {
+  function defaultSettings() {
     return {
       bookTitle: '',
       author: '',
@@ -602,10 +683,24 @@
       showPageNumbers: true,
       pageNumberStyle: 'center',
       showCutLines: true,
-      isExample: true,
       intakeCollapsed: false,
       intakeSourceLabel: null,
-      poems: [
+      chapbookId: null
+    };
+  }
+
+  // A brand-new, empty chapbook -- used by "New chapbook" in the library menu.
+  function blankChapbookState() {
+    var s = defaultSettings();
+    s.isExample = false;
+    s.poems = [];
+    return s;
+  }
+
+  function exampleState() {
+    var s = defaultSettings();
+    s.isExample = true;
+    s.poems = [
         {
           id: 'ex1',
           title: 'Instructions for Folding a Paper Boat',
@@ -636,8 +731,8 @@
             'small enough to carry home.'
           ]
         }
-      ]
-    };
+      ];
+    return s;
   }
 
   var state = null;
@@ -647,31 +742,60 @@
   } catch (e) { state = null; }
   if (!state || !state.poems) state = exampleState();
 
+  // ---------------------------------------------------------------------
+  // "My Chapbooks" library -- a list of named, explicitly-saved chapbooks,
+  // separate from the live scratch `state` above (which autosaves to
+  // localStorage continuously regardless of whether it's ever been
+  // saved into the library). Once a chapbook has been saved once,
+  // further local edits keep its library copy in sync automatically;
+  // pushing to the cloud only happens on an explicit save/delete, not
+  // on every keystroke.
+  // ---------------------------------------------------------------------
+  var LIBRARY_KEY = 'poetryBooklet.library.v1';
+  var library = [];
+  try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch (e) { library = []; }
+
+  function makeChapbookId() { return 'cb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function persistLibrary() {
+    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch (e) {}
+  }
+
+  function syncCurrentIntoLibrary() {
+    if (!state.chapbookId) return;
+    var entry = library.filter(function (c) { return c.id === state.chapbookId; })[0];
+    if (!entry) return;
+    entry.title = state.bookTitle || 'Untitled Collection';
+    entry.updatedAt = Date.now();
+    entry.data = JSON.parse(JSON.stringify(state));
+    persistLibrary();
+  }
+
   var saveTimer = null;
   function persist() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+      syncCurrentIntoLibrary();
     }, 300);
-    scheduleCloudSync();
   }
 
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // ---------------------------------------------------------------------
-  // Cloud sync (Google sign-in + a small AWS backend). Entirely optional:
-  // localStorage above is always the instant local cache and keeps
-  // working with no sign-in at all. Signing in additionally pulls your
-  // saved state once, then pushes local edits up on a short debounce.
-  // Not available inside a Claude Artifact (no window.google there, and
-  // its sandbox blocks the network call anyway) -- this only runs on the
-  // plain hosted page.
+  // Cloud sync (Google sign-in + a small AWS backend). Entirely optional
+  // and scoped to the saved "My Chapbooks" library, not the live scratch
+  // `state` above -- that keeps autosaving to localStorage regardless of
+  // sign-in. Signing in pulls your saved chapbooks once; after that,
+  // pushing to the cloud happens on explicit save/delete actions, not on
+  // every keystroke. Not available inside a Claude Artifact (no
+  // window.google there, and its sandbox blocks the network call anyway)
+  // -- this only runs on the plain hosted page.
   // ---------------------------------------------------------------------
   var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
   var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
   var googleIdToken = null;
   var googleUserEmail = '';
-  var cloudSyncTimer = null;
 
   function setAccountStatus(msg, isError) {
     var el = document.getElementById('accountStatus');
@@ -691,46 +815,43 @@
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = 'none';
     setAccountStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
-    await pullFromCloud();
+    await pullLibraryFromCloud();
   }
 
-  async function pullFromCloud() {
+  async function pullLibraryFromCloud() {
     if (!googleIdToken) return;
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
       var data = await res.json();
-      if (data.state) {
-        var ok = await confirmDialog('Load your saved poems from the cloud? This replaces what’s currently loaded here.');
+      var cloudChapbooks = (data.state && data.state.chapbooks) || null;
+      if (cloudChapbooks && cloudChapbooks.length) {
+        var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved chapbook(s) from the cloud? This replaces your local “My Chapbooks” list.');
         if (ok) {
-          state = data.state;
-          persist();
-          renderAll();
+          library = cloudChapbooks;
+          persistLibrary();
+          renderChapbooksList();
         }
         setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
+      } else if (library.length) {
+        setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your chapbooks to the cloud…');
+        await syncLibraryToCloud();
       } else {
-        setAccountStatus('Signed in as ' + googleUserEmail + ' — saving your current poems to the cloud…');
-        await pushToCloud();
+        setAccountStatus('Signed in as ' + googleUserEmail + '.');
       }
     } catch (e) {
       setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', true);
     }
   }
 
-  function scheduleCloudSync() {
+  async function syncLibraryToCloud() {
     if (!googleIdToken) return;
-    clearTimeout(cloudSyncTimer);
-    cloudSyncTimer = setTimeout(pushToCloud, 2500);
-  }
-
-  async function pushToCloud() {
-    if (!googleIdToken) return;
-    setAccountStatus('Signed in as ' + googleUserEmail + ' — saving…');
+    setAccountStatus('Signed in as ' + googleUserEmail + ' — saving to the cloud…');
     try {
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify(state)
+        body: JSON.stringify({ chapbooks: library })
       });
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
       setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
@@ -1992,6 +2113,102 @@
     document.getElementById('bookTitleInput').value = '';
     document.getElementById('authorInput').value = '';
     renderAll();
+  });
+
+  // ---------------------------------------------------------------------
+  // UI: "My Chapbooks" library menu
+  // ---------------------------------------------------------------------
+  var chapbooksMenuBtn = document.getElementById('chapbooksMenuBtn');
+  var chapbooksDropdown = document.getElementById('chapbooksDropdown');
+  var chapbooksList = document.getElementById('chapbooksList');
+
+  function closeChapbooksDropdown() { chapbooksDropdown.hidden = true; }
+  function toggleChapbooksDropdown() {
+    if (chapbooksDropdown.hidden) renderChapbooksList();
+    chapbooksDropdown.hidden = !chapbooksDropdown.hidden;
+  }
+  chapbooksMenuBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleChapbooksDropdown(); });
+  document.addEventListener('click', function (e) {
+    if (!chapbooksDropdown.hidden && !chapbooksDropdown.contains(e.target) && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
+  });
+
+  function renderChapbooksList() {
+    chapbooksList.innerHTML = '';
+    if (!library.length) {
+      chapbooksList.innerHTML = '<div class="chapbooks-empty">No saved chapbooks yet — use “Save chapbook” to add this one.</div>';
+      return;
+    }
+    var sorted = library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+    sorted.forEach(function (entry) {
+      var row = document.createElement('div');
+      row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
+      row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-del" type="button" title="Delete">×</button>';
+      row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+      row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+      row.addEventListener('click', function () { loadChapbook(entry.id); });
+      row.querySelector('.chapbook-del').addEventListener('click', function (e) {
+        e.stopPropagation();
+        deleteChapbook(entry.id);
+      });
+      chapbooksList.appendChild(row);
+    });
+  }
+
+  async function loadChapbook(id) {
+    var entry = library.filter(function (c) { return c.id === id; })[0];
+    if (!entry) return;
+    var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current chapbook will be lost.');
+    if (!ok) return;
+    state = JSON.parse(JSON.stringify(entry.data));
+    state.isExample = false;
+    persist();
+    renderAll();
+    closeChapbooksDropdown();
+  }
+
+  async function deleteChapbook(id) {
+    var entry = library.filter(function (c) { return c.id === id; })[0];
+    if (!entry) return;
+    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled Collection') + '” from your saved chapbooks? This can’t be undone.');
+    if (!ok) return;
+    library = library.filter(function (c) { return c.id !== id; });
+    if (state.chapbookId === id) { state.chapbookId = null; persist(); }
+    persistLibrary();
+    renderChapbooksList();
+    if (googleIdToken) await syncLibraryToCloud();
+    else setAccountStatus('Deleted — sign in to back up your remaining chapbooks to the cloud.');
+  }
+
+  document.getElementById('newChapbookBtn').addEventListener('click', async function () {
+    var ok = await confirmDialog('Start a new, blank chapbook? Any unsaved changes to the current one will be lost.');
+    if (!ok) return;
+    state = blankChapbookState();
+    persist();
+    renderAll();
+    closeChapbooksDropdown();
+  });
+
+  document.getElementById('saveChapbookBtn').addEventListener('click', async function () {
+    var title = await promptDialog('Save this chapbook as:', state.bookTitle || 'Untitled Collection');
+    if (title === null) return;
+    title = title.trim() || 'Untitled Collection';
+    state.bookTitle = title;
+    state.isExample = false;
+    var now = Date.now();
+    var entry = state.chapbookId ? library.filter(function (c) { return c.id === state.chapbookId; })[0] : null;
+    if (!entry) {
+      state.chapbookId = makeChapbookId();
+      entry = { id: state.chapbookId, title: title, updatedAt: now, data: null };
+      library.push(entry);
+    }
+    entry.title = title;
+    entry.updatedAt = now;
+    entry.data = JSON.parse(JSON.stringify(state));
+    persistLibrary();
+    persist();
+    renderAll();
+    if (googleIdToken) await syncLibraryToCloud();
+    else setAccountStatus('Saved on this device — sign in to back it up to the cloud.');
   });
 
   // ---------------------------------------------------------------------
