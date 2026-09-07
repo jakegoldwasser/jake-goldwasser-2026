@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chapbook Builder — Jake Goldwasser</title>
-<meta name="description" content="Turn a Google Doc of poems into a paginated, print-ready PDF chapbook, one poem per page.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<meta name="description" content="Turn a Google Doc of poems into a paginated, print-ready PDF chapbook, one poem per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
   :root {
     --paper: #F7F1EE;
@@ -825,6 +826,7 @@
   // -- this only runs on the plain hosted page.
   // ---------------------------------------------------------------------
   var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
+  var GOOGLE_API_KEY = 'AIzaSyCx7xo78YGyvASwgoRW2dhPmXZA3p0w-84'; // restricted to Picker + Docs APIs, HTTP referrer jake-goldwasser.com
   var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
   var googleIdToken = null;
   var googleUserEmail = '';
@@ -1618,15 +1620,21 @@
     return d.toLocaleDateString();
   }
 
-  var driveStatus = document.getElementById('driveStatus');
   var driveList = document.getElementById('driveList');
   var driveSearch = document.getElementById('driveSearch');
   var driveSearchBtn = document.getElementById('driveSearchBtn');
   var mcpNs = null, mcpChecked = false;
+  var driveAccessToken = null;
+  var driveTokenClient = null;
+  var pickerLoaded = false;
 
+  // Looked up fresh each call, since the Picker fallback path below
+  // replaces #drivePane's innerHTML (and therefore #driveStatus itself).
   function setDriveStatus(msg, isError) {
-    driveStatus.textContent = msg || '';
-    driveStatus.classList.toggle('error', !!isError);
+    var el = document.getElementById('driveStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('error', !!isError);
   }
 
   function describeMcpError(err) {
@@ -1677,10 +1685,7 @@
 
   async function loadRecentDocs() {
     var mcp = await ensureMcp();
-    if (!mcp) {
-      document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import only works inside a Claude artifact, not on this page — use the Paste text tab instead.</div>';
-      return;
-    }
+    if (!mcp) { renderPickerEntryPoint(); return; }
     setDriveStatus('Loading recent documents…');
     try {
       var res = await mcp.callTool('Google Drive', 'list_recent_files', { pageSize: 20, orderBy: 'lastModifiedByMe' });
@@ -1689,11 +1694,8 @@
       setDriveStatus('');
     } catch (err) {
       var msg = describeMcpError(err);
-      if (msg === null) {
-        document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import only works inside a Claude artifact, not on this page — use the Paste text tab instead.</div>';
-      } else {
-        setDriveStatus(msg, true);
-      }
+      if (msg === null) renderPickerEntryPoint();
+      else setDriveStatus(msg, true);
     }
   }
 
@@ -1721,17 +1723,7 @@
     try {
       var res = await mcp.callTool('Google Drive', 'read_file_content', { fileId: fileId });
       var text = (res.payload && res.payload.fileContent) || '';
-      var poems = parseDocText(text);
-      if (!poems.length) { setDriveStatus('Couldn’t find any poems in that document.', true); return; }
-      var wasExample = state.isExample;
-      state.poems = wasExample ? poems : state.poems.concat(poems);
-      state.isExample = false;
-      state.intakeCollapsed = true;
-      state.intakeSourceLabel = title;
-      if (!state.bookTitle) state.bookTitle = title;
-      setDriveStatus((wasExample ? 'Imported ' : 'Added ') + poems.length + ' poem(s) from “' + title + '”.');
-      persist();
-      renderAll();
+      addImportedPoems(parseDocText(text), title);
     } catch (err) {
       setDriveStatus(describeMcpError(err) || 'Couldn’t read that document.', true);
     }
@@ -1739,6 +1731,135 @@
 
   driveSearchBtn.addEventListener('click', function () { searchDocs(driveSearch.value.trim()); });
   driveSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchDocs(driveSearch.value.trim()); });
+
+  // ---------------------------------------------------------------------
+  // Drive import on the real website: the MCP connector above only
+  // exists inside a Claude artifact. Here instead we get a short-lived
+  // OAuth access token (scoped to just the file the poet picks, via
+  // drive.file — never full Drive access) and let them choose a doc
+  // through Google's own Picker UI, then read it with the Docs API
+  // directly from the browser. No backend involved.
+  // ---------------------------------------------------------------------
+  function addImportedPoems(poems, title) {
+    if (!poems.length) { setDriveStatus('Couldn’t find any poems in that document.', true); return; }
+    var wasExample = state.isExample;
+    state.poems = wasExample ? poems : state.poems.concat(poems);
+    state.isExample = false;
+    state.intakeCollapsed = true;
+    state.intakeSourceLabel = title;
+    if (!state.bookTitle) state.bookTitle = title;
+    setDriveStatus((wasExample ? 'Imported ' : 'Added ') + poems.length + ' poem(s) from “' + title + '”.');
+    persist();
+    renderAll();
+  }
+
+  function renderPickerEntryPoint() {
+    var pane = document.getElementById('drivePane');
+    if (!pane) return;
+    pane.innerHTML =
+      '<div class="hint-box">Pick a Google Doc from your Drive to bring its poems in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
+      '<button class="btn btn-primary" id="connectDriveBtn" type="button">Choose a Google Doc…</button>' +
+      '<div id="driveStatus" class="status-line"></div>';
+    document.getElementById('connectDriveBtn').addEventListener('click', openDrivePicker);
+  }
+
+  function ensureDriveTokenClient() {
+    if (driveTokenClient) return driveTokenClient;
+    if (!window.google || !google.accounts || !google.accounts.oauth2) return null;
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: ''
+    });
+    return driveTokenClient;
+  }
+
+  function requestDriveAccessToken() {
+    return new Promise(function (resolve, reject) {
+      var client = ensureDriveTokenClient();
+      if (!client) { reject(new Error('no_google_oauth')); return; }
+      client.callback = function (resp) {
+        if (resp.error) { reject(resp); return; }
+        driveAccessToken = resp.access_token;
+        resolve(resp.access_token);
+      };
+      client.requestAccessToken({ prompt: driveAccessToken ? '' : 'consent' });
+    });
+  }
+
+  function loadDrivePicker() {
+    return new Promise(function (resolve) {
+      if (pickerLoaded) { resolve(true); return; }
+      if (!window.gapi) { resolve(false); return; }
+      gapi.load('picker', function () { pickerLoaded = true; resolve(true); });
+    });
+  }
+
+  async function openDrivePicker() {
+    if (!window.google || !google.accounts || !google.accounts.oauth2 || !window.gapi) {
+      var pane = document.getElementById('drivePane');
+      if (pane) pane.innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
+      return;
+    }
+    setDriveStatus('Connecting to Google Drive…');
+    try {
+      var token = await requestDriveAccessToken();
+      var ok = await loadDrivePicker();
+      if (!ok) { setDriveStatus('Couldn’t load the Google Drive picker.', true); return; }
+      var view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/vnd.google-apps.document');
+      var picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(GOOGLE_API_KEY)
+        .setCallback(onDrivePickerResult)
+        .build();
+      picker.setVisible(true);
+      setDriveStatus('');
+    } catch (err) {
+      setDriveStatus('Couldn’t connect to Google Drive.', true);
+    }
+  }
+
+  function onDrivePickerResult(data) {
+    if (data.action !== google.picker.Action.PICKED) return;
+    var doc = data.docs[0];
+    importGoogleDoc(doc.id, doc.name);
+  }
+
+  // Reconstructs the same "### Heading" / blank-line-separated markdown
+  // text parseDocText already expects, straight from the Docs API's
+  // structural JSON -- see the module notes above parseDocText.
+  function docsJsonToText(doc) {
+    var body = (doc.body && doc.body.content) || [];
+    var paras = [];
+    body.forEach(function (el) {
+      if (!el.paragraph) return;
+      var style = (el.paragraph.paragraphStyle && el.paragraph.paragraphStyle.namedStyleType) || '';
+      var isHeading = /^(HEADING_\d|TITLE|SUBTITLE)$/.test(style);
+      var text = (el.paragraph.elements || []).map(function (pe) {
+        return (pe.textRun && pe.textRun.content) || '';
+      }).join('');
+      text = text.replace(/\n$/, '').replace(/\v/g, '\n');
+      if (isHeading && text.trim() !== '') text = '### ' + text.trim();
+      paras.push(text);
+    });
+    return paras.join('\n\n');
+  }
+
+  async function importGoogleDoc(fileId, title) {
+    setDriveStatus('Fetching “' + title + '”…');
+    try {
+      var res = await fetch('https://docs.googleapis.com/v1/documents/' + fileId, {
+        headers: { Authorization: 'Bearer ' + driveAccessToken }
+      });
+      if (!res.ok) throw new Error('http_' + res.status);
+      var docJson = await res.json();
+      addImportedPoems(parseDocText(docsJsonToText(docJson)), title);
+    } catch (err) {
+      setDriveStatus('Couldn’t read that document.', true);
+    }
+  }
+
   loadRecentDocs();
 
   // ---------------------------------------------------------------------
