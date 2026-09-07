@@ -58,7 +58,29 @@
 
   .top-actions { display: flex; gap: 14px; align-items: center; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .account-area .status-line { min-height: 0; margin-top: 0; text-align: right; }
+  .account-status-row { display: flex; align-items: center; gap: 8px; }
+  .account-status-row .status-line { min-height: 0; margin-top: 0; text-align: right; }
+  .btn-link {
+    background: none; border: none; color: var(--ink-faint); font-size: 11.5px; text-decoration: underline;
+    text-underline-offset: 2px; cursor: pointer; padding: 0; white-space: nowrap;
+  }
+  .btn-link:hover { color: var(--accent); }
+
+  .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
+  #bookTitleInput {
+    font-family: "Fraunces", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
+    color: var(--ink); background: transparent; border: none; border-bottom: 2px solid var(--line-strong);
+    padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
+  }
+  #bookTitleInput:focus { border-bottom-color: var(--accent); }
+  #bookTitleInput::placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
+  #authorInput {
+    font-family: "Work Sans", sans-serif; font-size: 14px; color: var(--ink-soft); background: transparent;
+    border: none; border-bottom: 1px solid var(--line); padding: 2px 2px 6px; outline: none; width: 100%;
+    max-width: 320px; transition: border-color .15s ease;
+  }
+  #authorInput:focus { border-bottom-color: var(--accent); }
+  #authorInput::placeholder { color: var(--ink-faint); }
 
   button, select, input[type="text"], input[type="number"], textarea {
     font-family: inherit; color: inherit;
@@ -340,10 +362,16 @@
     flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .chapbook-row .chapbook-meta { font-size: 10.5px; color: var(--ink-faint); flex: 0 0 auto; white-space: nowrap; }
-  .chapbook-row .chapbook-del {
+  .chapbook-row .chapbook-del, .chapbook-row .chapbook-restore {
     flex: 0 0 auto; background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 15px; padding: 2px 4px; line-height: 1;
   }
   .chapbook-row .chapbook-del:hover { color: var(--danger); }
+  .chapbook-row .chapbook-restore:hover { color: var(--accent); }
+  .chapbooks-trash-link {
+    display: block; width: 100%; text-align: left; background: none; border: none; border-radius: 6px;
+    padding: 8px 10px; font-size: 12px; color: var(--ink-faint); cursor: pointer;
+  }
+  .chapbooks-trash-link:hover { background: var(--surface-2); color: var(--ink-soft); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
   ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -363,18 +391,24 @@
       <div class="chapbooks-menu">
         <button class="btn" id="chapbooksMenuBtn" type="button">My Chapbooks ▾</button>
         <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
-          <button class="chapbooks-new" id="newChapbookBtn" type="button">+ New chapbook</button>
-          <div class="chapbooks-divider"></div>
-          <div id="chapbooksList"></div>
+          <div id="chapbooksPane"></div>
         </div>
       </div>
       <button class="btn btn-primary" id="saveChapbookBtn" type="button">Save chapbook</button>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
-        <div class="status-line" id="accountStatus" style="margin:0;"></div>
+        <div class="account-status-row">
+          <span class="status-line" id="accountStatus" style="margin:0;"></span>
+          <button class="btn-link" id="signOutBtn" type="button" hidden>Sign out</button>
+        </div>
       </div>
       <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
     </div>
+  </div>
+
+  <div class="chapbook-header">
+    <input type="text" id="bookTitleInput" placeholder="Untitled Collection">
+    <input type="text" id="authorInput" placeholder="Author name">
   </div>
 
   <div class="panel" id="intakePanel">
@@ -450,14 +484,6 @@
       <div class="sidebar-scroll">
         <div class="panel">
           <div class="panel-title">Booklet</div>
-          <div class="field">
-            <label for="bookTitleInput">Title</label>
-            <input type="text" id="bookTitleInput" placeholder="Untitled Collection">
-          </div>
-          <div class="field">
-            <label for="authorInput">Author</label>
-            <input type="text" id="authorInput" placeholder="Your name">
-          </div>
           <div class="field">
             <label for="trimSelect">Trim size</label>
             <select id="trimSelect"></select>
@@ -752,13 +778,19 @@
   // on every keystroke.
   // ---------------------------------------------------------------------
   var LIBRARY_KEY = 'poetryBooklet.library.v1';
+  var TRASH_KEY = 'poetryBooklet.trash.v1';
   var library = [];
+  var trash = [];
   try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch (e) { library = []; }
+  try { trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]'); } catch (e) { trash = []; }
 
   function makeChapbookId() { return 'cb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   function persistLibrary() {
     try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch (e) {}
+  }
+  function persistTrash() {
+    try { localStorage.setItem(TRASH_KEY, JSON.stringify(trash)); } catch (e) {}
   }
 
   function syncCurrentIntoLibrary() {
@@ -796,6 +828,7 @@
   var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
   var googleIdToken = null;
   var googleUserEmail = '';
+  var googleUserName = '';
 
   function setAccountStatus(msg, isError) {
     var el = document.getElementById('accountStatus');
@@ -811,12 +844,34 @@
 
   async function handleGoogleCredential(response) {
     googleIdToken = response.credential;
-    googleUserEmail = decodeJwtPayload(googleIdToken).email || 'your account';
+    var payload = decodeJwtPayload(googleIdToken);
+    googleUserEmail = payload.email || 'your account';
+    googleUserName = payload.name || '';
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = 'none';
+    document.getElementById('signOutBtn').hidden = false;
+    // A default, not an override: only fills in a name the poet hasn't
+    // already typed for this chapbook.
+    if (!state.author && googleUserName) {
+      state.author = googleUserName;
+      persist();
+      syncSidebarFromState();
+    }
     setAccountStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
     await pullLibraryFromCloud();
   }
+
+  function signOut() {
+    googleIdToken = null;
+    googleUserEmail = '';
+    googleUserName = '';
+    var btn = document.getElementById('googleSignInBtn');
+    if (btn) btn.style.display = '';
+    document.getElementById('signOutBtn').hidden = true;
+    setAccountStatus('');
+    try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
+  }
+  document.getElementById('signOutBtn').addEventListener('click', signOut);
 
   async function pullLibraryFromCloud() {
     if (!googleIdToken) return;
@@ -825,15 +880,18 @@
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
       var data = await res.json();
       var cloudChapbooks = (data.state && data.state.chapbooks) || null;
+      var cloudTrash = (data.state && data.state.trash) || [];
       if (cloudChapbooks && cloudChapbooks.length) {
         var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved chapbook(s) from the cloud? This replaces your local “My Chapbooks” list.');
         if (ok) {
           library = cloudChapbooks;
+          trash = cloudTrash;
           persistLibrary();
+          persistTrash();
           renderChapbooksList();
         }
         setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
-      } else if (library.length) {
+      } else if (library.length || trash.length) {
         setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your chapbooks to the cloud…');
         await syncLibraryToCloud();
       } else {
@@ -851,7 +909,7 @@
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapbooks: library })
+        body: JSON.stringify({ chapbooks: library, trash: trash })
       });
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
       setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
@@ -1620,7 +1678,7 @@
   async function loadRecentDocs() {
     var mcp = await ensureMcp();
     if (!mcp) {
-      document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
+      document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import only works inside a Claude artifact, not on this page — use the Paste text tab instead.</div>';
       return;
     }
     setDriveStatus('Loading recent documents…');
@@ -1632,7 +1690,7 @@
     } catch (err) {
       var msg = describeMcpError(err);
       if (msg === null) {
-        document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
+        document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import only works inside a Claude artifact, not on this page — use the Paste text tab instead.</div>';
       } else {
         setDriveStatus(msg, true);
       }
@@ -2116,15 +2174,17 @@
   });
 
   // ---------------------------------------------------------------------
-  // UI: "My Chapbooks" library menu
+  // UI: "My Chapbooks" library menu, plus a 7-day trash bin for deletes
   // ---------------------------------------------------------------------
   var chapbooksMenuBtn = document.getElementById('chapbooksMenuBtn');
   var chapbooksDropdown = document.getElementById('chapbooksDropdown');
-  var chapbooksList = document.getElementById('chapbooksList');
+  var chapbooksPane = document.getElementById('chapbooksPane');
+  var chapbooksViewMode = 'library';
+  var TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
   function closeChapbooksDropdown() { chapbooksDropdown.hidden = true; }
   function toggleChapbooksDropdown() {
-    if (chapbooksDropdown.hidden) renderChapbooksList();
+    if (chapbooksDropdown.hidden) { chapbooksViewMode = 'library'; renderChapbooksList(); }
     chapbooksDropdown.hidden = !chapbooksDropdown.hidden;
   }
   chapbooksMenuBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleChapbooksDropdown(); });
@@ -2132,26 +2192,91 @@
     if (!chapbooksDropdown.hidden && !chapbooksDropdown.contains(e.target) && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
   });
 
+  function purgeOldTrash() {
+    var cutoff = Date.now() - TRASH_RETENTION_MS;
+    var before = trash.length;
+    trash = trash.filter(function (t) { return t.deletedAt > cutoff; });
+    if (trash.length !== before) persistTrash();
+  }
+
+  function makeDivider() {
+    var d = document.createElement('div');
+    d.className = 'chapbooks-divider';
+    return d;
+  }
+
   function renderChapbooksList() {
-    chapbooksList.innerHTML = '';
-    if (!library.length) {
-      chapbooksList.innerHTML = '<div class="chapbooks-empty">No saved chapbooks yet — use “Save chapbook” to add this one.</div>';
+    purgeOldTrash();
+    chapbooksPane.innerHTML = '';
+
+    if (chapbooksViewMode === 'trash') {
+      var backBtn = document.createElement('button');
+      backBtn.className = 'chapbooks-new';
+      backBtn.type = 'button';
+      backBtn.textContent = '← Back to My Chapbooks';
+      backBtn.addEventListener('click', function () { chapbooksViewMode = 'library'; renderChapbooksList(); });
+      chapbooksPane.appendChild(backBtn);
+      chapbooksPane.appendChild(makeDivider());
+
+      if (!trash.length) {
+        var empty = document.createElement('div');
+        empty.className = 'chapbooks-empty';
+        empty.textContent = 'Trash is empty.';
+        chapbooksPane.appendChild(empty);
+      } else {
+        trash.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }).forEach(function (entry) {
+          var daysLeft = Math.max(1, Math.ceil((TRASH_RETENTION_MS - (Date.now() - entry.deletedAt)) / 86400000));
+          var row = document.createElement('div');
+          row.className = 'chapbook-row';
+          row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
+            '<button class="chapbook-restore" type="button" title="Restore">↺</button>' +
+            '<button class="chapbook-del" type="button" title="Delete forever">×</button>';
+          row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+          row.querySelector('.chapbook-meta').textContent = 'purges in ' + daysLeft + 'd';
+          row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); restoreChapbook(entry.id); });
+          row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); purgeChapbookForever(entry.id); });
+          chapbooksPane.appendChild(row);
+        });
+      }
       return;
     }
-    var sorted = library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; });
-    sorted.forEach(function (entry) {
-      var row = document.createElement('div');
-      row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
-      row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-del" type="button" title="Delete">×</button>';
-      row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
-      row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
-      row.addEventListener('click', function () { loadChapbook(entry.id); });
-      row.querySelector('.chapbook-del').addEventListener('click', function (e) {
-        e.stopPropagation();
-        deleteChapbook(entry.id);
+
+    var newBtn = document.createElement('button');
+    newBtn.className = 'chapbooks-new';
+    newBtn.type = 'button';
+    newBtn.textContent = '+ New chapbook';
+    newBtn.addEventListener('click', onNewChapbookClick);
+    chapbooksPane.appendChild(newBtn);
+    chapbooksPane.appendChild(makeDivider());
+
+    if (!library.length) {
+      var emptyLib = document.createElement('div');
+      emptyLib.className = 'chapbooks-empty';
+      emptyLib.textContent = 'No saved chapbooks yet — use “Save chapbook” to add this one.';
+      chapbooksPane.appendChild(emptyLib);
+    } else {
+      library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+        var row = document.createElement('div');
+        row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
+        row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-del" type="button" title="Move to trash">×</button>';
+        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+        row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+        row.addEventListener('click', function () { loadChapbook(entry.id); });
+        row.querySelector('.chapbook-del').addEventListener('click', function (e) {
+          e.stopPropagation();
+          deleteChapbook(entry.id);
+        });
+        chapbooksPane.appendChild(row);
       });
-      chapbooksList.appendChild(row);
-    });
+    }
+
+    chapbooksPane.appendChild(makeDivider());
+    var trashLink = document.createElement('button');
+    trashLink.className = 'chapbooks-trash-link';
+    trashLink.type = 'button';
+    trashLink.textContent = 'Trash' + (trash.length ? ' (' + trash.length + ')' : '');
+    trashLink.addEventListener('click', function () { chapbooksViewMode = 'trash'; renderChapbooksList(); });
+    chapbooksPane.appendChild(trashLink);
   }
 
   async function loadChapbook(id) {
@@ -2169,24 +2294,52 @@
   async function deleteChapbook(id) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
-    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled Collection') + '” from your saved chapbooks? This can’t be undone.');
+    var ok = await confirmDialog('Move “' + (entry.title || 'Untitled Collection') + '” to the trash? It’ll be kept for 7 days before being permanently deleted.');
     if (!ok) return;
     library = library.filter(function (c) { return c.id !== id; });
+    entry.deletedAt = Date.now();
+    trash.push(entry);
     if (state.chapbookId === id) { state.chapbookId = null; persist(); }
     persistLibrary();
+    persistTrash();
     renderChapbooksList();
     if (googleIdToken) await syncLibraryToCloud();
-    else setAccountStatus('Deleted — sign in to back up your remaining chapbooks to the cloud.');
+    else setAccountStatus('Moved to trash — sign in to back up your chapbooks to the cloud.');
   }
 
-  document.getElementById('newChapbookBtn').addEventListener('click', async function () {
+  async function restoreChapbook(id) {
+    var entry = trash.filter(function (t) { return t.id === id; })[0];
+    if (!entry) return;
+    trash = trash.filter(function (t) { return t.id !== id; });
+    delete entry.deletedAt;
+    library.push(entry);
+    persistLibrary();
+    persistTrash();
+    renderChapbooksList();
+    if (googleIdToken) await syncLibraryToCloud();
+    else setAccountStatus('Restored — sign in to back up your chapbooks to the cloud.');
+  }
+
+  async function purgeChapbookForever(id) {
+    var entry = trash.filter(function (t) { return t.id === id; })[0];
+    if (!entry) return;
+    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled Collection') + '”? This can’t be undone.');
+    if (!ok) return;
+    trash = trash.filter(function (t) { return t.id !== id; });
+    persistTrash();
+    renderChapbooksList();
+    if (googleIdToken) await syncLibraryToCloud();
+  }
+
+  async function onNewChapbookClick() {
     var ok = await confirmDialog('Start a new, blank chapbook? Any unsaved changes to the current one will be lost.');
     if (!ok) return;
     state = blankChapbookState();
+    if (googleUserName) state.author = googleUserName;
     persist();
     renderAll();
     closeChapbooksDropdown();
-  });
+  }
 
   document.getElementById('saveChapbookBtn').addEventListener('click', async function () {
     var title = await promptDialog('Save this chapbook as:', state.bookTitle || 'Untitled Collection');
