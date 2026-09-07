@@ -236,6 +236,18 @@
   .title-align-seg button:last-child { border-right: none; }
   .title-align-seg button.active { background: var(--accent); color: var(--accent-ink); }
 
+  .poem-compact-row {
+    display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--surface-2); padding: 8px 12px; margin-bottom: 6px;
+  }
+  .poem-compact-row.dragging { opacity: 0.4; }
+  .poem-compact-row .poem-handle { flex: 0 0 30px; flex-direction: row; gap: 8px; padding-top: 0; justify-content: flex-start; }
+  input.poem-title-compact {
+    flex: 1; min-width: 0; border: none; background: transparent; font-family: "Fraunces", serif;
+    font-weight: 600; font-size: 14px; padding: 4px 2px; outline: none; color: var(--ink);
+  }
+  input.poem-title-compact::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+
   .poem-gap { height: 12px; margin: -4px 0 -2px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 40px; right: 0; height: 1px; background: transparent; }
   .poem-gap:hover .poem-gap-line { background: var(--line-strong); }
@@ -297,6 +309,13 @@
   }
   .seg button:last-child { border-right: none; }
   .seg button.active { background: var(--accent); color: var(--accent-ink); }
+  .seg-3 button { padding: 8px 3px; font-size: 11.5px; }
+
+  .subhead {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--accent); margin: 4px 0 2px; padding-top: 12px; border-top: 1px solid var(--line);
+  }
+  .subhead:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
 
   .checkline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); margin-bottom: 10px; }
   .checkline:last-child { margin-bottom: 0; }
@@ -386,7 +405,10 @@
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
           <div class="panel-title" style="margin:0;">Poems</div>
-          <div class="poems-count" id="poemsCount"></div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="poems-count" id="poemsCount"></div>
+            <button class="btn btn-sm" id="poemsViewToggle" type="button">Titles only</button>
+          </div>
         </div>
         <div id="exampleBanner" class="example-banner" hidden>
           <span>These two poems are just a working example — import or paste your own above to replace them.</span>
@@ -424,31 +446,64 @@
             <label for="trimSelect">Trim size</label>
             <select id="trimSelect"></select>
           </div>
+
+          <div class="subhead">Body text</div>
           <div class="field">
             <label>Typeface</label>
-            <div class="seg" id="fontSeg">
+            <div class="seg" id="bodyFontSeg">
               <button data-val="serif" class="active">Times</button>
               <button data-val="sans">Helvetica</button>
             </div>
           </div>
           <div class="field">
             <label>Alignment</label>
-            <div class="seg" id="alignSeg">
+            <div class="seg seg-3" id="bodyAlignSeg">
               <button data-val="left" class="active">Left</button>
               <button data-val="center">Center</button>
+              <button data-val="right">Right</button>
             </div>
           </div>
           <div class="field">
-            <label>Type size</label>
-            <div class="seg" id="sizeModeSeg">
+            <label>Size</label>
+            <div class="seg" id="bodySizeModeSeg">
               <button data-val="auto" class="active">Auto-fit</button>
               <button data-val="fixed">Fixed</button>
             </div>
           </div>
-          <div class="field" id="fixedSizeField" hidden>
-            <label for="fixedSizeInput">Point size</label>
-            <input type="number" id="fixedSizeInput" min="8" max="16" step="0.5" value="12">
+          <div class="field" id="bodyFixedSizeField" hidden>
+            <label for="bodyFixedSizeInput">Point size</label>
+            <input type="number" id="bodyFixedSizeInput" min="8" max="16" step="0.5" value="12">
           </div>
+
+          <div class="subhead">Title text</div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg" id="titleFontSeg">
+              <button data-val="serif" class="active">Times</button>
+              <button data-val="sans">Helvetica</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="titleAlignSeg">
+              <button data-val="left" class="active">Left</button>
+              <button data-val="center">Center</button>
+              <button data-val="right">Right</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <div class="seg" id="titleSizeModeSeg">
+              <button data-val="auto" class="active">Auto</button>
+              <button data-val="fixed">Fixed</button>
+            </div>
+          </div>
+          <div class="field" id="titleFixedSizeField" hidden>
+            <label for="titleFixedSizeInput">Point size</label>
+            <input type="number" id="titleFixedSizeInput" min="10" max="36" step="0.5" value="18">
+          </div>
+
+          <div class="subhead">Layout</div>
           <div class="checkline">
             <input type="checkbox" id="titlePageCheck" checked>
             <label for="titlePageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include title page</label>
@@ -456,6 +511,21 @@
           <div class="checkline">
             <input type="checkbox" id="tocCheck" checked>
             <label for="tocCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include table of contents</label>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="pageNumbersCheck" checked>
+            <label for="pageNumbersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show page numbers</label>
+          </div>
+          <div class="field" id="pageNumberStyleField">
+            <label>Page number position</label>
+            <div class="seg" id="pageNumberStyleSeg">
+              <button data-val="center" class="active">Center</button>
+              <button data-val="corners">Outer corners</button>
+            </div>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="cutLinesCheck" checked>
+            <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines (print-ready export)</label>
           </div>
         </div>
 
@@ -536,12 +606,19 @@
       bookTitle: '',
       author: '',
       trimKey: 'digest',
-      fontFamily: 'serif',
-      alignment: 'left',
-      sizeMode: 'auto',
-      fixedSize: 12,
+      bodyFontFamily: 'serif',
+      titleFontFamily: 'serif',
+      bodyAlignment: 'left',
+      titleAlignment: 'left',
+      bodySizeMode: 'auto',
+      bodyFixedSize: 12,
+      titleSizeMode: 'auto',
+      titleFixedSize: 18,
       includeTitlePage: true,
       includeToc: true,
+      showPageNumbers: true,
+      pageNumberStyle: 'center',
+      showCutLines: true,
       isExample: true,
       intakeCollapsed: false,
       intakeSourceLabel: null,
@@ -727,21 +804,35 @@
   // ---------------------------------------------------------------------
   var SIZE_CANDIDATES = [14, 13, 12, 11, 10, 9.5, 9];
 
-  function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, fontFamily) {
-    var lineHeight = sizePt * 1.55;
-    var titleSizePt = Math.min(20, Math.round(sizePt + 6));
-    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, fontFamily, 600).slice(0, 2) : [];
+  function resolveTitleSizePt(bodySizePt, state) {
+    if (state.titleSizeMode === 'fixed') return state.titleFixedSize;
+    return Math.min(20, Math.round(bodySizePt + 6));
+  }
+
+  // Left/center/right x-position for a piece of text of width w, shared
+  // by every draw call below so alignment stays consistent everywhere.
+  function resolveX(align, w, contentLeftX, contentRightX) {
+    if (align === 'left') return contentLeftX;
+    if (align === 'right') return contentRightX - w;
+    return (contentLeftX + contentRightX) / 2 - w / 2;
+  }
+
+  function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, state) {
+    var titleSizePt = resolveTitleSizePt(sizePt, state);
+    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, state.titleFontFamily, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
+    var lineHeight = sizePt * 1.55;
     var renderLines = [];
     poem.lines.forEach(function (line) {
       if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
-      wrapLine(line, contentWidthPt, sizePt, fontFamily, 400).forEach(function (w) {
+      wrapLine(line, contentWidthPt, sizePt, state.bodyFontFamily, 400).forEach(function (w) {
         renderLines.push({ blank: false, text: w });
       });
     });
 
-    var contHeaderH = poem.title ? (sizePt * 1.1 + 16) : 4;
+    var contLabelSizePt = Math.max(8, titleSizePt * 0.6);
+    var contHeaderH = poem.title ? (contLabelSizePt * 1.3 + 16) : 4;
     var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
     var laterCap = Math.max(1, Math.floor((contentHeightPt - contHeaderH) / lineHeight));
 
@@ -755,7 +846,7 @@
     }
     return {
       sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
-      titleLines: titleLines, titleH: titleH, contHeaderH: contHeaderH, pages: pages
+      titleLines: titleLines, titleH: titleH, contHeaderH: contHeaderH, contLabelSizePt: contLabelSizePt, pages: pages
     };
   }
 
@@ -764,16 +855,26 @@
   // pick its own size independently. "Auto" still tries the largest size
   // that keeps every poem to one page; it just applies that one choice
   // uniformly instead of re-deciding per poem.
-  function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, fontFamily, sizeMode, fixedSize) {
-    if (sizeMode === 'fixed') return fixedSize;
+  function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, state) {
+    if (state.bodySizeMode === 'fixed') return state.bodyFixedSize;
     for (var i = 0; i < SIZE_CANDIDATES.length; i++) {
       var size = SIZE_CANDIDATES[i];
       var allFit = poems.every(function (poem) {
-        return layoutPoem(poem, size, contentWidthPt, contentHeightPt, fontFamily).pages.length === 1;
+        return layoutPoem(poem, size, contentWidthPt, contentHeightPt, state).pages.length === 1;
       });
       if (allFit) return size;
     }
     return SIZE_CANDIDATES[SIZE_CANDIDATES.length - 1];
+  }
+
+  // The table of contents must land on a recto (right-hand) page. Page 1
+  // (the cover, if present) is always a recto; if the TOC would otherwise
+  // fall right after it, that's an even/verso position, so one blank
+  // verso page is inserted first -- pages 2 (blank) and 3 (TOC) then form
+  // the book's first true spread, TOC on the recto side.
+  function needsTocSpacer(state, tocPageCount) {
+    var coverCount = state.includeTitlePage ? 1 : 0;
+    return tocPageCount > 0 && (coverCount + 1) % 2 === 0;
   }
 
   function planBooklet(state) {
@@ -783,9 +884,9 @@
     var contentWidth = PAGE_W - marginSide * 2;
     var contentHeight = PAGE_H - marginTop - marginBottom;
 
-    var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state.fontFamily, state.sizeMode, state.fixedSize);
+    var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state);
     var layouts = state.poems.map(function (poem) {
-      return layoutPoem(poem, globalSize, contentWidth, contentHeight, state.fontFamily);
+      return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
     var tocFontSize = 12.5, tocLineHeight = 22, tocTitleH = 44;
@@ -797,19 +898,21 @@
       tocPageCount = 1;
       while (remaining > 0) { tocPageCount++; remaining -= linesPerTocPageN; }
     }
+    var tocSpacer = needsTocSpacer(state, tocPageCount) ? 1 : 0;
 
-    var frontPages = (state.includeTitlePage ? 1 : 0) + tocPageCount;
+    var frontPages = (state.includeTitlePage ? 1 : 0) + tocSpacer + tocPageCount;
     var running = frontPages + 1;
     layouts.forEach(function (l) {
       l.startPage = running;
       running += l.pages.length;
     });
-    var totalPages = (state.includeTitlePage ? 1 : 0) + tocPageCount + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0);
+    // +1 for the back cover, which is always present.
+    var totalPages = frontPages + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0) + 1;
 
     return {
       trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
       contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
-      tocPageCount: tocPageCount, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
+      tocPageCount: tocPageCount, tocSpacer: tocSpacer, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
       linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
       totalPages: totalPages
     };
@@ -912,18 +1015,25 @@
   // these same pages two-up on landscape sheets afterward.
   function buildReadingPageContents(state) {
     var plan = planBooklet(state);
-    var keys = fontKeys(state.fontFamily);
+    var titleKeys = fontKeys(state.titleFontFamily);
+    var bodyKeys = fontKeys(state.bodyFontFamily);
     var contentLeft = plan.marginSide;
     var contentRight = plan.PAGE_W - plan.marginSide;
     var contentTop = plan.PAGE_H - plan.marginTop;
-    var footerY = 36;
+    var footerY = 36, cornerY = 30;
     var contents = [];
 
     function pageNumberOp(bytes, n) {
-      if (!n) return;
+      if (!n || !state.showPageNumbers) return;
       var s = String(n);
-      var w = measure(s, 9.5, state.fontFamily, 400);
-      drawText(bytes, keys.reg, 9.5, plan.PAGE_W / 2 - w / 2, footerY, s, MUTED_RGB);
+      var w = measure(s, 9.5, state.bodyFontFamily, 400);
+      if (state.pageNumberStyle === 'corners') {
+        var isRecto = (n % 2) === 1;
+        var x = isRecto ? (contentRight - w) : contentLeft;
+        drawText(bytes, bodyKeys.reg, 9.5, x, cornerY, s, MUTED_RGB);
+      } else {
+        drawText(bytes, bodyKeys.reg, 9.5, plan.PAGE_W / 2 - w / 2, footerY, s, MUTED_RGB);
+      }
     }
 
     // ---- Title page ----
@@ -932,23 +1042,26 @@
       var bookTitle = (state.bookTitle || 'Untitled Collection').trim();
       var author = (state.author || '').trim();
       var titleSize = 27;
-      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.fontFamily, 600).slice(0, 4);
+      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.titleFontFamily, 600).slice(0, 4);
       var titleLineH = titleSize * 1.3;
       var blockH = titleLines.length * titleLineH + (author ? 40 : 0);
       var startY = plan.PAGE_H / 2 + blockH / 2;
       titleLines.forEach(function (line, i) {
-        var w = measure(line, titleSize, state.fontFamily, 600);
-        drawText(bytes, keys.bold, titleSize, plan.PAGE_W / 2 - w / 2, startY - i * titleLineH, line, INK_RGB);
+        var w = measure(line, titleSize, state.titleFontFamily, 600);
+        drawText(bytes, titleKeys.bold, titleSize, plan.PAGE_W / 2 - w / 2, startY - i * titleLineH, line, INK_RGB);
       });
       if (author) {
         var y = startY - titleLines.length * titleLineH - 14;
         var ruleW = 60;
         drawLine(bytes, plan.PAGE_W / 2 - ruleW / 2, y + 16, plan.PAGE_W / 2 + ruleW / 2, y + 16, 0.6, 0.75);
-        var aw = measure(author, 13, state.fontFamily, 400);
-        drawText(bytes, keys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
+        var aw = measure(author, 13, state.bodyFontFamily, 400);
+        drawText(bytes, bodyKeys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
       }
       contents.push(bytes);
     }
+
+    // ---- Blank spacer so the table of contents lands on a recto ----
+    if (plan.tocSpacer) contents.push([]);
 
     // ---- Table of contents ----
     if (plan.tocPageCount > 0) {
@@ -958,7 +1071,7 @@
         var y = contentTop;
         if (tp === 0) {
           var headSize = 20;
-          drawText(tbytes, keys.bold, headSize, contentLeft, y - headSize, 'Contents', INK_RGB);
+          drawText(tbytes, titleKeys.bold, headSize, contentLeft, y - headSize, 'Contents', INK_RGB);
           y -= plan.tocTitleH;
         }
         var capacity = tp === 0 ? plan.linesPerTocPage1 : plan.linesPerTocPageN;
@@ -966,24 +1079,24 @@
           var poem = state.poems[idx];
           var startPage = plan.layouts[idx].startPage;
           var numStr = String(startPage);
-          var numW = measure(numStr, plan.tocFontSize, state.fontFamily, 400);
+          var numW = measure(numStr, plan.tocFontSize, state.bodyFontFamily, 400);
           var titleMaxW = plan.contentWidth - numW - 16;
           var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
-          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.fontFamily, 400);
+          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.bodyFontFamily, 400);
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
-          drawText(tbytes, keys.reg, plan.tocFontSize, contentLeft, lineY, display, INK_RGB);
-          var titleW = measure(display, plan.tocFontSize, state.fontFamily, 400);
+          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentLeft, lineY, display, INK_RGB);
+          var titleW = measure(display, plan.tocFontSize, state.bodyFontFamily, 400);
           var dotX0 = contentLeft + titleW + 6;
           var dotX1 = contentRight - numW - 8;
           if (dotX1 > dotX0) {
-            var dotW = measure('.', plan.tocFontSize, state.fontFamily, 400);
+            var dotW = measure('.', plan.tocFontSize, state.bodyFontFamily, 400);
             var dotStep = dotW * 2.2;
             var dotCount = Math.max(0, Math.floor((dotX1 - dotX0) / dotStep));
             var dots = '';
             for (var d = 0; d < dotCount; d++) dots += '.  ';
-            if (dots) drawText(tbytes, keys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
+            if (dots) drawText(tbytes, bodyKeys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
           }
-          drawText(tbytes, keys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
         }
         contents.push(tbytes);
       }
@@ -992,41 +1105,52 @@
     // ---- Poem pages ----
     state.poems.forEach(function (poem, pi) {
       var layout = plan.layouts[pi];
-      var effAlign = poem.titleAlign || state.alignment;
+      var effAlign = poem.titleAlign || state.titleAlignment;
       layout.pages.forEach(function (pageLines, pageIdx) {
         var bytes = [];
         var y = contentTop;
         if (pageIdx === 0) {
           layout.titleLines.forEach(function (tl, i) {
-            var w = measure(tl, layout.titleSizePt, state.fontFamily, 600);
-            var tx = effAlign === 'left' ? contentLeft : (plan.PAGE_W / 2 - w / 2);
+            var w = measure(tl, layout.titleSizePt, state.titleFontFamily, 600);
+            var tx = resolveX(effAlign, w, contentLeft, contentRight);
             var ty = y - (i + 1) * (layout.titleSizePt * 1.28) + layout.titleSizePt * 0.28;
-            drawText(bytes, keys.bold, layout.titleSizePt, tx, ty, tl, INK_RGB);
+            drawText(bytes, titleKeys.bold, layout.titleSizePt, tx, ty, tl, INK_RGB);
           });
           y -= layout.titleH;
         } else {
           var contLabel = (poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled') + '  (continued)';
-          var cw = measure(contLabel, layout.sizePt * 0.72, state.fontFamily, 400);
-          var cx = effAlign === 'left' ? contentLeft : (plan.PAGE_W / 2 - cw / 2);
-          drawText(bytes, keys.ital, layout.sizePt * 0.72, cx, y - layout.sizePt * 0.72, contLabel, MUTED_RGB);
+          var cw = measure(contLabel, layout.contLabelSizePt, state.titleFontFamily, 400);
+          var cx = resolveX(effAlign, cw, contentLeft, contentRight);
+          drawText(bytes, titleKeys.ital, layout.contLabelSizePt, cx, y - layout.contLabelSizePt, contLabel, MUTED_RGB);
           y -= layout.contHeaderH;
         }
         pageLines.forEach(function (rl, li) {
           var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
           if (rl.blank) return;
-          var x;
-          if (state.alignment === 'center') {
-            var w = measure(rl.text, layout.sizePt, state.fontFamily, 400);
-            x = plan.PAGE_W / 2 - w / 2;
-          } else {
-            x = contentLeft;
-          }
-          drawText(bytes, keys.reg, layout.sizePt, x, lineY, rl.text, INK_RGB);
+          var w = measure(rl.text, layout.sizePt, state.bodyFontFamily, 400);
+          var x = resolveX(state.bodyAlignment, w, contentLeft, contentRight);
+          drawText(bytes, bodyKeys.reg, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
         contents.push(bytes);
       });
     });
+
+    // ---- Back cover -- always present: author, (c), and the year, in a
+    // small font near the bottom ----
+    var backBytes = [];
+    var backAuthor = (state.author || '').trim();
+    var year = new Date().getFullYear();
+    var backLines = [];
+    if (backAuthor) backLines.push(backAuthor);
+    backLines.push('© ' + year);
+    var backSize = 9.5, backLineH = backSize * 1.5;
+    backLines.forEach(function (line, i) {
+      var w = measure(line, backSize, state.bodyFontFamily, 400);
+      var by = 44 + (backLines.length - 1 - i) * backLineH;
+      drawText(backBytes, bodyKeys.reg, backSize, plan.PAGE_W / 2 - w / 2, by, line, MUTED_RGB);
+    });
+    contents.push(backBytes);
 
     return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents };
   }
@@ -1104,10 +1228,13 @@
 
   function buildImposedBookletPdf(state) {
     var built = buildReadingPageContents(state);
-    var keys = fontKeys(state.fontFamily);
+    var keys = fontKeys(state.bodyFontFamily);
     var BOOK_W = built.PAGE_W, BOOK_H = built.PAGE_H;
     var contents = built.contents.slice();
-    while (contents.length % 4 !== 0) contents.push([]);
+    // The back cover (always the last content page) must stay last --
+    // any padding needed to reach a multiple of 4 physical pages goes in
+    // just before it, not after.
+    while (contents.length % 4 !== 0) contents.splice(contents.length - 1, 0, []);
     var total = contents.length, numSheets = total / 4;
 
     var availW = IMPOSE_SHEET_W - IMPOSE_OUTER_MARGIN * 2;
@@ -1134,11 +1261,13 @@
     }
     function emitSheetFace(leftIdx, rightIdx, rotate180, label) {
       var bytes = [];
-      pushAscii(bytes, pdfDashedRectStr(startX, startY, boxW * 2, boxH));
-      pushAscii(bytes, pdfDashedLineStr(startX + boxW, startY, startX + boxW, startY + boxH));
+      if (state.showCutLines) {
+        pushAscii(bytes, pdfDashedRectStr(startX, startY, boxW * 2, boxH));
+        pushAscii(bytes, pdfDashedLineStr(startX + boxW, startY, startX + boxW, startY + boxH));
+      }
       placeForm(bytes, leftIdx, startX, startY);
       placeForm(bytes, rightIdx, startX + boxW, startY);
-      drawText(bytes, keys.reg, 8, IMPOSE_OUTER_MARGIN, 14, label, MUTED_RGB);
+      if (state.showCutLines) drawText(bytes, keys.reg, 8, IMPOSE_OUTER_MARGIN, 14, label, MUTED_RGB);
       var pageNum = w.allocObj(), contentNum = w.allocObj();
       kids.push(pageNum);
       w.beginObj(pageNum);
@@ -1398,7 +1527,7 @@
     label.textContent = 'Title';
     var seg = document.createElement('div');
     seg.className = 'title-align-seg';
-    [['', 'Auto'], ['left', 'Left'], ['center', 'Center']].forEach(function (pair) {
+    [['', 'Auto'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']].forEach(function (pair) {
       var val = pair[0];
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -1438,7 +1567,7 @@
     titleInput.className = 'poem-title';
     titleInput.placeholder = 'Untitled';
     titleInput.value = poem.title;
-    titleInput.style.textAlign = (poem.titleAlign || state.alignment) === 'center' ? 'center' : 'left';
+    titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.addEventListener('input', function () {
       poem.title = titleInput.value;
       state.isExample = false;
@@ -1465,7 +1594,7 @@
     var textarea = document.createElement('textarea');
     textarea.className = 'poem-text';
     textarea.value = poem.lines.join('\n');
-    textarea.style.textAlign = state.alignment === 'center' ? 'center' : 'left';
+    textarea.style.textAlign = state.bodyAlignment;
     textarea.addEventListener('input', function () {
       poem.lines = textarea.value.split('\n');
       state.isExample = false;
@@ -1514,12 +1643,77 @@
     return card;
   }
 
+  function makeCompactRow(poem, index) {
+    var row = document.createElement('div');
+    row.className = 'poem-compact-row';
+    row.draggable = true;
+
+    var handle = document.createElement('div');
+    handle.className = 'poem-handle';
+    handle.innerHTML = '<div class="poem-num">' + (index + 1) + '</div><div class="poem-grip">⋮⋮</div>';
+
+    var titleInput = document.createElement('input');
+    titleInput.className = 'poem-title-compact';
+    titleInput.placeholder = 'Untitled';
+    titleInput.value = poem.title;
+    titleInput.addEventListener('input', function () {
+      poem.title = titleInput.value;
+      state.isExample = false;
+      persist();
+      updateStats();
+    });
+
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'btn btn-ghost btn-danger';
+    removeBtn.type = 'button';
+    removeBtn.title = 'Remove poem';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', async function () {
+      var ok = await confirmDialog('Remove “' + (poem.title || 'Untitled') + '”?');
+      if (!ok) return;
+      state.poems.splice(index, 1);
+      state.isExample = false;
+      persist();
+      renderAll();
+    });
+
+    row.appendChild(handle);
+    row.appendChild(titleInput);
+    row.appendChild(removeBtn);
+
+    row.addEventListener('dragstart', function (e) {
+      dragFromIndex = index;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
+    row.addEventListener('dragover', function (e) { e.preventDefault(); });
+    row.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (dragFromIndex === null || dragFromIndex === index) return;
+      var moved = state.poems.splice(dragFromIndex, 1)[0];
+      state.poems.splice(index, 0, moved);
+      persist();
+      renderAll();
+    });
+
+    return row;
+  }
+
+  var poemsViewMode = 'full';
+  var poemsViewToggle = document.getElementById('poemsViewToggle');
+  poemsViewToggle.addEventListener('click', function () {
+    poemsViewMode = poemsViewMode === 'full' ? 'compact' : 'full';
+    poemsViewToggle.textContent = poemsViewMode === 'full' ? 'Titles only' : 'Full view';
+    renderPoems();
+  });
+
   function renderPoems() {
     poemList.innerHTML = '';
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
     state.poems.forEach(function (poem, i) {
-      poemList.appendChild(makeCard(poem, i, plan));
+      poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i) : makeCard(poem, i, plan));
       poemList.appendChild(makeGap(i + 1));
     });
     poemsCount.textContent = state.poems.length + ' poem' + (state.poems.length === 1 ? '' : 's');
@@ -1559,21 +1753,22 @@
     var layout = plan.layouts[previewIndex];
     var scale = PREVIEW_WIDTH_PX / plan.PAGE_W;
 
+    var titleStack = state.titleFontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
+    var bodyStack = state.bodyFontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
     box.style.width = PREVIEW_WIDTH_PX + 'px';
     box.style.height = Math.round(plan.PAGE_H * scale) + 'px';
-    box.style.fontFamily = state.fontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
+    box.style.fontFamily = bodyStack;
     box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
     box.style.boxSizing = 'border-box';
 
-    var effAlign = poem.titleAlign || state.alignment;
-    var bodyAlign = state.alignment === 'left' ? 'left' : 'center';
+    var effAlign = poem.titleAlign || state.titleAlignment;
     var html = '';
     if (layout.titleLines.length) {
-      html += '<div style="font-weight:700; text-align:' + (effAlign === 'left' ? 'left' : 'center') +
+      html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
         '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
         layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
     }
-    html += '<div style="font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + bodyAlign + ';">';
+    html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + state.bodyAlignment + ';">';
     (layout.pages[0] || []).forEach(function (rl) {
       html += '<div>' + (rl.blank ? '&nbsp;' : escapeHtml(rl.text)) + '</div>';
     });
@@ -1639,16 +1834,28 @@
       });
     });
   }
-  wireSeg('fontSeg', function (val) { state.fontFamily = val; persist(); renderAll(); });
-  wireSeg('alignSeg', function (val) { state.alignment = val; persist(); renderAll(); });
-  wireSeg('sizeModeSeg', function (val) {
-    state.sizeMode = val;
-    document.getElementById('fixedSizeField').hidden = (val !== 'fixed');
+  wireSeg('bodyFontSeg', function (val) { state.bodyFontFamily = val; persist(); renderAll(); });
+  wireSeg('titleFontSeg', function (val) { state.titleFontFamily = val; persist(); renderAll(); });
+  wireSeg('bodyAlignSeg', function (val) { state.bodyAlignment = val; persist(); renderAll(); });
+  wireSeg('titleAlignSeg', function (val) { state.titleAlignment = val; persist(); renderAll(); });
+  wireSeg('bodySizeModeSeg', function (val) {
+    state.bodySizeMode = val;
+    document.getElementById('bodyFixedSizeField').hidden = (val !== 'fixed');
     persist(); renderAll();
   });
+  wireSeg('titleSizeModeSeg', function (val) {
+    state.titleSizeMode = val;
+    document.getElementById('titleFixedSizeField').hidden = (val !== 'fixed');
+    persist(); renderAll();
+  });
+  wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
 
-  document.getElementById('fixedSizeInput').addEventListener('input', function (e) {
-    state.fixedSize = parseFloat(e.target.value) || 12;
+  document.getElementById('bodyFixedSizeInput').addEventListener('input', function (e) {
+    state.bodyFixedSize = parseFloat(e.target.value) || 12;
+    persist(); updateStats();
+  });
+  document.getElementById('titleFixedSizeInput').addEventListener('input', function (e) {
+    state.titleFixedSize = parseFloat(e.target.value) || 18;
     persist(); updateStats();
   });
   document.getElementById('titlePageCheck').addEventListener('change', function (e) {
@@ -1656,6 +1863,14 @@
   });
   document.getElementById('tocCheck').addEventListener('change', function (e) {
     state.includeToc = e.target.checked; persist(); updateStats();
+  });
+  document.getElementById('pageNumbersCheck').addEventListener('change', function (e) {
+    state.showPageNumbers = e.target.checked;
+    document.getElementById('pageNumberStyleField').hidden = !e.target.checked;
+    persist(); updateStats();
+  });
+  document.getElementById('cutLinesCheck').addEventListener('change', function (e) {
+    state.showCutLines = e.target.checked; persist(); updateStats();
   });
   document.getElementById('bookTitleInput').addEventListener('input', function (e) {
     state.bookTitle = e.target.value; persist();
@@ -1668,13 +1883,22 @@
     document.getElementById('bookTitleInput').value = state.bookTitle || '';
     document.getElementById('authorInput').value = state.author || '';
     trimSelect.value = state.trimKey;
-    document.querySelectorAll('#fontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.fontFamily); });
-    document.querySelectorAll('#alignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.alignment); });
-    document.querySelectorAll('#sizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.sizeMode); });
-    document.getElementById('fixedSizeField').hidden = (state.sizeMode !== 'fixed');
-    document.getElementById('fixedSizeInput').value = state.fixedSize;
+    document.querySelectorAll('#bodyFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyFontFamily); });
+    document.querySelectorAll('#titleFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleFontFamily); });
+    document.querySelectorAll('#bodyAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyAlignment); });
+    document.querySelectorAll('#titleAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleAlignment); });
+    document.querySelectorAll('#bodySizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodySizeMode); });
+    document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
+    document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
+    document.getElementById('bodyFixedSizeField').hidden = (state.bodySizeMode !== 'fixed');
+    document.getElementById('bodyFixedSizeInput').value = state.bodyFixedSize;
+    document.getElementById('titleFixedSizeField').hidden = (state.titleSizeMode !== 'fixed');
+    document.getElementById('titleFixedSizeInput').value = state.titleFixedSize;
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
     document.getElementById('tocCheck').checked = !!state.includeToc;
+    document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
+    document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
+    document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
   }
 
   function updateStats() {
