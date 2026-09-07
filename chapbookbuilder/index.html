@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chapbook Builder — Jake Goldwasser</title>
+<meta name="description" content="Turn a Google Doc of poems into a paginated, print-ready PDF chapbook, one poem per page.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --paper: #F7F1EE;
+    --surface: #FFFFFF;
+    --surface-2: #FBF5F3;
+    --ink: #2B1F2A;
+    --ink-soft: #6E5A68;
+    --ink-faint: #A895A0;
+    --line: #E6D9DD;
+    --line-strong: #D2BEC4;
+    --accent: #8E3B4D;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #F1DEE1;
+    --danger: #B3492E;
+    --danger-soft: #F7E4DD;
+    --shadow: rgba(43, 31, 42, 0.12);
+    --radius: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1B1417;
+      --surface: #241A1F;
+      --surface-2: #2B1F25;
+      --ink: #F3E9EC;
+      --ink-soft: #C7AEB8;
+      --ink-faint: #8C7480;
+      --line: #3A2C33;
+      --line-strong: #4E3B44;
+      --accent: #E28599;
+      --accent-ink: #241017;
+      --accent-soft: #3E2530;
+      --danger: #E6906F;
+      --danger-soft: #3A241D;
+      --shadow: rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #1B1417;
+    --surface: #241A1F;
+    --surface-2: #2B1F25;
+    --ink: #F3E9EC;
+    --ink-soft: #C7AEB8;
+    --ink-faint: #8C7480;
+    --line: #3A2C33;
+    --line-strong: #4E3B44;
+    --accent: #E28599;
+    --accent-ink: #241017;
+    --accent-soft: #3E2530;
+    --danger: #E6906F;
+    --danger-soft: #3A241D;
+    --shadow: rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    padding: 36px clamp(16px, 4vw, 56px) 90px;
+  }
+
+  .page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+
+  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+
+  h1.appname {
+    font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-size: clamp(30px, 4.4vw, 46px);
+    margin: 0 0 8px;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
+
+  .top-actions { display: flex; gap: 10px; align-items: center; }
+
+  button, select, input[type="text"], input[type="number"], textarea {
+    font-family: inherit; color: inherit;
+  }
+
+  .btn {
+    appearance: none; border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--ink); border-radius: var(--radius); padding: 9px 15px; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: border-color .15s ease, background .15s ease, transform .1s ease;
+    display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-soft); padding: 6px 8px; }
+  .btn-ghost:hover { color: var(--accent); border-color: transparent; }
+  .btn-sm { padding: 6px 11px; font-size: 12.5px; }
+  .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px 24px; box-shadow: 0 1px 2px var(--shadow);
+  }
+
+  .panel-title {
+    font-family: "Fraunces", ui-serif, serif; font-weight: 600; font-size: 19px; margin: 0 0 4px;
+  }
+  .panel-sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; line-height: 1.55; max-width: 62ch; }
+
+  .intake-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+  .intake-head .btn { flex: 0 0 auto; }
+  .intake-collapsed-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 20px;
+  }
+  .intake-collapsed-bar[hidden] { display: none; }
+  #intakeCollapsedText { font-size: 13px; color: var(--ink-soft); }
+  #intakeCollapsedText strong { color: var(--ink); font-weight: 600; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  .tab {
+    appearance: none; background: none; border: none; padding: 9px 4px; margin-right: 18px;
+    font-size: 13.5px; font-weight: 600; color: var(--ink-faint); cursor: pointer; position: relative; top: 1px;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--ink-soft); }
+
+  .tabpane { display: none; }
+  .tabpane.active { display: block; }
+
+  .search-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .search-row input { flex: 1; }
+
+  input[type="text"], input[type="search"] {
+    border: 1px solid var(--line-strong); border-radius: 7px; padding: 9px 11px; font-size: 13.5px;
+    background: var(--surface-2); color: var(--ink); outline: none; width: 100%;
+  }
+  input[type="text"]:focus, input[type="search"]:focus, textarea:focus, select:focus { border-color: var(--accent); }
+
+  .doc-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+  .doc-row {
+    display: flex; flex-direction: column; gap: 2px; text-align: left; border: 1px solid var(--line);
+    background: var(--surface-2); border-radius: 7px; padding: 10px 12px; cursor: pointer; width: 100%;
+  }
+  .doc-row:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .doc-row .doc-title { font-weight: 600; font-size: 13.5px; }
+  .doc-row .doc-meta { font-size: 11.5px; color: var(--ink-faint); }
+  .doc-row .doc-snip {
+    font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+  }
+
+  .status-line { font-size: 12.5px; color: var(--ink-soft); min-height: 18px; margin-top: 8px; }
+  .status-line.error { color: var(--danger); }
+
+  .hint-box {
+    background: var(--surface-2); border: 1px dashed var(--line-strong); border-radius: 8px;
+    padding: 12px 14px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; margin-bottom: 14px;
+  }
+  .hint-box code { background: var(--accent-soft); color: var(--accent); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+
+  textarea.raw-paste {
+    width: 100%; min-height: 220px; resize: vertical; border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 12px 13px; font-size: 13px; line-height: 1.6; background: var(--surface-2);
+    outline: none; font-family: "Newsreader", ui-serif, serif;
+  }
+
+  .workspace { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+  @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+
+  .poems-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .poems-count { font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  .poem-card {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
+    padding: 14px 16px 16px; margin-bottom: 10px; display: flex; gap: 12px;
+  }
+  .poem-card.dragging { opacity: 0.4; }
+  .poem-handle {
+    flex: 0 0 30px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 4px; cursor: grab; user-select: none;
+  }
+  .poem-num {
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 15px; color: var(--ink-faint);
+    width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line-strong); background: var(--surface);
+  }
+  .poem-grip { color: var(--ink-faint); font-size: 13px; line-height: 1; }
+
+  .poem-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .poem-title-row { display: flex; align-items: center; gap: 8px; }
+  input.poem-title {
+    flex: 1; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; padding: 3px 2px 7px; outline: none;
+    color: var(--ink);
+  }
+  input.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  input.poem-title:focus { border-bottom-color: var(--accent); }
+
+  textarea.poem-text {
+    width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+    font-family: "Newsreader", ui-serif, serif; font-size: 14.5px; line-height: 1.65; padding: 10px 12px;
+    outline: none; resize: none; overflow: hidden; color: var(--ink); white-space: pre-wrap;
+  }
+  textarea.poem-text:focus { border-color: var(--accent); }
+
+  .poem-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .poem-meta { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .title-align { display: flex; align-items: center; gap: 6px; }
+  .title-align span {
+    font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
+  }
+  .title-align-seg { display: flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
+  .title-align-seg button {
+    border: none; background: var(--surface); color: var(--ink-soft); font-size: 11px; font-weight: 600;
+    padding: 3px 8px; cursor: pointer; border-right: 1px solid var(--line-strong);
+  }
+  .title-align-seg button:last-child { border-right: none; }
+  .title-align-seg button.active { background: var(--accent); color: var(--accent-ink); }
+
+  .poem-gap { height: 12px; margin: -4px 0 -2px; position: relative; display: flex; align-items: center; justify-content: center; }
+  .poem-gap-line { position: absolute; left: 40px; right: 0; height: 1px; background: transparent; }
+  .poem-gap:hover .poem-gap-line { background: var(--line-strong); }
+  .poem-gap-btn {
+    opacity: 0; transition: opacity .12s ease; background: var(--surface); border: 1px solid var(--line-strong);
+    color: var(--ink-soft); border-radius: 999px; font-size: 15px; width: 22px; height: 22px; line-height: 1;
+    cursor: pointer; position: relative; z-index: 1;
+  }
+  .poem-gap:hover .poem-gap-btn { opacity: 1; }
+  .poem-gap-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .add-poem-btn { margin-top: 4px; }
+
+  .example-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+    background: var(--accent-soft); border: 1px solid var(--line-strong); border-radius: 9px;
+    padding: 10px 14px; font-size: 12.5px; color: var(--ink); margin-bottom: 14px;
+  }
+  .example-banner[hidden] { display: none; }
+
+  .sidebar {
+    position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
+    max-height: calc(100vh - 48px);
+  }
+  .sidebar-scroll {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    display: flex; flex-direction: column; gap: 16px; padding-right: 2px; margin: -2px; padding: 2px;
+  }
+
+  .preview-panel { flex: 0 0 auto; }
+  .preview-stage { display: flex; justify-content: center; padding: 4px 0 2px; }
+  .preview-page {
+    background: #FBF9F5; color: #241A1F; border: 1px solid var(--line); box-shadow: 0 2px 10px var(--shadow);
+    overflow: hidden; position: relative; flex: 0 0 auto;
+  }
+  .preview-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 34px 10px; }
+  .preview-nav { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 8px; }
+  .preview-nav button {
+    background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; padding: 2px 6px; line-height: 1;
+  }
+  .preview-nav button:hover:not(:disabled) { color: var(--accent); }
+  .preview-nav button:disabled { opacity: 0.3; cursor: default; }
+  .preview-nav span { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
+  .field[hidden] { display: none; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); }
+  .field input[type="text"] { font-size: 13.5px; }
+  select {
+    border: 1px solid var(--line-strong); border-radius: 7px; padding: 8px 10px; font-size: 13px;
+    background: var(--surface-2); color: var(--ink); outline: none; width: 100%;
+  }
+
+  .seg { display: flex; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    flex: 1; border: none; background: var(--surface-2); color: var(--ink-soft); padding: 8px 6px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; border-right: 1px solid var(--line-strong);
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button.active { background: var(--accent); color: var(--accent-ink); }
+
+  .checkline { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); margin-bottom: 10px; }
+  .checkline:last-child { margin-bottom: 0; }
+  .checkline input { width: 15px; height: 15px; accent-color: var(--accent); }
+
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line);
+  }
+  .stat-row:first-child { border-top: none; padding-top: 0; }
+  .stat-num { font-family: "Fraunces", serif; font-weight: 600; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .export-status { font-size: 12px; color: var(--ink-soft); margin-top: 8px; min-height: 16px; }
+
+  /* ---- custom confirm modal (native confirm() is unavailable in this frame) ---- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(20, 10, 15, 0.45); display: none;
+    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: 10px; padding: 22px 24px; max-width: 380px;
+    box-shadow: 0 8px 30px var(--shadow); border: 1px solid var(--line);
+  }
+  .modal-box p { font-size: 13.5px; line-height: 1.55; margin: 0 0 18px; color: var(--ink); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <h1 class="appname">Chapbook Builder</h1>
+      <div class="tagline">Bring in poems from a neatly formatted Google Doc — Heading for the title, Normal text for the poem — and export a paginated, print-ready PDF with one poem per page.</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
+    </div>
+  </div>
+
+  <div class="panel" id="intakePanel">
+    <div class="intake-head">
+      <div>
+        <div class="panel-title">Bring in your poems</div>
+        <div class="panel-sub">Import straight from Google Drive, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
+      </div>
+      <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Minimize</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="drive">Import from Google Drive</button>
+      <button class="tab" data-tab="paste">Paste text</button>
+    </div>
+
+    <div class="tabpane active" data-pane="drive" id="drivePane">
+      <div class="search-row">
+        <input type="text" id="driveSearch" placeholder="Search your Docs by title or text…">
+        <button class="btn" id="driveSearchBtn">Search</button>
+      </div>
+      <div id="driveStatus" class="status-line"></div>
+      <div class="doc-list" id="driveList"></div>
+    </div>
+
+    <div class="tabpane" data-pane="paste" id="pastePane">
+      <div class="hint-box">
+        Paste plain text below. Mark each poem's title by starting its line with <code>### </code> — this is exactly what a Google Docs Heading paragraph turns into when brought in from Drive, so anything you'd import will already match. Separate poems with a blank line. Blank lines inside a poem become stanza breaks.
+      </div>
+      <textarea class="raw-paste" id="pasteBox" placeholder="### Instructions for Folding a Paper Boat&#10;&#10;Crease the sky in half...&#10;&#10;### What the Tide Leaves"></textarea>
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+        <button class="btn btn-primary" id="parsePasteBtn">Parse into poems</button>
+        <span class="status-line" id="pasteStatus" style="margin:0;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel intake-collapsed-bar" id="intakeCollapsedBar" hidden>
+    <span id="intakeCollapsedText"></span>
+    <button class="btn btn-sm" id="intakeExpandBtn" type="button">Change source</button>
+  </div>
+
+  <div class="workspace">
+    <div>
+      <div class="panel" id="poemsPanel">
+        <div class="poems-head">
+          <div class="panel-title" style="margin:0;">Poems</div>
+          <div class="poems-count" id="poemsCount"></div>
+        </div>
+        <div id="exampleBanner" class="example-banner" hidden>
+          <span>These two poems are just a working example — import or paste your own above to replace them.</span>
+          <button class="btn btn-sm" id="clearExampleBtn">Clear examples</button>
+        </div>
+        <div id="poemGapTop"></div>
+        <div id="poemList"></div>
+        <button class="btn add-poem-btn" id="addPoemBtn">+ Add poem</button>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel preview-panel">
+        <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
+        <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
+        <div class="preview-nav">
+          <button type="button" id="previewPrevBtn" aria-label="Preview previous poem">‹</button>
+          <span id="previewCaption"></span>
+          <button type="button" id="previewNextBtn" aria-label="Preview next poem">›</button>
+        </div>
+      </div>
+
+      <div class="sidebar-scroll">
+        <div class="panel">
+          <div class="panel-title">Booklet</div>
+          <div class="field">
+            <label for="bookTitleInput">Title</label>
+            <input type="text" id="bookTitleInput" placeholder="Untitled Collection">
+          </div>
+          <div class="field">
+            <label for="authorInput">Author</label>
+            <input type="text" id="authorInput" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label for="trimSelect">Trim size</label>
+            <select id="trimSelect"></select>
+          </div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg" id="fontSeg">
+              <button data-val="serif" class="active">Times</button>
+              <button data-val="sans">Helvetica</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg" id="alignSeg">
+              <button data-val="left" class="active">Left</button>
+              <button data-val="center">Center</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Type size</label>
+            <div class="seg" id="sizeModeSeg">
+              <button data-val="auto" class="active">Auto-fit</button>
+              <button data-val="fixed">Fixed</button>
+            </div>
+          </div>
+          <div class="field" id="fixedSizeField" hidden>
+            <label for="fixedSizeInput">Point size</label>
+            <input type="number" id="fixedSizeInput" min="8" max="16" step="0.5" value="12">
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="titlePageCheck" checked>
+            <label for="titlePageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include title page</label>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="tocCheck" checked>
+            <label for="tocCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include table of contents</label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="stat-row">
+            <span class="stat-label">Poems</span>
+            <span class="stat-num" id="statPoems">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Estimated pages</span>
+            <span class="stat-num" id="statPages">0</span>
+          </div>
+          <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-primary" id="exportBtn" style="width:100%; justify-content:center;">Export PDF</button>
+            <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export print-ready booklet</button>
+            <div class="export-status" id="exportStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <p id="modalMessage"></p>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="modalOkBtn">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+
+  // ---------------------------------------------------------------------
+  // Confirm modal (window.confirm is unavailable in the artifact frame)
+  // ---------------------------------------------------------------------
+  var modalOverlay = document.getElementById('modalOverlay');
+  var modalMessage = document.getElementById('modalMessage');
+  var modalOkBtn = document.getElementById('modalOkBtn');
+  var modalCancelBtn = document.getElementById('modalCancelBtn');
+  var modalResolve = null;
+
+  function confirmDialog(message) {
+    modalMessage.textContent = message;
+    modalOverlay.classList.add('open');
+    return new Promise(function (resolve) { modalResolve = resolve; });
+  }
+  function closeModal(result) {
+    modalOverlay.classList.remove('open');
+    if (modalResolve) { modalResolve(result); modalResolve = null; }
+  }
+  modalOkBtn.addEventListener('click', function () { closeModal(true); });
+  modalCancelBtn.addEventListener('click', function () { closeModal(false); });
+  modalOverlay.addEventListener('click', function (e) { if (e.target === modalOverlay) closeModal(false); });
+
+  // ---------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------
+  var TRIM_SIZES = [
+    { key: 'digest', label: '5.5 × 8.5 in — chapbook', w: 5.5, h: 8.5 },
+    { key: 'trade', label: '6 × 9 in — trade', w: 6, h: 9 },
+    { key: 'a5', label: '5.83 × 8.27 in — A5', w: 5.83, h: 8.27 },
+    { key: 'letter', label: '8.5 × 11 in — US Letter', w: 8.5, h: 11 }
+  ];
+  function getTrim(key) {
+    for (var i = 0; i < TRIM_SIZES.length; i++) if (TRIM_SIZES[i].key === key) return TRIM_SIZES[i];
+    return TRIM_SIZES[0];
+  }
+
+  var STORAGE_KEY = 'poetryBooklet.v1';
+
+  function exampleState() {
+    return {
+      bookTitle: '',
+      author: '',
+      trimKey: 'digest',
+      fontFamily: 'serif',
+      alignment: 'left',
+      sizeMode: 'auto',
+      fixedSize: 12,
+      includeTitlePage: true,
+      includeToc: true,
+      isExample: true,
+      intakeCollapsed: false,
+      intakeSourceLabel: null,
+      poems: [
+        {
+          id: 'ex1',
+          title: 'Instructions for Folding a Paper Boat',
+          lines: [
+            'Crease the sky in half, then in half again,',
+            'until the horizon fits in your palm.',
+            '',
+            'Fold the harbor toward you. Fold the leaving.',
+            'Tuck the loose corner of the year in tight',
+            'so it can’t come undone in the current.',
+            '',
+            'Set it on the sink water and watch:',
+            'this is the part where it either holds',
+            'or it doesn’t, and either way you let go.'
+          ]
+        },
+        {
+          id: 'ex2',
+          title: 'What the Tide Leaves',
+          lines: [
+            'A shoe. A single glove, still shaped',
+            'like a hand that meant something.',
+            'Rope gone soft as hair.',
+            '',
+            'The sea keeps what it wants',
+            'and gives back only the questions —',
+            'salt-cured, unanswerable,',
+            'small enough to carry home.'
+          ]
+        }
+      ]
+    };
+  }
+
+  var state = null;
+  try {
+    var saved = localStorage.getItem(STORAGE_KEY);
+    state = saved ? JSON.parse(saved) : null;
+  } catch (e) { state = null; }
+  if (!state || !state.poems) state = exampleState();
+
+  var saveTimer = null;
+  function persist() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    }, 300);
+  }
+
+  function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // ---------------------------------------------------------------------
+  // Text cleanup for markdown-ish import text
+  // ---------------------------------------------------------------------
+  function cleanMarkdownText(s) {
+    s = String(s || '');
+    s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+    s = s.replace(/\*\*(.*?)\*\*/g, '$1');
+    s = s.replace(/\*(.*?)\*/g, '$1');
+    s = s.replace(/\\([\\`*_{}\[\]()#+\-.!])/g, '$1');
+    s = s.replace(/[ \t]+$/, '');
+    return s;
+  }
+
+  function parseDocText(raw) {
+    raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var blocks = raw.split('\n\n');
+    var poems = [];
+    var current = null;
+
+    function startPoem(title) {
+      current = { id: makeId(), title: title || '', lines: [] };
+    }
+    function finishPoem() {
+      if (!current) return;
+      var lines = current.lines.slice();
+      while (lines.length && lines[0] === '') lines.shift();
+      while (lines.length && lines[lines.length - 1] === '') lines.pop();
+      var collapsed = [];
+      for (var i = 0; i < lines.length; i++) {
+        if (lines[i] === '' && collapsed.length && collapsed[collapsed.length - 1] === '') continue;
+        collapsed.push(lines[i]);
+      }
+      current.lines = collapsed;
+      if (current.title.trim() !== '' || current.lines.length > 0) poems.push(current);
+      current = null;
+    }
+    function pushLine(text) {
+      if (!current) startPoem('');
+      current.lines.push(text);
+    }
+
+    blocks.forEach(function (block) {
+      var trimmed = block.trim();
+      if (trimmed === '') { if (current) pushLine(''); return; }
+
+      var firstLine = block.split('\n')[0];
+      var headingMatch = /^#{1,6}[ \t]+([\s\S]*)$/.exec(firstLine.trim()) || /^#{1,6}[ \t]*$/.exec(firstLine.trim());
+      var isHeadingOnlyHash = /^#{1,6}$/.test(firstLine.trim());
+      if (headingMatch || isHeadingOnlyHash) {
+        finishPoem();
+        var titleRaw = headingMatch && headingMatch[1] ? headingMatch[1] : '';
+        startPoem(cleanMarkdownText(titleRaw).replace(/\s+/g, ' ').trim());
+        return;
+      }
+      if (/^-{3,}$/.test(trimmed)) {
+        finishPoem();
+        startPoem('');
+        return;
+      }
+
+      var subLines = block.split('\n');
+      subLines.forEach(function (sub) {
+        if (sub.trim() === '') pushLine('');
+        else pushLine(cleanMarkdownText(sub));
+      });
+    });
+    finishPoem();
+    return poems;
+  }
+
+  // ---------------------------------------------------------------------
+  // PDF text measurement (canvas approximation of base-14 font metrics)
+  // ---------------------------------------------------------------------
+  var measureCtx = document.createElement('canvas').getContext('2d');
+  function measureStack(fontFamily) {
+    return fontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
+  }
+  function measure(text, sizePt, fontFamily, weight) {
+    measureCtx.font = (weight || 400) + ' ' + sizePt + 'px ' + measureStack(fontFamily);
+    return measureCtx.measureText(text).width;
+  }
+
+  function wrapLine(text, maxWidthPt, sizePt, fontFamily, weight) {
+    text = text || '';
+    if (text === '') return [''];
+    var safeWidth = maxWidthPt * 0.97;
+    var leadingMatch = text.match(/^ +/);
+    var leading = leadingMatch ? leadingMatch[0] : '';
+    var rest = text.slice(leading.length);
+    if (measure(text, sizePt, fontFamily, weight) <= safeWidth) return [text];
+    var words = rest.split(' ');
+    var lines = [];
+    var current = leading;
+    var empty = true;
+    words.forEach(function (word) {
+      var test = empty ? current + word : current + ' ' + word;
+      if (empty || measure(test, sizePt, fontFamily, weight) <= safeWidth) {
+        current = test; empty = false;
+      } else {
+        lines.push(current);
+        current = word; empty = false;
+      }
+    });
+    lines.push(current);
+    var out = [];
+    lines.forEach(function (l) {
+      if (measure(l, sizePt, fontFamily, weight) <= safeWidth || l.length <= 1) { out.push(l); return; }
+      var chunk = '';
+      for (var i = 0; i < l.length; i++) {
+        var t = chunk + l[i];
+        if (chunk && measure(t, sizePt, fontFamily, weight) > safeWidth) { out.push(chunk); chunk = l[i]; }
+        else chunk = t;
+      }
+      if (chunk) out.push(chunk);
+    });
+    return out;
+  }
+
+  function ellipsize(text, maxWidthPt, sizePt, fontFamily, weight) {
+    if (measure(text, sizePt, fontFamily, weight) <= maxWidthPt) return text;
+    var s = text;
+    while (s.length > 1 && measure(s + '…', sizePt, fontFamily, weight) > maxWidthPt) s = s.slice(0, -1);
+    return s + '…';
+  }
+
+  // ---------------------------------------------------------------------
+  // Poem pagination
+  // ---------------------------------------------------------------------
+  var SIZE_CANDIDATES = [14, 13, 12, 11, 10, 9.5, 9];
+
+  function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, fontFamily) {
+    var lineHeight = sizePt * 1.55;
+    var titleSizePt = Math.min(20, Math.round(sizePt + 6));
+    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, fontFamily, 600).slice(0, 2) : [];
+    var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
+
+    var renderLines = [];
+    poem.lines.forEach(function (line) {
+      if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
+      wrapLine(line, contentWidthPt, sizePt, fontFamily, 400).forEach(function (w) {
+        renderLines.push({ blank: false, text: w });
+      });
+    });
+
+    var contHeaderH = poem.title ? (sizePt * 1.1 + 16) : 4;
+    var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
+    var laterCap = Math.max(1, Math.floor((contentHeightPt - contHeaderH) / lineHeight));
+
+    var pages = [];
+    if (renderLines.length === 0) pages.push([]);
+    var i = 0, first = true;
+    while (i < renderLines.length) {
+      var cap = first ? firstCap : laterCap;
+      pages.push(renderLines.slice(i, i + cap));
+      i += cap; first = false;
+    }
+    return {
+      sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
+      titleLines: titleLines, titleH: titleH, contHeaderH: contHeaderH, pages: pages
+    };
+  }
+
+  // A single size is chosen for the whole booklet -- titles and body text
+  // stay consistent from poem to poem -- rather than letting each poem
+  // pick its own size independently. "Auto" still tries the largest size
+  // that keeps every poem to one page; it just applies that one choice
+  // uniformly instead of re-deciding per poem.
+  function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, fontFamily, sizeMode, fixedSize) {
+    if (sizeMode === 'fixed') return fixedSize;
+    for (var i = 0; i < SIZE_CANDIDATES.length; i++) {
+      var size = SIZE_CANDIDATES[i];
+      var allFit = poems.every(function (poem) {
+        return layoutPoem(poem, size, contentWidthPt, contentHeightPt, fontFamily).pages.length === 1;
+      });
+      if (allFit) return size;
+    }
+    return SIZE_CANDIDATES[SIZE_CANDIDATES.length - 1];
+  }
+
+  function planBooklet(state) {
+    var trim = getTrim(state.trimKey);
+    var PAGE_W = trim.w * 72, PAGE_H = trim.h * 72;
+    var marginSide = 0.85 * 72, marginTop = 1.0 * 72, marginBottom = 0.9 * 72;
+    var contentWidth = PAGE_W - marginSide * 2;
+    var contentHeight = PAGE_H - marginTop - marginBottom;
+
+    var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state.fontFamily, state.sizeMode, state.fixedSize);
+    var layouts = state.poems.map(function (poem) {
+      return layoutPoem(poem, globalSize, contentWidth, contentHeight, state.fontFamily);
+    });
+
+    var tocFontSize = 12.5, tocLineHeight = 22, tocTitleH = 44;
+    var linesPerTocPage1 = Math.max(1, Math.floor((contentHeight - tocTitleH) / tocLineHeight));
+    var linesPerTocPageN = Math.max(1, Math.floor(contentHeight / tocLineHeight));
+    var tocPageCount = 0;
+    if (state.includeToc && state.poems.length) {
+      var remaining = state.poems.length - linesPerTocPage1;
+      tocPageCount = 1;
+      while (remaining > 0) { tocPageCount++; remaining -= linesPerTocPageN; }
+    }
+
+    var frontPages = (state.includeTitlePage ? 1 : 0) + tocPageCount;
+    var running = frontPages + 1;
+    layouts.forEach(function (l) {
+      l.startPage = running;
+      running += l.pages.length;
+    });
+    var totalPages = (state.includeTitlePage ? 1 : 0) + tocPageCount + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0);
+
+    return {
+      trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
+      contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
+      tocPageCount: tocPageCount, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
+      linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
+      totalPages: totalPages
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // Hand-rolled PDF writer -- base-14 fonts, real vector text, no
+  // external library. WinAnsiEncoding must be declared on every font
+  // object so the high bytes below (curly quotes, dashes, ellipsis)
+  // decode the way toWinAnsiBytes() encoded them.
+  // ---------------------------------------------------------------------
+  var WINANSI_MAP = {
+    0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94,
+    0x2013: 0x96, 0x2014: 0x97, 0x2026: 0x85, 0x2022: 0x95
+  };
+  function toWinAnsiBytes(str) {
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+      var code = str.charCodeAt(i), b;
+      if (code < 0x80) b = code;
+      else if (WINANSI_MAP[code] !== undefined) b = WINANSI_MAP[code];
+      else if (code >= 0xA0 && code <= 0xFF) b = code;
+      else b = 0x3F;
+      bytes.push(b);
+    }
+    return bytes;
+  }
+  function pdfLiteralStringBytes(str) {
+    var out = [0x28];
+    toWinAnsiBytes(str).forEach(function (b) {
+      if (b === 0x28 || b === 0x29 || b === 0x5C) out.push(0x5C, b);
+      else out.push(b);
+    });
+    out.push(0x29);
+    return out;
+  }
+  function toAsciiSafe(str) {
+    return String(str || '')
+      .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+      .replace(/[–—]/g, '-').replace(/…/g, '...')
+      .replace(/[^\x20-\x7E]/g, '?');
+  }
+  function pushAscii(arr, str) { for (var i = 0; i < str.length; i++) arr.push(str.charCodeAt(i) & 0xFF); }
+  function pad10(n) { var s = String(n); while (s.length < 10) s = '0' + s; return s; }
+
+  function fontKeys(fontFamily) {
+    return fontFamily === 'sans' ? { reg: 'F4', bold: 'F5', ital: 'F6' } : { reg: 'F1', bold: 'F2', ital: 'F3' };
+  }
+
+  function drawText(bytes, fontKey, sizePt, x, y, text, rgb) {
+    pushAscii(bytes, 'BT\n/' + fontKey + ' ' + sizePt.toFixed(2) + ' Tf\n' +
+      rgb[0].toFixed(3) + ' ' + rgb[1].toFixed(3) + ' ' + rgb[2].toFixed(3) + ' rg\n' +
+      '1 0 0 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Tm\n');
+    pdfLiteralStringBytes(text).forEach(function (b) { bytes.push(b); });
+    pushAscii(bytes, ' Tj\nET\n');
+  }
+  function drawLine(bytes, x1, y1, x2, y2, gray, w) {
+    pushAscii(bytes, gray.toFixed(3) + ' G\n' + (w || 0.75).toFixed(2) + ' w\n' +
+      x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n');
+  }
+
+  var INK_RGB = [0.169, 0.122, 0.165];
+  var MUTED_RGB = [0.431, 0.353, 0.408];
+
+  // Shared xref/trailer/byte-assembly bookkeeping used by both PDF
+  // assemblers below -- reading order and the imposed booklet only
+  // differ in what pages/XObjects they write, not in this plumbing.
+  function makePdfWriter() {
+    var parts = [], offsets = [], pos = 0, nextObj = 1;
+    function pushPart(chunk) {
+      var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
+      parts.push(u8); pos += u8.length;
+    }
+    function allocObj() { return nextObj++; }
+    function beginObj(n) { offsets[n] = pos; pushPart(n + ' 0 obj\n'); }
+    function endObj() { pushPart('endobj\n'); }
+    function finish(catalogNum, infoNum) {
+      var totalObjs = nextObj, xrefOffset = pos;
+      var xrefLines = ['0000000000 65535 f \n'];
+      for (var n = 1; n < totalObjs; n++) xrefLines.push(pad10(offsets[n] || 0) + ' 00000 n \n');
+      pushPart('xref\n0 ' + totalObjs + '\n' + xrefLines.join(''));
+      pushPart('trailer\n<< /Size ' + totalObjs + ' /Root ' + catalogNum + ' 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF');
+      var total = 0; parts.forEach(function (p) { total += p.length; });
+      var result = new Uint8Array(total), o = 0;
+      parts.forEach(function (p) { result.set(p, o); o += p.length; });
+      return result;
+    }
+    return { pushPart: pushPart, allocObj: allocObj, beginObj: beginObj, endObj: endObj, finish: finish };
+  }
+
+  function fontResourcesStr(fontNums) {
+    return '<< /Font << /F1 ' + fontNums.F1 + ' 0 R /F2 ' + fontNums.F2 + ' 0 R /F3 ' + fontNums.F3 +
+      ' 0 R /F4 ' + fontNums.F4 + ' 0 R /F5 ' + fontNums.F5 + ' 0 R /F6 ' + fontNums.F6 + ' 0 R >>';
+  }
+
+  // Renders every page in final reading order (title page, table of
+  // contents, then each poem) as a standalone content stream, with no
+  // PDF object plumbing yet. Both the plain export and the imposed
+  // booklet export share this -- the booklet export just re-places
+  // these same pages two-up on landscape sheets afterward.
+  function buildReadingPageContents(state) {
+    var plan = planBooklet(state);
+    var keys = fontKeys(state.fontFamily);
+    var contentLeft = plan.marginSide;
+    var contentRight = plan.PAGE_W - plan.marginSide;
+    var contentTop = plan.PAGE_H - plan.marginTop;
+    var footerY = 36;
+    var contents = [];
+
+    function pageNumberOp(bytes, n) {
+      if (!n) return;
+      var s = String(n);
+      var w = measure(s, 9.5, state.fontFamily, 400);
+      drawText(bytes, keys.reg, 9.5, plan.PAGE_W / 2 - w / 2, footerY, s, MUTED_RGB);
+    }
+
+    // ---- Title page ----
+    if (state.includeTitlePage) {
+      var bytes = [];
+      var bookTitle = (state.bookTitle || 'Untitled Collection').trim();
+      var author = (state.author || '').trim();
+      var titleSize = 27;
+      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.fontFamily, 600).slice(0, 4);
+      var titleLineH = titleSize * 1.3;
+      var blockH = titleLines.length * titleLineH + (author ? 40 : 0);
+      var startY = plan.PAGE_H / 2 + blockH / 2;
+      titleLines.forEach(function (line, i) {
+        var w = measure(line, titleSize, state.fontFamily, 600);
+        drawText(bytes, keys.bold, titleSize, plan.PAGE_W / 2 - w / 2, startY - i * titleLineH, line, INK_RGB);
+      });
+      if (author) {
+        var y = startY - titleLines.length * titleLineH - 14;
+        var ruleW = 60;
+        drawLine(bytes, plan.PAGE_W / 2 - ruleW / 2, y + 16, plan.PAGE_W / 2 + ruleW / 2, y + 16, 0.6, 0.75);
+        var aw = measure(author, 13, state.fontFamily, 400);
+        drawText(bytes, keys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
+      }
+      contents.push(bytes);
+    }
+
+    // ---- Table of contents ----
+    if (plan.tocPageCount > 0) {
+      var idx = 0;
+      for (var tp = 0; tp < plan.tocPageCount; tp++) {
+        var tbytes = [];
+        var y = contentTop;
+        if (tp === 0) {
+          var headSize = 20;
+          drawText(tbytes, keys.bold, headSize, contentLeft, y - headSize, 'Contents', INK_RGB);
+          y -= plan.tocTitleH;
+        }
+        var capacity = tp === 0 ? plan.linesPerTocPage1 : plan.linesPerTocPageN;
+        for (var c = 0; c < capacity && idx < plan.layouts.length; c++, idx++) {
+          var poem = state.poems[idx];
+          var startPage = plan.layouts[idx].startPage;
+          var numStr = String(startPage);
+          var numW = measure(numStr, plan.tocFontSize, state.fontFamily, 400);
+          var titleMaxW = plan.contentWidth - numW - 16;
+          var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
+          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.fontFamily, 400);
+          var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
+          drawText(tbytes, keys.reg, plan.tocFontSize, contentLeft, lineY, display, INK_RGB);
+          var titleW = measure(display, plan.tocFontSize, state.fontFamily, 400);
+          var dotX0 = contentLeft + titleW + 6;
+          var dotX1 = contentRight - numW - 8;
+          if (dotX1 > dotX0) {
+            var dotW = measure('.', plan.tocFontSize, state.fontFamily, 400);
+            var dotStep = dotW * 2.2;
+            var dotCount = Math.max(0, Math.floor((dotX1 - dotX0) / dotStep));
+            var dots = '';
+            for (var d = 0; d < dotCount; d++) dots += '.  ';
+            if (dots) drawText(tbytes, keys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
+          }
+          drawText(tbytes, keys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+        }
+        contents.push(tbytes);
+      }
+    }
+
+    // ---- Poem pages ----
+    state.poems.forEach(function (poem, pi) {
+      var layout = plan.layouts[pi];
+      var effAlign = poem.titleAlign || state.alignment;
+      layout.pages.forEach(function (pageLines, pageIdx) {
+        var bytes = [];
+        var y = contentTop;
+        if (pageIdx === 0) {
+          layout.titleLines.forEach(function (tl, i) {
+            var w = measure(tl, layout.titleSizePt, state.fontFamily, 600);
+            var tx = effAlign === 'left' ? contentLeft : (plan.PAGE_W / 2 - w / 2);
+            var ty = y - (i + 1) * (layout.titleSizePt * 1.28) + layout.titleSizePt * 0.28;
+            drawText(bytes, keys.bold, layout.titleSizePt, tx, ty, tl, INK_RGB);
+          });
+          y -= layout.titleH;
+        } else {
+          var contLabel = (poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled') + '  (continued)';
+          var cw = measure(contLabel, layout.sizePt * 0.72, state.fontFamily, 400);
+          var cx = effAlign === 'left' ? contentLeft : (plan.PAGE_W / 2 - cw / 2);
+          drawText(bytes, keys.ital, layout.sizePt * 0.72, cx, y - layout.sizePt * 0.72, contLabel, MUTED_RGB);
+          y -= layout.contHeaderH;
+        }
+        pageLines.forEach(function (rl, li) {
+          var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
+          if (rl.blank) return;
+          var x;
+          if (state.alignment === 'center') {
+            var w = measure(rl.text, layout.sizePt, state.fontFamily, 400);
+            x = plan.PAGE_W / 2 - w / 2;
+          } else {
+            x = contentLeft;
+          }
+          drawText(bytes, keys.reg, layout.sizePt, x, lineY, rl.text, INK_RGB);
+        });
+        pageNumberOp(bytes, layout.startPage + pageIdx);
+        contents.push(bytes);
+      });
+    });
+
+    return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents };
+  }
+
+  function writeFontObjects(w, fontNums) {
+    var baseFonts = { F1: 'Times-Roman', F2: 'Times-Bold', F3: 'Times-Italic', F4: 'Helvetica', F5: 'Helvetica-Bold', F6: 'Helvetica-Oblique' };
+    Object.keys(fontNums).forEach(function (key) {
+      w.beginObj(fontNums[key]);
+      w.pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /' + baseFonts[key] + ' /Encoding /WinAnsiEncoding >>\n');
+      w.endObj();
+    });
+  }
+
+  function buildBookletPdf(state) {
+    var built = buildReadingPageContents(state);
+    var w = makePdfWriter();
+    w.pushPart('%PDF-1.4\n');
+    var catalogNum = w.allocObj();
+    var pagesNum = w.allocObj();
+    var fontNums = { F1: w.allocObj(), F2: w.allocObj(), F3: w.allocObj(), F4: w.allocObj(), F5: w.allocObj(), F6: w.allocObj() };
+    var resourcesStr = fontResourcesStr(fontNums) + ' >>';
+
+    var kids = [];
+    built.contents.forEach(function (contentBytesArr) {
+      var pageNum = w.allocObj(), contentNum = w.allocObj();
+      kids.push(pageNum);
+      w.beginObj(pageNum);
+      w.pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + built.PAGE_W.toFixed(2) + ' ' + built.PAGE_H.toFixed(2) +
+        '] /Resources ' + resourcesStr + ' /Contents ' + contentNum + ' 0 R >>\n');
+      w.endObj();
+      var u8 = new Uint8Array(contentBytesArr);
+      w.beginObj(contentNum);
+      w.pushPart('<< /Length ' + u8.length + ' >>\nstream\n');
+      w.pushPart(u8);
+      w.pushPart('\nendstream\n');
+      w.endObj();
+    });
+
+    w.beginObj(catalogNum);
+    w.pushPart('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n');
+    w.endObj();
+    w.beginObj(pagesNum);
+    w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
+    w.endObj();
+    writeFontObjects(w, fontNums);
+
+    var infoNum = w.allocObj();
+    w.beginObj(infoNum);
+    w.pushPart('<< /Title ');
+    w.pushPart(pdfLiteralStringBytes(toAsciiSafe(state.bookTitle || 'Untitled Collection')));
+    w.pushPart(' /Producer (Chapbook Builder) >>\n');
+    w.endObj();
+
+    return w.finish(catalogNum, infoNum);
+  }
+
+  // ---- Print-ready booklet imposition ----
+  //
+  // Borrowed from the picture-book dummy builder: pad the page count to
+  // a multiple of 4 physical pages, then for saddle-stitch sheet i, the
+  // front carries pages (total-2i+2, 2i-1) and the back carries
+  // (2i, total-2i+1) -- the classic booklet signature order -- with the
+  // back pre-rotated 180 degrees so it reads right-side up once the
+  // printed sheet is physically flipped for duplex printing. Each book
+  // page becomes a Form XObject so its content is defined once and
+  // simply placed (scaled, positioned) twice per sheet.
+  var IMPOSE_SHEET_W = 792, IMPOSE_SHEET_H = 612, IMPOSE_OUTER_MARGIN = 36;
+
+  function pdfDashedRectStr(x, y, w, h) {
+    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n';
+  }
+  function pdfDashedLineStr(x1, y1, x2, y2) {
+    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
+  }
+
+  function buildImposedBookletPdf(state) {
+    var built = buildReadingPageContents(state);
+    var keys = fontKeys(state.fontFamily);
+    var BOOK_W = built.PAGE_W, BOOK_H = built.PAGE_H;
+    var contents = built.contents.slice();
+    while (contents.length % 4 !== 0) contents.push([]);
+    var total = contents.length, numSheets = total / 4;
+
+    var availW = IMPOSE_SHEET_W - IMPOSE_OUTER_MARGIN * 2;
+    var availH = IMPOSE_SHEET_H - IMPOSE_OUTER_MARGIN * 2;
+    var scale = Math.min(availW / (2 * BOOK_W), availH / BOOK_H, 1);
+    var boxW = BOOK_W * scale, boxH = BOOK_H * scale;
+    var startX = IMPOSE_OUTER_MARGIN + (availW - boxW * 2) / 2;
+    var startY = IMPOSE_OUTER_MARGIN + (availH - boxH) / 2;
+
+    var w = makePdfWriter();
+    w.pushPart('%PDF-1.4\n');
+    var catalogNum = w.allocObj();
+    var pagesNum = w.allocObj();
+    var fontNums = { F1: w.allocObj(), F2: w.allocObj(), F3: w.allocObj(), F4: w.allocObj(), F5: w.allocObj(), F6: w.allocObj() };
+    var formNums = contents.map(function () { return w.allocObj(); });
+    var xobjEntries = formNums.map(function (num, i) { return '/Fm' + i + ' ' + num + ' 0 R'; }).join(' ');
+    var pageResourcesStr = fontResourcesStr(fontNums) + ' /XObject << ' + xobjEntries + ' >> >>';
+    var formResourcesStr = fontResourcesStr(fontNums) + ' >>';
+
+    var kids = [];
+    function placeForm(bytes, contentIdx, x, y) {
+      if (!contents[contentIdx] || !contents[contentIdx].length) return;
+      pushAscii(bytes, 'q\n' + scale.toFixed(4) + ' 0 0 ' + scale.toFixed(4) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm\n/Fm' + contentIdx + ' Do\nQ\n');
+    }
+    function emitSheetFace(leftIdx, rightIdx, rotate180, label) {
+      var bytes = [];
+      pushAscii(bytes, pdfDashedRectStr(startX, startY, boxW * 2, boxH));
+      pushAscii(bytes, pdfDashedLineStr(startX + boxW, startY, startX + boxW, startY + boxH));
+      placeForm(bytes, leftIdx, startX, startY);
+      placeForm(bytes, rightIdx, startX + boxW, startY);
+      drawText(bytes, keys.reg, 8, IMPOSE_OUTER_MARGIN, 14, label, MUTED_RGB);
+      var pageNum = w.allocObj(), contentNum = w.allocObj();
+      kids.push(pageNum);
+      w.beginObj(pageNum);
+      w.pushPart('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + IMPOSE_SHEET_W + ' ' + IMPOSE_SHEET_H + ']' +
+        (rotate180 ? ' /Rotate 180' : '') + ' /Resources ' + pageResourcesStr + ' /Contents ' + contentNum + ' 0 R >>\n');
+      w.endObj();
+      var u8 = new Uint8Array(bytes);
+      w.beginObj(contentNum);
+      w.pushPart('<< /Length ' + u8.length + ' >>\nstream\n');
+      w.pushPart(u8);
+      w.pushPart('\nendstream\n');
+      w.endObj();
+    }
+
+    for (var i = 1; i <= numSheets; i++) {
+      var frontLeft = total - 2 * i + 2, frontRight = 2 * i - 1;
+      var backLeft = 2 * i, backRight = total - 2 * i + 1;
+      emitSheetFace(frontLeft - 1, frontRight - 1, false, 'Sheet ' + i + ' of ' + numSheets + ' — front · pp. ' + frontLeft + ', ' + frontRight);
+      emitSheetFace(backLeft - 1, backRight - 1, true, 'Sheet ' + i + ' of ' + numSheets + ' — back · pp. ' + backLeft + ', ' + backRight);
+    }
+
+    contents.forEach(function (c, i) {
+      var u8 = new Uint8Array(c);
+      w.beginObj(formNums[i]);
+      w.pushPart('<< /Type /XObject /Subtype /Form /BBox [0 0 ' + BOOK_W.toFixed(2) + ' ' + BOOK_H.toFixed(2) + '] /Resources ' + formResourcesStr + ' /Length ' + u8.length + ' >>\nstream\n');
+      w.pushPart(u8);
+      w.pushPart('\nendstream\n');
+      w.endObj();
+    });
+
+    w.beginObj(catalogNum);
+    w.pushPart('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n');
+    w.endObj();
+    w.beginObj(pagesNum);
+    w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
+    w.endObj();
+    writeFontObjects(w, fontNums);
+
+    var infoNum = w.allocObj();
+    w.beginObj(infoNum);
+    w.pushPart('<< /Title ');
+    w.pushPart(pdfLiteralStringBytes(toAsciiSafe((state.bookTitle || 'Untitled Collection') + ' - Printable Booklet')));
+    w.pushPart(' /Producer (Chapbook Builder) >>\n');
+    w.endObj();
+
+    return w.finish(catalogNum, infoNum);
+  }
+
+  // ---------------------------------------------------------------------
+  // UI: intake tabs
+  // ---------------------------------------------------------------------
+  document.querySelectorAll('.tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+      document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      document.querySelector('.tabpane[data-pane="' + tab.dataset.tab + '"]').classList.add('active');
+    });
+  });
+
+  function escQ(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function relTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso), diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 86400 * 30) return Math.floor(diff / 86400) + 'd ago';
+    return d.toLocaleDateString();
+  }
+
+  var driveStatus = document.getElementById('driveStatus');
+  var driveList = document.getElementById('driveList');
+  var driveSearch = document.getElementById('driveSearch');
+  var driveSearchBtn = document.getElementById('driveSearchBtn');
+  var mcpNs = null, mcpChecked = false;
+
+  function setDriveStatus(msg, isError) {
+    driveStatus.textContent = msg || '';
+    driveStatus.classList.toggle('error', !!isError);
+  }
+
+  function describeMcpError(err) {
+    var code = err && err.code;
+    switch (code) {
+      case 'needs_reauth': return 'Your Google Drive connection needs to be refreshed — reconnect it in claude.ai Settings → Connectors.';
+      case 'server_not_connected': return 'Google Drive isn’t connected — add it in claude.ai Settings → Connectors.';
+      case 'selection_required': return 'Choose a Google account for Drive in the prompt claude.ai showed, then try again.';
+      case 'blocked_by_policy': return 'Your organization has blocked Drive access here.';
+      case 'approval_required': return 'This action needs approval that isn’t supported in this view.';
+      case 'server_unavailable': return 'Google Drive is temporarily unavailable — try again in a moment.';
+      case 'tool_error': return 'Drive couldn’t complete that request' + (err.message ? (': ' + err.message) : '') + '.';
+      case 'not_granted': case 'capability_disabled': case 'capability_removed': return null;
+      default: return 'Couldn’t reach Google Drive (' + (code || 'unknown error') + ').';
+    }
+  }
+
+  function renderDocList(files) {
+    driveList.innerHTML = '';
+    if (!files || !files.length) {
+      driveList.innerHTML = '<div class="status-line">No Google Docs found.</div>';
+      return;
+    }
+    files.forEach(function (f) {
+      if (f.mimeType && f.mimeType !== 'application/vnd.google-apps.document') return;
+      var row = document.createElement('button');
+      row.className = 'doc-row';
+      row.type = 'button';
+      var snip = (f.contentSnippet || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+      row.innerHTML = '<span class="doc-title"></span><span class="doc-meta"></span><span class="doc-snip"></span>';
+      row.querySelector('.doc-title').textContent = f.title || 'Untitled document';
+      row.querySelector('.doc-meta').textContent = 'Edited ' + relTime(f.modifiedTime);
+      row.querySelector('.doc-snip').textContent = snip;
+      row.addEventListener('click', function () { importDoc(f.id, f.title); });
+      driveList.appendChild(row);
+    });
+    if (!driveList.children.length) driveList.innerHTML = '<div class="status-line">No Google Docs found.</div>';
+  }
+
+  async function ensureMcp() {
+    if (mcpChecked) return mcpNs;
+    mcpChecked = true;
+    try {
+      if (window.claude && window.claude.use) mcpNs = await window.claude.use('mcp');
+    } catch (e) { mcpNs = null; }
+    return mcpNs;
+  }
+
+  async function loadRecentDocs() {
+    var mcp = await ensureMcp();
+    if (!mcp) {
+      document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
+      return;
+    }
+    setDriveStatus('Loading recent documents…');
+    try {
+      var res = await mcp.callTool('Google Drive', 'list_recent_files', { pageSize: 20, orderBy: 'lastModifiedByMe' });
+      var files = (res.payload && res.payload.files) || [];
+      renderDocList(files);
+      setDriveStatus('');
+    } catch (err) {
+      var msg = describeMcpError(err);
+      if (msg === null) {
+        document.getElementById('drivePane').innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
+      } else {
+        setDriveStatus(msg, true);
+      }
+    }
+  }
+
+  async function searchDocs(term) {
+    var mcp = await ensureMcp();
+    if (!mcp) return;
+    if (!term) { loadRecentDocs(); return; }
+    setDriveStatus('Searching…');
+    var query = "fullText contains '" + escQ(term) + "' and mimeType = 'application/vnd.google-apps.document'";
+    try {
+      var res = await mcp.callTool('Google Drive', 'search_files', { query: query, pageSize: 15 });
+      var files = (res.payload && res.payload.files) || [];
+      renderDocList(files);
+      setDriveStatus(files.length ? '' : 'No matches.');
+    } catch (err) {
+      var msg = describeMcpError(err);
+      setDriveStatus(msg || 'Search unavailable here.', true);
+    }
+  }
+
+  async function importDoc(fileId, title) {
+    var mcp = await ensureMcp();
+    if (!mcp) return;
+    setDriveStatus('Fetching “' + title + '”…');
+    try {
+      var res = await mcp.callTool('Google Drive', 'read_file_content', { fileId: fileId });
+      var text = (res.payload && res.payload.fileContent) || '';
+      var poems = parseDocText(text);
+      if (!poems.length) { setDriveStatus('Couldn’t find any poems in that document.', true); return; }
+      if (state.poems.length && !state.isExample) {
+        var ok = await confirmDialog('Replace the ' + state.poems.length + ' poem(s) currently loaded with the ' + poems.length + ' poem(s) from “' + title + '”?');
+        if (!ok) { setDriveStatus(''); return; }
+      }
+      state.poems = poems;
+      state.isExample = false;
+      state.intakeCollapsed = true;
+      state.intakeSourceLabel = title;
+      if (!state.bookTitle) state.bookTitle = title;
+      setDriveStatus('Imported ' + poems.length + ' poem(s) from “' + title + '”.');
+      persist();
+      renderAll();
+    } catch (err) {
+      setDriveStatus(describeMcpError(err) || 'Couldn’t read that document.', true);
+    }
+  }
+
+  driveSearchBtn.addEventListener('click', function () { searchDocs(driveSearch.value.trim()); });
+  driveSearch.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchDocs(driveSearch.value.trim()); });
+  loadRecentDocs();
+
+  // ---------------------------------------------------------------------
+  // UI: paste tab
+  // ---------------------------------------------------------------------
+  var pasteBox = document.getElementById('pasteBox');
+  var pasteStatus = document.getElementById('pasteStatus');
+  document.getElementById('parsePasteBtn').addEventListener('click', async function () {
+    var text = pasteBox.value;
+    if (!text.trim()) { pasteStatus.textContent = 'Paste some text first.'; return; }
+    var poems = parseDocText(text);
+    if (!poems.length) { pasteStatus.textContent = 'Couldn’t find any poems — check the ### title markers.'; return; }
+    if (state.poems.length && !state.isExample) {
+      var ok = await confirmDialog('Replace the ' + state.poems.length + ' poem(s) currently loaded with these ' + poems.length + ' poem(s)?');
+      if (!ok) return;
+    }
+    state.poems = poems;
+    state.isExample = false;
+    state.intakeCollapsed = true;
+    state.intakeSourceLabel = 'pasted text';
+    pasteStatus.textContent = 'Parsed ' + poems.length + ' poem(s).';
+    persist();
+    renderAll();
+  });
+
+  // ---------------------------------------------------------------------
+  // UI: poem cards
+  // ---------------------------------------------------------------------
+  var poemList = document.getElementById('poemList');
+  var poemsCount = document.getElementById('poemsCount');
+  var exampleBanner = document.getElementById('exampleBanner');
+
+  function autoGrow(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+
+  function estimatePages(poem) {
+    try {
+      var plan = planBooklet(state);
+      var idx = state.poems.indexOf(poem);
+      return (idx >= 0 && plan.layouts[idx]) ? plan.layouts[idx].pages.length : 1;
+    } catch (e) { return 1; }
+  }
+
+  function makeGap(index) {
+    var gap = document.createElement('div');
+    gap.className = 'poem-gap';
+    gap.innerHTML = '<div class="poem-gap-line"></div><button class="poem-gap-btn" type="button" title="Add poem here">+</button>';
+    gap.querySelector('.poem-gap-btn').addEventListener('click', function () {
+      state.poems.splice(index, 0, { id: makeId(), title: '', lines: [''] });
+      state.isExample = false;
+      persist();
+      renderAll();
+    });
+    return gap;
+  }
+
+  var dragFromIndex = null;
+
+  function makeTitleAlignControl(poem) {
+    var wrap = document.createElement('div');
+    wrap.className = 'title-align';
+    var label = document.createElement('span');
+    label.textContent = 'Title';
+    var seg = document.createElement('div');
+    seg.className = 'title-align-seg';
+    [['', 'Auto'], ['left', 'Left'], ['center', 'Center']].forEach(function (pair) {
+      var val = pair[0];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = pair[1];
+      btn.dataset.val = val;
+      if ((poem.titleAlign || '') === val) btn.classList.add('active');
+      btn.addEventListener('click', function () {
+        poem.titleAlign = val || null;
+        state.isExample = false;
+        seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        persist();
+        updateStats();
+      });
+      seg.appendChild(btn);
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(seg);
+    return wrap;
+  }
+
+  function makeCard(poem, index, initialPlan) {
+    var card = document.createElement('div');
+    card.className = 'poem-card';
+    card.draggable = true;
+
+    var handle = document.createElement('div');
+    handle.className = 'poem-handle';
+    handle.innerHTML = '<div class="poem-num">' + (index + 1) + '</div><div class="poem-grip">⋮⋮</div>';
+
+    var body = document.createElement('div');
+    body.className = 'poem-body';
+
+    var titleRow = document.createElement('div');
+    titleRow.className = 'poem-title-row';
+    var titleInput = document.createElement('input');
+    titleInput.className = 'poem-title';
+    titleInput.placeholder = 'Untitled';
+    titleInput.value = poem.title;
+    titleInput.style.textAlign = (poem.titleAlign || state.alignment) === 'center' ? 'center' : 'left';
+    titleInput.addEventListener('input', function () {
+      poem.title = titleInput.value;
+      state.isExample = false;
+      persist();
+      updateMeta();
+      updateStats();
+    });
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'btn btn-ghost btn-danger';
+    removeBtn.type = 'button';
+    removeBtn.title = 'Remove poem';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', async function () {
+      var ok = await confirmDialog('Remove “' + (poem.title || 'Untitled') + '”?');
+      if (!ok) return;
+      state.poems.splice(index, 1);
+      state.isExample = false;
+      persist();
+      renderAll();
+    });
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(removeBtn);
+
+    var textarea = document.createElement('textarea');
+    textarea.className = 'poem-text';
+    textarea.value = poem.lines.join('\n');
+    textarea.style.textAlign = state.alignment === 'center' ? 'center' : 'left';
+    textarea.addEventListener('input', function () {
+      poem.lines = textarea.value.split('\n');
+      state.isExample = false;
+      autoGrow(textarea);
+      persist();
+      updateMeta();
+      updateStats();
+    });
+
+    var metaRow = document.createElement('div');
+    metaRow.className = 'poem-meta-row';
+    var meta = document.createElement('div');
+    meta.className = 'poem-meta';
+    function updateMeta(planOverride) {
+      var lineCount = poem.lines.filter(function (l) { return l.trim() !== ''; }).length;
+      var pages = planOverride && planOverride.layouts[index] ? planOverride.layouts[index].pages.length : estimatePages(poem);
+      meta.textContent = lineCount + ' line' + (lineCount === 1 ? '' : 's') + ' · ' + pages + ' page' + (pages === 1 ? '' : 's');
+    }
+    updateMeta(initialPlan);
+    metaRow.appendChild(meta);
+    metaRow.appendChild(makeTitleAlignControl(poem));
+
+    body.appendChild(titleRow);
+    body.appendChild(textarea);
+    body.appendChild(metaRow);
+    card.appendChild(handle);
+    card.appendChild(body);
+
+    card.addEventListener('dragstart', function (e) {
+      dragFromIndex = index;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', function () { card.classList.remove('dragging'); dragFromIndex = null; });
+    card.addEventListener('dragover', function (e) { e.preventDefault(); });
+    card.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (dragFromIndex === null || dragFromIndex === index) return;
+      var moved = state.poems.splice(dragFromIndex, 1)[0];
+      state.poems.splice(index, 0, moved);
+      persist();
+      renderAll();
+    });
+
+    setTimeout(function () { autoGrow(textarea); }, 0);
+    return card;
+  }
+
+  function renderPoems() {
+    poemList.innerHTML = '';
+    poemList.appendChild(makeGap(0));
+    var plan = planBooklet(state);
+    state.poems.forEach(function (poem, i) {
+      poemList.appendChild(makeCard(poem, i, plan));
+      poemList.appendChild(makeGap(i + 1));
+    });
+    poemsCount.textContent = state.poems.length + ' poem' + (state.poems.length === 1 ? '' : 's');
+    exampleBanner.hidden = !state.isExample;
+  }
+
+  // ---------------------------------------------------------------------
+  // Live page preview -- mirrors the real PDF layout (trim size, font,
+  // alignment, auto-fit size) at a small scale so formatting choices are
+  // visible immediately, without exporting.
+  // ---------------------------------------------------------------------
+  var previewIndex = 0;
+  var PREVIEW_WIDTH_PX = 210;
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderPreview() {
+    var box = document.getElementById('previewPage');
+    var caption = document.getElementById('previewCaption');
+    var prevBtn = document.getElementById('previewPrevBtn');
+    var nextBtn = document.getElementById('previewNextBtn');
+    if (!box) return;
+    if (!state.poems.length) {
+      box.style.width = PREVIEW_WIDTH_PX + 'px';
+      box.style.height = Math.round(PREVIEW_WIDTH_PX * 1.3) + 'px';
+      box.innerHTML = '<div class="preview-empty">Add a poem to see a preview.</div>';
+      caption.textContent = '';
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      return;
+    }
+    previewIndex = Math.max(0, Math.min(previewIndex, state.poems.length - 1));
+    var plan = planBooklet(state);
+    var poem = state.poems[previewIndex];
+    var layout = plan.layouts[previewIndex];
+    var scale = PREVIEW_WIDTH_PX / plan.PAGE_W;
+
+    box.style.width = PREVIEW_WIDTH_PX + 'px';
+    box.style.height = Math.round(plan.PAGE_H * scale) + 'px';
+    box.style.fontFamily = state.fontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
+    box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
+    box.style.boxSizing = 'border-box';
+
+    var effAlign = poem.titleAlign || state.alignment;
+    var bodyAlign = state.alignment === 'left' ? 'left' : 'center';
+    var html = '';
+    if (layout.titleLines.length) {
+      html += '<div style="font-weight:700; text-align:' + (effAlign === 'left' ? 'left' : 'center') +
+        '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
+        layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
+    }
+    html += '<div style="font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + bodyAlign + ';">';
+    (layout.pages[0] || []).forEach(function (rl) {
+      html += '<div>' + (rl.blank ? '&nbsp;' : escapeHtml(rl.text)) + '</div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+
+    var pageNote = layout.pages.length > 1 ? ', page 1 of ' + layout.pages.length : '';
+    caption.textContent = 'Poem ' + (previewIndex + 1) + ' of ' + state.poems.length + pageNote + ' · ' + layout.sizePt + 'pt';
+    prevBtn.disabled = previewIndex === 0;
+    nextBtn.disabled = previewIndex === state.poems.length - 1;
+  }
+
+  document.getElementById('previewPrevBtn').addEventListener('click', function () {
+    previewIndex = Math.max(0, previewIndex - 1);
+    renderPreview();
+  });
+  document.getElementById('previewNextBtn').addEventListener('click', function () {
+    previewIndex = Math.min(state.poems.length - 1, previewIndex + 1);
+    renderPreview();
+  });
+
+  document.getElementById('addPoemBtn').addEventListener('click', function () {
+    state.poems.push({ id: makeId(), title: '', lines: [''] });
+    state.isExample = false;
+    persist();
+    renderAll();
+  });
+  document.getElementById('clearExampleBtn').addEventListener('click', function () {
+    state.poems = [];
+    state.isExample = false;
+    persist();
+    renderAll();
+  });
+  document.getElementById('startOverBtn').addEventListener('click', async function () {
+    var ok = await confirmDialog('Clear the title, author, and all poems and start over?');
+    if (!ok) return;
+    state = exampleState();
+    persist();
+    document.getElementById('bookTitleInput').value = '';
+    document.getElementById('authorInput').value = '';
+    renderAll();
+  });
+
+  // ---------------------------------------------------------------------
+  // UI: settings sidebar
+  // ---------------------------------------------------------------------
+  var trimSelect = document.getElementById('trimSelect');
+  TRIM_SIZES.forEach(function (t) {
+    var opt = document.createElement('option');
+    opt.value = t.key; opt.textContent = t.label;
+    trimSelect.appendChild(opt);
+  });
+  trimSelect.value = state.trimKey;
+  trimSelect.addEventListener('change', function () { state.trimKey = trimSelect.value; persist(); renderAll(); });
+
+  function wireSeg(id, onChange) {
+    var seg = document.getElementById(id);
+    seg.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        onChange(btn.dataset.val);
+      });
+    });
+  }
+  wireSeg('fontSeg', function (val) { state.fontFamily = val; persist(); renderAll(); });
+  wireSeg('alignSeg', function (val) { state.alignment = val; persist(); renderAll(); });
+  wireSeg('sizeModeSeg', function (val) {
+    state.sizeMode = val;
+    document.getElementById('fixedSizeField').hidden = (val !== 'fixed');
+    persist(); renderAll();
+  });
+
+  document.getElementById('fixedSizeInput').addEventListener('input', function (e) {
+    state.fixedSize = parseFloat(e.target.value) || 12;
+    persist(); updateStats();
+  });
+  document.getElementById('titlePageCheck').addEventListener('change', function (e) {
+    state.includeTitlePage = e.target.checked; persist(); updateStats();
+  });
+  document.getElementById('tocCheck').addEventListener('change', function (e) {
+    state.includeToc = e.target.checked; persist(); updateStats();
+  });
+  document.getElementById('bookTitleInput').addEventListener('input', function (e) {
+    state.bookTitle = e.target.value; persist();
+  });
+  document.getElementById('authorInput').addEventListener('input', function (e) {
+    state.author = e.target.value; persist();
+  });
+
+  function syncSidebarFromState() {
+    document.getElementById('bookTitleInput').value = state.bookTitle || '';
+    document.getElementById('authorInput').value = state.author || '';
+    trimSelect.value = state.trimKey;
+    document.querySelectorAll('#fontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.fontFamily); });
+    document.querySelectorAll('#alignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.alignment); });
+    document.querySelectorAll('#sizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.sizeMode); });
+    document.getElementById('fixedSizeField').hidden = (state.sizeMode !== 'fixed');
+    document.getElementById('fixedSizeInput').value = state.fixedSize;
+    document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
+    document.getElementById('tocCheck').checked = !!state.includeToc;
+  }
+
+  function updateStats() {
+    var plan = planBooklet(state);
+    document.getElementById('statPoems').textContent = state.poems.length;
+    document.getElementById('statPages').textContent = plan.totalPages;
+    document.getElementById('exportBtn').disabled = state.poems.length === 0;
+    document.getElementById('exportPrintBtn').disabled = state.poems.length === 0;
+    renderPreview();
+  }
+
+  function applyIntakeCollapsedView() {
+    var collapsed = !!state.intakeCollapsed;
+    document.getElementById('intakePanel').hidden = collapsed;
+    document.getElementById('intakeCollapsedBar').hidden = !collapsed;
+    if (collapsed) {
+      var n = state.poems.length;
+      document.getElementById('intakeCollapsedText').innerHTML = '';
+      var strong = document.createElement('strong');
+      strong.textContent = n + ' poem' + (n === 1 ? '' : 's');
+      document.getElementById('intakeCollapsedText').appendChild(strong);
+      document.getElementById('intakeCollapsedText').appendChild(document.createTextNode(
+        state.intakeSourceLabel ? ' loaded from “' + state.intakeSourceLabel + '”' : ' loaded'
+      ));
+    }
+  }
+  document.getElementById('intakeCollapseBtn').addEventListener('click', function () {
+    state.intakeCollapsed = true;
+    persist();
+    applyIntakeCollapsedView();
+  });
+  document.getElementById('intakeExpandBtn').addEventListener('click', function () {
+    state.intakeCollapsed = false;
+    persist();
+    applyIntakeCollapsedView();
+  });
+
+  function renderAll() {
+    syncSidebarFromState();
+    renderPoems();
+    updateStats();
+    applyIntakeCollapsedView();
+  }
+
+  // ---------------------------------------------------------------------
+  // Export
+  // ---------------------------------------------------------------------
+  var exportStatusEl = document.getElementById('exportStatus');
+  function setExportStatus(msg) { exportStatusEl.textContent = msg || ''; }
+  function slugify(s) {
+    return (s || 'poetry-booklet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'poetry-booklet';
+  }
+
+  function downloadBlob(filename, bytes, mime) {
+    var blob = new Blob([bytes], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+
+  async function runExport(btn, buildFn, filenameSuffix) {
+    if (!state.poems.length) return;
+    var otherBtn = btn.id === 'exportBtn' ? document.getElementById('exportPrintBtn') : document.getElementById('exportBtn');
+    btn.disabled = true;
+    otherBtn.disabled = true;
+    setExportStatus('Building PDF…');
+    try {
+      var bytes = buildFn(state);
+      var filename = slugify(state.bookTitle) + filenameSuffix;
+      var dl = null;
+      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+      if (dl) {
+        await dl.save({ filename: filename, data: bytes });
+        setExportStatus('Saved ' + filename + '.');
+      } else {
+        downloadBlob(filename, bytes, 'application/pdf');
+        setExportStatus('Downloaded ' + filename + '.');
+      }
+    } catch (err) {
+      if (err && err.code === 'declined') setExportStatus('');
+      else setExportStatus('Couldn’t save the file' + (err && err.code ? ' (' + err.code + ')' : '') + '.');
+    }
+    btn.disabled = state.poems.length === 0;
+    otherBtn.disabled = state.poems.length === 0;
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    runExport(this, buildBookletPdf, '.pdf');
+  });
+  document.getElementById('exportPrintBtn').addEventListener('click', function () {
+    runExport(this, buildImposedBookletPdf, '-printable.pdf');
+  });
+
+  renderAll();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      document.querySelectorAll('.poem-text').forEach(autoGrow);
+    });
+  }
+})();
+</script>
+</body>
+</html>
