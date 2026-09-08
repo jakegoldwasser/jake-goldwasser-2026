@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flyleaf — Jake Goldwasser</title>
+<title>Booklouse — Jake Goldwasser</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF chapbook, one entry per page.">
+<meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
@@ -14,7 +14,7 @@
 <style>
   :root {
     /* An antique paint-swatch card: aged paper stock, umber ink, and a
-       burnt-orange accent pulled from the warmest chip on the sheet. */
+       mossy-green accent pulled from the wordmark's own swatch chips. */
     --paper: #EFE3C8;
     --surface: #FBF5E6;
     --surface-2: #F2E7CB;
@@ -23,9 +23,9 @@
     --ink-faint: #A6957A;
     --line: #E1D1AC;
     --line-strong: #C9B183;
-    --accent: #C1602A;
+    --accent: #6E7B3E;
     --accent-ink: #FFFFFF;
-    --accent-soft: #EFD1AF;
+    --accent-soft: #E0E6CB;
     --danger: #8B3A2B;
     --danger-soft: #E9D6C7;
     --shadow: rgba(46, 32, 19, 0.14);
@@ -50,7 +50,18 @@
 
   .page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
 
-  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  /* No flex-wrap here on wider screens: keeping this a single row (and
+     letting --top-actions shrink) forces its own internal flex-wrap to
+     kick in when space is tight, so the account/save/library controls
+     stay pinned beside the wordmark instead of dropping to a whole new
+     line below the tagline. Only true narrow/mobile widths fall back to
+     stacking the two halves, via the media query below. */
+  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+  .masthead > div:first-child { flex-shrink: 0; }
+  @media (max-width: 640px) {
+    .masthead { flex-wrap: wrap; }
+    .masthead > div:first-child { flex-shrink: 1; }
+  }
 
   h1.appname {
     font-family: "BioRhyme Expanded", "Work Sans", ui-sans-serif, system-ui, sans-serif;
@@ -61,7 +72,9 @@
     color: var(--accent);
     text-wrap: balance;
   }
-  h1.appname .c1 { color: var(--accent); }
+  /* Hardcoded rather than tied to --accent, so the wordmark keeps all
+     four distinct swatch colors even now that --accent itself is green. */
+  h1.appname .c1 { color: #C1602A; }
   h1.appname .c2 { color: var(--swatch-green); }
   h1.appname .c3 { color: var(--swatch-brown); }
   h1.appname .c4 { color: var(--swatch-blue); }
@@ -74,6 +87,8 @@
     h1.appname span:nth-child(5) { animation-delay: 0.36s; }
     h1.appname span:nth-child(6) { animation-delay: 0.45s; }
     h1.appname span:nth-child(7) { animation-delay: 0.54s; }
+    h1.appname span:nth-child(8) { animation-delay: 0.63s; }
+    h1.appname span:nth-child(9) { animation-delay: 0.72s; }
   }
   @keyframes letterJitter {
     0%, 100% { transform: translateY(0); }
@@ -82,14 +97,14 @@
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
-  .top-actions { display: flex; gap: 14px; align-items: center; }
+  .top-actions { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   #googleSignInBtn.signin-attention { animation: signinPulse 0.6s ease-in-out 3; border-radius: 4px; }
   @keyframes signinPulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(193, 96, 42, 0); }
     50% { box-shadow: 0 0 0 5px rgba(193, 96, 42, 0.35); }
   }
-  .account-status-row { display: flex; align-items: center; gap: 8px; }
+  .account-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .account-status-row .status-line { min-height: 0; margin-top: 0; text-align: right; }
   .btn-link {
     background: none; border: none; color: var(--ink-faint); font-size: 11.5px; text-decoration: underline;
@@ -319,11 +334,9 @@
 
   .sidebar {
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
-    max-height: calc(100vh - 48px);
   }
   .sidebar-scroll {
-    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
-    display: flex; flex-direction: column; gap: 16px; padding-right: 2px; margin: -2px; padding: 2px;
+    display: flex; flex-direction: column; gap: 16px;
   }
 
   .preview-panel { flex: 0 0 auto; }
@@ -457,17 +470,17 @@
 
   <div class="masthead">
     <div>
-      <h1 class="appname"><span class="c1">f</span><span class="c2">l</span><span class="c3">y</span><span class="c4">l</span><span class="c1">e</span><span class="c3">a</span><span class="c2">f</span></h1>
+      <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">l</span><span class="c3">o</span><span class="c4">u</span><span class="c2">s</span><span class="c1">e</span></h1>
       <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
       <div class="chapbooks-menu">
-        <button class="btn" id="chapbooksMenuBtn" type="button">My Chapbooks ▾</button>
+        <button class="btn" id="chapbooksMenuBtn" type="button">My Books ▾</button>
         <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
           <div id="chapbooksPane"></div>
         </div>
       </div>
-      <button class="btn btn-primary" id="saveChapbookBtn" type="button">Save chapbook</button>
+      <button class="btn btn-primary" id="saveChapbookBtn" type="button" title="Adds this book to your My Books list, saved to this browser (and backed up to the cloud if you're signed in with Google).">Save book</button>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
         <div class="account-status-row">
@@ -569,6 +582,33 @@
             <select id="trimSelect"></select>
           </div>
 
+          <div class="subhead">Entry title text</div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg seg-4" id="titleFontSeg">
+              <button data-val="lora">Lora</button>
+              <button data-val="garamond">Garamond</button>
+              <button data-val="zillaslab" class="active">Slab Serif</button>
+              <button data-val="helvetica">Helvetica</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="titleAlignSeg">
+              <button data-val="left" class="active">Left</button>
+              <button data-val="center">Center</button>
+              <button data-val="right">Right</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <div class="seg seg-3" id="titleSizeModeSeg">
+              <button data-val="small">Small</button>
+              <button data-val="medium" class="active">Medium</button>
+              <button data-val="large">Large</button>
+            </div>
+          </div>
+
           <div class="subhead">Body text</div>
           <div class="field">
             <label>Typeface</label>
@@ -590,44 +630,11 @@
           </div>
           <div class="field">
             <label>Size</label>
-            <div class="seg" id="bodySizeModeSeg">
-              <button data-val="auto" class="active">Auto-fit</button>
-              <button data-val="fixed">Fixed</button>
+            <div class="seg seg-3" id="bodySizeModeSeg">
+              <button data-val="small">Small</button>
+              <button data-val="medium" class="active">Medium</button>
+              <button data-val="large">Large</button>
             </div>
-          </div>
-          <div class="field" id="bodyFixedSizeField" hidden>
-            <label for="bodyFixedSizeInput">Point size</label>
-            <input type="number" id="bodyFixedSizeInput" min="8" max="16" step="0.5" value="12">
-          </div>
-
-          <div class="subhead">Entry title text</div>
-          <div class="field">
-            <label>Typeface</label>
-            <div class="seg seg-4" id="titleFontSeg">
-              <button data-val="lora">Lora</button>
-              <button data-val="garamond">Garamond</button>
-              <button data-val="zillaslab" class="active">Slab Serif</button>
-              <button data-val="helvetica">Helvetica</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>Alignment</label>
-            <div class="seg seg-3" id="titleAlignSeg">
-              <button data-val="left" class="active">Left</button>
-              <button data-val="center">Center</button>
-              <button data-val="right">Right</button>
-            </div>
-          </div>
-          <div class="field">
-            <label>Size</label>
-            <div class="seg" id="titleSizeModeSeg">
-              <button data-val="auto" class="active">Auto</button>
-              <button data-val="fixed">Fixed</button>
-            </div>
-          </div>
-          <div class="field" id="titleFixedSizeField" hidden>
-            <label for="titleFixedSizeInput">Point size</label>
-            <input type="number" id="titleFixedSizeInput" min="10" max="36" step="0.5" value="18">
           </div>
 
           <div class="subhead">Layout</div>
@@ -784,7 +791,7 @@
   // State
   // ---------------------------------------------------------------------
   var TRIM_SIZES = [
-    { key: 'digest', label: '5.5 × 8.5 in — chapbook', w: 5.5, h: 8.5 },
+    { key: 'digest', label: '5.5 × 8.5 in — book', w: 5.5, h: 8.5 },
     { key: 'trade', label: '6 × 9 in — trade', w: 6, h: 9 },
     { key: 'a5', label: '5.83 × 8.27 in — A5', w: 5.83, h: 8.27 },
     { key: 'letter', label: '8.5 × 11 in — US Letter', w: 8.5, h: 11 }
@@ -799,6 +806,11 @@
   // Editor-only text scale -- a personal display preference, not part of
   // the chapbook's own saved state, so it lives in its own key.
   var EDITOR_ZOOM_KEY = 'poetryBooklet.editorZoom.v1';
+  // The zoom control's own 0.7-2 / 100%-labeled range was rendering too
+  // small at "100%" -- this constant shifts the whole scale up so what
+  // used to look like 120% is now what "100%" looks like, without
+  // changing the control's displayed percentages or range.
+  var EDITOR_ZOOM_BASE = 1.2;
   var editorZoom = 1;
   try {
     var savedZoom = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
@@ -816,10 +828,8 @@
       titleFontFamily: 'serif',
       bodyAlignment: 'left',
       titleAlignment: 'left',
-      bodySizeMode: 'auto',
-      bodyFixedSize: 12,
-      titleSizeMode: 'auto',
-      titleFixedSize: 18,
+      bodySizeMode: 'medium',
+      titleSizeMode: 'medium',
       includeTitlePage: true,
       includeToc: true,
       showPageNumbers: true,
@@ -973,7 +983,7 @@
     var el = document.getElementById('autosaveIndicator');
     if (!el) return;
     if (!state.chapbookId) {
-      el.textContent = 'Autosaving to this browser only — save this chapbook to also back it up to the cloud.';
+      el.textContent = 'Autosaving to this browser only — save this book to also back it up to the cloud.';
       el.classList.remove('is-synced');
     } else if (googleIdToken) {
       el.textContent = 'Autosaving to this browser, syncing to the cloud.';
@@ -1057,7 +1067,7 @@
       var cloudChapbooks = (data.state && data.state.chapbooks) || null;
       var cloudTrash = (data.state && data.state.trash) || [];
       if (cloudChapbooks && cloudChapbooks.length) {
-        var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved chapbook(s) from the cloud? This replaces your local “My Chapbooks” list.');
+        var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved book(s) from the cloud? This replaces your local “My Books” list.');
         if (ok) {
           library = cloudChapbooks;
           trash = cloudTrash;
@@ -1067,7 +1077,7 @@
         }
         setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
       } else if (library.length || trash.length) {
-        setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your chapbooks to the cloud…');
+        setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your books to the cloud…');
         await syncLibraryToCloud();
       } else {
         setAccountStatus('Signed in as ' + googleUserEmail + '.');
@@ -1298,11 +1308,11 @@
   // ---------------------------------------------------------------------
   // Poem pagination
   // ---------------------------------------------------------------------
-  var SIZE_CANDIDATES = [14, 13, 12, 11, 10, 9.5, 9];
+  var BODY_SIZE_PRESETS = { small: 10, medium: 12, large: 14 };
+  var TITLE_SIZE_PRESETS = { small: 14, medium: 18, large: 24 };
 
-  function resolveTitleSizePt(bodySizePt, state) {
-    if (state.titleSizeMode === 'fixed') return state.titleFixedSize;
-    return Math.min(20, Math.round(bodySizePt + 6));
+  function resolveTitleSizePt(state) {
+    return TITLE_SIZE_PRESETS[state.titleSizeMode] || TITLE_SIZE_PRESETS.medium;
   }
 
   // Left/center/right x-position for a piece of text of width w, shared
@@ -1314,7 +1324,7 @@
   }
 
   function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, state) {
-    var titleSizePt = resolveTitleSizePt(sizePt, state);
+    var titleSizePt = resolveTitleSizePt(state);
     var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, state.titleFontFamily, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
@@ -1352,19 +1362,9 @@
 
   // A single size is chosen for the whole booklet -- titles and body text
   // stay consistent from poem to poem -- rather than letting each poem
-  // pick its own size independently. "Auto" still tries the largest size
-  // that keeps every poem to one page; it just applies that one choice
-  // uniformly instead of re-deciding per poem.
+  // pick its own size independently.
   function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, state) {
-    if (state.bodySizeMode === 'fixed') return state.bodyFixedSize;
-    for (var i = 0; i < SIZE_CANDIDATES.length; i++) {
-      var size = SIZE_CANDIDATES[i];
-      var allFit = poems.every(function (poem) {
-        return layoutPoem(poem, size, contentWidthPt, contentHeightPt, state).pages.length === 1;
-      });
-      if (allFit) return size;
-    }
-    return SIZE_CANDIDATES[SIZE_CANDIDATES.length - 1];
+    return BODY_SIZE_PRESETS[state.bodySizeMode] || BODY_SIZE_PRESETS.medium;
   }
 
   // The table of contents must land on a recto (right-hand) page. Page 1
@@ -1727,7 +1727,7 @@
     w.beginObj(infoNum);
     w.pushPart('<< /Title ');
     w.pushPart(pdfLiteralStringBytes(toAsciiSafe(state.bookTitle || 'Untitled Collection')));
-    w.pushPart(' /Producer (Chapbook Builder) >>\n');
+    w.pushPart(' /Producer (Book Builder) >>\n');
     w.endObj();
 
     return w.finish(catalogNum, infoNum);
@@ -1836,7 +1836,7 @@
     w.beginObj(infoNum);
     w.pushPart('<< /Title ');
     w.pushPart(pdfLiteralStringBytes(toAsciiSafe((state.bookTitle || 'Untitled Collection') + ' - Printable Booklet')));
-    w.pushPart(' /Producer (Chapbook Builder) >>\n');
+    w.pushPart(' /Producer (Book Builder) >>\n');
     w.endObj();
 
     return w.finish(catalogNum, infoNum);
@@ -2190,17 +2190,37 @@
   // Wraps the textarea's current selection in the given marker pair
   // (inserting an empty pair with the cursor in between when nothing's
   // selected), then re-fires input so poem.lines and autosave pick it up.
+  // If the selection is already exactly wrapped in that marker pair (or
+  // the selection's outer edges are, letting you toggle off after
+  // selecting a bit wide), it unwraps instead of double-wrapping.
   function wrapSelection(textarea, before, after) {
     var start = textarea.selectionStart, end = textarea.selectionEnd;
     var val = textarea.value;
     var selected = val.slice(start, end);
+    var alreadyWrapped = selected.length >= before.length + after.length &&
+      selected.slice(0, before.length) === before &&
+      selected.slice(selected.length - after.length) === after;
+    var outerWrapped = !alreadyWrapped &&
+      val.slice(start - before.length, start) === before &&
+      val.slice(end, end + after.length) === after;
     textarea.focus();
-    textarea.value = val.slice(0, start) + before + selected + after + val.slice(end);
-    if (selected) {
-      textarea.selectionStart = start + before.length;
-      textarea.selectionEnd = start + before.length + selected.length;
+    if (alreadyWrapped) {
+      var inner = selected.slice(before.length, selected.length - after.length);
+      textarea.value = val.slice(0, start) + inner + val.slice(end);
+      textarea.selectionStart = start;
+      textarea.selectionEnd = start + inner.length;
+    } else if (outerWrapped) {
+      textarea.value = val.slice(0, start - before.length) + selected + val.slice(end + after.length);
+      textarea.selectionStart = start - before.length;
+      textarea.selectionEnd = start - before.length + selected.length;
     } else {
-      textarea.selectionStart = textarea.selectionEnd = start + before.length;
+      textarea.value = val.slice(0, start) + before + selected + after + val.slice(end);
+      if (selected) {
+        textarea.selectionStart = start + before.length;
+        textarea.selectionEnd = start + before.length + selected.length;
+      } else {
+        textarea.selectionStart = textarea.selectionEnd = start + before.length;
+      }
     }
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
@@ -2307,7 +2327,7 @@
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
-    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom) + 'px';
+    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     titleInput.addEventListener('input', function () {
       poem.title = titleInput.value;
       state.isExample = false;
@@ -2332,7 +2352,7 @@
     textarea.value = poem.lines.join('\n');
     textarea.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     textarea.style.fontFamily = displayStackFor(state.bodyFontChoice);
-    if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom) + 'px';
+    if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     wireTabIndent(textarea);
     textarea.addEventListener('input', function () {
       poem.lines = textarea.value.split('\n');
@@ -2508,7 +2528,10 @@
 
   archiveToggleBtn.addEventListener('click', function () {
     archivePanel.hidden = !archivePanel.hidden;
-    if (!archivePanel.hidden) renderArchiveList();
+    if (!archivePanel.hidden) {
+      renderArchiveList();
+      archivePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   });
 
   async function archivePoem(index) {
@@ -2620,7 +2643,10 @@
   function buildPreviewItems(state) {
     var items = [];
     if (state.includeTitlePage) items.push({ type: 'cover' });
-    if (state.includeToc && state.poems.length) items.push({ type: 'toc' });
+    if (state.includeToc && state.poems.length) {
+      var tocCount = planBooklet(state).tocPageCount || 1;
+      for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
+    }
     state.poems.forEach(function (poem, i) { items.push({ type: 'poem', index: i }); });
     items.push({ type: 'back' });
     return items;
@@ -2641,19 +2667,37 @@
     return '<div style="' + style + 'left:0; right:0; text-align:center;">' + pageNum + '</div>';
   }
 
-  function renderTocPreview(box, plan, scale) {
-    box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
+  // Mirrors planBooklet()'s own TOC pagination math: the first page holds
+  // linesPerTocPage1 entries under the "Contents" heading, and any
+  // overflow spills onto continuation pages of linesPerTocPageN entries
+  // each (no heading, even top/bottom margins), rather than cramming
+  // every entry onto one overlong preview page.
+  function renderTocPreview(box, plan, scale, tocPageIndex) {
+    tocPageIndex = tocPageIndex || 0;
+    var n = state.poems.length;
+    var firstCount = Math.min(plan.linesPerTocPage1, n);
+    var isFirst = tocPageIndex === 0;
+    var start = isFirst ? 0 : firstCount + (tocPageIndex - 1) * plan.linesPerTocPageN;
+    var end = isFirst ? firstCount : Math.min(start + plan.linesPerTocPageN, n);
+
+    if (isFirst) {
+      box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
+    } else {
+      box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginTop * scale) + 'px';
+    }
     var titleStack = displayStackFor(state.titleFontChoice);
     var bodyStack = displayStackFor(state.bodyFontChoice);
-    var html = '<div style="font-weight:700; font-family:' + titleStack + '; font-size:' + (18 * scale).toFixed(1) + 'px; margin-bottom:' + (14 * scale).toFixed(1) + 'px;">Contents</div>';
+    var html = isFirst
+      ? '<div style="font-weight:700; font-family:' + titleStack + '; font-size:' + (18 * scale).toFixed(1) + 'px; margin-bottom:' + (14 * scale).toFixed(1) + 'px;">Contents</div>'
+      : '';
     html += '<div style="font-family:' + bodyStack + '; font-size:' + (10 * scale).toFixed(1) + 'px; line-height:2;">';
-    state.poems.forEach(function (poem, i) {
+    for (var i = start; i < end; i++) {
       html += '<div style="display:flex; justify-content:space-between; gap:6px;"><span>' +
-        escapeHtml(poem.title || 'Untitled') + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
-    });
+        escapeHtml(state.poems[i].title || 'Untitled') + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
+    }
     html += '</div>';
     box.innerHTML = html;
-    var tocStartPage = (state.includeTitlePage ? 1 : 0) + 1;
+    var tocStartPage = (state.includeTitlePage ? 1 : 0) + plan.tocSpacer + 1 + tocPageIndex;
     box.innerHTML += pageNumberOverlayHtml(tocStartPage, scale);
   }
 
@@ -2710,8 +2754,9 @@
       renderCoverPreview(box, plan, scale);
       caption.textContent = 'Front cover';
     } else if (item.type === 'toc') {
-      renderTocPreview(box, plan, scale);
-      caption.textContent = 'Table of contents';
+      renderTocPreview(box, plan, scale, item.tocPageIndex);
+      var tocTotal = plan.tocPageCount || 1;
+      caption.textContent = 'Table of contents' + (tocTotal > 1 ? ' (' + (item.tocPageIndex + 1) + ' of ' + tocTotal + ')' : '');
     } else if (item.type === 'back') {
       renderBackCoverPreview(box, plan, scale);
       box.innerHTML += pageNumberOverlayHtml(plan.totalPages, scale);
@@ -2819,7 +2864,7 @@
       var backBtn = document.createElement('button');
       backBtn.className = 'chapbooks-new';
       backBtn.type = 'button';
-      backBtn.textContent = '← Back to My Chapbooks';
+      backBtn.textContent = '← Back to My Books';
       backBtn.addEventListener('click', function () { chapbooksViewMode = 'library'; renderChapbooksList(); });
       chapbooksPane.appendChild(backBtn);
       chapbooksPane.appendChild(makeDivider());
@@ -2850,7 +2895,7 @@
     var newBtn = document.createElement('button');
     newBtn.className = 'chapbooks-new';
     newBtn.type = 'button';
-    newBtn.textContent = '+ New chapbook';
+    newBtn.textContent = '+ New book';
     newBtn.addEventListener('click', onNewChapbookClick);
     chapbooksPane.appendChild(newBtn);
     chapbooksPane.appendChild(makeDivider());
@@ -2858,7 +2903,7 @@
     if (!library.length) {
       var emptyLib = document.createElement('div');
       emptyLib.className = 'chapbooks-empty';
-      emptyLib.textContent = 'No saved chapbooks yet — use “Save chapbook” to add this one.';
+      emptyLib.textContent = 'No saved books yet — use “Save book” to add this one.';
       chapbooksPane.appendChild(emptyLib);
     } else {
       library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
@@ -2888,7 +2933,7 @@
   async function loadChapbook(id) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
-    var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current chapbook will be lost.');
+    var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current book will be lost.');
     if (!ok) return;
     state = JSON.parse(JSON.stringify(entry.data));
     state.isExample = false;
@@ -2910,7 +2955,7 @@
     persistTrash();
     renderChapbooksList();
     if (googleIdToken) await syncLibraryToCloud();
-    else setAccountStatus('Moved to trash — sign in to back up your chapbooks to the cloud.');
+    else setAccountStatus('Moved to trash — sign in to back up your books to the cloud.');
   }
 
   async function restoreChapbook(id) {
@@ -2923,7 +2968,7 @@
     persistTrash();
     renderChapbooksList();
     if (googleIdToken) await syncLibraryToCloud();
-    else setAccountStatus('Restored — sign in to back up your chapbooks to the cloud.');
+    else setAccountStatus('Restored — sign in to back up your books to the cloud.');
   }
 
   async function purgeChapbookForever(id) {
@@ -2938,7 +2983,7 @@
   }
 
   async function onNewChapbookClick() {
-    var ok = await confirmDialog('Start a new, blank chapbook? Any unsaved changes to the current one will be lost.');
+    var ok = await confirmDialog('Start a new, blank book? Any unsaved changes to the current one will be lost.');
     if (!ok) return;
     state = blankChapbookState();
     if (googleUserName) state.author = googleUserName;
@@ -2950,7 +2995,7 @@
   document.getElementById('saveChapbookBtn').addEventListener('click', async function () {
     var title = (state.bookTitle || '').trim();
     if (!title) {
-      title = await promptDialog('Save this chapbook as:', 'Untitled Collection');
+      title = await promptDialog('Save this book as:', 'Untitled Collection');
       if (title === null) return;
       title = title.trim() || 'Untitled Collection';
     }
@@ -3012,26 +3057,10 @@
   wireSeg('titleFontSeg', function (val) { state.titleFontChoice = val; state.titleFontFamily = pdfFamilyFor(val); persist(); renderAll(); });
   wireSeg('bodyAlignSeg', function (val) { state.bodyAlignment = val; persist(); renderAll(); });
   wireSeg('titleAlignSeg', function (val) { state.titleAlignment = val; persist(); renderAll(); });
-  wireSeg('bodySizeModeSeg', function (val) {
-    state.bodySizeMode = val;
-    document.getElementById('bodyFixedSizeField').hidden = (val !== 'fixed');
-    persist(); renderAll();
-  });
-  wireSeg('titleSizeModeSeg', function (val) {
-    state.titleSizeMode = val;
-    document.getElementById('titleFixedSizeField').hidden = (val !== 'fixed');
-    persist(); renderAll();
-  });
+  wireSeg('bodySizeModeSeg', function (val) { state.bodySizeMode = val; persist(); renderAll(); });
+  wireSeg('titleSizeModeSeg', function (val) { state.titleSizeMode = val; persist(); renderAll(); });
   wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
 
-  document.getElementById('bodyFixedSizeInput').addEventListener('input', function (e) {
-    state.bodyFixedSize = parseFloat(e.target.value) || 12;
-    persist(); updateStats();
-  });
-  document.getElementById('titleFixedSizeInput').addEventListener('input', function (e) {
-    state.titleFixedSize = parseFloat(e.target.value) || 18;
-    persist(); updateStats();
-  });
   document.getElementById('titlePageCheck').addEventListener('change', function (e) {
     state.includeTitlePage = e.target.checked; persist(); updateStats();
   });
@@ -3064,10 +3093,6 @@
     document.querySelectorAll('#bodySizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodySizeMode); });
     document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
     document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
-    document.getElementById('bodyFixedSizeField').hidden = (state.bodySizeMode !== 'fixed');
-    document.getElementById('bodyFixedSizeInput').value = state.bodyFixedSize;
-    document.getElementById('titleFixedSizeField').hidden = (state.titleSizeMode !== 'fixed');
-    document.getElementById('titleFixedSizeInput').value = state.titleFixedSize;
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
     document.getElementById('tocCheck').checked = !!state.includeToc;
     document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
