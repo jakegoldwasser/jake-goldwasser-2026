@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chapbook Builder — Jake Goldwasser</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<meta name="description" content="Turn a Google Doc of poems into a paginated, print-ready PDF chapbook, one poem per page.">
+<meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF chapbook, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Work+Sans:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
@@ -31,7 +31,7 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; }
+  html, body { margin: 0; overscroll-behavior: none; }
 
   body {
     background: var(--paper);
@@ -45,11 +45,11 @@
   .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
 
   h1.appname {
-    font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif;
-    font-weight: 700;
+    font-family: "BioRhyme Expanded", "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    font-size: clamp(30px, 4.4vw, 46px);
+    font-size: clamp(52px, 9vw, 108px);
     margin: 0 0 8px;
     color: var(--accent);
     text-wrap: balance;
@@ -59,6 +59,11 @@
 
   .top-actions { display: flex; gap: 14px; align-items: center; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  #googleSignInBtn.signin-attention { animation: signinPulse 0.6s ease-in-out 3; border-radius: 4px; }
+  @keyframes signinPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(142, 59, 77, 0); }
+    50% { box-shadow: 0 0 0 5px rgba(142, 59, 77, 0.35); }
+  }
   .account-status-row { display: flex; align-items: center; gap: 8px; }
   .account-status-row .status-line { min-height: 0; margin-top: 0; text-align: right; }
   .btn-link {
@@ -74,7 +79,7 @@
     padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
   }
   #bookTitleInput:focus { border-bottom-color: var(--accent); }
-  #bookTitleInput::placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
+  #bookTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
   #authorInput {
     font-family: "Work Sans", sans-serif; font-size: 14px; color: var(--ink-soft); background: transparent;
     border: none; border-bottom: 1px solid var(--line); padding: 2px 2px 6px; outline: none; width: 100%;
@@ -208,6 +213,7 @@
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
     font-family: "Newsreader", ui-serif, serif; font-size: 14.5px; line-height: 1.65; padding: 10px 12px;
     outline: none; resize: none; overflow: hidden; color: var(--ink); white-space: pre-wrap;
+    overscroll-behavior: contain;
   }
   textarea.poem-text:focus { border-color: var(--accent); }
 
@@ -232,11 +238,17 @@
   }
   .poem-compact-row.dragging { opacity: 0.4; }
   .poem-compact-row .poem-handle { flex: 0 0 30px; flex-direction: row; gap: 8px; padding-top: 0; justify-content: flex-start; }
-  input.poem-title-compact {
+  .poem-title-compact {
     flex: 1; min-width: 0; border: none; background: transparent; font-family: "Fraunces", serif;
     font-weight: 600; font-size: 14px; padding: 4px 2px; outline: none; color: var(--ink);
   }
-  input.poem-title-compact::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  .poem-title-compact::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  button.poem-title-compact-toggle {
+    text-align: left; cursor: pointer; appearance: none;
+  }
+  button.poem-title-compact-toggle.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  button.poem-title-compact-toggle:hover { color: var(--accent); }
+  .poem-compact-expanded { margin: 0 0 6px 40px; }
 
   .poem-gap { height: 12px; margin: -4px 0 -2px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 40px; right: 0; height: 1px; background: transparent; }
@@ -385,8 +397,8 @@
 
   <div class="masthead">
     <div>
-      <h1 class="appname">Chapbook Builder</h1>
-      <div class="tagline">Bring in poems from a neatly formatted Google Doc — Heading for the title, Normal text for the poem — and export a paginated, print-ready PDF with one poem per page.</div>
+      <h1 class="appname">Flyleaf</h1>
+      <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
       <div class="chapbooks-menu">
@@ -408,14 +420,14 @@
   </div>
 
   <div class="chapbook-header">
-    <input type="text" id="bookTitleInput" placeholder="Untitled Collection">
+    <input type="text" id="bookTitleInput" placeholder="Title">
     <input type="text" id="authorInput" placeholder="Author name">
   </div>
 
   <div class="panel" id="intakePanel">
     <div class="intake-head">
       <div>
-        <div class="panel-title">Bring in your poems</div>
+        <div class="panel-title">Bring in your entries</div>
         <div class="panel-sub">Import straight from Google Drive, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
       </div>
       <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Minimize</button>
@@ -436,11 +448,11 @@
 
     <div class="tabpane" data-pane="paste" id="pastePane">
       <div class="hint-box">
-        Paste plain text below. Mark each poem's title by starting its line with <code>### </code> — this is exactly what a Google Docs Heading paragraph turns into when brought in from Drive, so anything you'd import will already match. Separate poems with a blank line. Blank lines inside a poem become stanza breaks.
+        Paste plain text below. Mark each entry's title by starting its line with <code>### </code> — this is exactly what a Google Docs Heading paragraph turns into when brought in from Drive, so anything you'd import will already match. Separate entries with a blank line. Blank lines inside an entry become stanza breaks.
       </div>
       <textarea class="raw-paste" id="pasteBox" placeholder="### Instructions for Folding a Paper Boat&#10;&#10;Crease the sky in half...&#10;&#10;### What the Tide Leaves"></textarea>
       <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-        <button class="btn btn-primary" id="parsePasteBtn">Parse into poems</button>
+        <button class="btn btn-primary" id="parsePasteBtn">Parse into entries</button>
         <span class="status-line" id="pasteStatus" style="margin:0;"></span>
       </div>
     </div>
@@ -448,26 +460,35 @@
 
   <div class="panel intake-collapsed-bar" id="intakeCollapsedBar" hidden>
     <span id="intakeCollapsedText"></span>
-    <button class="btn btn-sm" id="intakeExpandBtn" type="button">Change source</button>
+    <button class="btn btn-sm" id="intakeExpandBtn" type="button">Add source</button>
   </div>
 
   <div class="workspace">
     <div>
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
-          <div class="panel-title" style="margin:0;">Poems</div>
+          <div class="panel-title" style="margin:0;">Entries</div>
           <div style="display:flex; align-items:center; gap:12px;">
             <div class="poems-count" id="poemsCount"></div>
+            <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
             <button class="btn btn-sm" id="poemsViewToggle" type="button">Titles only</button>
           </div>
         </div>
         <div id="exampleBanner" class="example-banner" hidden>
-          <span>These two poems are just a working example — import or paste your own above to replace them.</span>
+          <span>These two entries are just a working example — import or paste your own above to replace them.</span>
           <button class="btn btn-sm" id="clearExampleBtn">Clear examples</button>
         </div>
         <div id="poemGapTop"></div>
         <div id="poemList"></div>
-        <button class="btn add-poem-btn" id="addPoemBtn">+ Add poem</button>
+        <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
+      </div>
+
+      <div class="panel" id="archivePanel" hidden style="margin-top:16px;">
+        <div class="poems-head">
+          <div class="panel-title" style="margin:0;">Archived entries</div>
+          <button class="btn btn-sm btn-danger" id="emptyArchiveBtn" type="button">Empty archive</button>
+        </div>
+        <div id="archiveList"></div>
       </div>
     </div>
 
@@ -476,9 +497,9 @@
         <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
         <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
         <div class="preview-nav">
-          <button type="button" id="previewPrevBtn" aria-label="Preview previous poem">‹</button>
+          <button type="button" id="previewPrevBtn" aria-label="Preview previous entry">‹</button>
           <span id="previewCaption"></span>
-          <button type="button" id="previewNextBtn" aria-label="Preview next poem">›</button>
+          <button type="button" id="previewNextBtn" aria-label="Preview next entry">›</button>
         </div>
       </div>
 
@@ -525,9 +546,9 @@
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-4" id="titleFontSeg">
-              <button data-val="lora" class="active">Lora</button>
+              <button data-val="lora">Lora</button>
               <button data-val="garamond">Garamond</button>
-              <button data-val="zillaslab">Slab Serif</button>
+              <button data-val="zillaslab" class="active">Slab Serif</button>
               <button data-val="helvetica">Helvetica</button>
             </div>
           </div>
@@ -579,7 +600,7 @@
 
         <div class="panel">
           <div class="stat-row">
-            <span class="stat-label">Poems</span>
+            <span class="stat-label">Entries</span>
             <span class="stat-num" id="statPoems">0</span>
           </div>
           <div class="stat-row">
@@ -697,7 +718,7 @@
       trimKey: 'digest',
       bodyFontChoice: 'lora',
       bodyFontFamily: 'serif',
-      titleFontChoice: 'lora',
+      titleFontChoice: 'zillaslab',
       titleFontFamily: 'serif',
       bodyAlignment: 'left',
       titleAlignment: 'left',
@@ -712,7 +733,8 @@
       showCutLines: true,
       intakeCollapsed: false,
       intakeSourceLabel: null,
-      chapbookId: null
+      chapbookId: null,
+      archivedPoems: []
     };
   }
 
@@ -922,8 +944,13 @@
 
   function waitForGoogleIdentity(retriesLeft) {
     if (window.google && google.accounts && google.accounts.id) {
-      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+      // auto_select + prompt() lets a returning visitor with a live Google
+      // session sign back in silently, instead of needing to click the
+      // button on every page load -- renderButton stays as the fallback
+      // for when the silent prompt is unavailable or gets dismissed.
+      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true });
       google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
+      google.accounts.id.prompt();
       return;
     }
     if (retriesLeft <= 0) return;
@@ -1741,14 +1768,14 @@
   // directly from the browser. No backend involved.
   // ---------------------------------------------------------------------
   function addImportedPoems(poems, title) {
-    if (!poems.length) { setDriveStatus('Couldn’t find any poems in that document.', true); return; }
+    if (!poems.length) { setDriveStatus('Couldn’t find any entries in that document.', true); return; }
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = title;
     if (!state.bookTitle) state.bookTitle = title;
-    setDriveStatus((wasExample ? 'Imported ' : 'Added ') + poems.length + ' poem(s) from “' + title + '”.');
+    setDriveStatus((wasExample ? 'Imported ' : 'Added ') + poems.length + (poems.length === 1 ? ' entry' : ' entries') + ' from “' + title + '”.');
     persist();
     renderAll();
   }
@@ -1757,7 +1784,7 @@
     var pane = document.getElementById('drivePane');
     if (!pane) return;
     pane.innerHTML =
-      '<div class="hint-box">Pick a Google Doc from your Drive to bring its poems in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
+      '<div class="hint-box">Pick a Google Doc from your Drive to bring its entries in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
       '<button class="btn btn-primary" id="connectDriveBtn" type="button">Choose a Google Doc…</button>' +
       '<div id="driveStatus" class="status-line"></div>';
     document.getElementById('connectDriveBtn').addEventListener('click', openDrivePicker);
@@ -1774,16 +1801,25 @@
     return driveTokenClient;
   }
 
-  function requestDriveAccessToken() {
+  // Always tries a silent renewal first (no UI at all, if a live grant
+  // already exists) and only falls back to a real consent prompt once
+  // that fails -- forcing "consent" just because our own in-memory
+  // token was empty on a fresh page load was what made this ask every
+  // single time, even for a poet who'd already granted access.
+  function requestDriveAccessToken(forceConsent) {
     return new Promise(function (resolve, reject) {
       var client = ensureDriveTokenClient();
       if (!client) { reject(new Error('no_google_oauth')); return; }
       client.callback = function (resp) {
-        if (resp.error) { reject(resp); return; }
+        if (resp.error) {
+          if (!forceConsent) { requestDriveAccessToken(true).then(resolve, reject); return; }
+          reject(resp);
+          return;
+        }
         driveAccessToken = resp.access_token;
         resolve(resp.access_token);
       };
-      client.requestAccessToken({ prompt: driveAccessToken ? '' : 'consent' });
+      client.requestAccessToken({ prompt: forceConsent ? 'consent' : '' });
     });
   }
 
@@ -1859,13 +1895,13 @@
     var text = pasteBox.value;
     if (!text.trim()) { pasteStatus.textContent = 'Paste some text first.'; return; }
     var poems = parseDocText(text);
-    if (!poems.length) { pasteStatus.textContent = 'Couldn’t find any poems — check the ### title markers.'; return; }
+    if (!poems.length) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
-    pasteStatus.textContent = (wasExample ? 'Parsed ' : 'Added ') + poems.length + ' poem(s).';
+    pasteStatus.textContent = (wasExample ? 'Parsed ' : 'Added ') + poems.length + (poems.length === 1 ? ' entry.' : ' entries.');
     persist();
     renderAll();
   });
@@ -1987,15 +2023,11 @@
     var removeBtn = document.createElement('button');
     removeBtn.className = 'btn btn-ghost btn-danger';
     removeBtn.type = 'button';
-    removeBtn.title = 'Remove poem';
+    removeBtn.title = 'Archive entry';
     removeBtn.textContent = '×';
-    removeBtn.addEventListener('click', async function () {
-      var ok = await confirmDialog('Remove “' + (poem.title || 'Untitled') + '”?');
-      if (!ok) return;
-      state.poems.splice(index, 1);
-      state.isExample = false;
-      persist();
-      renderAll();
+    removeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      archivePoem(index);
     });
     titleRow.appendChild(titleInput);
     titleRow.appendChild(removeBtn);
@@ -2065,7 +2097,7 @@
     return card;
   }
 
-  function makeCompactRow(poem, index) {
+  function makeCompactRow(poem, index, plan) {
     var row = document.createElement('div');
     row.className = 'poem-compact-row';
     row.draggable = true;
@@ -2074,33 +2106,33 @@
     handle.className = 'poem-handle';
     handle.innerHTML = '<div class="poem-num">' + (index + 1) + '</div><div class="poem-grip">⋮⋮</div>';
 
-    var titleInput = document.createElement('input');
-    titleInput.className = 'poem-title-compact';
-    titleInput.placeholder = 'Untitled';
-    titleInput.value = poem.title;
-    titleInput.addEventListener('input', function () {
-      poem.title = titleInput.value;
-      state.isExample = false;
-      persist();
-      updateStats();
+    // A button, not an input: a single click opens this entry's full
+    // editor below (click again to close it); renaming happens there,
+    // in the editor's real title field.
+    var titleBtn = document.createElement('button');
+    titleBtn.type = 'button';
+    titleBtn.className = 'poem-title-compact poem-title-compact-toggle';
+    titleBtn.textContent = poem.title || 'Untitled';
+    titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
+    if (!poem.title) titleBtn.classList.add('is-placeholder');
+    titleBtn.addEventListener('click', function () {
+      if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
+      else expandedCompactIds[poem.id] = true;
+      renderPoems();
     });
 
     var removeBtn = document.createElement('button');
     removeBtn.className = 'btn btn-ghost btn-danger';
     removeBtn.type = 'button';
-    removeBtn.title = 'Remove poem';
+    removeBtn.title = 'Archive entry';
     removeBtn.textContent = '×';
-    removeBtn.addEventListener('click', async function () {
-      var ok = await confirmDialog('Remove “' + (poem.title || 'Untitled') + '”?');
-      if (!ok) return;
-      state.poems.splice(index, 1);
-      state.isExample = false;
-      persist();
-      renderAll();
+    removeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      archivePoem(index);
     });
 
     row.appendChild(handle);
-    row.appendChild(titleInput);
+    row.appendChild(titleBtn);
     row.appendChild(removeBtn);
 
     row.addEventListener('dragstart', function (e) {
@@ -2119,10 +2151,18 @@
       renderAll();
     });
 
-    return row;
+    var out = document.createDocumentFragment();
+    out.appendChild(row);
+    if (expandedCompactIds[poem.id]) {
+      var expandedCard = makeCard(poem, index, plan);
+      expandedCard.classList.add('poem-compact-expanded');
+      out.appendChild(expandedCard);
+    }
+    return out;
   }
 
   var poemsViewMode = 'full';
+  var expandedCompactIds = {};
   var poemsViewToggle = document.getElementById('poemsViewToggle');
   poemsViewToggle.addEventListener('click', function () {
     poemsViewMode = poemsViewMode === 'full' ? 'compact' : 'full';
@@ -2135,12 +2175,106 @@
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
     state.poems.forEach(function (poem, i) {
-      poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i) : makeCard(poem, i, plan));
+      poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan) : makeCard(poem, i, plan));
       poemList.appendChild(makeGap(i + 1));
     });
-    poemsCount.textContent = state.poems.length + ' poem' + (state.poems.length === 1 ? '' : 's');
+    poemsCount.textContent = state.poems.length + (state.poems.length === 1 ? ' entry' : ' entries');
+    updateArchiveButton();
     exampleBanner.hidden = !state.isExample;
   }
+
+  // ---------------------------------------------------------------------
+  // Entry archive -- "×" moves an entry here instead of deleting it
+  // outright; it's only gone for good once restored-then-removed
+  // individually, or the whole archive is emptied.
+  // ---------------------------------------------------------------------
+  var archiveToggleBtn = document.getElementById('archiveToggleBtn');
+  var archivePanel = document.getElementById('archivePanel');
+  var archiveList = document.getElementById('archiveList');
+  var emptyArchiveBtn = document.getElementById('emptyArchiveBtn');
+
+  function updateArchiveButton() {
+    var n = (state.archivedPoems || []).length;
+    archiveToggleBtn.textContent = 'Archive' + (n ? ' (' + n + ')' : '');
+  }
+
+  archiveToggleBtn.addEventListener('click', function () {
+    archivePanel.hidden = !archivePanel.hidden;
+    if (!archivePanel.hidden) renderArchiveList();
+  });
+
+  function archivePoem(index) {
+    var poem = state.poems.splice(index, 1)[0];
+    if (!poem) return;
+    poem.archivedAt = Date.now();
+    state.archivedPoems = state.archivedPoems || [];
+    state.archivedPoems.push(poem);
+    delete expandedCompactIds[poem.id];
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+
+  function restoreArchivedPoem(i) {
+    var archived = state.archivedPoems || [];
+    var poem = archived.splice(i, 1)[0];
+    if (!poem) return;
+    delete poem.archivedAt;
+    state.poems.push(poem);
+    state.isExample = false;
+    persist();
+    renderAll();
+    renderArchiveList();
+  }
+
+  function renderArchiveList() {
+    archiveList.innerHTML = '';
+    var archived = state.archivedPoems || [];
+    if (!archived.length) {
+      archiveList.innerHTML = '<div class="status-line">No archived entries.</div>';
+      return;
+    }
+    archived.forEach(function (poem, i) {
+      var row = document.createElement('div');
+      row.className = 'poem-compact-row';
+      var titleSpan = document.createElement('div');
+      titleSpan.className = 'poem-title-compact';
+      titleSpan.textContent = poem.title || 'Untitled';
+      var restoreBtn = document.createElement('button');
+      restoreBtn.className = 'btn btn-sm';
+      restoreBtn.type = 'button';
+      restoreBtn.textContent = 'Restore';
+      restoreBtn.addEventListener('click', function () { restoreArchivedPoem(i); });
+      var deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn btn-ghost btn-danger';
+      deleteBtn.type = 'button';
+      deleteBtn.title = 'Delete forever';
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', async function () {
+        var ok = await confirmDialog('Permanently delete “' + (poem.title || 'Untitled') + '”? This can’t be undone.');
+        if (!ok) return;
+        state.archivedPoems.splice(i, 1);
+        persist();
+        renderArchiveList();
+        updateArchiveButton();
+      });
+      row.appendChild(titleSpan);
+      row.appendChild(restoreBtn);
+      row.appendChild(deleteBtn);
+      archiveList.appendChild(row);
+    });
+  }
+
+  emptyArchiveBtn.addEventListener('click', async function () {
+    var archived = state.archivedPoems || [];
+    if (!archived.length) return;
+    var ok = await confirmDialog('Permanently delete all ' + archived.length + ' archived entries? This can’t be undone.');
+    if (!ok) return;
+    state.archivedPoems = [];
+    persist();
+    renderArchiveList();
+    updateArchiveButton();
+  });
 
   // ---------------------------------------------------------------------
   // Live page preview -- mirrors the real PDF layout (trim size, font,
@@ -2273,7 +2407,7 @@
     renderAll();
   });
   document.getElementById('startOverBtn').addEventListener('click', async function () {
-    var ok = await confirmDialog('Clear the title, author, and all poems and start over?');
+    var ok = await confirmDialog('Clear the title, author, and all entries and start over?');
     if (!ok) return;
     state = exampleState();
     persist();
@@ -2451,9 +2585,12 @@
   }
 
   document.getElementById('saveChapbookBtn').addEventListener('click', async function () {
-    var title = await promptDialog('Save this chapbook as:', state.bookTitle || 'Untitled Collection');
-    if (title === null) return;
-    title = title.trim() || 'Untitled Collection';
+    var title = (state.bookTitle || '').trim();
+    if (!title) {
+      title = await promptDialog('Save this chapbook as:', 'Untitled Collection');
+      if (title === null) return;
+      title = title.trim() || 'Untitled Collection';
+    }
     state.bookTitle = title;
     state.isExample = false;
     var now = Date.now();
@@ -2469,9 +2606,22 @@
     persistLibrary();
     persist();
     renderAll();
-    if (googleIdToken) await syncLibraryToCloud();
-    else setAccountStatus('Saved on this device — sign in to back it up to the cloud.');
+    if (googleIdToken) {
+      await syncLibraryToCloud();
+    } else {
+      setAccountStatus('Saved to this browser only — not backed up.', true);
+      var wantsSignIn = await confirmDialog('Saved — but only to this browser. It won’t back up to the cloud or show up on your other devices unless you sign in with Google. Sign in now?');
+      if (wantsSignIn) promptGoogleSignIn();
+    }
   });
+
+  function promptGoogleSignIn() {
+    var btn = document.getElementById('googleSignInBtn');
+    if (!btn) return;
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    btn.classList.add('signin-attention');
+    setTimeout(function () { btn.classList.remove('signin-attention'); }, 2400);
+  }
 
   // ---------------------------------------------------------------------
   // UI: settings sidebar
@@ -2579,7 +2729,7 @@
       var n = state.poems.length;
       document.getElementById('intakeCollapsedText').innerHTML = '';
       var strong = document.createElement('strong');
-      strong.textContent = n + ' poem' + (n === 1 ? '' : 's');
+      strong.textContent = n + (n === 1 ? ' entry' : ' entries');
       document.getElementById('intakeCollapsedText').appendChild(strong);
       document.getElementById('intakeCollapsedText').appendChild(document.createTextNode(
         state.intakeSourceLabel ? ' loaded from “' + state.intakeSourceLabel + '”' : ' loaded'
