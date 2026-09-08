@@ -1281,6 +1281,16 @@
         return;
       }
 
+      // Reaching a second (or later) content block for the same poem
+      // means there was a blank line between them in the original text --
+      // that's exactly what caused split('\n\n') to break them apart in
+      // the first place. A single blank-line separator never survives as
+      // its own array entry (only a double blank line does, via the
+      // `trimmed === ''` branch above), so it has to be re-inserted here
+      // as a stanza break, or every stanza after the first silently runs
+      // into the one before it.
+      if (current && current.lines.length) pushLine('');
+
       var subLines = block.split('\n');
       subLines.forEach(function (sub) {
         if (sub.trim() === '') pushLine('');
@@ -2383,6 +2393,11 @@
     titleRow.className = 'poem-title-row';
     var titleInput = document.createElement('input');
     titleInput.className = 'poem-title';
+    // The card itself is draggable (for reordering by its handle), but
+    // that must not swallow ordinary click-and-drag text selection
+    // inside this input -- an explicit draggable="false" here keeps the
+    // browser from treating a drag gesture starting here as a card drag.
+    titleInput.draggable = false;
     titleInput.placeholder = 'Untitled';
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
@@ -2409,6 +2424,7 @@
 
     var textarea = document.createElement('textarea');
     textarea.className = 'poem-text';
+    textarea.draggable = false; // see titleInput.draggable above
     textarea.value = poem.lines.join('\n');
     textarea.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     textarea.style.fontFamily = displayStackFor(state.bodyFontChoice);
