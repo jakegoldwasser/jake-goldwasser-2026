@@ -645,7 +645,6 @@
               <button data-val="helvetica">Helvetica</button>
             </div>
           </div>
-          <div class="field-note">Lora, Garamond, and Slab Serif preview here; the PDF itself always prints in Times or Helvetica.</div>
           <div class="field">
             <label>Alignment</label>
             <div class="seg seg-3" id="bodyAlignSeg">
@@ -849,9 +848,7 @@
       author: '',
       trimKey: 'digest',
       bodyFontChoice: 'garamond',
-      bodyFontFamily: 'serif',
       titleFontChoice: 'zillaslab',
-      titleFontFamily: 'serif',
       bodyAlignment: 'left',
       titleAlignment: 'left',
       bodySizeMode: 'medium',
@@ -1315,22 +1312,44 @@
     { key: 'zillaslab', label: 'Slab Serif', pdfFamily: 'serif', displayStack: "'Zilla Slab', 'Roboto Slab', serif" },
     { key: 'helvetica', label: 'Helvetica', pdfFamily: 'sans', displayStack: "Arial, Helvetica, sans-serif" }
   ];
+
+  // Precomputed offline (fontTools) from static Regular/Bold/Italic
+  // instances of each family's variable font, subset to the WinAnsi
+  // character set: per-font unitsPerEm, per-WinAnsi-byte glyph width
+  // (already scaled to /1000 units) and glyph ID (for CIDToGIDMap), plus
+  // FontDescriptor metrics. Lets the PDF writer embed real Lora/EB
+  // Garamond/Zilla Slab outlines (see fonts/*.ttf) instead of only ever
+  // rendering in the base-14 Times/Helvetica, while keeping wrapping
+  // measurement exact with zero client-side font parsing.
+  var EMBEDDED_FONTS = {"lora":{"regular":{"file":"Lora-Regular.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,263,266,346,830,529,870,695,208,305,305,520,530,253,489,246,690,621,364,537,557,542,545,578,461,562,578,250,263,530,530,530,474,796,626,622,699,745,622,548,761,780,335,373,683,578,918,762,794,606,796,628,567,640,752,653,995,649,634,610,359,690,359,823,729,252,516,582,532,598,542,338,553,599,281,261,537,272,894,607,585,597,576,433,463,387,597,505,801,530,528,511,334,231,334,530,0,760,0,253,343,429,786,512,531,400,1291,567,383,1022,0,610,0,0,224,174,400,349,401,590,841,406,1068,463,383,883,0,511,634,263,243,531,548,535,705,243,533,387,877,409,530,530,0,878,355,405,530,385,370,252,614,501,250,292,283,419,530,757,785,796,467,626,626,626,626,626,626,949,699,622,622,622,622,335,335,335,335,745,762,794,794,794,794,794,530,794,752,752,752,752,634,596,681,516,516,516,516,516,516,777,532,542,542,542,542,281,281,281,281,559,607,585,585,585,585,585,530,585,597,597,597,597,528,577,528],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,145,152,182,159,199,215,186,183,166,167,158,203,148,162,147,160,127,128,129,130,131,132,133,134,135,136,149,150,209,207,208,154,185,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,170,161,171,213,165,236,61,69,70,72,74,79,80,81,82,88,90,91,92,93,95,103,105,106,107,110,111,116,117,118,119,122,168,193,169,211,0,200,0,172,184,173,151,195,196,238,216,46,180,40,0,60,0,0,176,177,174,175,157,163,164,239,191,108,181,102,0,123,58,146,153,197,201,198,202,194,188,235,189,124,178,212,0,190,240,192,210,142,143,237,214,187,156,241,141,125,179,139,138,140,155,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,205,38,52,49,50,51,57,42,109,65,62,63,67,64,66,68,71,78,75,76,77,87,84,85,86,73,94,99,96,97,101,98,206,100,115,112,113,114,120,104,121],"ascent":1006,"descent":-274,"capHeight":700,"italicAngle":0,"bbox":[-121,-271,1258,1114],"stemV":80},"bold":{"file":"Lora-Bold.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,263,258,326,871,588,904,670,188,296,296,533,530,250,471,233,699,636,406,533,560,547,540,575,469,572,576,250,267,530,530,530,503,793,668,661,688,759,624,571,754,807,387,451,712,604,972,773,769,639,770,686,598,650,760,708,1016,699,667,604,386,699,386,823,832,524,524,573,518,596,538,369,557,621,327,302,594,312,920,638,566,601,573,480,485,413,618,538,811,548,551,514,368,259,368,530,0,809,0,250,363,450,773,520,544,429,1316,598,378,1028,0,604,0,0,223,210,423,411,382,563,845,426,1110,485,378,888,0,514,667,263,237,565,573,566,722,248,549,427,915,386,493,530,0,915,374,382,530,375,365,282,612,573,226,325,278,378,493,777,795,816,493,668,668,668,668,668,668,935,688,624,624,624,624,387,387,387,387,758,773,769,769,769,769,769,530,769,760,760,760,760,667,633,771,524,524,524,524,524,524,770,518,538,538,538,538,327,327,327,327,542,638,566,566,566,566,566,530,566,618,618,618,618,551,573,551],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,145,152,182,159,199,215,186,183,166,167,158,203,148,162,147,160,127,128,129,130,131,132,133,134,135,136,149,150,209,207,208,154,185,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,170,161,171,213,165,236,61,69,70,72,74,79,80,81,82,88,90,91,92,93,95,103,105,106,107,110,111,116,117,118,119,122,168,193,169,211,0,200,0,172,184,173,151,195,196,238,216,46,180,40,0,60,0,0,176,177,174,175,157,163,164,239,191,108,181,102,0,123,58,146,153,197,201,198,202,194,188,235,189,124,178,212,0,190,240,192,210,142,143,237,214,187,156,241,141,125,179,139,138,140,155,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,205,38,52,49,50,51,57,42,109,65,62,63,67,64,66,68,71,78,75,76,77,87,84,85,86,73,94,99,96,97,101,98,206,100,115,112,113,114,120,104,121],"ascent":1006,"descent":-274,"capHeight":700,"italicAngle":0,"bbox":[-113,-284,1311,1178],"stemV":80},"italic":{"file":"Lora-Italic.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,263,272,356,808,529,873,683,199,298,298,513,530,237,483,232,654,597,354,525,545,527,523,554,452,564,552,250,271,530,530,530,473,792,631,619,686,738,619,541,753,773,333,367,667,577,917,762,788,597,788,625,566,636,744,665,994,652,641,612,361,785,361,823,710,240,548,511,473,555,477,325,518,572,324,287,520,283,876,615,521,571,518,455,428,364,593,526,801,545,514,471,332,235,332,530,0,756,0,237,325,413,772,510,534,469,1273,566,369,1012,0,612,0,0,211,196,388,372,389,583,770,424,1040,428,369,797,0,471,641,263,253,482,547,555,699,261,524,351,876,402,517,530,0,876,358,387,530,374,358,240,592,490,237,293,270,362,521,718,733,793,465,631,631,631,631,631,631,955,686,619,619,619,619,333,333,333,333,738,762,788,788,788,788,788,530,787,744,744,744,744,641,577,650,548,548,548,548,548,548,747,473,477,477,477,477,324,324,324,324,516,615,521,521,521,521,521,529,521,593,593,593,593,514,512,514],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,145,152,182,159,199,215,186,183,166,167,158,203,148,162,147,160,127,128,129,130,131,132,133,134,135,136,149,150,209,207,208,154,185,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,170,161,171,213,165,237,61,69,70,72,74,79,80,81,82,88,90,91,92,93,95,103,105,106,107,110,111,116,117,118,119,122,168,193,169,211,0,200,0,172,184,173,151,195,196,239,216,46,180,40,0,60,0,0,176,177,174,175,157,163,164,240,191,108,181,102,0,123,58,146,153,197,201,198,202,194,188,236,189,124,178,212,0,190,241,192,210,142,143,238,214,187,156,242,141,125,179,139,138,140,155,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,205,38,52,49,50,51,57,42,109,65,62,63,67,64,66,68,71,78,75,76,77,87,84,85,86,73,94,99,96,97,101,98,206,100,115,112,113,114,120,104,121],"ascent":1006,"descent":-274,"capHeight":700,"italicAngle":-3,"bbox":[-126,-284,1235,1045],"stemV":80}},"garamond":{"regular":{"file":"EBGaramond-Regular.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,200,250,330,468,441,650,756,200,315,315,340,590,230,274,230,399,480,480,480,480,480,480,480,480,480,480,248,228,560,566,560,376,749,692,587,710,754,564,512,729,810,340,340,681,584,901,792,763,552,763,713,465,670,738,672,916,707,578,603,331,399,331,500,500,200,399,515,407,506,390,318,435,515,245,226,469,240,778,528,495,519,522,334,323,314,527,438,685,430,438,377,376,260,376,500,0,707,0,242,313,418,686,440,440,300,963,465,384,947,0,603,0,0,242,242,418,418,348,550,950,300,1066,323,384,758,0,377,578,200,250,422,490,506,570,260,400,300,665,310,595,600,274,665,300,290,590,300,284,200,537,595,200,200,259,309,595,657,717,634,376,692,692,692,692,692,692,872,710,564,564,564,564,340,340,340,340,754,792,763,763,763,763,763,600,773,738,738,738,738,578,559,504,399,399,399,399,399,399,557,407,390,390,390,390,245,245,245,245,487,528,495,495,495,495,495,590,485,527,527,527,527,438,505,438],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,159,166,197,173,215,229,201,198,181,182,172,218,162,176,161,174,128,129,130,131,132,133,134,135,136,137,163,164,223,221,222,168,200,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,185,175,186,227,180,250,63,71,72,74,76,81,82,83,84,90,91,92,93,94,96,104,106,107,108,111,112,117,118,119,120,123,183,208,184,225,0,212,0,187,199,188,165,210,211,252,230,46,195,40,0,60,0,0,191,192,189,190,171,178,179,253,206,109,196,103,0,124,58,160,167,213,216,214,217,209,203,248,204,126,193,226,177,205,254,207,224,157,158,251,228,202,170,255,156,127,194,154,153,155,169,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,219,38,52,49,50,51,57,42,110,67,64,65,69,66,68,70,73,80,77,78,79,89,86,87,88,75,95,100,97,98,102,99,220,101,116,113,114,115,121,105,122],"ascent":1007,"descent":-298,"capHeight":650,"italicAngle":0,"bbox":[-290,-324,2500,985],"stemV":80},"bold":{"file":"EBGaramond-Bold.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,237,290,398,484,461,702,799,237,304,304,357,601,247,316,247,406,529,529,529,529,529,529,529,529,529,529,282,247,541,629,541,395,781,720,626,709,766,575,546,719,801,364,370,763,586,917,809,760,607,760,760,494,695,745,706,1020,750,654,596,356,406,356,514,590,237,438,542,411,553,417,360,500,559,295,266,546,285,807,566,503,551,536,414,360,375,551,483,752,505,481,437,373,276,373,545,0,738,0,239,373,439,746,486,486,292,1021,494,372,986,0,596,0,0,239,239,439,439,373,632,960,355,1177,360,372,762,0,437,654,237,290,434,568,509,653,277,443,355,681,350,583,621,316,686,355,347,600,341,295,237,559,628,255,274,249,327,583,645,719,660,395,720,720,720,720,720,720,909,709,575,575,575,575,364,364,364,364,766,809,760,760,760,760,760,539,762,745,745,745,745,654,590,580,438,438,438,438,438,438,623,411,417,417,417,417,295,295,295,295,514,566,503,503,503,503,503,600,501,551,551,551,551,481,548,481],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,159,166,197,173,215,229,201,198,181,182,172,218,162,176,161,174,128,129,130,131,132,133,134,135,136,137,163,164,223,221,222,168,200,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,185,175,186,227,180,250,63,71,72,74,76,81,82,83,84,90,91,92,93,94,96,104,106,107,108,111,112,117,118,119,120,123,183,208,184,225,0,212,0,187,199,188,165,210,211,252,230,46,195,40,0,60,0,0,191,192,189,190,171,178,179,253,206,109,196,103,0,124,58,160,167,213,216,214,217,209,203,248,204,126,193,226,177,205,254,207,224,157,158,251,228,202,170,255,156,127,194,154,153,155,169,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,219,38,52,49,50,51,57,42,110,67,64,65,69,66,68,70,73,80,77,78,79,89,86,87,88,75,95,100,97,98,102,99,220,101,116,113,114,115,121,105,122],"ascent":1007,"descent":-298,"capHeight":650,"italicAngle":0,"bbox":[-313,-324,2689,1039],"stemV":80},"italic":{"file":"EBGaramond-Italic.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,200,287,330,449,483,644,822,200,308,309,339,590,215,268,215,276,480,480,480,480,480,480,480,480,480,480,216,215,590,590,590,316,761,658,572,631,752,576,509,687,751,362,293,699,583,991,771,694,566,694,687,467,622,700,683,1067,633,575,635,361,410,360,501,464,200,491,449,313,516,341,321,415,488,294,259,455,286,789,527,380,439,473,379,276,292,509,410,623,438,405,407,352,260,352,500,0,627,0,215,329,389,671,414,416,300,938,467,409,943,0,635,0,0,215,215,389,390,341,519,891,300,1077,276,409,584,0,407,575,200,287,395,499,488,560,260,380,300,665,293,620,600,268,665,300,290,590,0,0,200,502,589,201,200,0,307,700,627,659,642,316,658,658,658,658,658,658,800,631,576,576,576,576,362,362,362,362,752,771,694,694,694,694,694,600,713,700,700,700,700,575,551,522,491,491,491,491,491,491,521,313,341,341,341,341,294,294,294,294,415,527,380,380,380,380,380,586,380,509,509,509,509,405,451,405],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,156,163,194,170,212,226,198,195,178,179,169,215,159,173,158,171,128,129,130,131,132,133,134,135,136,137,160,161,220,218,219,165,197,1,9,10,12,14,19,20,21,22,27,28,29,30,31,33,41,43,44,45,47,48,53,54,55,56,59,182,172,183,224,177,246,63,71,72,74,76,81,82,83,84,90,91,92,93,94,96,104,106,107,108,111,112,117,118,119,120,123,180,205,181,222,0,209,0,184,196,185,162,207,208,248,227,46,192,40,0,60,0,0,188,189,186,187,168,175,176,249,203,109,193,103,0,124,58,157,164,210,213,211,214,206,200,244,201,126,190,223,174,202,250,204,221,0,0,247,225,199,167,251,0,127,191,154,153,155,166,5,2,3,7,4,6,8,11,18,15,16,17,26,23,24,25,13,32,37,34,35,39,36,216,38,52,49,50,51,57,42,110,67,64,65,69,66,68,70,73,80,77,78,79,89,86,87,88,75,95,100,97,98,102,99,217,101,116,113,114,115,121,105,122],"ascent":1007,"descent":-298,"capHeight":650,"italicAngle":-17,"bbox":[-321,-337,2500,986],"stemV":80}},"zillaslab":{"regular":{"file":"ZillaSlab-Regular.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,227,240,371,591,470,687,730,191,274,275,415,421,201,348,211,339,576,385,515,489,539,512,531,471,538,531,224,234,407,578,407,446,906,648,604,646,705,588,558,691,755,322,456,642,545,882,738,729,574,736,617,533,620,718,648,934,632,613,577,282,387,282,452,534,440,483,534,462,549,470,319,548,560,280,252,520,266,863,573,513,550,534,420,438,371,561,509,766,514,511,464,280,233,280,611,0,601,0,201,387,367,585,467,513,338,991,533,287,998,0,577,0,0,203,201,365,363,357,623,1079,374,1066,438,287,833,0,464,613,227,223,475,509,514,587,228,589,395,624,377,451,605,0,591,335,396,451,347,342,440,572,618,219,256,260,379,451,708,746,734,440,648,648,648,648,648,648,919,646,589,589,589,589,322,322,322,322,706,738,728,728,728,728,728,388,735,717,717,717,717,613,572,652,483,483,483,483,483,483,759,462,470,470,470,470,280,280,279,280,524,573,513,513,513,513,513,448,516,562,562,562,562,511,524,511],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,140,171,163,205,164,147,170,151,152,182,185,133,142,134,148,54,55,56,57,58,59,60,61,62,63,136,137,187,188,189,138,146,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,153,149,154,157,145,195,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,155,150,156,158,0,204,0,176,208,177,135,168,169,196,165,87,178,97,0,94,0,0,174,175,172,173,161,143,144,198,201,121,179,132,0,129,92,217,141,206,207,210,209,184,160,197,203,166,180,192,0,202,199,159,190,215,216,194,193,162,183,200,214,167,181,212,211,213,139,68,64,65,69,66,67,70,71,75,72,73,74,79,76,77,78,96,80,81,84,85,83,82,186,86,90,88,89,91,93,95,122,99,98,100,102,101,103,104,105,107,106,108,109,111,110,112,113,131,114,116,115,117,119,118,191,120,124,123,125,126,128,130,127],"ascent":787,"descent":-213,"capHeight":650,"italicAngle":0,"bbox":[-144,-231,3260,883],"stemV":80},"bold":{"file":"ZillaSlab-Bold.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,187,261,387,574,491,738,702,208,289,289,416,401,222,321,228,376,576,404,537,533,570,522,536,495,539,535,248,249,397,545,395,481,894,687,622,644,698,593,567,682,761,352,486,674,558,900,760,712,598,718,638,557,651,719,685,989,666,646,589,299,421,299,469,502,440,506,551,471,570,483,343,568,581,299,265,553,285,876,593,523,571,551,441,459,398,585,527,760,537,530,477,299,244,299,568,0,592,0,222,365,400,660,460,482,338,1062,557,301,996,0,589,0,0,230,222,401,395,351,590,1028,374,1092,459,301,826,0,477,646,187,247,494,495,478,595,240,631,412,596,375,471,569,0,561,335,363,418,368,351,440,592,657,230,256,282,374,471,744,785,776,474,687,687,687,687,687,687,934,645,592,592,592,592,352,352,352,352,700,760,711,711,711,711,711,372,714,719,719,719,719,646,604,685,506,506,506,506,506,506,773,471,483,483,483,483,299,299,299,299,528,593,522,522,522,522,522,405,524,585,585,585,585,529,545,529],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,140,171,163,205,164,147,170,151,152,182,185,133,142,134,148,54,55,56,57,58,59,60,61,62,63,136,137,187,188,189,138,146,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,153,149,154,157,145,195,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,155,150,156,158,0,204,0,176,208,177,135,168,169,196,165,87,178,97,0,94,0,0,174,175,172,173,161,143,144,198,201,121,179,132,0,129,92,217,141,206,207,210,209,184,160,197,203,166,180,192,0,202,199,159,190,215,216,194,193,162,183,200,214,167,181,212,211,213,139,68,64,65,69,66,67,70,71,75,72,73,74,79,76,77,78,96,80,81,84,85,83,82,186,86,90,88,89,91,93,95,122,99,98,100,102,101,103,104,105,107,106,108,109,111,110,112,113,131,114,116,115,117,119,118,191,120,124,123,125,126,128,130,127],"ascent":787,"descent":-213,"capHeight":650,"italicAngle":0,"bbox":[-150,-248,3260,906],"stemV":80},"italic":{"file":"ZillaSlab-Italic.ttf","unitsPerEm":1000,"widths":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,220,237,366,579,463,675,716,190,273,272,407,414,200,342,208,376,566,375,505,504,529,503,526,463,528,525,220,232,397,565,398,438,891,632,588,630,686,573,544,675,733,311,442,623,528,856,715,710,561,720,599,523,605,696,632,909,616,597,563,279,506,279,445,527,431,505,504,440,510,437,306,513,505,255,245,446,239,787,523,480,520,502,343,418,343,522,469,713,477,468,448,277,230,277,603,0,589,0,200,377,363,574,458,501,331,973,523,280,979,0,563,0,0,204,200,362,359,350,611,1055,367,1066,418,281,768,0,449,597,220,219,450,499,503,577,211,578,387,612,385,441,591,0,591,328,390,444,340,336,431,558,606,216,251,254,354,442,691,731,718,431,633,633,633,633,633,633,904,628,573,573,573,573,311,311,311,311,687,715,710,710,710,710,710,381,706,696,696,696,696,597,556,599,504,504,504,504,504,504,705,440,437,437,437,437,256,255,256,255,490,523,481,481,481,481,481,437,478,522,522,522,522,468,502,468],"gids":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,140,171,163,205,164,147,170,151,152,182,185,133,142,134,148,54,55,56,57,58,59,60,61,62,63,136,137,187,188,189,138,146,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,153,149,154,157,145,195,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,155,150,156,158,0,204,0,176,208,177,135,168,169,196,165,87,178,97,0,94,0,0,174,175,172,173,161,143,144,198,201,121,179,132,0,129,92,217,141,206,207,210,209,184,160,197,203,166,180,192,0,202,199,159,190,215,216,194,193,162,183,200,214,167,181,212,211,213,139,68,64,65,69,66,67,70,71,75,72,73,74,79,76,77,78,96,80,81,84,85,83,82,186,86,90,88,89,91,93,95,122,99,98,100,102,101,103,104,105,107,106,108,109,111,110,112,113,131,114,116,115,117,119,118,191,120,124,123,125,126,128,130,127],"ascent":787,"descent":-213,"capHeight":650,"italicAngle":-6,"bbox":[-169,-225,1229,883],"stemV":80}}};
+
   function getFontChoice(key) {
     for (var i = 0; i < FONT_CHOICES.length; i++) if (FONT_CHOICES[i].key === key) return FONT_CHOICES[i];
     return FONT_CHOICES[0];
   }
-  function pdfFamilyFor(key) { return getFontChoice(key).pdfFamily; }
   function displayStackFor(key) { return getFontChoice(key).displayStack; }
 
   // ---------------------------------------------------------------------
-  // PDF text measurement (canvas approximation of base-14 font metrics)
+  // PDF text measurement -- exact, from the embedded font's own widths for
+  // lora/garamond/zillaslab (see EMBEDDED_FONTS above); a canvas-based
+  // Times/Arial approximation only for helvetica, which stays a base-14
+  // PDF font (never embedded).
   // ---------------------------------------------------------------------
   var measureCtx = document.createElement('canvas').getContext('2d');
-  function measureStack(fontFamily) {
-    return fontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
+  function measureStack(pdfFamily) {
+    return pdfFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
   }
-  function measure(text, sizePt, fontFamily, weight, italic) {
-    measureCtx.font = (italic ? 'italic ' : '') + (weight || 400) + ' ' + sizePt + 'px ' + measureStack(fontFamily);
+  function styleFor(weight, italic) { return weight >= 600 ? 'bold' : (italic ? 'italic' : 'regular'); }
+  function measure(text, sizePt, fontChoice, weight, italic) {
+    var embedded = EMBEDDED_FONTS[fontChoice];
+    if (embedded) {
+      var table = embedded[styleFor(weight, italic)].widths;
+      var winBytes = toWinAnsiBytes(text);
+      var total = 0;
+      for (var i = 0; i < winBytes.length; i++) total += table[winBytes[i]] || 0;
+      return total * sizePt / 1000;
+    }
+    measureCtx.font = (italic ? 'italic ' : '') + (weight || 400) + ' ' + sizePt + 'px ' + measureStack(getFontChoice(fontChoice).pdfFamily);
     return measureCtx.measureText(text).width;
   }
 
@@ -1397,7 +1416,7 @@
 
   function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, state) {
     var titleSizePt = resolveTitleSizePt(state);
-    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, state.titleFontFamily, 600).slice(0, 2) : [];
+    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
     var lineHeight = sizePt * 1.55;
@@ -1405,7 +1424,7 @@
     var wasWrapped = false;
     poem.lines.forEach(function (line) {
       if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
-      var wrapped = wrapLine(line, contentWidthPt, sizePt, state.bodyFontFamily, 400);
+      var wrapped = wrapLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400);
       if (wrapped.length > 1) wasWrapped = true;
       wrapped.forEach(function (w) {
         renderLines.push({ blank: false, text: w });
@@ -1536,15 +1555,78 @@
   function pushAscii(arr, str) { for (var i = 0; i < str.length; i++) arr.push(str.charCodeAt(i) & 0xFF); }
   function pad10(n) { var s = String(n); while (s.length < 10) s = '0' + s; return s; }
 
-  function fontKeys(fontFamily) {
-    return fontFamily === 'sans' ? { reg: 'F4', bold: 'F5', ital: 'F6' } : { reg: 'F1', bold: 'F2', ital: 'F3' };
+  // Which specific fonts a page-content build needs, and what PDF
+  // resource name (e.g. "F1") each is assigned. Base14 choices
+  // (helvetica, or a fallback) get a plain Type1 font; lora/garamond/
+  // zillaslab get a real embedded font (see writeFontObjects below) --
+  // titles are only ever drawn bold, so only that one style is planned
+  // for the title choice, while body text also needs bold/italic for
+  // inline **bold**/*italic* markup.
+  var BASE14_STYLES = {
+    serif: { regular: 'Times-Roman', bold: 'Times-Bold', italic: 'Times-Italic' },
+    sans: { regular: 'Helvetica', bold: 'Helvetica-Bold', italic: 'Helvetica-Oblique' }
+  };
+  function planFonts(state) {
+    var byDedupeKey = {}, ordered = [], counter = 0;
+    function resolve(choiceKey, style) {
+      var fc = getFontChoice(choiceKey);
+      var embeddable = fc.pdfFamily !== 'sans' && EMBEDDED_FONTS[choiceKey];
+      var dedupeKey = (embeddable ? choiceKey : fc.pdfFamily) + ':' + style;
+      if (byDedupeKey[dedupeKey]) return byDedupeKey[dedupeKey];
+      counter++;
+      var name = 'F' + counter;
+      var entry = embeddable
+        ? { name: name, embedded: true, choice: choiceKey, style: style, file: EMBEDDED_FONTS[choiceKey][style].file, metrics: EMBEDDED_FONTS[choiceKey][style] }
+        : { name: name, embedded: false, baseFont: BASE14_STYLES[fc.pdfFamily][style] };
+      byDedupeKey[dedupeKey] = entry;
+      ordered.push(entry);
+      return entry;
+    }
+    return {
+      titleKeys: { bold: resolve(state.titleFontChoice, 'bold') },
+      bodyKeys: { reg: resolve(state.bodyFontChoice, 'regular'), bold: resolve(state.bodyFontChoice, 'bold'), ital: resolve(state.bodyFontChoice, 'italic') },
+      fonts: ordered
+    };
   }
 
-  function drawText(bytes, fontKey, sizePt, x, y, text, rgb) {
-    pushAscii(bytes, 'BT\n/' + fontKey + ' ' + sizePt.toFixed(2) + ' Tf\n' +
+  // Fetches the raw bytes (same-origin, chapbookbuilder/fonts/) for every
+  // distinct embedded font a plan needs, once each. A fetch failure here
+  // propagates up to the export's own try/catch rather than silently
+  // falling back to a base-14 font -- that would leave the already-
+  // computed layout (measured against the intended font's real widths)
+  // visibly mismatched against whatever got drawn instead.
+  async function fetchNeededFontBytes(fontPlan) {
+    var files = [];
+    fontPlan.fonts.forEach(function (f) { if (f.embedded && files.indexOf(f.file) === -1) files.push(f.file); });
+    var map = {};
+    await Promise.all(files.map(async function (file) {
+      var res = await fetch('fonts/' + file);
+      if (!res.ok) throw new Error('Could not load font ' + file + ' (' + res.status + ')');
+      map[file] = new Uint8Array(await res.arrayBuffer());
+    }));
+    return map;
+  }
+
+  function hex4(n) { var s = (n & 0xFFFF).toString(16); while (s.length < 4) s = '0' + s; return s; }
+
+  function drawText(bytes, fontRef, sizePt, x, y, text, rgb) {
+    pushAscii(bytes, 'BT\n/' + fontRef.name + ' ' + sizePt.toFixed(2) + ' Tf\n' +
       rgb[0].toFixed(3) + ' ' + rgb[1].toFixed(3) + ' ' + rgb[2].toFixed(3) + ' rg\n' +
       '1 0 0 1 ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' Tm\n');
-    pdfLiteralStringBytes(text).forEach(function (b) { bytes.push(b); });
+    if (fontRef.embedded) {
+      // Identity-H: each shown code IS the CID directly (no name/cmap
+      // lookup) -- we've defined CID = the same WinAnsi byte value the
+      // base-14 path below would write as a single literal byte, just
+      // 2 bytes wide instead of 1. The CIDToGIDMap built in
+      // writeFontObjects is what resolves each CID to its actual glyph
+      // inside the embedded font; encoding a GID here directly would
+      // skip that lookup and show the wrong glyph.
+      var winBytes = toWinAnsiBytes(text), hex = '<';
+      for (var i = 0; i < winBytes.length; i++) hex += hex4(winBytes[i]);
+      pushAscii(bytes, hex + '>');
+    } else {
+      pdfLiteralStringBytes(text).forEach(function (b) { bytes.push(b); });
+    }
     pushAscii(bytes, ' Tj\nET\n');
   }
   function drawLine(bytes, x1, y1, x2, y2, gray, w) {
@@ -1556,13 +1638,13 @@
   // **bold**/*italic*/++underline++ markers render as real formatting
   // instead of literal asterisks. Width/position for the line as a
   // whole is still measured on the marker-stripped text by the caller.
-  function drawFormattedRuns(bytes, keys, fontFamily, sizePt, x, y, text, rgb) {
+  function drawFormattedRuns(bytes, keys, fontChoice, sizePt, x, y, text, rgb) {
     var runs = parseInlineRuns(text);
     var curX = x;
     runs.forEach(function (run) {
       if (!run.text) return;
       var key = run.bold ? keys.bold : (run.italic ? keys.ital : keys.reg);
-      var w = measure(run.text, sizePt, fontFamily, run.bold ? 700 : 400, !!run.italic);
+      var w = measure(run.text, sizePt, fontChoice, run.bold ? 700 : 400, !!run.italic);
       drawText(bytes, key, sizePt, curX, y, run.text, rgb);
       if (run.underline) {
         var uy = y - sizePt * 0.09;
@@ -1601,9 +1683,8 @@
     return { pushPart: pushPart, allocObj: allocObj, beginObj: beginObj, endObj: endObj, finish: finish };
   }
 
-  function fontResourcesStr(fontNums) {
-    return '<< /Font << /F1 ' + fontNums.F1 + ' 0 R /F2 ' + fontNums.F2 + ' 0 R /F3 ' + fontNums.F3 +
-      ' 0 R /F4 ' + fontNums.F4 + ' 0 R /F5 ' + fontNums.F5 + ' 0 R /F6 ' + fontNums.F6 + ' 0 R >>';
+  function fontResourcesStr(fonts) {
+    return '<< /Font << ' + fonts.map(function (f) { return '/' + f.name + ' ' + f.objNum + ' 0 R'; }).join(' ') + ' >>';
   }
 
   // Renders every page in final reading order (title page, table of
@@ -1611,10 +1692,10 @@
   // PDF object plumbing yet. Both the plain export and the imposed
   // booklet export share this -- the booklet export just re-places
   // these same pages two-up on landscape sheets afterward.
-  function buildReadingPageContents(state) {
+  function buildReadingPageContents(state, fontPlan) {
     var plan = planBooklet(state);
-    var titleKeys = fontKeys(state.titleFontFamily);
-    var bodyKeys = fontKeys(state.bodyFontFamily);
+    var titleKeys = fontPlan.titleKeys;
+    var bodyKeys = fontPlan.bodyKeys;
     var contentLeft = plan.marginSide;
     var contentRight = plan.PAGE_W - plan.marginSide;
     var contentTop = plan.PAGE_H - plan.marginTop;
@@ -1624,7 +1705,7 @@
     function pageNumberOp(bytes, n) {
       if (!n || !state.showPageNumbers) return;
       var s = String(n);
-      var w = measure(s, 9.5, state.bodyFontFamily, 400);
+      var w = measure(s, 9.5, state.bodyFontChoice, 400);
       if (state.pageNumberStyle === 'corners') {
         var isRecto = (n % 2) === 1;
         var x = isRecto ? (contentRight - w) : contentLeft;
@@ -1640,17 +1721,17 @@
       var bookTitle = (state.bookTitle || 'Untitled Collection').trim();
       var author = (state.author || '').trim();
       var titleSize = 27;
-      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.titleFontFamily, 600).slice(0, 4);
+      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.titleFontChoice, 600).slice(0, 4);
       var titleLineH = titleSize * 1.3;
       var blockH = titleLines.length * titleLineH + (author ? 40 : 0);
       var startY = plan.PAGE_H / 2 + blockH / 2;
       titleLines.forEach(function (line, i) {
-        var w = measure(line, titleSize, state.titleFontFamily, 600);
+        var w = measure(line, titleSize, state.titleFontChoice, 600);
         drawText(bytes, titleKeys.bold, titleSize, plan.PAGE_W / 2 - w / 2, startY - i * titleLineH, line, INK_RGB);
       });
       if (author) {
         var y = startY - titleLines.length * titleLineH - 14;
-        var aw = measure(author, 13, state.bodyFontFamily, 400);
+        var aw = measure(author, 13, state.bodyFontChoice, 400);
         drawText(bytes, bodyKeys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
       }
       contents.push(bytes);
@@ -1675,17 +1756,17 @@
           var poem = state.poems[idx];
           var startPage = plan.layouts[idx].startPage;
           var numStr = String(startPage);
-          var numW = measure(numStr, plan.tocFontSize, state.bodyFontFamily, 400);
+          var numW = measure(numStr, plan.tocFontSize, state.bodyFontChoice, 400);
           var titleMaxW = plan.contentWidth - numW - 16;
           var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
-          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.bodyFontFamily, 400);
+          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.bodyFontChoice, 400);
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
           drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentLeft, lineY, display, INK_RGB);
-          var titleW = measure(display, plan.tocFontSize, state.bodyFontFamily, 400);
+          var titleW = measure(display, plan.tocFontSize, state.bodyFontChoice, 400);
           var dotX0 = contentLeft + titleW + 6;
           var dotX1 = contentRight - numW - 8;
           if (dotX1 > dotX0) {
-            var dotW = measure('.', plan.tocFontSize, state.bodyFontFamily, 400);
+            var dotW = measure('.', plan.tocFontSize, state.bodyFontChoice, 400);
             var dotStep = dotW * 2.2;
             var dotCount = Math.max(0, Math.floor((dotX1 - dotX0) / dotStep));
             var dots = '';
@@ -1708,7 +1789,7 @@
         var y = contentTop;
         if (pageIdx === 0) {
           layout.titleLines.forEach(function (tl, i) {
-            var w = measure(tl, layout.titleSizePt, state.titleFontFamily, 600);
+            var w = measure(tl, layout.titleSizePt, state.titleFontChoice, 600);
             var tx = resolveX(effAlign, w, contentLeft, contentRight);
             var ty = y - (i + 1) * (layout.titleSizePt * 1.28) + layout.titleSizePt * 0.28;
             drawText(bytes, titleKeys.bold, layout.titleSizePt, tx, ty, tl, INK_RGB);
@@ -1718,9 +1799,9 @@
         pageLines.forEach(function (rl, li) {
           var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
           if (rl.blank) return;
-          var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontFamily, 400);
+          var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice, 400);
           var x = resolveX(effBodyAlign, w, contentLeft, contentRight);
-          drawFormattedRuns(bytes, bodyKeys, state.bodyFontFamily, layout.sizePt, x, lineY, rl.text, INK_RGB);
+          drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
         contents.push(bytes);
@@ -1737,7 +1818,7 @@
     backLines.push('© ' + year);
     var backSize = 9.5, backLineH = backSize * 1.5;
     backLines.forEach(function (line, i) {
-      var w = measure(line, backSize, state.bodyFontFamily, 400);
+      var w = measure(line, backSize, state.bodyFontChoice, 400);
       var by = 44 + (backLines.length - 1 - i) * backLineH;
       drawText(backBytes, bodyKeys.reg, backSize, plan.PAGE_W / 2 - w / 2, by, line, MUTED_RGB);
     });
@@ -1746,23 +1827,69 @@
     return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents };
   }
 
-  function writeFontObjects(w, fontNums) {
-    var baseFonts = { F1: 'Times-Roman', F2: 'Times-Bold', F3: 'Times-Italic', F4: 'Helvetica', F5: 'Helvetica-Bold', F6: 'Helvetica-Oblique' };
-    Object.keys(fontNums).forEach(function (key) {
-      w.beginObj(fontNums[key]);
-      w.pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /' + baseFonts[key] + ' /Encoding /WinAnsiEncoding >>\n');
+  // Writes each font's PDF object(s). A base-14 entry is a plain Type1
+  // font. An embedded entry is a full Type0/Identity-H CID font: the
+  // FontFile2 stream carries the actual (subset) TrueType outlines, and
+  // CIDToGIDMap tells the viewer which glyph each of our 256 CIDs (one
+  // per WinAnsi byte, matching what drawText's hex string emits) maps
+  // to inside that specific font file -- everything here (widths,
+  // gids, ascent/descent/etc) came from EMBEDDED_FONTS, computed
+  // offline, so no font parsing happens on the client at all.
+  function writeFontObjects(w, fonts, fontBytesMap) {
+    fonts.forEach(function (f) {
+      if (!f.embedded) {
+        w.beginObj(f.objNum);
+        w.pushPart('<< /Type /Font /Subtype /Type1 /BaseFont /' + f.baseFont + ' /Encoding /WinAnsiEncoding >>\n');
+        w.endObj();
+        return;
+      }
+      var m = f.metrics, fileBytes = fontBytesMap[f.file];
+      var fontFileNum = w.allocObj(), descNum = w.allocObj(), cidToGidNum = w.allocObj(), descendantNum = w.allocObj();
+      var tag = 'AAAAAA+' + f.choice + '-' + f.style;
+
+      w.beginObj(fontFileNum);
+      w.pushPart('<< /Length ' + fileBytes.length + ' /Length1 ' + fileBytes.length + ' >>\nstream\n');
+      w.pushPart(fileBytes);
+      w.pushPart('\nendstream\n');
+      w.endObj();
+
+      w.beginObj(descNum);
+      w.pushPart('<< /Type /FontDescriptor /FontName /' + tag + ' /Flags 32 /FontBBox [' + m.bbox.join(' ') +
+        '] /ItalicAngle ' + m.italicAngle + ' /Ascent ' + m.ascent + ' /Descent ' + m.descent +
+        ' /CapHeight ' + m.capHeight + ' /StemV ' + m.stemV + ' /FontFile2 ' + fontFileNum + ' 0 R >>\n');
+      w.endObj();
+
+      var mapBytes = [];
+      for (var c = 0; c < 256; c++) { var gid = m.gids[c] || 0; mapBytes.push((gid >> 8) & 0xFF, gid & 0xFF); }
+      w.beginObj(cidToGidNum);
+      w.pushPart('<< /Length ' + mapBytes.length + ' >>\nstream\n');
+      w.pushPart(new Uint8Array(mapBytes));
+      w.pushPart('\nendstream\n');
+      w.endObj();
+
+      w.beginObj(descendantNum);
+      w.pushPart('<< /Type /Font /Subtype /CIDFontType2 /BaseFont /' + tag +
+        ' /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ' + descNum +
+        ' 0 R /DW 0 /W [0 [' + m.widths.join(' ') + ']] /CIDToGIDMap ' + cidToGidNum + ' 0 R >>\n');
+      w.endObj();
+
+      w.beginObj(f.objNum);
+      w.pushPart('<< /Type /Font /Subtype /Type0 /BaseFont /' + tag + ' /Encoding /Identity-H /DescendantFonts [' +
+        descendantNum + ' 0 R] >>\n');
       w.endObj();
     });
   }
 
-  function buildBookletPdf(state) {
-    var built = buildReadingPageContents(state);
+  async function buildBookletPdf(state) {
+    var fontPlan = planFonts(state);
+    var fontBytesMap = await fetchNeededFontBytes(fontPlan);
+    var built = buildReadingPageContents(state, fontPlan);
     var w = makePdfWriter();
     w.pushPart('%PDF-1.4\n');
     var catalogNum = w.allocObj();
     var pagesNum = w.allocObj();
-    var fontNums = { F1: w.allocObj(), F2: w.allocObj(), F3: w.allocObj(), F4: w.allocObj(), F5: w.allocObj(), F6: w.allocObj() };
-    var resourcesStr = fontResourcesStr(fontNums) + ' >>';
+    fontPlan.fonts.forEach(function (f) { f.objNum = w.allocObj(); });
+    var resourcesStr = fontResourcesStr(fontPlan.fonts) + ' >>';
 
     var kids = [];
     built.contents.forEach(function (contentBytesArr) {
@@ -1786,7 +1913,7 @@
     w.beginObj(pagesNum);
     w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
     w.endObj();
-    writeFontObjects(w, fontNums);
+    writeFontObjects(w, fontPlan.fonts, fontBytesMap);
 
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
@@ -1817,9 +1944,11 @@
     return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
   }
 
-  function buildImposedBookletPdf(state) {
-    var built = buildReadingPageContents(state);
-    var keys = fontKeys(state.bodyFontFamily);
+  async function buildImposedBookletPdf(state) {
+    var fontPlan = planFonts(state);
+    var fontBytesMap = await fetchNeededFontBytes(fontPlan);
+    var built = buildReadingPageContents(state, fontPlan);
+    var keys = fontPlan.bodyKeys;
     var BOOK_W = built.PAGE_W, BOOK_H = built.PAGE_H;
     var contents = built.contents.slice();
     // The back cover (always the last content page) must stay last --
@@ -1839,11 +1968,11 @@
     w.pushPart('%PDF-1.4\n');
     var catalogNum = w.allocObj();
     var pagesNum = w.allocObj();
-    var fontNums = { F1: w.allocObj(), F2: w.allocObj(), F3: w.allocObj(), F4: w.allocObj(), F5: w.allocObj(), F6: w.allocObj() };
+    fontPlan.fonts.forEach(function (f) { f.objNum = w.allocObj(); });
     var formNums = contents.map(function () { return w.allocObj(); });
     var xobjEntries = formNums.map(function (num, i) { return '/Fm' + i + ' ' + num + ' 0 R'; }).join(' ');
-    var pageResourcesStr = fontResourcesStr(fontNums) + ' /XObject << ' + xobjEntries + ' >> >>';
-    var formResourcesStr = fontResourcesStr(fontNums) + ' >>';
+    var pageResourcesStr = fontResourcesStr(fontPlan.fonts) + ' /XObject << ' + xobjEntries + ' >> >>';
+    var formResourcesStr = fontResourcesStr(fontPlan.fonts) + ' >>';
 
     var kids = [];
     function placeForm(bytes, contentIdx, x, y) {
@@ -1895,7 +2024,7 @@
     w.beginObj(pagesNum);
     w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
     w.endObj();
-    writeFontObjects(w, fontNums);
+    writeFontObjects(w, fontPlan.fonts, fontBytesMap);
 
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
@@ -3129,8 +3258,8 @@
       });
     });
   }
-  wireSeg('bodyFontSeg', function (val) { state.bodyFontChoice = val; state.bodyFontFamily = pdfFamilyFor(val); persist(); renderAll(); });
-  wireSeg('titleFontSeg', function (val) { state.titleFontChoice = val; state.titleFontFamily = pdfFamilyFor(val); persist(); renderAll(); });
+  wireSeg('bodyFontSeg', function (val) { state.bodyFontChoice = val; persist(); renderAll(); });
+  wireSeg('titleFontSeg', function (val) { state.titleFontChoice = val; persist(); renderAll(); });
   wireSeg('bodyAlignSeg', function (val) { state.bodyAlignment = val; persist(); renderAll(); });
   wireSeg('titleAlignSeg', function (val) { state.titleAlignment = val; persist(); renderAll(); });
   wireSeg('bodySizeModeSeg', function (val) { state.bodySizeMode = val; persist(); renderAll(); });
@@ -3259,7 +3388,7 @@
   async function runExportForState(exportState, buildFn, filenameSuffix) {
     setExportStatus('Building PDF…');
     try {
-      var bytes = buildFn(exportState);
+      var bytes = await buildFn(exportState);
       var filename = slugify(exportState.bookTitle) + filenameSuffix;
       await saveOrDownloadPdf(filename, bytes);
     } catch (err) {
