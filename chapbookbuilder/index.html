@@ -639,8 +639,8 @@
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-4" id="bodyFontSeg">
-              <button data-val="lora" class="active">Lora</button>
-              <button data-val="garamond">Garamond</button>
+              <button data-val="lora">Lora</button>
+              <button data-val="garamond" class="active">Garamond</button>
               <button data-val="zillaslab">Slab Serif</button>
               <button data-val="helvetica">Helvetica</button>
             </div>
@@ -848,7 +848,7 @@
       bookTitle: '',
       author: '',
       trimKey: 'digest',
-      bodyFontChoice: 'lora',
+      bodyFontChoice: 'garamond',
       bodyFontFamily: 'serif',
       titleFontChoice: 'zillaslab',
       titleFontFamily: 'serif',
@@ -1412,10 +1412,11 @@
       });
     });
 
-    var contLabelSizePt = Math.max(8, titleSizePt * 0.6);
-    var contHeaderH = poem.title ? (contLabelSizePt * 1.3 + 16) : 4;
     var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
-    var laterCap = Math.max(1, Math.floor((contentHeightPt - contHeaderH) / lineHeight));
+    // A continuation page carries no title or label of its own -- readers
+    // expect an entry to simply carry on onto the next page -- so it gets
+    // the full content height, same as any other untitled page.
+    var laterCap = Math.max(1, Math.floor(contentHeightPt / lineHeight));
 
     var pages = [];
     if (renderLines.length === 0) pages.push([]);
@@ -1427,7 +1428,7 @@
     }
     return {
       sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
-      titleLines: titleLines, titleH: titleH, contHeaderH: contHeaderH, contLabelSizePt: contLabelSizePt, pages: pages,
+      titleLines: titleLines, titleH: titleH, pages: pages,
       wasWrapped: wasWrapped
     };
   }
@@ -1713,12 +1714,6 @@
             drawText(bytes, titleKeys.bold, layout.titleSizePt, tx, ty, tl, INK_RGB);
           });
           y -= layout.titleH;
-        } else {
-          var contLabel = (poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled') + '  (continued)';
-          var cw = measure(contLabel, layout.contLabelSizePt, state.titleFontFamily, 400);
-          var cx = resolveX(effAlign, cw, contentLeft, contentRight);
-          drawText(bytes, titleKeys.ital, layout.contLabelSizePt, cx, y - layout.contLabelSizePt, contLabel, MUTED_RGB);
-          y -= layout.contHeaderH;
         }
         pageLines.forEach(function (rl, li) {
           var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
@@ -2852,17 +2847,10 @@
       var effAlign = poem.titleAlign || state.titleAlignment;
       var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       var html = '';
-      if (isFirstPoemPage) {
-        if (layout.titleLines.length) {
-          html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
-            '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
-            layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
-        }
-      } else {
-        var contLabel = (poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled') + '  (continued)';
-        html += '<div style="font-style:italic; font-family:' + titleStack + '; text-align:' + effAlign +
-          '; font-size:' + (layout.contLabelSizePt * scale).toFixed(2) + 'px; color:#6B5A42; margin-bottom:' + ((layout.contHeaderH - layout.contLabelSizePt) * scale).toFixed(2) + 'px;">' +
-          escapeHtml(contLabel) + '</div>';
+      if (isFirstPoemPage && layout.titleLines.length) {
+        html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
+          '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
+          layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
       }
       html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
       (layout.pages[pageIndex] || []).forEach(function (rl) {
