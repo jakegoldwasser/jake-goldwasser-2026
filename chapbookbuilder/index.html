@@ -65,6 +65,20 @@
   h1.appname .c2 { color: var(--swatch-green); }
   h1.appname .c3 { color: var(--swatch-brown); }
   h1.appname .c4 { color: var(--swatch-blue); }
+  @media (prefers-reduced-motion: no-preference) {
+    h1.appname span { display: inline-block; animation: letterJitter 2.4s ease-in-out infinite; }
+    h1.appname span:nth-child(1) { animation-delay: 0s; }
+    h1.appname span:nth-child(2) { animation-delay: 0.09s; }
+    h1.appname span:nth-child(3) { animation-delay: 0.18s; }
+    h1.appname span:nth-child(4) { animation-delay: 0.27s; }
+    h1.appname span:nth-child(5) { animation-delay: 0.36s; }
+    h1.appname span:nth-child(6) { animation-delay: 0.45s; }
+    h1.appname span:nth-child(7) { animation-delay: 0.54s; }
+  }
+  @keyframes letterJitter {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
@@ -84,6 +98,8 @@
   .btn-link:hover { color: var(--accent); }
 
   .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
+  .autosave-indicator { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+  .autosave-indicator.is-synced { color: var(--swatch-green); }
   #bookTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid var(--line-strong);
@@ -466,6 +482,7 @@
   <div class="chapbook-header">
     <input type="text" id="bookTitleInput" placeholder="Book title">
     <input type="text" id="authorInput" placeholder="Author name">
+    <div class="autosave-indicator" id="autosaveIndicator"></div>
   </div>
 
   <div class="panel" id="intakePanel">
@@ -935,7 +952,36 @@
     saveTimer = setTimeout(function () {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
       syncCurrentIntoLibrary();
+      scheduleCloudAutosave();
     }, 300);
+  }
+
+  // Once a chapbook has been named and saved at least once (chapbookId
+  // set), further edits keep syncing to the cloud on their own -- not on
+  // every keystroke, but a few seconds after typing settles, same spirit
+  // as the local autosave above.
+  var cloudAutosaveTimer = null;
+  function scheduleCloudAutosave() {
+    if (!state.chapbookId || !googleIdToken) return;
+    clearTimeout(cloudAutosaveTimer);
+    cloudAutosaveTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
+  }
+
+  // Always-visible, so it's never ambiguous whether edits are only
+  // local or also reaching the cloud.
+  function updateAutosaveIndicator() {
+    var el = document.getElementById('autosaveIndicator');
+    if (!el) return;
+    if (!state.chapbookId) {
+      el.textContent = 'Autosaving to this browser only — save this chapbook to also back it up to the cloud.';
+      el.classList.remove('is-synced');
+    } else if (googleIdToken) {
+      el.textContent = 'Autosaving to this browser, syncing to the cloud.';
+      el.classList.add('is-synced');
+    } else {
+      el.textContent = 'Autosaving to this browser only — sign in with Google to also sync to the cloud.';
+      el.classList.remove('is-synced');
+    }
   }
 
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -985,6 +1031,7 @@
       syncSidebarFromState();
     }
     setAccountStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
+    updateAutosaveIndicator();
     await pullLibraryFromCloud();
   }
 
@@ -996,6 +1043,7 @@
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
     setAccountStatus('');
+    updateAutosaveIndicator();
     try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
   }
   document.getElementById('signOutBtn').addEventListener('click', signOut);
@@ -3067,6 +3115,7 @@
     renderPoems();
     updateStats();
     applyIntakeCollapsedView();
+    updateAutosaveIndicator();
   }
 
   // ---------------------------------------------------------------------
