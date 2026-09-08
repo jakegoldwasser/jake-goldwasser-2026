@@ -56,7 +56,7 @@
      stay pinned beside the wordmark instead of dropping to a whole new
      line below the tagline. Only true narrow/mobile widths fall back to
      stacking the two halves, via the media query below. */
-  .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+  .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
   .masthead > div:first-child { flex-shrink: 0; }
   @media (max-width: 640px) {
     .masthead { flex-wrap: wrap; }
@@ -363,13 +363,20 @@
     overflow: hidden; position: relative; flex: 0 0 auto;
   }
   .preview-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 34px 10px; }
-  .preview-nav { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 8px; }
+  /* space-between + a flexible center span keeps the arrows pinned at
+     the same fixed spots regardless of how long the caption text is
+     ("Front cover" vs. "Poem 12 of 40, page 2 of 3 · 12pt") -- only the
+     caption grows/shrinks (and truncates) between them. */
+  .preview-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
   .preview-nav button {
-    background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; padding: 2px 6px; line-height: 1;
+    background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; padding: 2px 6px; line-height: 1; flex: 0 0 auto;
   }
   .preview-nav button:hover:not(:disabled) { color: var(--accent); }
   .preview-nav button:disabled { opacity: 0.3; cursor: default; }
-  .preview-nav span { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .preview-nav span {
+    flex: 1 1 auto; min-width: 0; text-align: center; font-size: 11.5px; color: var(--ink-faint);
+    font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px;
+  }
 
   .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
   .field[hidden] { display: none; }
@@ -1632,8 +1639,6 @@
       });
       if (author) {
         var y = startY - titleLines.length * titleLineH - 14;
-        var ruleW = 60;
-        drawLine(bytes, plan.PAGE_W / 2 - ruleW / 2, y + 16, plan.PAGE_W / 2 + ruleW / 2, y + 16, 0.6, 0.75);
         var aw = measure(author, 13, state.bodyFontFamily, 400);
         drawText(bytes, bodyKeys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
       }
@@ -2702,7 +2707,11 @@
       var tocCount = planBooklet(state).tocPageCount || 1;
       for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
     }
-    state.poems.forEach(function (poem, i) { items.push({ type: 'poem', index: i }); });
+    var plan = planBooklet(state);
+    state.poems.forEach(function (poem, i) {
+      var pageCount = (plan.layouts[i] && plan.layouts[i].pages.length) || 1;
+      for (var p = 0; p < pageCount; p++) items.push({ type: 'poem', index: i, pageIndex: p });
+    });
     items.push({ type: 'back' });
     return items;
   }
@@ -2766,7 +2775,6 @@
       'justify-content:center; text-align:center; gap:' + (12 * scale).toFixed(1) + 'px; padding:0 ' + (16 * scale).toFixed(1) + 'px; box-sizing:border-box;">';
     html += '<div style="font-family:' + titleStack + '; font-weight:700; font-size:' + (27 * scale).toFixed(1) + 'px; line-height:1.3;">' + escapeHtml(bookTitle) + '</div>';
     if (author) {
-      html += '<div style="width:' + (60 * scale).toFixed(1) + 'px; height:1px; background:#C9B183;"></div>';
       html += '<div style="font-family:' + bodyStack + '; font-style:italic; font-size:' + (13 * scale).toFixed(1) + 'px; color:#6B5A42;">' + escapeHtml(author) + '</div>';
     }
     html += '</div>';
@@ -2819,6 +2827,8 @@
     } else {
       var poem = state.poems[item.index];
       var layout = plan.layouts[item.index];
+      var pageIndex = item.pageIndex || 0;
+      var isFirstPoemPage = pageIndex === 0;
       box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
 
       var titleStack = displayStackFor(state.titleFontChoice);
@@ -2826,19 +2836,26 @@
       var effAlign = poem.titleAlign || state.titleAlignment;
       var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       var html = '';
-      if (layout.titleLines.length) {
-        html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
-          '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
-          layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
+      if (isFirstPoemPage) {
+        if (layout.titleLines.length) {
+          html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
+            '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
+            layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
+        }
+      } else {
+        var contLabel = (poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled') + '  (continued)';
+        html += '<div style="font-style:italic; font-family:' + titleStack + '; text-align:' + effAlign +
+          '; font-size:' + (layout.contLabelSizePt * scale).toFixed(2) + 'px; color:#6B5A42; margin-bottom:' + ((layout.contHeaderH - layout.contLabelSizePt) * scale).toFixed(2) + 'px;">' +
+          escapeHtml(contLabel) + '</div>';
       }
       html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
-      (layout.pages[0] || []).forEach(function (rl) {
+      (layout.pages[pageIndex] || []).forEach(function (rl) {
         html += '<div>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
-      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage, scale);
+      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale);
 
-      var pageNote = layout.pages.length > 1 ? ', page 1 of ' + layout.pages.length : '';
+      var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
       caption.textContent = 'Poem ' + (item.index + 1) + ' of ' + state.poems.length + pageNote + ' · ' + layout.sizePt + 'pt';
     }
 
