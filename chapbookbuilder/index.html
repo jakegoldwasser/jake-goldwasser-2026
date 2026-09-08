@@ -1766,11 +1766,16 @@
           var dotX0 = contentLeft + titleW + 6;
           var dotX1 = contentRight - numW - 8;
           if (dotX1 > dotX0) {
-            var dotW = measure('.', plan.tocFontSize, state.bodyFontChoice, 400);
-            var dotStep = dotW * 2.2;
-            var dotCount = Math.max(0, Math.floor((dotX1 - dotX0) / dotStep));
-            var dots = '';
-            for (var d = 0; d < dotCount; d++) dots += '.  ';
+            // Measure the actual repeated string as it grows, rather than
+            // estimating a per-repeat width and multiplying -- with real
+            // embedded-font metrics that estimate no longer matches a
+            // repeated ". " string's true width closely enough, letting
+            // the leader run past dotX1 and into the page number.
+            var dots = '', nextDots = '.  ';
+            while (measure(nextDots, plan.tocFontSize, state.bodyFontChoice, 400) <= (dotX1 - dotX0)) {
+              dots = nextDots;
+              nextDots += '.  ';
+            }
             if (dots) drawText(tbytes, bodyKeys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
           }
           drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
