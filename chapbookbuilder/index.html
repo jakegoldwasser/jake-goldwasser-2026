@@ -30,6 +30,11 @@
     --danger-soft: #E9D6C7;
     --shadow: rgba(46, 32, 19, 0.14);
     --radius: 8px;
+
+    /* A few more chips off the same swatch card, used for the wordmark */
+    --swatch-green: #6E7B3E;
+    --swatch-brown: #7A4E2B;
+    --swatch-blue: #5C7A93;
   }
 
   * { box-sizing: border-box; }
@@ -56,6 +61,10 @@
     color: var(--accent);
     text-wrap: balance;
   }
+  h1.appname .c1 { color: var(--accent); }
+  h1.appname .c2 { color: var(--swatch-green); }
+  h1.appname .c3 { color: var(--swatch-brown); }
+  h1.appname .c4 { color: var(--swatch-blue); }
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
@@ -184,6 +193,16 @@
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
 
   .poems-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .zoom-control {
+    display: flex; align-items: center; gap: 2px; border: 1px solid var(--line-strong); border-radius: 7px;
+    padding: 2px; background: var(--surface-2);
+  }
+  .zoom-control button {
+    appearance: none; border: none; background: transparent; color: var(--ink-soft); font-size: 15px; font-weight: 700;
+    width: 22px; height: 22px; line-height: 1; border-radius: 5px; cursor: pointer;
+  }
+  .zoom-control button:hover { background: var(--surface); color: var(--accent); }
+  .zoom-control span { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; padding: 0 3px; min-width: 32px; text-align: center; }
   .poems-count { font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
   .poem-card {
@@ -203,6 +222,15 @@
 
   .poem-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
   .poem-title-row { display: flex; align-items: center; gap: 8px; }
+  .format-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+  .format-toolbar button {
+    appearance: none; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink-soft);
+    width: 26px; height: 24px; border-radius: 5px; cursor: pointer; font-size: 12.5px; line-height: 1;
+  }
+  .format-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .format-btn-bold { font-weight: 700; }
+  .format-btn-italic { font-style: italic; }
+  .format-btn-underline { text-decoration: underline; }
   input.poem-title {
     flex: 1; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
     font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; padding: 3px 2px 7px; outline: none;
@@ -215,7 +243,6 @@
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
     font-family: "Newsreader", ui-serif, serif; font-size: 14.5px; line-height: 1.65; padding: 10px 12px;
     outline: none; resize: none; overflow: hidden; color: var(--ink); white-space: pre-wrap;
-    overscroll-behavior: contain;
   }
   textarea.poem-text:focus { border-color: var(--accent); }
 
@@ -389,6 +416,19 @@
   .chapbooks-trash-link:hover { background: var(--surface-2); color: var(--ink-soft); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+  .select-entries-box { max-width: 440px; width: 100%; }
+  .select-entries-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .select-entries-list {
+    max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin-bottom: 16px; background: var(--surface-2);
+  }
+  .select-entry-row {
+    display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; cursor: pointer; font-size: 13.5px;
+  }
+  .select-entry-row:hover { background: var(--surface); }
+  .select-entry-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); flex: 0 0 auto; }
+  .select-entry-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
 </style>
@@ -399,7 +439,7 @@
 
   <div class="masthead">
     <div>
-      <h1 class="appname">Flyleaf</h1>
+      <h1 class="appname"><span class="c1">F</span><span class="c2">l</span><span class="c3">y</span><span class="c4">l</span><span class="c1">e</span><span class="c3">a</span><span class="c2">f</span></h1>
       <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
@@ -422,7 +462,7 @@
   </div>
 
   <div class="chapbook-header">
-    <input type="text" id="bookTitleInput" placeholder="Title">
+    <input type="text" id="bookTitleInput" placeholder="Book title">
     <input type="text" id="authorInput" placeholder="Author name">
   </div>
 
@@ -469,7 +509,14 @@
     <div>
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
-          <div class="panel-title" style="margin:0;">Entries</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="panel-title" style="margin:0;">Entries</div>
+            <div class="zoom-control">
+              <button id="zoomOutBtn" type="button" aria-label="Zoom editor text out">−</button>
+              <span id="zoomLabel">100%</span>
+              <button id="zoomInBtn" type="button" aria-label="Zoom editor text in">+</button>
+            </div>
+          </div>
           <div style="display:flex; align-items:center; gap:12px;">
             <div class="poems-count" id="poemsCount"></div>
             <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
@@ -477,7 +524,7 @@
           </div>
         </div>
         <div id="exampleBanner" class="example-banner" hidden>
-          <span>These two entries are just a working example — import or paste your own above to replace them.</span>
+          <span>These three Emily Dickinson poems are just a working example — import or paste your own above to replace them.</span>
           <button class="btn btn-sm" id="clearExampleBtn">Clear examples</button>
         </div>
         <div id="poemGapTop"></div>
@@ -544,7 +591,7 @@
             <input type="number" id="bodyFixedSizeInput" min="8" max="16" step="0.5" value="12">
           </div>
 
-          <div class="subhead">Title text</div>
+          <div class="subhead">Entry title text</div>
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-4" id="titleFontSeg">
@@ -612,6 +659,8 @@
           <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
             <button class="btn btn-primary" id="exportBtn" style="width:100%; justify-content:center;">Export PDF</button>
             <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export print-ready booklet</button>
+            <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
+            <button class="btn" id="exportSelectBtn" style="width:100%; justify-content:center;">Export select entries…</button>
             <div class="export-status" id="exportStatus"></div>
           </div>
         </div>
@@ -638,6 +687,21 @@
     <div class="modal-actions">
       <button class="btn" id="promptCancelBtn">Cancel</button>
       <button class="btn btn-primary" id="promptOkBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="selectEntriesOverlay">
+  <div class="modal-box select-entries-box">
+    <p style="margin-top:0;">Choose which entries to include:</p>
+    <div class="select-entries-toolbar">
+      <button class="btn btn-sm" id="selectEntriesToggleAllBtn" type="button">Uncheck all</button>
+    </div>
+    <div id="selectEntriesList" class="select-entries-list"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button class="btn" id="selectEntriesCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="selectEntriesPdfBtn">Export as PDF</button>
+      <button class="btn btn-primary" id="selectEntriesPrintBtn">Export as printable PDF</button>
     </div>
   </div>
 </div>
@@ -713,6 +777,15 @@
 
   var STORAGE_KEY = 'poetryBooklet.v1';
 
+  // Editor-only text scale -- a personal display preference, not part of
+  // the chapbook's own saved state, so it lives in its own key.
+  var EDITOR_ZOOM_KEY = 'poetryBooklet.editorZoom.v1';
+  var editorZoom = 1;
+  try {
+    var savedZoom = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
+    if (savedZoom && savedZoom > 0) editorZoom = savedZoom;
+  } catch (e) {}
+
   function defaultSettings() {
     return {
       bookTitle: '',
@@ -751,35 +824,61 @@
   function exampleState() {
     var s = defaultSettings();
     s.isExample = true;
+    s.author = 'Emily Dickinson';
     s.poems = [
         {
           id: 'ex1',
-          title: 'Instructions for Folding a Paper Boat',
+          title: 'I dwell in Possibility',
           lines: [
-            'Crease the sky in half, then in half again,',
-            'until the horizon fits in your palm.',
+            'I dwell in Possibility –',
+            'A fairer House than Prose –',
+            'More numerous of Windows –',
+            'Superior – for Doors –',
             '',
-            'Fold the harbor toward you. Fold the leaving.',
-            'Tuck the loose corner of the year in tight',
-            'so it can’t come undone in the current.',
+            'Of Chambers as the Cedars –',
+            'Impregnable of Eye –',
+            'And for an Everlasting Roof',
+            'The Gambrels of the Sky –',
             '',
-            'Set it on the sink water and watch:',
-            'this is the part where it either holds',
-            'or it doesn’t, and either way you let go.'
+            'Of Visitors – the fairest –',
+            'For Occupation – This –',
+            'The spreading wide my narrow Hands',
+            'To gather Paradise –'
           ]
         },
         {
           id: 'ex2',
-          title: 'What the Tide Leaves',
+          title: 'The Brain—is wider than the Sky',
           lines: [
-            'A shoe. A single glove, still shaped',
-            'like a hand that meant something.',
-            'Rope gone soft as hair.',
+            'The Brain—is wider than the Sky—',
+            'For—put them side by side—',
+            'The one the other will contain',
+            'With ease—and You—beside—',
             '',
-            'The sea keeps what it wants',
-            'and gives back only the questions —',
-            'salt-cured, unanswerable,',
-            'small enough to carry home.'
+            'The Brain is deeper than the sea—',
+            'For—hold them—Blue to Blue—',
+            'The one the other will absorb—',
+            'As Sponges—Buckets—do—',
+            '',
+            'The Brain is just the weight of God—',
+            'For—Heft them—Pound for Pound—',
+            'And they will differ—if they do—',
+            'As Syllable from Sound—'
+          ]
+        },
+        {
+          id: 'ex3',
+          title: 'This is my letter to the World',
+          lines: [
+            'This is my letter to the World',
+            'That never wrote to Me –',
+            'The simple News that Nature told –',
+            'With tender Majesty',
+            '',
+            'Her Message is committed',
+            'To Hands I cannot see –',
+            'For love of Her – Sweet – countrymen –',
+            'Judge tenderly – of Me'
           ]
         }
       ];
@@ -962,14 +1061,50 @@
   // ---------------------------------------------------------------------
   // Text cleanup for markdown-ish import text
   // ---------------------------------------------------------------------
-  function cleanMarkdownText(s) {
+  // `keepEmphasisMarkers` preserves **bold**/*italic* instead of
+  // stripping it -- used for body lines, which now render that markup
+  // as real formatting; titles still strip it since they don't support
+  // inline styling.
+  function cleanMarkdownText(s, keepEmphasisMarkers) {
     s = String(s || '');
     s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
-    s = s.replace(/\*\*(.*?)\*\*/g, '$1');
-    s = s.replace(/\*(.*?)\*/g, '$1');
+    if (!keepEmphasisMarkers) {
+      s = s.replace(/\*\*(.*?)\*\*/g, '$1');
+      s = s.replace(/\*(.*?)\*/g, '$1');
+    }
     s = s.replace(/\\([\\`*_{}\[\]()#+\-.!])/g, '$1');
     s = s.replace(/[ \t]+$/, '');
     return s;
+  }
+
+  // ---------------------------------------------------------------------
+  // Basic inline formatting for entry body text: **bold**, *italic*,
+  // ++underline++, typed directly or inserted via the toolbar. Kept as
+  // plain-text markers (not a rich editor) so the data model, autosave,
+  // and cloud sync stay untouched -- parseInlineRuns splits a line into
+  // styled runs wherever it actually needs to be drawn or rendered.
+  // ---------------------------------------------------------------------
+  function stripFormatMarkers(text) {
+    return String(text || '')
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\+\+(.+?)\+\+/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1');
+  }
+
+  function parseInlineRuns(text) {
+    var runs = [];
+    var re = /\*\*(.+?)\*\*|\+\+(.+?)\+\+|\*(.+?)\*/g;
+    var lastIndex = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > lastIndex) runs.push({ text: text.slice(lastIndex, m.index) });
+      if (m[1] !== undefined) runs.push({ text: m[1], bold: true });
+      else if (m[2] !== undefined) runs.push({ text: m[2], underline: true });
+      else runs.push({ text: m[3], italic: true });
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < text.length) runs.push({ text: text.slice(lastIndex) });
+    if (!runs.length) runs.push({ text: text });
+    return runs;
   }
 
   function parseDocText(raw) {
@@ -1022,7 +1157,7 @@
       var subLines = block.split('\n');
       subLines.forEach(function (sub) {
         if (sub.trim() === '') pushLine('');
-        else pushLine(cleanMarkdownText(sub));
+        else pushLine(cleanMarkdownText(sub, true));
       });
     });
     finishPoem();
@@ -1057,8 +1192,8 @@
   function measureStack(fontFamily) {
     return fontFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
   }
-  function measure(text, sizePt, fontFamily, weight) {
-    measureCtx.font = (weight || 400) + ' ' + sizePt + 'px ' + measureStack(fontFamily);
+  function measure(text, sizePt, fontFamily, weight, italic) {
+    measureCtx.font = (italic ? 'italic ' : '') + (weight || 400) + ' ' + sizePt + 'px ' + measureStack(fontFamily);
     return measureCtx.measureText(text).width;
   }
 
@@ -1284,8 +1419,28 @@
       x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n');
   }
 
-  var INK_RGB = [0.169, 0.122, 0.165];
-  var MUTED_RGB = [0.431, 0.353, 0.408];
+  // Draws one already-wrapped body line left-to-right run by run, so
+  // **bold**/*italic*/++underline++ markers render as real formatting
+  // instead of literal asterisks. Width/position for the line as a
+  // whole is still measured on the marker-stripped text by the caller.
+  function drawFormattedRuns(bytes, keys, fontFamily, sizePt, x, y, text, rgb) {
+    var runs = parseInlineRuns(text);
+    var curX = x;
+    runs.forEach(function (run) {
+      if (!run.text) return;
+      var key = run.bold ? keys.bold : (run.italic ? keys.ital : keys.reg);
+      var w = measure(run.text, sizePt, fontFamily, run.bold ? 700 : 400, !!run.italic);
+      drawText(bytes, key, sizePt, curX, y, run.text, rgb);
+      if (run.underline) {
+        var uy = y - sizePt * 0.09;
+        drawLine(bytes, curX, uy, curX + w, uy, rgb[0], Math.max(0.6, sizePt * 0.045));
+      }
+      curX += w;
+    });
+  }
+
+  var INK_RGB = [0.180, 0.125, 0.075];
+  var MUTED_RGB = [0.420, 0.353, 0.259];
 
   // Shared xref/trailer/byte-assembly bookkeeping used by both PDF
   // assemblers below -- reading order and the imposed booklet only
@@ -1416,6 +1571,7 @@
     state.poems.forEach(function (poem, pi) {
       var layout = plan.layouts[pi];
       var effAlign = poem.titleAlign || state.titleAlignment;
+      var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       layout.pages.forEach(function (pageLines, pageIdx) {
         var bytes = [];
         var y = contentTop;
@@ -1437,9 +1593,9 @@
         pageLines.forEach(function (rl, li) {
           var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
           if (rl.blank) return;
-          var w = measure(rl.text, layout.sizePt, state.bodyFontFamily, 400);
-          var x = resolveX(state.bodyAlignment, w, contentLeft, contentRight);
-          drawText(bytes, bodyKeys.reg, layout.sizePt, x, lineY, rl.text, INK_RGB);
+          var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontFamily, 400);
+          var x = resolveX(effBodyAlign, w, contentLeft, contentRight);
+          drawFormattedRuns(bytes, bodyKeys, state.bodyFontFamily, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
         contents.push(bytes);
@@ -1773,6 +1929,7 @@
     if (!poems.length) { setDriveStatus('Couldn’t find any entries in that document.', true); return; }
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
+    if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = title;
@@ -1900,6 +2057,7 @@
     if (!poems.length) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
+    if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
@@ -1930,24 +2088,80 @@
   // the cursor (Shift+Tab outdents up to 4 spaces from the line start).
   function wireTabIndent(textarea) {
     textarea.addEventListener('keydown', function (e) {
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      var start = textarea.selectionStart, end = textarea.selectionEnd;
-      var val = textarea.value;
-      if (!e.shiftKey) {
-        textarea.value = val.slice(0, start) + '    ' + val.slice(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 4;
-      } else {
-        var lineStart = val.lastIndexOf('\n', start - 1) + 1;
-        var removeCount = 0;
-        while (removeCount < 4 && val[lineStart + removeCount] === ' ') removeCount++;
-        if (removeCount > 0) {
-          textarea.value = val.slice(0, lineStart) + val.slice(lineStart + removeCount);
-          textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - removeCount);
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        var start = textarea.selectionStart, end = textarea.selectionEnd;
+        var val = textarea.value;
+        if (!e.shiftKey) {
+          textarea.value = val.slice(0, start) + '    ' + val.slice(end);
+          textarea.selectionStart = textarea.selectionEnd = start + 4;
+        } else {
+          var lineStart = val.lastIndexOf('\n', start - 1) + 1;
+          var removeCount = 0;
+          while (removeCount < 4 && val[lineStart + removeCount] === ' ') removeCount++;
+          if (removeCount > 0) {
+            textarea.value = val.slice(0, lineStart) + val.slice(lineStart + removeCount);
+            textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - removeCount);
+          }
+        }
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+      // Backspace right after a Tab-inserted indent removes the whole
+      // indent back to the previous 4-space stop, not just one space --
+      // only within a line's leading whitespace, so ordinary spaces
+      // between words are untouched.
+      if (e.key === 'Backspace' && textarea.selectionStart === textarea.selectionEnd) {
+        var pos = textarea.selectionStart;
+        var text = textarea.value;
+        var ls = text.lastIndexOf('\n', pos - 1) + 1;
+        var leading = text.slice(ls, pos);
+        if (leading.length > 0 && /^ +$/.test(leading)) {
+          var toRemove = ((leading.length - 1) % 4) + 1;
+          e.preventDefault();
+          textarea.value = text.slice(0, pos - toRemove) + text.slice(pos);
+          textarea.selectionStart = textarea.selectionEnd = pos - toRemove;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
       }
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
     });
+  }
+
+  // Wraps the textarea's current selection in the given marker pair
+  // (inserting an empty pair with the cursor in between when nothing's
+  // selected), then re-fires input so poem.lines and autosave pick it up.
+  function wrapSelection(textarea, before, after) {
+    var start = textarea.selectionStart, end = textarea.selectionEnd;
+    var val = textarea.value;
+    var selected = val.slice(start, end);
+    textarea.focus();
+    textarea.value = val.slice(0, start) + before + selected + after + val.slice(end);
+    if (selected) {
+      textarea.selectionStart = start + before.length;
+      textarea.selectionEnd = start + before.length + selected.length;
+    } else {
+      textarea.selectionStart = textarea.selectionEnd = start + before.length;
+    }
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function makeFormatToolbar(textarea) {
+    var wrap = document.createElement('div');
+    wrap.className = 'format-toolbar';
+    [
+      ['B', '**', '**', 'bold', 'Bold'],
+      ['I', '*', '*', 'italic', 'Italic'],
+      ['U', '++', '++', 'underline', 'Underline']
+    ].forEach(function (spec) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'format-btn format-btn-' + spec[3];
+      btn.textContent = spec[0];
+      btn.title = spec[4] + ' the selected text';
+      btn.addEventListener('click', function () { wrapSelection(textarea, spec[1], spec[2]); });
+      wrap.appendChild(btn);
+    });
+    return wrap;
   }
 
   function makeGap(index) {
@@ -1965,11 +2179,16 @@
 
   var dragFromIndex = null;
 
-  function makeTitleAlignControl(poem) {
+  // Shared by the per-entry Title/Body alignment mini-controls: `getVal`
+  // reads the current override off the poem, `setVal` writes it back AND
+  // applies it immediately to the live input/textarea (a plain
+  // persist()+updateStats() alone doesn't touch the DOM, which is why
+  // these used to require a reload/tab-switch to actually show).
+  function makeAlignControl(label, getVal, setVal) {
     var wrap = document.createElement('div');
     wrap.className = 'title-align';
-    var label = document.createElement('span');
-    label.textContent = 'Title';
+    var labelEl = document.createElement('span');
+    labelEl.textContent = label;
     var seg = document.createElement('div');
     seg.className = 'title-align-seg';
     [['', 'Auto'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']].forEach(function (pair) {
@@ -1978,9 +2197,9 @@
       btn.type = 'button';
       btn.textContent = pair[1];
       btn.dataset.val = val;
-      if ((poem.titleAlign || '') === val) btn.classList.add('active');
+      if ((getVal() || '') === val) btn.classList.add('active');
       btn.addEventListener('click', function () {
-        poem.titleAlign = val || null;
+        setVal(val || null);
         state.isExample = false;
         seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
@@ -1989,9 +2208,23 @@
       });
       seg.appendChild(btn);
     });
-    wrap.appendChild(label);
+    wrap.appendChild(labelEl);
     wrap.appendChild(seg);
     return wrap;
+  }
+
+  function makeTitleAlignControl(poem, titleInput) {
+    return makeAlignControl('Title', function () { return poem.titleAlign; }, function (v) {
+      poem.titleAlign = v;
+      titleInput.style.textAlign = v || state.titleAlignment;
+    });
+  }
+
+  function makeBodyAlignControl(poem, textarea) {
+    return makeAlignControl('Body', function () { return poem.bodyAlign; }, function (v) {
+      poem.bodyAlign = v;
+      textarea.style.textAlign = v || state.bodyAlignment;
+    });
   }
 
   function makeCard(poem, index, initialPlan) {
@@ -2014,7 +2247,7 @@
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
-    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333) + 'px';
+    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom) + 'px';
     titleInput.addEventListener('input', function () {
       poem.title = titleInput.value;
       state.isExample = false;
@@ -2037,9 +2270,9 @@
     var textarea = document.createElement('textarea');
     textarea.className = 'poem-text';
     textarea.value = poem.lines.join('\n');
-    textarea.style.textAlign = state.bodyAlignment;
+    textarea.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     textarea.style.fontFamily = displayStackFor(state.bodyFontChoice);
-    if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333) + 'px';
+    if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom) + 'px';
     wireTabIndent(textarea);
     textarea.addEventListener('input', function () {
       poem.lines = textarea.value.split('\n');
@@ -2071,9 +2304,11 @@
     metaLeft.appendChild(meta);
     metaLeft.appendChild(warnEl);
     metaRow.appendChild(metaLeft);
-    metaRow.appendChild(makeTitleAlignControl(poem));
+    metaRow.appendChild(makeTitleAlignControl(poem, titleInput));
+    metaRow.appendChild(makeBodyAlignControl(poem, textarea));
 
     body.appendChild(titleRow);
+    body.appendChild(makeFormatToolbar(textarea));
     body.appendChild(textarea);
     body.appendChild(metaRow);
     card.appendChild(handle);
@@ -2172,6 +2407,17 @@
     renderPoems();
   });
 
+  var zoomLabel = document.getElementById('zoomLabel');
+  function setEditorZoom(z) {
+    editorZoom = Math.max(0.7, Math.min(2, Math.round(z * 20) / 20));
+    zoomLabel.textContent = Math.round(editorZoom * 100) + '%';
+    try { localStorage.setItem(EDITOR_ZOOM_KEY, String(editorZoom)); } catch (e) {}
+    renderPoems();
+  }
+  zoomLabel.textContent = Math.round(editorZoom * 100) + '%';
+  document.getElementById('zoomOutBtn').addEventListener('click', function () { setEditorZoom(editorZoom - 0.1); });
+  document.getElementById('zoomInBtn').addEventListener('click', function () { setEditorZoom(editorZoom + 0.1); });
+
   function renderPoems() {
     poemList.innerHTML = '';
     poemList.appendChild(makeGap(0));
@@ -2205,7 +2451,11 @@
     if (!archivePanel.hidden) renderArchiveList();
   });
 
-  function archivePoem(index) {
+  async function archivePoem(index) {
+    var target = state.poems[index];
+    if (!target) return;
+    var ok = await confirmDialog('Are you sure you want to send “' + (target.title || 'Untitled') + '” to the archive?');
+    if (!ok) return;
     var poem = state.poems.splice(index, 1)[0];
     if (!poem) return;
     poem.archivedAt = Date.now();
@@ -2290,6 +2540,19 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // Renders **bold**/*italic*/++underline++ markers as real tags for the
+  // live preview, mirroring how drawFormattedRuns handles the same
+  // markers for the PDF.
+  function renderInlineRunsHtml(text) {
+    return parseInlineRuns(text).map(function (run) {
+      var t = escapeHtml(run.text);
+      if (run.bold) t = '<b>' + t + '</b>';
+      if (run.italic) t = '<i>' + t + '</i>';
+      if (run.underline) t = '<u>' + t + '</u>';
+      return t;
+    }).join('');
+  }
+
   // The preview cycles through the whole book in reading order -- the
   // front cover first, then each poem, then the back cover -- so it
   // always starts on the front cover rather than jumping straight to
@@ -2297,9 +2560,41 @@
   function buildPreviewItems(state) {
     var items = [];
     if (state.includeTitlePage) items.push({ type: 'cover' });
+    if (state.includeToc && state.poems.length) items.push({ type: 'toc' });
     state.poems.forEach(function (poem, i) { items.push({ type: 'poem', index: i }); });
     items.push({ type: 'back' });
     return items;
+  }
+
+  // Mirrors pageNumberOp() in the real PDF export -- recto/verso corners
+  // or a centered footer -- so toggling the setting is visible here too.
+  function pageNumberOverlayHtml(pageNum, scale) {
+    if (!pageNum || !state.showPageNumbers) return '';
+    var sizePx = (9.5 * scale).toFixed(1);
+    var bottom = (10 * scale).toFixed(1);
+    var side = (12 * scale).toFixed(1);
+    var style = 'position:absolute; bottom:' + bottom + 'px; font-size:' + sizePx + 'px; color:#6B5A42; font-variant-numeric:tabular-nums;';
+    if (state.pageNumberStyle === 'corners') {
+      var isRecto = (pageNum % 2) === 1;
+      return '<div style="' + style + (isRecto ? 'right' : 'left') + ':' + side + 'px;">' + pageNum + '</div>';
+    }
+    return '<div style="' + style + 'left:0; right:0; text-align:center;">' + pageNum + '</div>';
+  }
+
+  function renderTocPreview(box, plan, scale) {
+    box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
+    var titleStack = displayStackFor(state.titleFontChoice);
+    var bodyStack = displayStackFor(state.bodyFontChoice);
+    var html = '<div style="font-weight:700; font-family:' + titleStack + '; font-size:' + (18 * scale).toFixed(1) + 'px; margin-bottom:' + (14 * scale).toFixed(1) + 'px;">Contents</div>';
+    html += '<div style="font-family:' + bodyStack + '; font-size:' + (10 * scale).toFixed(1) + 'px; line-height:2;">';
+    state.poems.forEach(function (poem, i) {
+      html += '<div style="display:flex; justify-content:space-between; gap:6px;"><span>' +
+        escapeHtml(poem.title || 'Untitled') + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
+    });
+    html += '</div>';
+    box.innerHTML = html;
+    var tocStartPage = (state.includeTitlePage ? 1 : 0) + 1;
+    box.innerHTML += pageNumberOverlayHtml(tocStartPage, scale);
   }
 
   function renderCoverPreview(box, plan, scale) {
@@ -2354,8 +2649,12 @@
     if (item.type === 'cover') {
       renderCoverPreview(box, plan, scale);
       caption.textContent = 'Front cover';
+    } else if (item.type === 'toc') {
+      renderTocPreview(box, plan, scale);
+      caption.textContent = 'Table of contents';
     } else if (item.type === 'back') {
       renderBackCoverPreview(box, plan, scale);
+      box.innerHTML += pageNumberOverlayHtml(plan.totalPages, scale);
       caption.textContent = 'Back cover';
     } else {
       var poem = state.poems[item.index];
@@ -2365,18 +2664,19 @@
       var titleStack = displayStackFor(state.titleFontChoice);
       var bodyStack = displayStackFor(state.bodyFontChoice);
       var effAlign = poem.titleAlign || state.titleAlignment;
+      var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       var html = '';
       if (layout.titleLines.length) {
         html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
           '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
           layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
       }
-      html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + state.bodyAlignment + ';">';
+      html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
       (layout.pages[0] || []).forEach(function (rl) {
-        html += '<div>' + (rl.blank ? '&nbsp;' : escapeHtml(rl.text)) + '</div>';
+        html += '<div>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
-      box.innerHTML = html;
+      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage, scale);
 
       var pageNote = layout.pages.length > 1 ? ', page 1 of ' + layout.pages.length : '';
       caption.textContent = 'Poem ' + (item.index + 1) + ' of ' + state.poems.length + pageNote + ' · ' + layout.sizePt + 'pt';
@@ -2404,6 +2704,7 @@
   });
   document.getElementById('clearExampleBtn').addEventListener('click', function () {
     state.poems = [];
+    if (state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     persist();
     renderAll();
@@ -2765,6 +3066,10 @@
     return (s || 'poetry-booklet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'poetry-booklet';
   }
 
+  // The Claude-artifact `downloads` capability doesn't exist on the plain
+  // website; the deploy step there swaps this one function's body for a
+  // real <a download> blob link, so every export path funnels through
+  // here rather than each duplicating the isn't-available fallback.
   function downloadBlob(filename, bytes, mime) {
     var blob = new Blob([bytes], { type: mime });
     var url = URL.createObjectURL(blob);
@@ -2777,28 +3082,36 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
+  async function saveOrDownloadPdf(filename, bytes) {
+    var dl = null;
+    try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+    if (dl) {
+      await dl.save({ filename: filename, data: bytes });
+      setExportStatus('Saved ' + filename + '.');
+    } else {
+      downloadBlob(filename, bytes, 'application/pdf');
+      setExportStatus('Downloaded ' + filename + '.');
+    }
+  }
+
+  async function runExportForState(exportState, buildFn, filenameSuffix) {
+    setExportStatus('Building PDF…');
+    try {
+      var bytes = buildFn(exportState);
+      var filename = slugify(exportState.bookTitle) + filenameSuffix;
+      await saveOrDownloadPdf(filename, bytes);
+    } catch (err) {
+      if (err && err.code === 'declined') setExportStatus('');
+      else setExportStatus('Couldn’t save the file' + (err && err.code ? ' (' + err.code + ')' : '') + '.');
+    }
+  }
+
   async function runExport(btn, buildFn, filenameSuffix) {
     if (!state.poems.length) return;
     var otherBtn = btn.id === 'exportBtn' ? document.getElementById('exportPrintBtn') : document.getElementById('exportBtn');
     btn.disabled = true;
     otherBtn.disabled = true;
-    setExportStatus('Building PDF…');
-    try {
-      var bytes = buildFn(state);
-      var filename = slugify(state.bookTitle) + filenameSuffix;
-      var dl = null;
-      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
-      if (dl) {
-        await dl.save({ filename: filename, data: bytes });
-        setExportStatus('Saved ' + filename + '.');
-      } else {
-        downloadBlob(filename, bytes, 'application/pdf');
-        setExportStatus('Downloaded ' + filename + '.');
-      }
-    } catch (err) {
-      if (err && err.code === 'declined') setExportStatus('');
-      else setExportStatus('Couldn’t save the file' + (err && err.code ? ' (' + err.code + ')' : '') + '.');
-    }
+    await runExportForState(state, buildFn, filenameSuffix);
     btn.disabled = state.poems.length === 0;
     otherBtn.disabled = state.poems.length === 0;
   }
@@ -2808,6 +3121,236 @@
   });
   document.getElementById('exportPrintBtn').addEventListener('click', function () {
     runExport(this, buildImposedBookletPdf, '-printable.pdf');
+  });
+
+  // ---------------------------------------------------------------------
+  // .docx export -- a hand-rolled minimal ZIP (STORED, no compression --
+  // valid per the zip spec and avoids needing a compression library)
+  // wrapping a bare-bones OOXML WordprocessingML document. Each entry
+  // starts on a new page via pageBreakBefore on its title paragraph.
+  // ---------------------------------------------------------------------
+  function crc32(bytes) {
+    var c;
+    if (!crc32.table) {
+      crc32.table = [];
+      for (var n = 0; n < 256; n++) {
+        c = n;
+        for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crc32.table[n] = c >>> 0;
+      }
+    }
+    c = 0xFFFFFFFF;
+    for (var i = 0; i < bytes.length; i++) c = crc32.table[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function makeZip(files) {
+    var encoder = new TextEncoder();
+    function u16(n) { return [n & 0xFF, (n >> 8) & 0xFF]; }
+    function u32(n) { return [n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, (n >> 24) & 0xFF]; }
+
+    var localParts = [], centralParts = [], offset = 0;
+    files.forEach(function (f) {
+      var nameBytes = encoder.encode(f.name);
+      var data = f.data;
+      var crc = crc32(data);
+      var localHeader = new Uint8Array([].concat(
+        u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0)
+      ));
+      localParts.push(localHeader, nameBytes, data);
+
+      var centralHeader = new Uint8Array([].concat(
+        u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+        u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length),
+        u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)
+      ));
+      centralParts.push(centralHeader, nameBytes);
+      offset += localHeader.length + nameBytes.length + data.length;
+    });
+
+    var centralStart = offset;
+    var centralSize = centralParts.reduce(function (sum, p) { return sum + p.length; }, 0);
+    var eocd = new Uint8Array([].concat(
+      u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+      u32(centralSize), u32(centralStart), u16(0)
+    ));
+
+    var allParts = localParts.concat(centralParts, [eocd]);
+    var total = allParts.reduce(function (sum, p) { return sum + p.length; }, 0);
+    var out = new Uint8Array(total);
+    var pos = 0;
+    allParts.forEach(function (p) { out.set(p, pos); pos += p.length; });
+    return out;
+  }
+
+  function escapeXml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  // Same **bold**/*italic*/++underline++ markers as the PDF/preview,
+  // rendered here as separate <w:r> runs with the matching rPr flags.
+  function docxRunsXml(text) {
+    return parseInlineRuns(text).map(function (run) {
+      if (!run.text) return '';
+      var rPr = (run.bold ? '<w:b/>' : '') + (run.italic ? '<w:i/>' : '') + (run.underline ? '<w:u w:val="single"/>' : '');
+      return '<w:r>' + (rPr ? '<w:rPr>' + rPr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escapeXml(run.text) + '</w:t></w:r>';
+    }).join('');
+  }
+
+  function buildDocxDocumentXml(poems) {
+    var body = '';
+    poems.forEach(function (poem, i) {
+      var titlePr = i > 0 ? '<w:pPr><w:pageBreakBefore/><w:jc w:val="center"/></w:pPr>' : '<w:pPr><w:jc w:val="center"/></w:pPr>';
+      body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">' +
+        escapeXml(poem.title || 'Untitled') + '</w:t></w:r></w:p>';
+      body += '<w:p/>';
+      poem.lines.forEach(function (line) {
+        body += line === '' ? '<w:p/>' : '<w:p>' + docxRunsXml(line) + '</w:p>';
+      });
+    });
+    body += '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body + '</w:body></w:document>';
+  }
+
+  function buildDocx(exportState) {
+    var encoder = new TextEncoder();
+    var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '</Types>';
+    var rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>';
+    var docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>';
+    var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+      '</w:styles>';
+    var documentXml = buildDocxDocumentXml(exportState.poems);
+
+    return makeZip([
+      { name: '[Content_Types].xml', data: encoder.encode(contentTypes) },
+      { name: '_rels/.rels', data: encoder.encode(rootRels) },
+      { name: 'word/document.xml', data: encoder.encode(documentXml) },
+      { name: 'word/_rels/document.xml.rels', data: encoder.encode(docRels) },
+      { name: 'word/styles.xml', data: encoder.encode(styles) }
+    ]);
+  }
+
+  var DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  async function runDocxExportForState(exportState, filenameSuffix) {
+    setExportStatus('Building .docx…');
+    try {
+      var bytes = buildDocx(exportState);
+      var filename = slugify(exportState.bookTitle) + filenameSuffix;
+      var dl = null;
+      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+      if (dl) {
+        await dl.save({ filename: filename, data: bytes });
+        setExportStatus('Saved ' + filename + '.');
+      } else {
+        downloadBlob(filename, bytes, DOCX_MIME);
+        setExportStatus('Downloaded ' + filename + '.');
+      }
+    } catch (err) {
+      if (err && err.code === 'declined') setExportStatus('');
+      else setExportStatus('Couldn’t save the file' + (err && err.code ? ' (' + err.code + ')' : '') + '.');
+    }
+  }
+
+  document.getElementById('exportDocxBtn').addEventListener('click', async function () {
+    if (!state.poems.length) return;
+    var btn = this;
+    btn.disabled = true;
+    await runDocxExportForState(state, '.docx');
+    btn.disabled = state.poems.length === 0;
+  });
+
+  // ---------------------------------------------------------------------
+  // Export select entries -- a checkbox list so a poet can export a PDF
+  // (or .docx) of just some entries without pulling them out of the
+  // chapbook first.
+  // ---------------------------------------------------------------------
+  var selectEntriesOverlay = document.getElementById('selectEntriesOverlay');
+  var selectEntriesList = document.getElementById('selectEntriesList');
+  var selectEntriesToggleAllBtn = document.getElementById('selectEntriesToggleAllBtn');
+
+  function getSelectEntriesCheckboxes() {
+    return Array.prototype.slice.call(selectEntriesList.querySelectorAll('.select-entry-checkbox'));
+  }
+
+  function updateSelectEntriesToggleLabel() {
+    var boxes = getSelectEntriesCheckboxes();
+    var allChecked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
+    selectEntriesToggleAllBtn.textContent = allChecked ? 'Uncheck all' : 'Check all';
+  }
+
+  function openSelectEntriesModal() {
+    if (!state.poems.length) return;
+    selectEntriesList.innerHTML = '';
+    state.poems.forEach(function (poem, i) {
+      var label = document.createElement('label');
+      label.className = 'select-entry-row';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'select-entry-checkbox';
+      cb.dataset.index = i;
+      cb.checked = true;
+      var span = document.createElement('span');
+      span.textContent = poem.title || 'Untitled';
+      label.appendChild(cb);
+      label.appendChild(span);
+      selectEntriesList.appendChild(label);
+    });
+    updateSelectEntriesToggleLabel();
+    selectEntriesOverlay.classList.add('open');
+  }
+
+  function closeSelectEntriesModal() {
+    selectEntriesOverlay.classList.remove('open');
+  }
+
+  function getSelectedEntries() {
+    return getSelectEntriesCheckboxes().filter(function (b) { return b.checked; })
+      .map(function (b) { return state.poems[Number(b.dataset.index)]; });
+  }
+
+  document.getElementById('exportSelectBtn').addEventListener('click', openSelectEntriesModal);
+  document.getElementById('selectEntriesCancelBtn').addEventListener('click', closeSelectEntriesModal);
+  selectEntriesOverlay.addEventListener('click', function (e) { if (e.target === selectEntriesOverlay) closeSelectEntriesModal(); });
+  selectEntriesList.addEventListener('change', function (e) {
+    if (e.target.classList.contains('select-entry-checkbox')) updateSelectEntriesToggleLabel();
+  });
+  selectEntriesToggleAllBtn.addEventListener('click', function () {
+    var boxes = getSelectEntriesCheckboxes();
+    var allChecked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
+    boxes.forEach(function (b) { b.checked = !allChecked; });
+    updateSelectEntriesToggleLabel();
+  });
+
+  document.getElementById('selectEntriesPdfBtn').addEventListener('click', async function () {
+    var selected = getSelectedEntries();
+    if (!selected.length) return;
+    closeSelectEntriesModal();
+    await runExportForState(Object.assign({}, state, { poems: selected }), buildBookletPdf, '.pdf');
+  });
+  document.getElementById('selectEntriesPrintBtn').addEventListener('click', async function () {
+    var selected = getSelectedEntries();
+    if (!selected.length) return;
+    closeSelectEntriesModal();
+    await runExportForState(Object.assign({}, state, { poems: selected }), buildImposedBookletPdf, '-printable.pdf');
   });
 
   renderAll();
