@@ -79,7 +79,7 @@
   h1.appname .c3 { color: var(--swatch-brown); }
   h1.appname .c4 { color: var(--swatch-blue); }
   @media (prefers-reduced-motion: no-preference) {
-    h1.appname span { display: inline-block; animation: letterJitter 2.4s ease-in-out infinite; }
+    h1.appname span { display: inline-block; animation: letterJitter 1.1s steps(1, jump-none) infinite; }
     h1.appname span:nth-child(1) { animation-delay: 0s; }
     h1.appname span:nth-child(2) { animation-delay: 0.09s; }
     h1.appname span:nth-child(3) { animation-delay: 0.18s; }
@@ -91,13 +91,24 @@
     h1.appname span:nth-child(9) { animation-delay: 0.72s; }
   }
   @keyframes letterJitter {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
+    0% { transform: translate(0, 0) rotate(0deg); }
+    14% { transform: translate(-2px, -6px) rotate(-6deg); }
+    28% { transform: translate(1px, 3px) rotate(4deg); }
+    42% { transform: translate(-3px, -2px) rotate(-3deg); }
+    57% { transform: translate(2px, -5px) rotate(5deg); }
+    71% { transform: translate(-1px, 2px) rotate(-2deg); }
+    85% { transform: translate(2px, -3px) rotate(3deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
   }
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
+  /* top-actions-main (My Books / Save book / Start over) never wraps or
+     shrinks -- it always stays on the wordmark's own row. account-area
+     (sign-in/status, unpredictable length) is the only part allowed to
+     drop to its own line when space runs out. */
   .top-actions { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+  .top-actions-main { display: flex; gap: 10px 14px; align-items: center; flex-wrap: nowrap; flex-shrink: 0; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   #googleSignInBtn.signin-attention { animation: signinPulse 0.6s ease-in-out 3; border-radius: 4px; }
   @keyframes signinPulse {
@@ -332,8 +343,14 @@
   }
   .example-banner[hidden] { display: none; }
 
+  /* The whole right column -- Booklet settings, stats/export, and Preview
+     -- shares one viewport-bounded scroll region, so reaching Preview/
+     export never requires scrolling past the (possibly very long) entries
+     editor on the left; it's always just a local scroll within the
+     sidebar itself. */
   .sidebar {
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
+    max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden;
   }
   .sidebar-scroll {
     display: flex; flex-direction: column; gap: 16px;
@@ -462,9 +479,53 @@
 
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
+
+  /* A small mascot that walks a loop hugging the outer edge of the
+     viewport, inset well within the body's own padding -- that keeps it
+     off every panel/button/text without needing per-element collision
+     checks against the actual page content. Positioned by the script at
+     the end of the page; this just supplies its look and leg-wiggle. */
+  .louse-bug {
+    position: fixed; left: 0; top: 0; width: 44px; height: 24px;
+    pointer-events: none; z-index: 60;
+    filter: drop-shadow(0 1px 1px var(--shadow));
+  }
+  .louse-bug svg { display: block; overflow: visible; }
+  .louse-body { fill: var(--accent); stroke: var(--ink); stroke-width: 1; }
+  .louse-legs path { stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; fill: none; transform-origin: center; }
+  @keyframes louseLegKick {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(1.6px); }
+  }
+  .louse-legs path:nth-child(odd) { animation: louseLegKick 0.16s ease-in-out infinite; }
+  .louse-legs path:nth-child(even) { animation: louseLegKick 0.16s ease-in-out infinite reverse; }
+  @media (prefers-reduced-motion: reduce) {
+    .louse-bug { display: none; }
+  }
 </style>
 </head>
 <body>
+
+<div class="louse-bug" id="louseBug" aria-hidden="true">
+  <svg viewBox="0 0 44 24" width="44" height="24" xmlns="http://www.w3.org/2000/svg">
+    <g class="louse-legs">
+      <path d="M14 17 L11 23"/>
+      <path d="M14 17 L10 21"/>
+      <path d="M21 18 L21 24"/>
+      <path d="M21 18 L19 22"/>
+      <path d="M28 17 L31 23"/>
+      <path d="M28 17 L32 21"/>
+    </g>
+    <path d="M36 9 Q41 4 43 6" stroke="var(--ink)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <path d="M36 9 Q40 7 42 10" stroke="var(--ink)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <ellipse class="louse-body" cx="20" cy="12" rx="16" ry="8"/>
+    <line x1="13" y1="5" x2="13" y2="19" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
+    <line x1="20" y1="4.3" x2="20" y2="19.7" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
+    <line x1="27" y1="5" x2="27" y2="19" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
+    <circle cx="34" cy="9" r="1.6" fill="var(--ink)"/>
+    <circle cx="34.5" cy="8.5" r="0.5" fill="#fff"/>
+  </svg>
+</div>
 
 <div class="page">
 
@@ -474,13 +535,16 @@
       <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
-      <div class="chapbooks-menu">
-        <button class="btn" id="chapbooksMenuBtn" type="button">My Books ▾</button>
-        <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
-          <div id="chapbooksPane"></div>
+      <div class="top-actions-main">
+        <div class="chapbooks-menu">
+          <button class="btn" id="chapbooksMenuBtn" type="button">My Books ▾</button>
+          <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
+            <div id="chapbooksPane"></div>
+          </div>
         </div>
+        <button class="btn btn-primary" id="saveChapbookBtn" type="button" title="Adds this book to your My Books list, saved to this browser (and backed up to the cloud if you're signed in with Google).">Save book</button>
+        <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
       </div>
-      <button class="btn btn-primary" id="saveChapbookBtn" type="button" title="Adds this book to your My Books list, saved to this browser (and backed up to the cloud if you're signed in with Google).">Save book</button>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
         <div class="account-status-row">
@@ -488,7 +552,6 @@
           <button class="btn-link" id="signOutBtn" type="button" hidden>Sign out</button>
         </div>
       </div>
-      <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
     </div>
   </div>
 
@@ -1013,6 +1076,24 @@
   var googleUserEmail = '';
   var googleUserName = '';
 
+  // The ID token itself is a short-lived JWT (~1hr) and can't be safely
+  // reused across a refresh -- Google's own auto_select/prompt() below is
+  // what actually re-authenticates a returning visitor. This just
+  // remembers WHO that was, so if the silent prompt gets skipped (it
+  // often does after being dismissed a few times, or without third-party
+  // cookie/FedCM support) the page can say so plainly instead of looking
+  // like a clean slate.
+  var LAST_GOOGLE_USER_KEY = 'poetryBooklet.lastGoogleUser.v1';
+  function rememberLastGoogleUser(email) {
+    try { localStorage.setItem(LAST_GOOGLE_USER_KEY, email); } catch (e) {}
+  }
+  function forgetLastGoogleUser() {
+    try { localStorage.removeItem(LAST_GOOGLE_USER_KEY); } catch (e) {}
+  }
+  function getLastGoogleUser() {
+    try { return localStorage.getItem(LAST_GOOGLE_USER_KEY) || ''; } catch (e) { return ''; }
+  }
+
   function setAccountStatus(msg, isError) {
     var el = document.getElementById('accountStatus');
     if (!el) return;
@@ -1030,6 +1111,7 @@
     var payload = decodeJwtPayload(googleIdToken);
     googleUserEmail = payload.email || 'your account';
     googleUserName = payload.name || '';
+    rememberLastGoogleUser(googleUserEmail);
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = 'none';
     document.getElementById('signOutBtn').hidden = false;
@@ -1049,6 +1131,7 @@
     googleIdToken = null;
     googleUserEmail = '';
     googleUserName = '';
+    forgetLastGoogleUser();
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
@@ -1111,7 +1194,23 @@
       // for when the silent prompt is unavailable or gets dismissed.
       google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true });
       google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
-      google.accounts.id.prompt();
+      // If the silent prompt never actually shows or gets skipped (no
+      // active Google session, third-party cookies/FedCM blocked, or
+      // it's been dismissed enough times that Google cools it down), we
+      // land here still signed out -- with nothing said about it, that
+      // reads as "the site just logged me out." Naming who we remember
+      // and pointing at the still-present Sign in button makes clear
+      // that's a one click away, not a lost session.
+      google.accounts.id.prompt(function (notification) {
+        if (googleIdToken) return;
+        var lastUser = getLastGoogleUser();
+        if (!lastUser) return;
+        var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
+          (notification.isSkippedMoment && notification.isSkippedMoment());
+        if (skipped) {
+          setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
+        }
+      });
       return;
     }
     if (retriesLeft <= 0) return;
@@ -3446,6 +3545,59 @@
       document.querySelectorAll('.poem-text').forEach(autoGrow);
     });
   }
+})();
+</script>
+
+<script>
+// ---------------------------------------------------------------------
+// The louse mascot: walks a loop hugging the outer edge of the viewport,
+// well inside the body's own padding, so it never crosses into the
+// `.page` container where every panel/button/textarea actually lives --
+// that keeps it clear of all of them without checking each one.
+// Independent of the app above; safe to no-op if its element is missing.
+// ---------------------------------------------------------------------
+(function () {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var bug = document.getElementById('louseBug');
+  if (!bug) return;
+
+  var inset = 28;       // px from the viewport edge to the bug's *center* -- half its
+                         // own size (44x24) plus a margin, so it stays fully on-screen
+  var speed = 26;       // px/second along the perimeter
+  var dist = 0;         // distance traveled along the loop
+  var lastTime = null;
+  var pauseUntil = 0;
+
+  function perimeterPoint(d, w, h) {
+    var W = Math.max(0, w - inset * 2), H = Math.max(0, h - inset * 2);
+    var perim = 2 * (W + H) || 1;
+    d = ((d % perim) + perim) % perim;
+    if (d < W) return { x: inset + d, y: inset, angle: 0 };
+    d -= W;
+    if (d < H) return { x: inset + W, y: inset + d, angle: 90 };
+    d -= H;
+    if (d < W) return { x: inset + W - d, y: inset + H, angle: 180 };
+    d -= W;
+    return { x: inset, y: inset + H - d, angle: 270 };
+  }
+
+  function frame(now) {
+    if (lastTime == null) lastTime = now;
+    var dt = Math.min(0.1, (now - lastTime) / 1000);
+    lastTime = now;
+    if (now > pauseUntil) {
+      dist += speed * dt;
+      if (Math.random() < 0.001) pauseUntil = now + 500 + Math.random() * 1200;
+    }
+    var p = perimeterPoint(dist, window.innerWidth, window.innerHeight);
+    var rad = p.angle * Math.PI / 180;
+    var wobble = Math.sin(dist / 8) * 2.2; // gentle side-to-side scuttle
+    var x = p.x - Math.sin(rad) * wobble;
+    var y = p.y + Math.cos(rad) * wobble;
+    bug.style.transform = 'translate(' + (x - 22) + 'px,' + (y - 12) + 'px) rotate(' + p.angle + 'deg)';
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
