@@ -479,53 +479,9 @@
 
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
-
-  /* A small mascot that walks a loop hugging the outer edge of the
-     viewport, inset well within the body's own padding -- that keeps it
-     off every panel/button/text without needing per-element collision
-     checks against the actual page content. Positioned by the script at
-     the end of the page; this just supplies its look and leg-wiggle. */
-  .louse-bug {
-    position: fixed; left: 0; top: 0; width: 44px; height: 24px;
-    pointer-events: none; z-index: 60;
-    filter: drop-shadow(0 1px 1px var(--shadow));
-  }
-  .louse-bug svg { display: block; overflow: visible; }
-  .louse-body { fill: var(--accent); stroke: var(--ink); stroke-width: 1; }
-  .louse-legs path { stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; fill: none; transform-origin: center; }
-  @keyframes louseLegKick {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(1.6px); }
-  }
-  .louse-legs path:nth-child(odd) { animation: louseLegKick 0.16s ease-in-out infinite; }
-  .louse-legs path:nth-child(even) { animation: louseLegKick 0.16s ease-in-out infinite reverse; }
-  @media (prefers-reduced-motion: reduce) {
-    .louse-bug { display: none; }
-  }
 </style>
 </head>
 <body>
-
-<div class="louse-bug" id="louseBug" aria-hidden="true">
-  <svg viewBox="0 0 44 24" width="44" height="24" xmlns="http://www.w3.org/2000/svg">
-    <g class="louse-legs">
-      <path d="M14 17 L11 23"/>
-      <path d="M14 17 L10 21"/>
-      <path d="M21 18 L21 24"/>
-      <path d="M21 18 L19 22"/>
-      <path d="M28 17 L31 23"/>
-      <path d="M28 17 L32 21"/>
-    </g>
-    <path d="M36 9 Q41 4 43 6" stroke="var(--ink)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-    <path d="M36 9 Q40 7 42 10" stroke="var(--ink)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-    <ellipse class="louse-body" cx="20" cy="12" rx="16" ry="8"/>
-    <line x1="13" y1="5" x2="13" y2="19" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
-    <line x1="20" y1="4.3" x2="20" y2="19.7" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
-    <line x1="27" y1="5" x2="27" y2="19" stroke="var(--danger)" stroke-width="1" opacity="0.3"/>
-    <circle cx="34" cy="9" r="1.6" fill="var(--ink)"/>
-    <circle cx="34.5" cy="8.5" r="0.5" fill="#fff"/>
-  </svg>
-</div>
 
 <div class="page">
 
@@ -3545,59 +3501,6 @@
       document.querySelectorAll('.poem-text').forEach(autoGrow);
     });
   }
-})();
-</script>
-
-<script>
-// ---------------------------------------------------------------------
-// The louse mascot: walks a loop hugging the outer edge of the viewport,
-// well inside the body's own padding, so it never crosses into the
-// `.page` container where every panel/button/textarea actually lives --
-// that keeps it clear of all of them without checking each one.
-// Independent of the app above; safe to no-op if its element is missing.
-// ---------------------------------------------------------------------
-(function () {
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var bug = document.getElementById('louseBug');
-  if (!bug) return;
-
-  var inset = 28;       // px from the viewport edge to the bug's *center* -- half its
-                         // own size (44x24) plus a margin, so it stays fully on-screen
-  var speed = 26;       // px/second along the perimeter
-  var dist = 0;         // distance traveled along the loop
-  var lastTime = null;
-  var pauseUntil = 0;
-
-  function perimeterPoint(d, w, h) {
-    var W = Math.max(0, w - inset * 2), H = Math.max(0, h - inset * 2);
-    var perim = 2 * (W + H) || 1;
-    d = ((d % perim) + perim) % perim;
-    if (d < W) return { x: inset + d, y: inset, angle: 0 };
-    d -= W;
-    if (d < H) return { x: inset + W, y: inset + d, angle: 90 };
-    d -= H;
-    if (d < W) return { x: inset + W - d, y: inset + H, angle: 180 };
-    d -= W;
-    return { x: inset, y: inset + H - d, angle: 270 };
-  }
-
-  function frame(now) {
-    if (lastTime == null) lastTime = now;
-    var dt = Math.min(0.1, (now - lastTime) / 1000);
-    lastTime = now;
-    if (now > pauseUntil) {
-      dist += speed * dt;
-      if (Math.random() < 0.001) pauseUntil = now + 500 + Math.random() * 1200;
-    }
-    var p = perimeterPoint(dist, window.innerWidth, window.innerHeight);
-    var rad = p.angle * Math.PI / 180;
-    var wobble = Math.sin(dist / 8) * 2.2; // gentle side-to-side scuttle
-    var x = p.x - Math.sin(rad) * wobble;
-    var y = p.y + Math.cos(rad) * wobble;
-    bug.style.transform = 'translate(' + (x - 22) + 'px,' + (y - 12) + 'px) rotate(' + p.angle + 'deg)';
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
 })();
 </script>
 </body>
