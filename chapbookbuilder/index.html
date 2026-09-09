@@ -326,6 +326,7 @@
   .poem-gap { height: 12px; margin: -4px 0 -2px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 40px; right: 0; height: 1px; background: transparent; }
   .poem-gap:hover .poem-gap-line { background: var(--line-strong); }
+  .poem-gap-actions { display: flex; gap: 4px; position: relative; z-index: 1; }
   .poem-gap-btn {
     opacity: 0; transition: opacity .12s ease; background: var(--surface); border: 1px solid var(--line-strong);
     color: var(--ink-soft); border-radius: 999px; font-size: 15px; width: 22px; height: 22px; line-height: 1;
@@ -333,8 +334,26 @@
   }
   .poem-gap:hover .poem-gap-btn { opacity: 1; }
   .poem-gap-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .poem-gap-btn-section { width: auto; padding: 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; }
 
   .add-poem-btn { margin-top: 4px; }
+
+  .section-row {
+    display: flex; align-items: center; gap: 10px; border: 1px dashed var(--line-strong); border-radius: 8px;
+    background: var(--surface); padding: 7px 12px; margin-bottom: 6px;
+  }
+  .section-row.dragging { opacity: 0.4; }
+  .section-row .poem-handle { flex: 0 0 auto; flex-direction: row; padding-top: 0; cursor: grab; }
+  .section-row-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint);
+    flex: 0 0 auto;
+  }
+  input.section-title {
+    flex: 1; min-width: 0; border: none; border-bottom: 1px solid transparent; background: transparent;
+    font-family: "Fraunces", serif; font-weight: 700; font-size: 14.5px; padding: 3px 2px; outline: none; color: var(--ink);
+  }
+  input.section-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  input.section-title:focus { border-bottom-color: var(--accent); }
 
   .example-banner {
     display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
@@ -587,7 +606,10 @@
         </div>
         <div id="poemGapTop"></div>
         <div id="poemList"></div>
-        <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
+          <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
+        </div>
       </div>
 
       <div class="panel" id="archivePanel" hidden style="margin-top:16px;">
@@ -1019,6 +1041,17 @@
 
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+  // A named section break -- the middle tier of the book > section >
+  // entry hierarchy. Lives inline in state.poems (see isSection below)
+  // rather than in a separate nested structure, so every existing
+  // index-based operation on that array (drag reorder, gap-insert,
+  // archive/restore) keeps working on sections for free.
+  function isSection(item) { return !!(item && item.kind === 'section'); }
+  function makeSection(title) { return { id: makeId(), kind: 'section', title: title || '' }; }
+  function countEntries(list) {
+    return (list || []).filter(function (p) { return !isSection(p); }).length;
+  }
+
   // ---------------------------------------------------------------------
   // Cloud sync (Google sign-in + a small AWS backend). Entirely optional
   // and scoped to the saved "My Chapbooks" library, not the live scratch
@@ -1226,6 +1259,24 @@
     return runs;
   }
 
+  // Section vs. entry isn't tied to a fixed heading level (H1/H2 =
+  // section, H3 = entry, etc.) -- different poets' docs use different
+  // levels for the same role. Instead: whichever heading level is used
+  // *deepest* in a given doc is the one holding entry titles, and any
+  // shallower level(s) actually used are section breaks. A doc using
+  // only H2 for poem titles imports with no sections at all; a doc
+  // using H2 for parts and H4 for poem titles imports H4 as entries
+  // and H2 as sections (skipping the unused H3 in between).
+  function scanHeadingLevels(blocks) {
+    var seen = {};
+    blocks.forEach(function (block) {
+      var m = /^(#{1,6})(?:[ \t]+\S[\s\S]*)?$/.exec(block.split('\n')[0].trim());
+      if (m) seen[m[1].length] = true;
+    });
+    var levels = Object.keys(seen).map(Number);
+    return levels.length ? Math.max.apply(null, levels) : null;
+  }
+
   function parseDocText(raw) {
     raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     // A soft line break within one Google Docs paragraph (Shift+Enter)
@@ -1234,7 +1285,8 @@
     // a real line break so poem lines don't get run together.
     raw = raw.replace(/<br\s*\/?>/gi, '\n').replace(/\\\n/g, '\n');
     var blocks = raw.split('\n\n');
-    var poems = [];
+    var entryLevel = scanHeadingLevels(blocks);
+    var items = [];
     var current = null;
 
     function startPoem(title) {
@@ -1251,7 +1303,7 @@
         collapsed.push(lines[i]);
       }
       current.lines = collapsed;
-      if (current.title.trim() !== '' || current.lines.length > 0) poems.push(current);
+      if (current.title.trim() !== '' || current.lines.length > 0) items.push(current);
       current = null;
     }
     function pushLine(text) {
@@ -1264,12 +1316,17 @@
       if (trimmed === '') { if (current) pushLine(''); return; }
 
       var firstLine = block.split('\n')[0];
-      var headingMatch = /^#{1,6}[ \t]+([\s\S]*)$/.exec(firstLine.trim()) || /^#{1,6}[ \t]*$/.exec(firstLine.trim());
-      var isHeadingOnlyHash = /^#{1,6}$/.test(firstLine.trim());
-      if (headingMatch || isHeadingOnlyHash) {
+      var headingMatch = /^(#{1,6})[ \t]+([\s\S]*)$/.exec(firstLine.trim()) || /^(#{1,6})[ \t]*$/.exec(firstLine.trim());
+      if (headingMatch) {
         finishPoem();
-        var titleRaw = headingMatch && headingMatch[1] ? headingMatch[1] : '';
-        startPoem(cleanMarkdownText(titleRaw).replace(/\s+/g, ' ').trim());
+        var level = headingMatch[1].length;
+        var titleRaw = headingMatch[2] || '';
+        var title = cleanMarkdownText(titleRaw).replace(/\s+/g, ' ').trim();
+        if (entryLevel !== null && level < entryLevel) {
+          items.push({ id: makeId(), kind: 'section', title: title });
+        } else {
+          startPoem(title);
+        }
         return;
       }
       if (/^-{3,}$/.test(trimmed)) {
@@ -1295,7 +1352,7 @@
       });
     });
     finishPoem();
-    return poems;
+    return items;
   }
 
   // ---------------------------------------------------------------------
@@ -1477,7 +1534,12 @@
     var contentHeight = PAGE_H - marginTop - marginBottom;
 
     var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state);
+    // A section marker consumes no pages of its own (pages: []) -- it's
+    // a pure TOC/editor concept, not a printed divider page -- so every
+    // page-walking loop below that reads layouts[i].pages naturally
+    // skips it with no isSection check needed.
     var layouts = state.poems.map(function (poem) {
+      if (isSection(poem)) return { isSection: true, pages: [], titleLines: [], titleH: 0, sizePt: globalSize, lineHeight: 0, titleSizePt: 0, wasWrapped: false };
       return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
@@ -1701,6 +1763,7 @@
     var contentTop = plan.PAGE_H - plan.marginTop;
     var footerY = 36, cornerY = 30;
     var contents = [];
+    var hasSections = state.poems.some(isSection);
 
     function pageNumberOp(bytes, n) {
       if (!n || !state.showPageNumbers) return;
@@ -1752,18 +1815,29 @@
           y -= plan.tocTitleH;
         }
         var capacity = tp === 0 ? plan.linesPerTocPage1 : plan.linesPerTocPageN;
+        // Once any section break exists, entries indent slightly under
+        // their section so the TOC reads as a hierarchy; with no
+        // sections at all the TOC looks exactly as it always has.
+        var entryIndent = hasSections ? 14 : 0;
         for (var c = 0; c < capacity && idx < plan.layouts.length; c++, idx++) {
           var poem = state.poems[idx];
           var startPage = plan.layouts[idx].startPage;
           var numStr = String(startPage);
           var numW = measure(numStr, plan.tocFontSize, state.bodyFontChoice, 400);
-          var titleMaxW = plan.contentWidth - numW - 16;
+          var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
+          if (isSection(poem)) {
+            var sLabel = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled section';
+            var sDisplay = ellipsize(sLabel, plan.contentWidth - numW - 16, plan.tocFontSize, state.bodyFontChoice, 700);
+            drawText(tbytes, bodyKeys.bold, plan.tocFontSize, contentLeft, lineY, sDisplay, INK_RGB);
+            drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+            continue;
+          }
+          var titleMaxW = plan.contentWidth - numW - 16 - entryIndent;
           var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
           var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.bodyFontChoice, 400);
-          var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
-          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentLeft, lineY, display, INK_RGB);
+          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentLeft + entryIndent, lineY, display, INK_RGB);
           var titleW = measure(display, plan.tocFontSize, state.bodyFontChoice, 400);
-          var dotX0 = contentLeft + titleW + 6;
+          var dotX0 = contentLeft + entryIndent + titleW + 6;
           var dotX1 = contentRight - numW - 8;
           if (dotX1 > dotX0) {
             // Measure the actual repeated string as it grows, rather than
@@ -2185,7 +2259,9 @@
   // directly from the browser. No backend involved.
   // ---------------------------------------------------------------------
   function addImportedPoems(poems, title) {
-    if (!poems.length) { setDriveStatus('Couldn’t find any entries in that document.', true); return; }
+    var entryCount = countEntries(poems);
+    if (!entryCount) { setDriveStatus('Couldn’t find any entries in that document.', true); return; }
+    var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
@@ -2193,7 +2269,9 @@
     state.intakeCollapsed = true;
     state.intakeSourceLabel = title;
     if (!state.bookTitle) state.bookTitle = title;
-    setDriveStatus((wasExample ? 'Imported ' : 'Added ') + poems.length + (poems.length === 1 ? ' entry' : ' entries') + ' from “' + title + '”.');
+    var msg = (wasExample ? 'Imported ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
+    if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
+    setDriveStatus(msg + ' from “' + title + '”.');
     persist();
     renderAll();
   }
@@ -2313,14 +2391,18 @@
     var text = pasteBox.value;
     if (!text.trim()) { pasteStatus.textContent = 'Paste some text first.'; return; }
     var poems = parseDocText(text);
-    if (!poems.length) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
+    var entryCount = countEntries(poems);
+    if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
+    var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
-    pasteStatus.textContent = (wasExample ? 'Parsed ' : 'Added ') + poems.length + (poems.length === 1 ? ' entry.' : ' entries.');
+    var msg = (wasExample ? 'Parsed ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
+    if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
+    pasteStatus.textContent = msg + '.';
     persist();
     renderAll();
   });
@@ -2446,9 +2528,21 @@
   function makeGap(index) {
     var gap = document.createElement('div');
     gap.className = 'poem-gap';
-    gap.innerHTML = '<div class="poem-gap-line"></div><button class="poem-gap-btn" type="button" title="Add poem here">+</button>';
-    gap.querySelector('.poem-gap-btn').addEventListener('click', function () {
+    gap.innerHTML = '<div class="poem-gap-line"></div>' +
+      '<div class="poem-gap-actions">' +
+      '<button class="poem-gap-btn" type="button" title="Add entry here">+</button>' +
+      '<button class="poem-gap-btn poem-gap-btn-section" type="button" title="Add named section break here">§+</button>' +
+      '</div>';
+    gap.querySelectorAll('.poem-gap-btn')[0].addEventListener('click', function () {
       state.poems.splice(index, 0, { id: makeId(), title: '', lines: [''] });
+      state.isExample = false;
+      persist();
+      renderAll();
+    });
+    gap.querySelector('.poem-gap-btn-section').addEventListener('click', function () {
+      var section = makeSection('');
+      state.poems.splice(index, 0, section);
+      pendingFocusId = section.id;
       state.isExample = false;
       persist();
       renderAll();
@@ -2457,6 +2551,11 @@
   }
 
   var dragFromIndex = null;
+  // Set right before renderAll() when a new section was just inserted,
+  // so its title input can auto-focus once the list re-renders -- the
+  // insert point (a gap button) isn't the input itself, so this can't
+  // just be a local focus() call at insert time.
+  var pendingFocusId = null;
 
   // Shared by the per-entry Title/Body alignment mini-controls: `getVal`
   // reads the current override off the poem, `setVal` writes it back AND
@@ -2506,14 +2605,14 @@
     });
   }
 
-  function makeCard(poem, index, initialPlan) {
+  function makeCard(poem, index, initialPlan, entryNum) {
     var card = document.createElement('div');
     card.className = 'poem-card';
     card.draggable = true;
 
     var handle = document.createElement('div');
     handle.className = 'poem-handle';
-    handle.innerHTML = '<div class="poem-num">' + (index + 1) + '</div><div class="poem-grip">⋮⋮</div>';
+    handle.innerHTML = '<div class="poem-num">' + entryNum + '</div><div class="poem-grip">⋮⋮</div>';
 
     var body = document.createElement('div');
     body.className = 'poem-body';
@@ -2619,14 +2718,14 @@
     return card;
   }
 
-  function makeCompactRow(poem, index, plan) {
+  function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
     row.className = 'poem-compact-row';
     row.draggable = true;
 
     var handle = document.createElement('div');
     handle.className = 'poem-handle';
-    handle.innerHTML = '<div class="poem-num">' + (index + 1) + '</div><div class="poem-grip">⋮⋮</div>';
+    handle.innerHTML = '<div class="poem-num">' + entryNum + '</div><div class="poem-grip">⋮⋮</div>';
 
     // A button, not an input: a single click opens this entry's full
     // editor below (click again to close it); renaming happens there,
@@ -2676,7 +2775,7 @@
     var out = document.createDocumentFragment();
     out.appendChild(row);
     if (expandedCompactIds[poem.id]) {
-      var expandedCard = makeCard(poem, index, plan);
+      var expandedCard = makeCard(poem, index, plan, entryNum);
       expandedCard.classList.add('poem-compact-expanded');
       out.appendChild(expandedCard);
     }
@@ -2703,15 +2802,90 @@
   document.getElementById('zoomOutBtn').addEventListener('click', function () { setEditorZoom(editorZoom - 0.1); });
   document.getElementById('zoomInBtn').addEventListener('click', function () { setEditorZoom(editorZoom + 0.1); });
 
+  // A section break renders as its own slim, dashed-border row (drag
+  // handle + rename input + remove) rather than makeCard/makeCompactRow
+  // -- it has no body text, alignment, or page-count meta, so reusing
+  // either poem row would mean hiding most of those controls anyway.
+  function makeSectionRow(section, index) {
+    var row = document.createElement('div');
+    row.className = 'section-row';
+    row.draggable = true;
+
+    var handle = document.createElement('div');
+    handle.className = 'poem-handle';
+    handle.innerHTML = '<div class="poem-grip">⋮⋮</div>';
+
+    var label = document.createElement('div');
+    label.className = 'section-row-label';
+    label.textContent = 'Section';
+
+    var titleInput = document.createElement('input');
+    titleInput.className = 'section-title';
+    titleInput.draggable = false;
+    titleInput.placeholder = 'Untitled section';
+    titleInput.value = section.title;
+    titleInput.addEventListener('input', function () {
+      section.title = titleInput.value;
+      state.isExample = false;
+      persist();
+      updateStats();
+    });
+
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'btn btn-ghost btn-danger';
+    removeBtn.type = 'button';
+    removeBtn.title = 'Archive this section break';
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      archivePoem(index);
+    });
+
+    row.appendChild(handle);
+    row.appendChild(label);
+    row.appendChild(titleInput);
+    row.appendChild(removeBtn);
+
+    row.addEventListener('dragstart', function (e) {
+      dragFromIndex = index;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
+    row.addEventListener('dragover', function (e) { e.preventDefault(); });
+    row.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (dragFromIndex === null || dragFromIndex === index) return;
+      var moved = state.poems.splice(dragFromIndex, 1)[0];
+      state.poems.splice(index, 0, moved);
+      persist();
+      renderAll();
+    });
+
+    if (pendingFocusId === section.id) {
+      pendingFocusId = null;
+      setTimeout(function () { titleInput.focus(); titleInput.select(); }, 0);
+    }
+
+    return row;
+  }
+
   function renderPoems() {
     poemList.innerHTML = '';
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
+    var entryNum = 0;
     state.poems.forEach(function (poem, i) {
-      poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan) : makeCard(poem, i, plan));
+      if (isSection(poem)) {
+        poemList.appendChild(makeSectionRow(poem, i));
+      } else {
+        entryNum++;
+        poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan, entryNum) : makeCard(poem, i, plan, entryNum));
+      }
       poemList.appendChild(makeGap(i + 1));
     });
-    poemsCount.textContent = state.poems.length + (state.poems.length === 1 ? ' entry' : ' entries');
+    var entryCount = countEntries(state.poems);
+    poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
     updateArchiveButton();
     exampleBanner.hidden = !state.isExample;
   }
@@ -2742,7 +2916,10 @@
   async function archivePoem(index) {
     var target = state.poems[index];
     if (!target) return;
-    var ok = await confirmDialog('Are you sure you want to send “' + (target.title || 'Untitled') + '” to the archive?');
+    var label = isSection(target)
+      ? 'the “' + (target.title || 'Untitled') + '” section break'
+      : '“' + (target.title || 'Untitled') + '”';
+    var ok = await confirmDialog('Are you sure you want to send ' + label + ' to the archive?');
     if (!ok) return;
     var poem = state.poems.splice(index, 1)[0];
     if (!poem) return;
@@ -2779,7 +2956,7 @@
       row.className = 'poem-compact-row';
       var titleSpan = document.createElement('div');
       titleSpan.className = 'poem-title-compact';
-      titleSpan.textContent = poem.title || 'Untitled';
+      titleSpan.textContent = (poem.title || 'Untitled') + (isSection(poem) ? ' (section)' : '');
       var restoreBtn = document.createElement('button');
       restoreBtn.className = 'btn btn-sm';
       restoreBtn.type = 'button';
@@ -2854,7 +3031,11 @@
     }
     var plan = planBooklet(state);
     state.poems.forEach(function (poem, i) {
-      var pageCount = (plan.layouts[i] && plan.layouts[i].pages.length) || 1;
+      // Sections legitimately contribute zero pages here (see planBooklet)
+      // -- unlike a real poem, whose layout always has at least one page
+      // even when empty, so the `|| 1` fallback below only ever matters
+      // for a missing layout entry, never a section's intentional 0.
+      var pageCount = plan.layouts[i] ? plan.layouts[i].pages.length : 1;
       for (var p = 0; p < pageCount; p++) items.push({ type: 'poem', index: i, pageIndex: p });
     });
     items.push({ type: 'back' });
@@ -2900,9 +3081,14 @@
       ? '<div style="font-weight:700; font-family:' + titleStack + '; font-size:' + (18 * scale).toFixed(1) + 'px; margin-bottom:' + (14 * scale).toFixed(1) + 'px;">Contents</div>'
       : '';
     html += '<div style="font-family:' + bodyStack + '; font-size:' + (10 * scale).toFixed(1) + 'px; line-height:2;">';
+    var hasSections = state.poems.some(isSection);
     for (var i = start; i < end; i++) {
-      html += '<div style="display:flex; justify-content:space-between; gap:6px;"><span>' +
-        escapeHtml(state.poems[i].title || 'Untitled') + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
+      var item = state.poems[i];
+      var isSec = isSection(item);
+      var indent = (!isSec && hasSections) ? (10 * scale).toFixed(1) + 'px' : '0';
+      var weight = isSec ? '700' : '400';
+      html += '<div style="display:flex; justify-content:space-between; gap:6px; padding-left:' + indent + '; font-weight:' + weight + ';"><span>' +
+        escapeHtml(item.title || (isSec ? 'Untitled section' : 'Untitled')) + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
     }
     html += '</div>';
     box.innerHTML = html;
@@ -3013,6 +3199,14 @@
 
   document.getElementById('addPoemBtn').addEventListener('click', function () {
     state.poems.push({ id: makeId(), title: '', lines: [''] });
+    state.isExample = false;
+    persist();
+    renderAll();
+  });
+  document.getElementById('addSectionBtn').addEventListener('click', function () {
+    var section = makeSection('');
+    state.poems.push(section);
+    pendingFocusId = section.id;
     state.isExample = false;
     persist();
     renderAll();
@@ -3312,10 +3506,10 @@
 
   function updateStats() {
     var plan = planBooklet(state);
-    document.getElementById('statPoems').textContent = state.poems.length;
+    document.getElementById('statPoems').textContent = countEntries(state.poems);
     document.getElementById('statPages').textContent = plan.totalPages;
-    document.getElementById('exportBtn').disabled = state.poems.length === 0;
-    document.getElementById('exportPrintBtn').disabled = state.poems.length === 0;
+    document.getElementById('exportBtn').disabled = countEntries(state.poems) === 0;
+    document.getElementById('exportPrintBtn').disabled = countEntries(state.poems) === 0;
     renderPreview();
   }
 
@@ -3324,7 +3518,7 @@
     document.getElementById('intakePanel').hidden = collapsed;
     document.getElementById('intakeCollapsedBar').hidden = !collapsed;
     if (collapsed) {
-      var n = state.poems.length;
+      var n = countEntries(state.poems);
       document.getElementById('intakeCollapsedText').innerHTML = '';
       var strong = document.createElement('strong');
       strong.textContent = n + (n === 1 ? ' entry' : ' entries');
@@ -3403,13 +3597,13 @@
   }
 
   async function runExport(btn, buildFn, filenameSuffix) {
-    if (!state.poems.length) return;
+    if (countEntries(state.poems) === 0) return;
     var otherBtn = btn.id === 'exportBtn' ? document.getElementById('exportPrintBtn') : document.getElementById('exportBtn');
     btn.disabled = true;
     otherBtn.disabled = true;
     await runExportForState(state, buildFn, filenameSuffix);
-    btn.disabled = state.poems.length === 0;
-    otherBtn.disabled = state.poems.length === 0;
+    btn.disabled = countEntries(state.poems) === 0;
+    otherBtn.disabled = countEntries(state.poems) === 0;
   }
 
   document.getElementById('exportBtn').addEventListener('click', function () {
@@ -3499,6 +3693,11 @@
     var body = '';
     poems.forEach(function (poem, i) {
       var titlePr = i > 0 ? '<w:pPr><w:pageBreakBefore/><w:jc w:val="center"/></w:pPr>' : '<w:pPr><w:jc w:val="center"/></w:pPr>';
+      if (isSection(poem)) {
+        body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">' +
+          escapeXml(poem.title || 'Untitled section') + '</w:t></w:r></w:p>';
+        return;
+      }
       body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">' +
         escapeXml(poem.title || 'Untitled') + '</w:t></w:r></w:p>';
       body += '<w:p/>';
@@ -3567,11 +3766,11 @@
   }
 
   document.getElementById('exportDocxBtn').addEventListener('click', async function () {
-    if (!state.poems.length) return;
+    if (countEntries(state.poems) === 0) return;
     var btn = this;
     btn.disabled = true;
     await runDocxExportForState(state, '.docx');
-    btn.disabled = state.poems.length === 0;
+    btn.disabled = countEntries(state.poems) === 0;
   });
 
   // ---------------------------------------------------------------------
@@ -3594,7 +3793,7 @@
   }
 
   function openSelectEntriesModal() {
-    if (!state.poems.length) return;
+    if (countEntries(state.poems) === 0) return;
     selectEntriesList.innerHTML = '';
     state.poems.forEach(function (poem, i) {
       var label = document.createElement('label');
@@ -3605,7 +3804,8 @@
       cb.dataset.index = i;
       cb.checked = true;
       var span = document.createElement('span');
-      span.textContent = poem.title || 'Untitled';
+      span.textContent = isSection(poem) ? ('§ ' + (poem.title || 'Untitled section')) : (poem.title || 'Untitled');
+      if (isSection(poem)) span.style.fontWeight = '700';
       label.appendChild(cb);
       label.appendChild(span);
       selectEntriesList.appendChild(label);
