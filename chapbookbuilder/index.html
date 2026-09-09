@@ -285,7 +285,7 @@
 
   textarea.poem-text {
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
-    font-family: "Newsreader", ui-serif, serif; font-size: 14.5px; line-height: 1.65; padding: 10px 12px;
+    font-family: "Newsreader", ui-serif, serif; font-size: 14.5px; line-height: 1.15; padding: 10px 12px;
     outline: none; resize: none; overflow: hidden; color: var(--ink); white-space: pre-wrap;
   }
   textarea.poem-text:focus { border-color: var(--accent); }
@@ -597,7 +597,7 @@
           <div style="display:flex; align-items:center; gap:12px;">
             <div class="poems-count" id="poemsCount"></div>
             <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
-            <button class="btn btn-sm" id="poemsViewToggle" type="button">Titles only</button>
+            <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>
           </div>
         </div>
         <div id="exampleBanner" class="example-banner" hidden>
@@ -681,6 +681,15 @@
               <button data-val="small">Small</button>
               <button data-val="medium" class="active">Medium</button>
               <button data-val="large">Large</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Line spacing</label>
+            <div class="seg seg-4" id="lineSpacingSeg">
+              <button data-val="1">1.0</button>
+              <button data-val="1.15" class="active">1.15</button>
+              <button data-val="1.5">1.5</button>
+              <button data-val="2">2.0</button>
             </div>
           </div>
 
@@ -874,6 +883,7 @@
       bodyAlignment: 'left',
       titleAlignment: 'left',
       bodySizeMode: 'medium',
+      lineSpacing: 1.15,
       titleSizeMode: 'medium',
       includeTitlePage: true,
       includeToc: true,
@@ -1262,30 +1272,37 @@
   // Section vs. entry isn't tied to a fixed heading level (H1/H2 =
   // section, H3 = entry, etc.) -- different poets' docs use different
   // levels for the same role. Instead: whichever heading level is used
-  // *deepest* in a given doc is the one holding entry titles, and any
-  // shallower level(s) actually used are section breaks. A doc using
-  // only H2 for poem titles imports with no sections at all; a doc
-  // using H2 for parts and H4 for poem titles imports H4 as entries
-  // and H2 as sections (skipping the unused H3 in between).
-  function scanHeadingLevels(blocks) {
-    var seen = {};
+  // *most often* in a given doc is almost certainly the one-per-poem
+  // title level -- a 20-poem, 3-part manuscript has 20 headings at one
+  // level and 3 at another, never the reverse. Picking strictly the
+  // *deepest* level used anywhere (an earlier version of this) let a
+  // single stray/one-off deeper heading -- a subtitle, a dedication, an
+  // export artifact -- hijack the whole doc and flip every real title
+  // into a "section." Ties go to the deeper level, since a title level
+  // is the more specific, leaf-most role. A doc using only H2 for poem
+  // titles imports with no sections at all; a doc using H2 for parts
+  // and H4 (many times over) for poem titles imports H4 as entries and
+  // H2 as sections.
+  function pickEntryHeadingLevel(blocks) {
+    var counts = {};
     blocks.forEach(function (block) {
       var m = /^(#{1,6})(?:[ \t]+\S[\s\S]*)?$/.exec(block.split('\n')[0].trim());
-      if (m) seen[m[1].length] = true;
+      if (m) counts[m[1].length] = (counts[m[1].length] || 0) + 1;
     });
-    var levels = Object.keys(seen).map(Number);
-    return levels.length ? Math.max.apply(null, levels) : null;
+    var levels = Object.keys(counts).map(Number);
+    if (!levels.length) return null;
+    var best = levels[0];
+    levels.forEach(function (lvl) {
+      if (counts[lvl] > counts[best] || (counts[lvl] === counts[best] && lvl > best)) best = lvl;
+    });
+    return best;
   }
 
-  function parseDocText(raw) {
-    raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    // A soft line break within one Google Docs paragraph (Shift+Enter)
-    // survives markdown export as either a literal <br> or a trailing
-    // backslash before the newline, not a bare \n -- normalize both to
-    // a real line break so poem lines don't get run together.
-    raw = raw.replace(/<br\s*\/?>/gi, '\n').replace(/\\\n/g, '\n');
-    var blocks = raw.split('\n\n');
-    var entryLevel = scanHeadingLevels(blocks);
+  // Walks the doc once for a given entryLevel (or null, meaning "every
+  // heading is an entry, exactly like before section-detection
+  // existed"). Split out from parseDocText so it can be re-run flat as
+  // a fallback -- see the sanity check below.
+  function walkDocBlocks(blocks, entryLevel) {
     var items = [];
     var current = null;
 
@@ -1352,6 +1369,33 @@
       });
     });
     finishPoem();
+    return items;
+  }
+
+  function parseDocText(raw) {
+    raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    // A soft line break within one Google Docs paragraph (Shift+Enter)
+    // survives markdown export as either a literal <br> or a trailing
+    // backslash before the newline, not a bare \n -- normalize both to
+    // a real line break so poem lines don't get run together.
+    raw = raw.replace(/<br\s*\/?>/gi, '\n').replace(/\\\n/g, '\n');
+    var blocks = raw.split('\n\n');
+    var entryLevel = pickEntryHeadingLevel(blocks);
+    var items = walkDocBlocks(blocks, entryLevel);
+
+    // Sanity check: a real manuscript has sections as the minority
+    // grouping, each holding several entries -- not the other way
+    // around. If more than 8 "sections" came out AND they're not
+    // clearly outnumbered by entries, the heading-level guess above
+    // was almost certainly wrong; re-import flat rather than mislabel
+    // most of the poet's actual entries as section headers.
+    if (entryLevel !== null) {
+      var sectionCount = items.filter(isSection).length;
+      var entryCount = items.length - sectionCount;
+      if (sectionCount > 8 && sectionCount >= entryCount) {
+        items = walkDocBlocks(blocks, null);
+      }
+    }
     return items;
   }
 
@@ -2656,6 +2700,7 @@
     textarea.value = poem.lines.join('\n');
     textarea.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     textarea.style.fontFamily = displayStackFor(state.bodyFontChoice);
+    textarea.style.lineHeight = String(state.lineSpacing || 1.15);
     if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     wireTabIndent(textarea);
     textarea.addEventListener('input', function () {
@@ -2782,12 +2827,16 @@
     return out;
   }
 
-  var poemsViewMode = 'full';
+  var poemsViewMode = 'compact';
   var expandedCompactIds = {};
   var poemsViewToggle = document.getElementById('poemsViewToggle');
+  function updatePoemsViewToggleLabel() {
+    poemsViewToggle.textContent = poemsViewMode === 'compact' ? 'Reveal All Entries' : 'Titles only';
+  }
+  updatePoemsViewToggleLabel();
   poemsViewToggle.addEventListener('click', function () {
     poemsViewMode = poemsViewMode === 'full' ? 'compact' : 'full';
-    poemsViewToggle.textContent = poemsViewMode === 'full' ? 'Titles only' : 'Full view';
+    updatePoemsViewToggleLabel();
     renderPoems();
   });
 
@@ -3462,6 +3511,7 @@
   wireSeg('bodyAlignSeg', function (val) { state.bodyAlignment = val; persist(); renderAll(); });
   wireSeg('titleAlignSeg', function (val) { state.titleAlignment = val; persist(); renderAll(); });
   wireSeg('bodySizeModeSeg', function (val) { state.bodySizeMode = val; persist(); renderAll(); });
+  wireSeg('lineSpacingSeg', function (val) { state.lineSpacing = parseFloat(val); persist(); renderAll(); });
   wireSeg('titleSizeModeSeg', function (val) { state.titleSizeMode = val; persist(); renderAll(); });
   wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
 
@@ -3495,6 +3545,7 @@
     document.querySelectorAll('#bodyAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyAlignment); });
     document.querySelectorAll('#titleAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleAlignment); });
     document.querySelectorAll('#bodySizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodySizeMode); });
+    document.querySelectorAll('#lineSpacingSeg button').forEach(function (b) { b.classList.toggle('active', parseFloat(b.dataset.val) === state.lineSpacing); });
     document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
     document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
