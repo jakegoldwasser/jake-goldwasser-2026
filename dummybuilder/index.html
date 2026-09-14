@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dummy — Jake Goldwasser</title>
 <meta name="description" content="An expandable grid for drafting picture book text and illustration notes.">
-<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="../favicon-96.png">
+<link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
+<link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
@@ -2854,8 +2857,16 @@
         // auto_select + prompt() lets a returning visitor with a live
         // Google session sign back in silently, same as Chapbook Builder —
         // renderButton stays as the fallback for when that silent prompt
-        // is unavailable or gets dismissed.
-        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true });
+        // is unavailable or gets dismissed. use_fedcm_for_prompt opts into
+        // Chrome's FedCM flow, which Google now requires for this silent
+        // renewal to work reliably now that third-party cookies are being
+        // phased out -- without it, the prompt increasingly fails
+        // silently and looks like "never staying signed in." itp_support
+        // does the Safari equivalent.
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true,
+          use_fedcm_for_prompt: true, itp_support: true
+        });
         google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
         google.accounts.id.prompt(function (notification) {
           if (googleIdToken) return;

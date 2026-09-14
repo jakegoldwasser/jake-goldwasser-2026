@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booklouse — Jake Goldwasser</title>
-<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="../favicon-96.png">
+<link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
+<link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1234,7 +1237,15 @@
       // session sign back in silently, instead of needing to click the
       // button on every page load -- renderButton stays as the fallback
       // for when the silent prompt is unavailable or gets dismissed.
-      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true });
+      // use_fedcm_for_prompt opts into Chrome's FedCM flow, which Google
+      // now requires for this silent renewal to work reliably now that
+      // third-party cookies are being phased out -- without it, the
+      // prompt increasingly fails silently and looks like "never staying
+      // signed in." itp_support does the Safari equivalent.
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true,
+        use_fedcm_for_prompt: true, itp_support: true
+      });
       google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
       // If the silent prompt never actually shows or gets skipped (no
       // active Google session, third-party cookies/FedCM blocked, or
