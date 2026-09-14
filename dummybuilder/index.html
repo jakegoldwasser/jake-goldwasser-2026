@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dummy — Jake Goldwasser</title>
-<meta name="description" content="A 14-spread grid for drafting picture book text and illustration notes.">
+<meta name="description" content="An expandable grid for drafting picture book text and illustration notes.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root {
     --paper: #F5FAFB;
@@ -355,12 +356,9 @@
   textarea.illustration:focus { color: var(--ink); }
 
   /* per-side control for where text sits on the printed dummy page —
-     always visible so placement stays legible without hovering */
-
-  /* vertical strip on the left edge — each button sits where it points:
-     Top at the top, Bottom at the bottom, Mid centered between them */
-  /* a vertical 3-stop slider — the textarea reserves a dedicated gutter
-     (see padding-left below) so this never sits on top of the text */
+     always visible so placement stays legible without hovering. Three
+     plain stacked buttons (Top/Mid/Bottom), in a dedicated gutter (see
+     padding-left below) so it never sits on top of the text. */
   .text-position-control {
     position: absolute;
     top: 10px;
@@ -368,54 +366,40 @@
     left: 8px;
     width: 16px;
     z-index: 2;
-    cursor: grab;
-    touch-action: none;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
   }
 
-  .text-position-control:active { cursor: grabbing; }
-
-  .text-position-track {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 3px;
-    transform: translateX(-50%);
-    background: var(--line-strong);
-    border-radius: 999px;
-  }
-
-  .text-position-thumb {
-    position: absolute;
-    left: 50%;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--teal);
-    border: 2px solid var(--surface);
-    box-shadow: 0 1px 3px var(--shadow);
-    transform: translate(-50%, -50%);
-    transition: top 0.15s ease;
-    pointer-events: none;
-  }
-
-  .text-position-zone {
-    position: absolute;
-    left: 0;
+  .text-position-btn {
+    flex: 1 1 0;
+    min-height: 0;
     width: 16px;
-    height: 34%;
-    background: none;
-    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Poppins", sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
     padding: 0;
     margin: 0;
     cursor: pointer;
   }
 
-  .text-position-zone[data-pos="top"] { top: 0; }
-  .text-position-zone[data-pos="middle"] { top: 33%; }
-  .text-position-zone[data-pos="bottom"] { top: 66%; }
+  .text-position-btn:hover { color: var(--ink); }
 
-  .text-position-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .text-position-btn.active {
+    color: var(--accent-ink);
+    background: var(--teal);
+    border-color: var(--teal);
+  }
+
+  .text-position-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   /* verso + recto: one connected unit, split only by a dotted rule */
 
@@ -463,10 +447,9 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    /* reserves a gutter for the text-position slider so it never sits on
+    /* reserves a gutter for the text-position toggle so it never sits on
        top of the text */
     padding-left: 32px;
-    transition: transform 0.2s ease;
   }
 
   .pair-side-box.no-slider textarea.cell {
@@ -519,7 +502,6 @@
     background: transparent;
     box-shadow: none;
     padding-left: 32px;
-    transition: transform 0.2s ease;
   }
 
   .title-page-box textarea.cell:focus { box-shadow: none; }
@@ -579,7 +561,6 @@
     background: transparent;
     box-shadow: none;
     padding-left: 32px;
-    transition: transform 0.2s ease;
   }
 
   .end-page-box textarea.cell:focus { box-shadow: none; }
@@ -1319,6 +1300,23 @@
           <p class="email-panel-status" id="github-status"></p>
         </div>
       </div>
+      <div class="email-menu" id="google-menu">
+        <button class="email-btn" id="google-btn" type="button" aria-expanded="false">Account ▾</button>
+        <div class="email-panel" id="google-panel" hidden>
+          <div id="google-signedout-view">
+            <p class="github-help">Sign in with Google to save your dummies to the cloud and pick them up on any device — anyone can sign in with their own account, not just Jake.</p>
+            <div id="googleSignInBtn"></div>
+          </div>
+          <div id="google-signedin-view" hidden>
+            <div class="github-connected-row">
+              <span class="github-connected-dot" id="google-account-email">Signed in</span>
+              <button class="library-entry-delete" id="google-signout-btn" type="button" aria-label="Sign out">×</button>
+            </div>
+            <p class="github-help">Autosaves to the cloud a few seconds after you stop editing, and pulls other devices’ changes when this page loads.</p>
+          </div>
+          <p class="email-panel-status" id="google-status"></p>
+        </div>
+      </div>
       <span class="export-status" id="export-status"></span>
     </div>
   </div>
@@ -1345,7 +1343,6 @@
     var STORY_PREFIX = 'book-dummy-story-';
     var CURRENT_KEY = 'book-dummy-current-v1';
     var INITIAL_ROWS = 15;
-    var MAX_ROWS = 15;
     var currentId = null;
     var sheetEl = document.getElementById('sheet');
     var titleEl = document.getElementById('title-input');
@@ -1562,6 +1559,7 @@
         statusEl.classList.remove('visible');
       }, 1500);
       scheduleGithubAutoSync();
+      scheduleCloudAutosync();
     }
 
     function autoGrow(el) {
@@ -1578,131 +1576,62 @@
       ta.addEventListener('input', function () {
         state.rows[rowIndex][field] = ta.value;
         autoGrow(ta);
-        if (ta._applyPosition) ta._applyPosition();
         save();
       });
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
 
-    // Shared canvas 2d context for measuring on-screen text width — reused
-    // rather than allocated per call.
-    var onScreenMeasureCtx = document.createElement('canvas').getContext('2d');
-
-    // True only when the box's current value is short enough to render as
-    // a single unwrapped line at its current width. Multi-line content
-    // (explicit newlines, or long enough to wrap) isn't previewed — how
-    // many lines it wraps to depends on layout in ways that aren't safe to
-    // recompute from here without measurement races (see applySingleLineSlide).
-    function isSingleLineFit(ta) {
-      var value = ta.value;
-      if (!value || value.indexOf('\n') !== -1) return false;
-      var style = getComputedStyle(ta);
-      onScreenMeasureCtx.font = style.font || (style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily);
-      var textWidth = onScreenMeasureCtx.measureText(value).width;
-      var availableWidth = ta.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
-      return textWidth <= availableWidth;
-    }
-
-    // Slides single-line text to preview print placement. Unlike the old
-    // general-purpose version, this never needs to measure "natural"
-    // content height by toggling flex-grow/height — a single line's height
-    // is just line-height + padding, a fixed CSS value — so there's no
-    // scrollHeight/flex-grow race to get wrong. Multi-line content is left
-    // where it naturally sits (no slide).
-    function applySingleLineSlide(ta, position) {
-      if (!position || !isSingleLineFit(ta)) {
-        ta.style.transform = '';
-        return;
-      }
-      var style = getComputedStyle(ta);
-      var lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
-      var oneLineH = lineHeight + (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-      var freeSpace = Math.max(0, ta.clientHeight - oneLineH);
-      var offset = position === 'bottom' ? freeSpace : position === 'middle' ? freeSpace / 2 : 0;
-      ta.style.transform = offset ? 'translateY(' + Math.round(offset) + 'px)' : '';
-    }
-
+    // Where the text sits is saved per box (used when placing it on the
+    // printed/exported page — see renderRegion below) but is no longer
+    // previewed on screen: an earlier version slid the textarea's content
+    // to approximate the printed position, but that only worked for
+    // single-line text and was fiddly enough in practice to not be worth
+    // it. The box just shows its text normally now.
     var TEXT_POSITION_LABELS_FULL = { top: 'Top', middle: 'Middle', bottom: 'Bottom' };
-    var TEXT_POSITION_THUMB_TOP = { top: '0%', middle: '50%', bottom: '100%' };
+    var TEXT_POSITION_LABELS_SHORT = { top: 'T', middle: 'M', bottom: 'B' };
 
     var TEXT_POSITION_TOOLTIP = 'Select where the text will sit on the page';
 
     // Generic — works for a spread's verso/recto/verso2/recto2, or for the
     // title/end page's own single side. `getPos`/`setPos` read and write
     // wherever the caller's position value actually lives; `onChange` runs
-    // after every update (typically: re-slide the affected textarea(s) and
-    // save()).
+    // after every update (typically just save()). A plain three-button
+    // toggle — a click-and-drag slider here made the underlying position
+    // hard to read and fiddly to hit precisely, and text no longer visibly
+    // moves on screen to preview it, so a slider's continuous-drag feel
+    // wasn't buying anything over three unambiguous buttons.
     function makeTextPositionControl(getPos, setPos, ariaLabel, onChange) {
       var wrap = document.createElement('div');
       wrap.className = 'text-position-control';
       wrap.setAttribute('role', 'group');
-      wrap.title = TEXT_POSITION_TOOLTIP;
       wrap.setAttribute('aria-label', ariaLabel);
 
-      var track = document.createElement('div');
-      track.className = 'text-position-track';
-      wrap.appendChild(track);
-
-      var thumb = document.createElement('div');
-      thumb.className = 'text-position-thumb';
-      thumb.style.top = TEXT_POSITION_THUMB_TOP[getPos()] || TEXT_POSITION_THUMB_TOP[DEFAULT_TEXT_POSITION];
-      wrap.appendChild(thumb);
-
-      var zoneEls = {};
+      var btnEls = {};
 
       function setPosition(pos) {
         setPos(pos);
-        // Update in place (no render()) so the slide actually animates
-        // instead of the box being torn down and rebuilt at rest.
-        thumb.style.top = TEXT_POSITION_THUMB_TOP[pos];
         TEXT_POSITIONS.forEach(function (p) {
-          zoneEls[p].setAttribute('aria-pressed', p === pos ? 'true' : 'false');
+          btnEls[p].classList.toggle('active', p === pos);
+          btnEls[p].setAttribute('aria-pressed', p === pos ? 'true' : 'false');
         });
         onChange();
       }
 
       TEXT_POSITIONS.forEach(function (pos) {
-        var zone = document.createElement('button');
-        zone.type = 'button';
-        zone.className = 'text-position-zone';
-        zone.dataset.pos = pos;
-        zone.title = TEXT_POSITION_TOOLTIP;
-        zone.setAttribute('aria-label', TEXT_POSITION_LABELS_FULL[pos] + ' — ' + ariaLabel);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-position-btn';
+        btn.textContent = TEXT_POSITION_LABELS_SHORT[pos];
+        btn.title = TEXT_POSITION_LABELS_FULL[pos] + ' — ' + TEXT_POSITION_TOOLTIP;
+        btn.setAttribute('aria-label', TEXT_POSITION_LABELS_FULL[pos] + ' — ' + ariaLabel);
         var isActive = getPos() === pos;
-        zone.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        zone.addEventListener('click', function () { setPosition(pos); });
-        zoneEls[pos] = zone;
-        wrap.appendChild(zone);
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        btn.addEventListener('click', function () { setPosition(pos); });
+        btnEls[pos] = btn;
+        wrap.appendChild(btn);
       });
-
-      // Click-and-drag: press anywhere on the control and move the pointer
-      // to slide the thumb between stops, snapping to whichever third of
-      // the track it's currently over.
-      var dragging = false;
-      function positionForClientY(clientY) {
-        var rect = track.getBoundingClientRect();
-        var ratio = rect.height ? (clientY - rect.top) / rect.height : 0;
-        ratio = Math.max(0, Math.min(1, ratio));
-        return ratio < 1 / 3 ? 'top' : ratio < 2 / 3 ? 'middle' : 'bottom';
-      }
-      wrap.addEventListener('pointerdown', function (e) {
-        dragging = true;
-        try { wrap.setPointerCapture(e.pointerId); } catch (err) {}
-        setPosition(positionForClientY(e.clientY));
-        e.preventDefault();
-      });
-      wrap.addEventListener('pointermove', function (e) {
-        if (!dragging) return;
-        setPosition(positionForClientY(e.clientY));
-      });
-      function endDrag(e) {
-        if (!dragging) return;
-        dragging = false;
-        try { wrap.releasePointerCapture(e.pointerId); } catch (err) {}
-      }
-      wrap.addEventListener('pointerup', endDrag);
-      wrap.addEventListener('pointercancel', endDrag);
 
       return wrap;
     }
@@ -1730,26 +1659,23 @@
       var side = document.createElement('div');
       side.className = 'pair-side';
 
-      // A box gets its own slider — except when the side is split into two
-      // stacked boxes, where placement isn't a choice any more: the top
-      // box always sits at the top of the page and the bottom box always
-      // starts at the page's vertical midpoint, so there's nothing to slide.
+      // A box gets its own Top/Mid/Bottom toggle — except when the side is
+      // split into two stacked boxes, where placement isn't a choice any
+      // more: the top box always sits at the top of the page and the
+      // bottom box always starts at the page's vertical midpoint, so
+      // there's nothing to choose.
       function makeBoxWrap(field, placeholder, showSlider) {
         var boxWrap = document.createElement('div');
         boxWrap.className = 'pair-side-box' + (showSlider ? '' : ' no-slider');
         var ta = makeTextarea(field, rowIndex, placeholder);
         boxWrap.appendChild(ta);
         if (showSlider) {
-          ta._applyPosition = function () {
-            applySingleLineSlide(ta, state.rows[rowIndex][field + 'TextPosition']);
-          };
           boxWrap.appendChild(makeTextPositionControl(
             function () { return state.rows[rowIndex][field + 'TextPosition']; },
             function (pos) { state.rows[rowIndex][field + 'TextPosition'] = pos; },
             'Text position — ' + placeholder.toLowerCase() + ' — spread ' + (rowIndex + 1),
-            function () { ta._applyPosition(); save(); }
+            save
           ));
-          requestAnimationFrame(function () { ta._applyPosition(); });
         }
         return boxWrap;
       }
@@ -1809,10 +1735,6 @@
     }
 
     function insertRowAt(gapIndex) {
-      if (state.rows.length >= MAX_ROWS) {
-        showAlert('You have reached the spread maximum. Send one spread to the graveyard.');
-        return;
-      }
       state.rows.splice(gapIndex, 0, blankRow());
       save();
       render();
@@ -1840,16 +1762,12 @@
       ta.placeholder = 'Recto text';
       ta.value = state.titlePage || '';
       ta.setAttribute('aria-label', 'Recto text — title page');
-      ta._applyPosition = function () {
-        applySingleLineSlide(ta, state.titlePageTextPosition);
-      };
       ta.addEventListener('input', function () {
         state.titlePage = ta.value;
         autoGrow(ta);
-        ta._applyPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); ta._applyPosition(); });
+      requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
 
@@ -1891,7 +1809,7 @@
         function () { return state.titlePageTextPosition; },
         function (pos) { state.titlePageTextPosition = pos; },
         'Text position — title page',
-        function () { ta._applyPosition(); save(); }
+        save
       ));
       pair.appendChild(box);
       sheetEl.appendChild(pair);
@@ -1905,16 +1823,12 @@
       ta.placeholder = 'Verso text';
       ta.value = state.endPage || '';
       ta.setAttribute('aria-label', 'Verso text — end page');
-      ta._applyPosition = function () {
-        applySingleLineSlide(ta, state.endPageTextPosition);
-      };
       ta.addEventListener('input', function () {
         state.endPage = ta.value;
         autoGrow(ta);
-        ta._applyPosition();
         save();
       });
-      requestAnimationFrame(function () { autoGrow(ta); ta._applyPosition(); });
+      requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
 
@@ -1952,7 +1866,7 @@
         function () { return state.endPageTextPosition; },
         function (pos) { state.endPageTextPosition = pos; },
         'Text position — end page',
-        function () { ta._applyPosition(); save(); }
+        save
       ));
       pair.appendChild(box);
       var empty = document.createElement('div');
@@ -2361,6 +2275,7 @@
       if (!emailPanel.hidden && !emailMenu.contains(e.target)) closeEmailPanel();
       if (!exportPanel.hidden && !exportMenu.contains(e.target)) closeExportPanel();
       if (!githubPanel.hidden && !githubMenu.contains(e.target)) closeGithubPanel();
+      if (!googlePanel.hidden && !googleMenu.contains(e.target)) closeGooglePanel();
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
@@ -2368,6 +2283,7 @@
       if (!emailPanel.hidden) closeEmailPanel();
       if (!exportPanel.hidden) closeExportPanel();
       if (!githubPanel.hidden) closeGithubPanel();
+      if (!googlePanel.hidden) closeGooglePanel();
     });
 
     // ---- Email storyboard ----
@@ -2730,6 +2646,195 @@
       });
     }
     runAutoPull();
+
+    // ---- Cloud sync (Google sign-in + a small AWS backend) ----
+    //
+    // Separate from the GitHub sync above, which is Jake's own personal
+    // cross-device save tied to his GitHub token and repo. This lets any
+    // visitor sign in with their own Google account and save their own
+    // dummies to the cloud instead — the same backend Chapbook Builder
+    // uses, with each tool's data kept in its own namespace so they can't
+    // collide (see /cloud-sync-backend/README.md at the repo root).
+
+    var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
+    var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
+    var googleIdToken = null;
+    var googleUserEmail = '';
+
+    var LAST_GOOGLE_USER_KEY = 'book-dummy.lastGoogleUser.v1';
+    function rememberLastGoogleUser(email) {
+      try { localStorage.setItem(LAST_GOOGLE_USER_KEY, email); } catch (e) {}
+    }
+    function forgetLastGoogleUser() {
+      try { localStorage.removeItem(LAST_GOOGLE_USER_KEY); } catch (e) {}
+    }
+    function getLastGoogleUser() {
+      try { return localStorage.getItem(LAST_GOOGLE_USER_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function decodeJwtPayload(token) {
+      try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); }
+      catch (e) { return {}; }
+    }
+
+    var googleMenu = document.getElementById('google-menu');
+    var googleBtn = document.getElementById('google-btn');
+    var googlePanel = document.getElementById('google-panel');
+    var googleSignedOutView = document.getElementById('google-signedout-view');
+    var googleSignedInView = document.getElementById('google-signedin-view');
+    var googleAccountEmailEl = document.getElementById('google-account-email');
+    var googleSignOutBtn = document.getElementById('google-signout-btn');
+    var googleStatusEl = document.getElementById('google-status');
+
+    function setGoogleStatus(msg, isError) {
+      googleStatusEl.textContent = msg || '';
+      googleStatusEl.style.color = isError ? 'var(--danger)' : '';
+    }
+
+    function refreshGoogleView() {
+      var signedIn = !!googleIdToken;
+      googleSignedOutView.hidden = signedIn;
+      googleSignedInView.hidden = !signedIn;
+      if (signedIn) googleAccountEmailEl.textContent = googleUserEmail;
+    }
+
+    function openGooglePanel() {
+      refreshGoogleView();
+      googlePanel.hidden = false;
+      googleBtn.setAttribute('aria-expanded', 'true');
+      clampPanelToViewport(googlePanel);
+    }
+    function closeGooglePanel() {
+      googlePanel.hidden = true;
+      googleBtn.setAttribute('aria-expanded', 'false');
+    }
+    googleBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (googlePanel.hidden) openGooglePanel(); else closeGooglePanel();
+    });
+
+    // Every locally-saved dummy, gathered into one array for the cloud —
+    // mirrors what pushStoryboardToGithub() sends per-file above, just
+    // batched into a single PUT since this backend stores one JSON blob
+    // per user rather than a file per dummy.
+    function buildDummiesLibraryArray() {
+      return loadIndex().map(function (entry) {
+        var data = (entry.id === currentId) ? currentStoryData() : loadStory(entry.id);
+        return Object.assign({ id: entry.id, updatedAt: entry.updatedAt }, data);
+      });
+    }
+
+    // Merges a pulled cloud library into local storage: newer-wins per
+    // dummy, same as pullLibraryFromGithub() above — and the
+    // currently-open dummy is left alone (push it first if it was edited
+    // elsewhere) so an in-progress edit here can't be clobbered mid-save.
+    function applyCloudDummies(remoteList) {
+      var localById = {};
+      loadIndex().forEach(function (e) { localById[e.id] = e; });
+      var pulled = 0, skippedCurrent = 0;
+      remoteList.forEach(function (entry) {
+        if (entry.id === currentId) { skippedCurrent++; return; }
+        var local = localById[entry.id];
+        if (local && local.updatedAt >= entry.updatedAt) return;
+        saveStory(entry.id, normalizeStoryFields(entry));
+        upsertIndexEntry(entry.id, entry.title);
+        pulled++;
+      });
+      return { pulled: pulled, skippedCurrent: skippedCurrent };
+    }
+
+    async function pullLibraryFromCloud() {
+      if (!googleIdToken) return;
+      try {
+        var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
+        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
+        var data = await res.json();
+        var ours = (data.state && data.state.dummybuilder) || null;
+        var cloudDummies = (ours && ours.dummies) || null;
+        if (cloudDummies && cloudDummies.length) {
+          var result = applyCloudDummies(cloudDummies);
+          var msg = result.pulled ? ('Synced ' + result.pulled + ' ' + (result.pulled === 1 ? 'dummy' : 'dummies') + ' from the cloud.') : 'Already up to date.';
+          if (result.skippedCurrent) msg += ' (Skipped the one you have open — it’ll sync on your next save.)';
+          setGoogleStatus(msg);
+        } else if (loadIndex().length) {
+          setGoogleStatus('Signed in as ' + googleUserEmail + ' — backing up your dummies to the cloud…');
+          await syncLibraryToCloud();
+        } else {
+          setGoogleStatus('Signed in as ' + googleUserEmail + '.');
+        }
+      } catch (e) {
+        setGoogleStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', true);
+      }
+    }
+
+    async function syncLibraryToCloud() {
+      if (!googleIdToken) return;
+      try {
+        var res = await fetch(CLOUD_API_URL, {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ app: 'dummybuilder', data: { dummies: buildDummiesLibraryArray() } })
+        });
+        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
+        setGoogleStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
+      } catch (e) {
+        setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', true);
+      }
+    }
+
+    // Once signed in, further edits keep syncing to the cloud on their
+    // own — not on every keystroke, but a few seconds after typing
+    // settles, same spirit as the GitHub auto-sync above.
+    var cloudSyncTimer = null;
+    function scheduleCloudAutosync() {
+      if (!googleIdToken) return;
+      clearTimeout(cloudSyncTimer);
+      cloudSyncTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
+    }
+
+    async function handleGoogleCredential(response) {
+      googleIdToken = response.credential;
+      var payload = decodeJwtPayload(googleIdToken);
+      googleUserEmail = payload.email || 'your account';
+      rememberLastGoogleUser(googleUserEmail);
+      refreshGoogleView();
+      setGoogleStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
+      await pullLibraryFromCloud();
+    }
+
+    function googleSignOut() {
+      googleIdToken = null;
+      googleUserEmail = '';
+      forgetLastGoogleUser();
+      refreshGoogleView();
+      setGoogleStatus('');
+      try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
+    }
+    googleSignOutBtn.addEventListener('click', googleSignOut);
+
+    function waitForGoogleIdentity(retriesLeft) {
+      if (window.google && google.accounts && google.accounts.id) {
+        // auto_select + prompt() lets a returning visitor with a live
+        // Google session sign back in silently, same as Chapbook Builder —
+        // renderButton stays as the fallback for when that silent prompt
+        // is unavailable or gets dismissed.
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true });
+        google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
+        google.accounts.id.prompt(function (notification) {
+          if (googleIdToken) return;
+          var lastUser = getLastGoogleUser();
+          if (!lastUser) return;
+          var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
+            (notification.isSkippedMoment && notification.isSkippedMoment());
+          if (skipped) setGoogleStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
+        });
+        return;
+      }
+      if (retriesLeft <= 0) return;
+      setTimeout(function () { waitForGoogleIdentity(retriesLeft - 1); }, 200);
+    }
+    refreshGoogleView();
+    waitForGoogleIdentity(25);
 
     // ---- Export As… (PowerPoint / PDF) ----
 
@@ -3332,12 +3437,13 @@
 
     // ---- Printable Dummy (booklet imposition) ----
     //
-    // 15 spreads (30 pages) + the recto-only Title Page (page 1) + the
-    // verso-only End Page (last page) = 32 pages = 8 saddle-stitch sheets.
-    // If a spread has been sent to the graveyard, book page count can drop
-    // below 32; since imposition needs page count divisible by 4 and
+    // Each spread (2 pages) plus the recto-only Title Page (page 1) and the
+    // verso-only End Page (last page) gives 2*rows+2 pages. Imposition needs
+    // that total divisible by 4 for whole saddle-stitch sheets; since
     // 2*rows+2 is only divisible by 4 when rows is odd, one blank spread is
-    // appended (export-only, never touching state) whenever rows is even.
+    // appended (export-only, never touching state) whenever rows is even —
+    // true no matter how many spreads the book has, since parity flips with
+    // every added row.
     //
     // Each output PDF page is one physical sheet FACE (front or back) on
     // landscape US Letter, with the two book pages scaled down to fit side

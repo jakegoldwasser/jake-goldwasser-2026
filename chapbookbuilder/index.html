@@ -1166,8 +1166,12 @@
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
       var data = await res.json();
-      var cloudChapbooks = (data.state && data.state.chapbooks) || null;
-      var cloudTrash = (data.state && data.state.trash) || [];
+      // The cloud blob is namespaced per app now (see CLOUD_API_URL's
+      // Lambda) since Dummy Builder shares this same backend/user
+      // identity -- our own data lives under state.chapbookbuilder.
+      var ours = (data.state && data.state.chapbookbuilder) || null;
+      var cloudChapbooks = (ours && ours.chapbooks) || null;
+      var cloudTrash = (ours && ours.trash) || [];
       if (cloudChapbooks && cloudChapbooks.length) {
         var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved book(s) from the cloud? This replaces your local “My Books” list.');
         if (ok) {
@@ -1196,7 +1200,7 @@
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chapbooks: library, trash: trash })
+        body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash } })
       });
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
       setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
