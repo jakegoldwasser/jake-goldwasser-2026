@@ -197,7 +197,7 @@
   .tabpane.active { display: block; }
 
   .search-row { display: flex; gap: 8px; margin-bottom: 14px; }
-  .search-row input { flex: 1; }
+  .search-row input { flex: 1; min-width: 0; }
 
   input[type="text"], input[type="search"] {
     border: 1px solid var(--line-strong); border-radius: 7px; padding: 9px 11px; font-size: 13.5px;
@@ -234,7 +234,23 @@
   }
 
   .workspace { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; }
+  /* Grid items default to min-width: auto, sizing to their content's
+     natural width -- a wide flex row inside (like .poems-head, below)
+     can then force the whole 1fr track wider than the viewport instead
+     of shrinking and letting that row's own flex-wrap kick in. */
+  .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+
+  /* iOS Safari auto-zooms the whole page when a focused text field's
+     font-size is under 16px -- jarring on every tap, and it doesn't
+     zoom back out on its own. The desktop density below (13-14.5px on
+     these fields) is intentional there, so only raise it for the
+     narrow/touch widths where it actually causes the zoom. */
+  @media (max-width: 700px) {
+    input[type="text"], input[type="search"], textarea.raw-paste, textarea.poem-text, .field input[type="text"] {
+      font-size: 16px;
+    }
+  }
 
   .poems-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
   .zoom-control {
@@ -276,7 +292,10 @@
   .format-btn-italic { font-style: italic; }
   .format-btn-underline { text-decoration: underline; }
   input.poem-title {
-    flex: 1; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
+    /* min-width: 0 overrides a flex item's default content-based minimum
+       -- without it, this input's own intrinsic minimum width could
+       force the whole card (and page) wider than a narrow viewport. */
+    flex: 1; min-width: 0; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
     font-family: "Fraunces", serif; font-weight: 600; font-size: 17px; padding: 3px 2px 7px; outline: none;
     color: var(--ink);
   }
@@ -602,7 +621,7 @@
               <button id="zoomInBtn" type="button" aria-label="Zoom editor text in">+</button>
             </div>
           </div>
-          <div style="display:flex; align-items:center; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
             <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
             <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>

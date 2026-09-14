@@ -1203,6 +1203,43 @@
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
+
+  /* ---- Mobile ----
+     The sheet's 3-column grid (spread number / verso+recto / illustration)
+     has a 680px min-width, so on a phone it was always horizontally
+     scrollable -- meaning typing into a box could mean scrolling
+     sideways first, then fighting the on-screen keyboard for vertical
+     space too. Below, it collapses to one stacked column per spread
+     (number, then verso, then recto, then illustration) so every box is
+     always fully on screen and full-width. Column headers are dropped
+     since they'd otherwise float above the grid as three redundant
+     lines once nothing lines up in columns any more -- each box's own
+     placeholder ("Verso text", "Recto text", "Illustration notes")
+     already says what it's for. Field font-sizes also come up to 16px:
+     iOS Safari auto-zooms the whole page on focus below that, which is
+     a jarring jump on every tap into a field. */
+  @media (max-width: 700px) {
+    .sheet { grid-template-columns: 1fr; min-width: 0; }
+    .col-head { display: none; }
+    .spread-pair { flex-direction: column; }
+    .pair-divider {
+      width: auto;
+      height: 3px;
+      align-self: stretch;
+      background-image: repeating-linear-gradient(
+        to right,
+        var(--line-strong) 0,
+        var(--line-strong) 10px,
+        transparent 10px,
+        transparent 17px
+      );
+    }
+    #author-input,
+    .email-panel input[type="email"],
+    .email-panel input[type="password"] {
+      font-size: 16px;
+    }
+  }
 </style>
 </head>
 <body>
