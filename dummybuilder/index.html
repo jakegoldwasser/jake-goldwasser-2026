@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,500&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;1,400&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -30,8 +30,11 @@
     --teal: #00A99A;
     --danger: #BD5138;
     --danger-soft: #FAEAE4;
+    --magenta: #B23E7E;
+    --magenta-soft: #FBEAF3;
     --shadow: rgba(20, 45, 56, 0.08);
     --radius: 6px;
+    --manuscript-font: 'Poppins', Arial, sans-serif;
   }
 
   * { box-sizing: border-box; }
@@ -326,7 +329,7 @@
   .row-gap.drag-target .insert-pill { background: var(--teal); }
 
   textarea.cell {
-    font-family: "EB Garamond", ui-serif, Georgia, serif;
+    font-family: var(--manuscript-font);
     font-weight: 400;
     font-size: 18px;
     line-height: 1.5;
@@ -337,7 +340,7 @@
     padding: 12px 14px;
     resize: none;
     overflow: hidden;
-    min-height: 64px;
+    min-height: 136px;
     width: 100%;
     box-shadow: 0 1px 2px var(--shadow);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -352,7 +355,7 @@
   }
 
   textarea.illustration {
-    background: var(--surface-2);
+    background: var(--magenta-soft);
     color: var(--ink-soft);
   }
 
@@ -365,7 +368,6 @@
   .text-position-control {
     position: absolute;
     top: 10px;
-    bottom: 10px;
     left: 8px;
     width: 16px;
     z-index: 2;
@@ -375,8 +377,8 @@
   }
 
   .text-position-btn {
-    flex: 1 1 0;
-    min-height: 0;
+    flex: 0 0 auto;
+    height: 16px;
     width: 16px;
     display: flex;
     align-items: center;
@@ -625,7 +627,7 @@
   .graveyard-item-side {
     flex: 1 1 50%;
     min-width: 0;
-    font-family: "EB Garamond", ui-serif, Georgia, serif;
+    font-family: var(--manuscript-font);
     font-size: 14px;
     line-height: 1.4;
     color: var(--ink-soft);
@@ -806,6 +808,8 @@
   }
 
   .trim-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .typeface-select:focus-visible { outline-color: var(--magenta); }
 
   /* ---- My Storyboards menu ---- */
 
@@ -1301,6 +1305,10 @@
         Book size
         <select id="trim-select" class="trim-select"></select>
       </label>
+      <label class="trim-label" for="typeface-select">
+        Typeface
+        <select id="typeface-select" class="trim-select typeface-select"></select>
+      </label>
       <div class="export-menu" id="export-menu">
         <button class="export-btn" id="export-btn" type="button" aria-expanded="false">Export As…</button>
         <div class="export-panel" id="export-panel" hidden>
@@ -1413,6 +1421,33 @@
     var TEXT_POSITIONS = ['top', 'middle', 'bottom'];
     var DEFAULT_TEXT_POSITION = 'bottom';
 
+    // Same typeface choices offered in Booklouse, so a manuscript reads the
+    // same whichever tool it's drafted in. `family` is the loaded webfont
+    // name (used for canvas measuring/rasterizing in the PDF/PPTX export);
+    // `displayStack` is what's applied on screen, with print-safe fallbacks.
+    var FONT_CHOICES = [
+      { key: 'poppins', label: 'Poppins', family: 'Poppins', displayStack: "'Poppins', Arial, sans-serif" },
+      { key: 'lora', label: 'Lora', family: 'Lora', displayStack: "'Lora', Georgia, serif" },
+      { key: 'garamond', label: 'Garamond', family: 'EB Garamond', displayStack: "'EB Garamond', Garamond, 'Times New Roman', serif" },
+      { key: 'zillaslab', label: 'Slab Serif', family: 'Zilla Slab', displayStack: "'Zilla Slab', 'Roboto Slab', serif" },
+      { key: 'spectral', label: 'Spectral', family: 'Spectral', displayStack: "'Spectral', Georgia, serif" },
+      { key: 'crimsontext', label: 'Crimson Text', family: 'Crimson Text', displayStack: "'Crimson Text', 'Times New Roman', serif" },
+      { key: 'ptsans', label: 'PT Sans', family: 'PT Sans', displayStack: "'PT Sans', Arial, sans-serif" },
+      { key: 'helvetica', label: 'Helvetica', family: 'Helvetica', displayStack: "Arial, Helvetica, sans-serif" }
+    ];
+    var DEFAULT_TYPEFACE = 'poppins';
+
+    function getFontChoice(key) {
+      for (var i = 0; i < FONT_CHOICES.length; i++) {
+        if (FONT_CHOICES[i].key === key) return FONT_CHOICES[i];
+      }
+      return FONT_CHOICES[0];
+    }
+
+    function applyTypeface(key) {
+      document.documentElement.style.setProperty('--manuscript-font', getFontChoice(key).displayStack);
+    }
+
     function updateCopyright() {
       var year = new Date().getFullYear();
       var author = (state.author || '').trim();
@@ -1467,6 +1502,7 @@
         author: d.author || '',
         rows: Array.isArray(d.rows) && d.rows.length ? d.rows.map(normalizeRow) : defaultRows(),
         trimSize: getTrimSize(d.trimSize).key,
+        typeface: getFontChoice(d.typeface || DEFAULT_TYPEFACE).key,
         titlePage: d.titlePage || '',
         endPage: d.endPage || '',
         titlePageTextPosition: TEXT_POSITIONS.indexOf(d.titlePageTextPosition) !== -1 ? d.titlePageTextPosition : DEFAULT_TEXT_POSITION,
@@ -1534,6 +1570,7 @@
     function currentStoryData() {
       return {
         title: state.title, author: state.author, rows: state.rows, trimSize: state.trimSize,
+        typeface: state.typeface,
         titlePage: state.titlePage, endPage: state.endPage,
         titlePageTextPosition: state.titlePageTextPosition, endPageTextPosition: state.endPageTextPosition,
         titlePageIllustration: state.titlePageIllustration, endPageIllustration: state.endPageIllustration,
@@ -2085,6 +2122,21 @@
       save();
     });
 
+    var typefaceSelect = document.getElementById('typeface-select');
+    FONT_CHOICES.forEach(function (f) {
+      var opt = document.createElement('option');
+      opt.value = f.key;
+      opt.textContent = f.label;
+      typefaceSelect.appendChild(opt);
+    });
+    typefaceSelect.value = state.typeface;
+    applyTypeface(state.typeface);
+    typefaceSelect.addEventListener('change', function () {
+      state.typeface = typefaceSelect.value;
+      applyTypeface(state.typeface);
+      save();
+    });
+
     // ---- My Storyboards library ----
 
     var libraryMenu = document.getElementById('library-menu');
@@ -2170,6 +2222,8 @@
       updateCopyright();
       updateWordCount();
       trimSelect.value = state.trimSize;
+      typefaceSelect.value = state.typeface;
+      applyTypeface(state.typeface);
       render();
     }
 
@@ -2931,9 +2985,10 @@
     function textToParagraphs(text, sz, algn) {
       var lines = String(text || '').split(/\r\n|\r|\n/);
       var pPr = algn ? '<a:pPr algn="' + algn + '"/>' : '';
+      var typeface = escapeXml(getFontChoice(state.typeface).family);
       return lines.map(function (line) {
         if (!line) return '<a:p>' + pPr + '</a:p>';
-        return '<a:p>' + pPr + '<a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"><a:latin typeface="Poppins"/></a:rPr><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
+        return '<a:p>' + pPr + '<a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"><a:latin typeface="' + typeface + '"/></a:rPr><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
       }).join('');
     }
 
@@ -3039,7 +3094,9 @@
 
     // ---- OOXML (.pptx) part builders ----
 
-    var THEME_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    function themeXml() {
+      var typeface = escapeXml(getFontChoice(state.typeface).family);
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
       '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Book Dummy">' +
       '<a:themeElements>' +
       '<a:clrScheme name="Book Dummy">' +
@@ -3057,8 +3114,8 @@
       '<a:folHlink><a:srgbClr val="00A99A"/></a:folHlink>' +
       '</a:clrScheme>' +
       '<a:fontScheme name="Book Dummy">' +
-      '<a:majorFont><a:latin typeface="Poppins"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
-      '<a:minorFont><a:latin typeface="Poppins"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
+      '<a:majorFont><a:latin typeface="' + typeface + '"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="' + typeface + '"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>' +
       '</a:fontScheme>' +
       '<a:fmtScheme name="Book Dummy">' +
       '<a:fillStyleLst>' +
@@ -3084,6 +3141,7 @@
       '</a:fmtScheme>' +
       '</a:themeElements>' +
       '</a:theme>';
+    }
 
     function makeTextBoxSp(id, name, x, y, w, h, text) {
       return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
@@ -3208,7 +3266,7 @@
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + relEntries + '</Relationships>');
 
-      addXml('ppt/theme/theme1.xml', THEME_XML);
+      addXml('ppt/theme/theme1.xml', themeXml());
 
       addXml('ppt/slideMasters/slideMaster1.xml',
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
@@ -3293,12 +3351,12 @@
 
     // ---- PDF builder (hand-rolled, no external library) ----
     //
-    // Poppins isn't one of the PDF standard 14 fonts, and embedding a real
-    // TrueType font from scratch (parsing WOFF2/Brotli, building CID tables)
-    // is well past what's reasonable here. Instead: render each text block
-    // with Canvas using the Poppins face already loaded on the page, read
-    // back the pixels, and embed them as small grayscale images. Vector
-    // drawing (box borders, gutter line) stays native PDF.
+    // None of the chosen typefaces are among the PDF standard 14 fonts, and
+    // embedding a real TrueType font from scratch (parsing WOFF2/Brotli,
+    // building CID tables) is well past what's reasonable here. Instead:
+    // render each text block with Canvas using the webfont already loaded
+    // on the page, read back the pixels, and embed them as small grayscale
+    // images. Vector drawing (box borders, gutter line) stays native PDF.
 
     var WINANSI_MAP = {
       0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94,
@@ -3351,7 +3409,8 @@
     var PDF_RASTER_SCALE = 2;
 
     function ensureFontsReady() {
-      var specs = ['400 16px Poppins', '600 16px Poppins'];
+      var family = getFontChoice(state.typeface).family;
+      var specs = ['400 16px "' + family + '"', '600 16px "' + family + '"'];
       return Promise.all(specs.map(function (s) {
         try { return document.fonts.load(s); } catch (e) { return Promise.resolve(); }
       })).then(function () {
@@ -3366,7 +3425,7 @@
     }
 
     function canvasFont(weight, sizePt) {
-      return weight + ' ' + sizePt + 'px Poppins, sans-serif';
+      return weight + ' ' + sizePt + 'px ' + getFontChoice(state.typeface).displayStack;
     }
 
     function measureCanvasText(str, weight, sizePt) {
@@ -3404,8 +3463,8 @@
       return lines;
     }
 
-    // Rasterize a wrapped text block with the real Poppins face (loaded on
-    // the page already) at PDF_RASTER_SCALE density, returning single-channel
+    // Rasterize a wrapped text block with the chosen typeface's real webfont
+    // face (loaded on the page already) at PDF_RASTER_SCALE density, returning single-channel
     // grayscale pixel bytes ready for RunLengthDecode + a DeviceGray image.
     function renderTextBlockGray(lines, weight, sizePt, lineHeightPt, colorHex, widthPt) {
       var heightPt = Math.max(1, lines.length * lineHeightPt);
