@@ -382,6 +382,13 @@
   .end-page-box:hover .text-position-control,
   .text-position-control:focus-within { opacity: 1; }
 
+  /* ...unless the box's own textarea is the thing that's focused (as
+     opposed to one of these buttons) — then stay hidden so typing isn't
+     obstructed, even while the mouse is still resting on the box. */
+  .pair-side-box.text-focused .text-position-control,
+  .title-page-box.text-focused .text-position-control,
+  .end-page-box.text-focused .text-position-control { opacity: 0; }
+
   .text-position-btn {
     flex: 0 0 auto;
     height: 16px;
@@ -684,6 +691,10 @@
 
   .pair-side:hover .pair-side-tools,
   .pair-side-tools:focus-within { opacity: 1; }
+
+  /* ...unless a textarea in this side is what's focused — stay hidden even
+     while the mouse is still resting on the box (see .text-focused above). */
+  .pair-side.text-focused .pair-side-tools { opacity: 0; }
 
   .pair-side-tools button {
     font-family: "Poppins", sans-serif;
@@ -1662,6 +1673,24 @@
       el.style.height = el.scrollHeight + 'px';
     }
 
+    // Hover-only controls (T/M/B, Clear/Split) stay hidden once you've
+    // actually clicked into a box, even if the mouse hasn't moved off it —
+    // the `.text-focused` class it sets overrides the plain :hover rule.
+    function bindTextFocusToggle(ta) {
+      ta.addEventListener('focus', function () {
+        var box = ta.closest('.pair-side-box, .title-page-box, .end-page-box');
+        if (box) box.classList.add('text-focused');
+        var side = ta.closest('.pair-side');
+        if (side) side.classList.add('text-focused');
+      });
+      ta.addEventListener('blur', function () {
+        var box = ta.closest('.pair-side-box, .title-page-box, .end-page-box');
+        if (box) box.classList.remove('text-focused');
+        var side = ta.closest('.pair-side');
+        if (side) side.classList.remove('text-focused');
+      });
+    }
+
     function makeTextarea(field, rowIndex, placeholder, extraClass) {
       var ta = document.createElement('textarea');
       ta.className = 'cell' + (extraClass ? ' ' + extraClass : '');
@@ -1673,6 +1702,7 @@
         autoGrow(ta);
         save();
       });
+      bindTextFocusToggle(ta);
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
@@ -1887,6 +1917,7 @@
         autoGrow(ta);
         save();
       });
+      bindTextFocusToggle(ta);
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
@@ -1948,6 +1979,7 @@
         autoGrow(ta);
         save();
       });
+      bindTextFocusToggle(ta);
       requestAnimationFrame(function () { autoGrow(ta); });
       return ta;
     }
