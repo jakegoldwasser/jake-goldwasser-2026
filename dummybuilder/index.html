@@ -361,9 +361,9 @@
   textarea.illustration:focus { color: var(--ink); }
 
   /* per-side control for where text sits on the printed dummy page —
-     shown on hover only, in a dedicated gutter (see padding-left below)
-     so it never sits on top of the text. Three plain stacked buttons
-     (Top/Mid/Bottom). */
+     shown on hover only, floating over the box's top-left corner (no
+     margin is reserved for it, so it can sit on top of the text while
+     visible). Three plain stacked buttons (Top/Mid/Bottom). */
   .text-position-control {
     position: absolute;
     top: 10px;
@@ -465,13 +465,6 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    /* reserves a gutter for the text-position toggle so it never sits on
-       top of the text */
-    padding-left: 32px;
-  }
-
-  .pair-side-box.no-slider textarea.cell {
-    padding-left: 14px;
   }
 
   .spread-pair textarea.cell:focus {
@@ -519,7 +512,6 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    padding-left: 32px;
   }
 
   .title-page-box textarea.cell:focus { box-shadow: none; }
@@ -578,7 +570,6 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    padding-left: 32px;
   }
 
   .end-page-box textarea.cell:focus { box-shadow: none; }
@@ -693,10 +684,13 @@
   .pair-side-tools:focus-within { opacity: 1; }
 
   /* ...unless a textarea in this side is what's focused — stay hidden even
-     while the mouse is still resting on the box (see .text-focused above). */
+     while the mouse is still resting on the box (see .text-focused above).
+     It's fine for this to sit over the text once shown; there's no reserved
+     margin for it any more (see textarea.cell padding). */
   .pair-side.text-focused .pair-side-tools { opacity: 0; }
 
-  .pair-side-tools button {
+  .pair-side-tools button,
+  .clear-side {
     font-family: "Poppins", sans-serif;
     font-size: 10px;
     font-weight: 600;
@@ -716,9 +710,21 @@
     border-color: var(--accent);
   }
 
-  .pair-side-tools .clear-side:hover {
-    background: var(--danger-soft);
+  /* Clear stays out of the text entirely: it renders below the box, inside
+     the card, and only takes up space once the side is actually being
+     edited — so it never has to overlap what you're typing. */
+  .clear-side {
+    display: none;
+    align-self: flex-end;
+    flex: 0 0 auto;
+    margin: 4px 4px 0 auto;
     color: var(--danger);
+  }
+
+  .pair-side:focus-within .clear-side { display: inline-block; }
+
+  .clear-side:hover {
+    background: var(--danger-soft);
     border-color: var(--danger);
   }
 
@@ -1816,10 +1822,25 @@
       var tools = document.createElement('div');
       tools.className = 'pair-side-tools';
 
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'split-toggle';
+      toggle.textContent = row[splitField] ? 'Merge' : 'Split';
+      toggle.setAttribute('aria-label', (row[splitField] ? 'Merge ' : 'Split ') + label.toLowerCase() + ' — spread ' + (rowIndex + 1));
+      toggle.addEventListener('click', function () {
+        toggleSplit(rowIndex, prefix);
+      });
+      tools.appendChild(toggle);
+
+      side.appendChild(tools);
+
+      // Clear sits below the box(es) instead of overlapping the text, and
+      // only shows once you're actually typing here (:focus-within) — it's
+      // the one control that stays out of the way of the words themselves.
       var clearBtn = document.createElement('button');
       clearBtn.type = 'button';
       clearBtn.className = 'clear-side';
-      clearBtn.textContent = 'Clear';
+      clearBtn.textContent = 'Clear ' + label.toLowerCase();
       clearBtn.setAttribute('aria-label', 'Clear ' + label.toLowerCase() + ' — spread ' + (rowIndex + 1));
       clearBtn.addEventListener('click', function () {
         var current = state.rows[rowIndex];
@@ -1834,19 +1855,7 @@
         save();
         render();
       });
-      tools.appendChild(clearBtn);
-
-      var toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'split-toggle';
-      toggle.textContent = row[splitField] ? 'Merge' : 'Split';
-      toggle.setAttribute('aria-label', (row[splitField] ? 'Merge ' : 'Split ') + label.toLowerCase() + ' — spread ' + (rowIndex + 1));
-      toggle.addEventListener('click', function () {
-        toggleSplit(rowIndex, prefix);
-      });
-      tools.appendChild(toggle);
-
-      side.appendChild(tools);
+      side.appendChild(clearBtn);
 
       return side;
     }
