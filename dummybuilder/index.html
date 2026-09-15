@@ -361,9 +361,9 @@
   textarea.illustration:focus { color: var(--ink); }
 
   /* per-side control for where text sits on the printed dummy page —
-     always visible so placement stays legible without hovering. Three
-     plain stacked buttons (Top/Mid/Bottom), in a dedicated gutter (see
-     padding-left below) so it never sits on top of the text. */
+     shown on hover only, in a dedicated gutter (see padding-left below)
+     so it never sits on top of the text. Three plain stacked buttons
+     (Top/Mid/Bottom). */
   .text-position-control {
     position: absolute;
     top: 10px;
@@ -373,7 +373,14 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
+    opacity: 0;
+    transition: opacity 0.12s ease;
   }
+
+  .pair-side-box:hover .text-position-control,
+  .title-page-box:hover .text-position-control,
+  .end-page-box:hover .text-position-control,
+  .text-position-control:focus-within { opacity: 1; }
 
   .text-position-btn {
     flex: 0 0 auto;
@@ -664,10 +671,21 @@
     );
   }
 
-  .split-toggle {
+  .pair-side-tools {
     position: absolute;
     top: 4px;
     right: 4px;
+    z-index: 2;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  .pair-side:hover .pair-side-tools,
+  .pair-side-tools:focus-within { opacity: 1; }
+
+  .pair-side-tools button {
     font-family: "Poppins", sans-serif;
     font-size: 10px;
     font-weight: 600;
@@ -678,18 +696,19 @@
     border-radius: 999px;
     padding: 2px 9px;
     cursor: pointer;
-    opacity: 0;
-    z-index: 2;
-    transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
   }
 
-  .pair-side:hover .split-toggle,
-  .split-toggle:focus-visible { opacity: 1; }
-
-  .split-toggle:hover {
+  .pair-side-tools .split-toggle:hover {
     background: var(--surface-2);
     color: var(--accent);
     border-color: var(--accent);
+  }
+
+  .pair-side-tools .clear-side:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger);
   }
 
   /* ---- Footer / add row ---- */
@@ -1764,6 +1783,29 @@
         side.appendChild(makeBoxWrap(field2, label + ', continued', false));
       }
 
+      var tools = document.createElement('div');
+      tools.className = 'pair-side-tools';
+
+      var clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'clear-side';
+      clearBtn.textContent = 'Clear';
+      clearBtn.setAttribute('aria-label', 'Clear ' + label.toLowerCase() + ' — spread ' + (rowIndex + 1));
+      clearBtn.addEventListener('click', function () {
+        var current = state.rows[rowIndex];
+        if (current[prefix] || current[field2]) {
+          state.graveyard.unshift(Object.assign({}, current));
+        }
+        current[prefix] = '';
+        current[field2] = '';
+        current[splitField] = false;
+        current[prefix + 'TextPosition'] = DEFAULT_TEXT_POSITION;
+        current[field2 + 'TextPosition'] = DEFAULT_TEXT_POSITION;
+        save();
+        render();
+      });
+      tools.appendChild(clearBtn);
+
       var toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'split-toggle';
@@ -1772,7 +1814,9 @@
       toggle.addEventListener('click', function () {
         toggleSplit(rowIndex, prefix);
       });
-      side.appendChild(toggle);
+      tools.appendChild(toggle);
+
+      side.appendChild(tools);
 
       return side;
     }
