@@ -1195,13 +1195,21 @@
       var cloudChapbooks = (ours && ours.chapbooks) || null;
       var cloudTrash = (ours && ours.trash) || [];
       if (cloudChapbooks && cloudChapbooks.length) {
-        var ok = await confirmDialog('Load your ' + cloudChapbooks.length + ' saved book(s) from the cloud? This replaces your local “My Books” list.');
-        if (ok) {
-          library = cloudChapbooks;
-          trash = cloudTrash;
-          persistLibrary();
-          persistTrash();
-          renderChapbooksList();
+        // The cloud is the default source of truth once signed in -- import
+        // straight away with no confirmation, then jump to whichever book
+        // was edited most recently so the poet lands right back where they
+        // left off instead of on the empty-state screen.
+        library = cloudChapbooks;
+        trash = cloudTrash;
+        persistLibrary();
+        persistTrash();
+        renderChapbooksList();
+        var mostRecent = library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
+        if (mostRecent) {
+          state = JSON.parse(JSON.stringify(mostRecent.data));
+          state.isExample = false;
+          persist();
+          renderAll();
         }
         setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
       } else if (library.length || trash.length) {
