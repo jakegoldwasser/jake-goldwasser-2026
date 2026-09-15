@@ -226,53 +226,51 @@
   .num-cell.dragging { opacity: 0.35; }
   .num-cell:active { cursor: grabbing; }
 
-  .num-cell .n { font-size: 28px; }
+  .num-cell .n {
+    font-size: 28px;
+    transition: opacity 0.12s ease;
+  }
 
-  .num-cell .remove-row {
+  .num-cell:hover .n { opacity: 0; }
+
+  /* delete / clear / add, shown in a single row over the spread number on
+     hover — the number itself hides rather than sharing the space with them */
+  .num-cell-actions {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .num-cell:hover .num-cell-actions { display: flex; }
+
+  .num-cell-actions button {
     width: 20px;
     height: 20px;
+    flex: 0 0 auto;
     border-radius: 50%;
     border: 1px solid var(--line-strong);
     background: var(--surface);
-    color: var(--danger);
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
   }
 
-  .num-cell:hover .remove-row { display: flex; }
-  .num-cell .remove-row:hover { background: var(--danger-soft); }
+  .num-cell-actions .remove-row { color: var(--danger); }
+  .num-cell-actions .remove-row:hover { background: var(--danger-soft); }
 
-  .num-cell .add-below-row {
-    position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 1px solid var(--line-strong);
-    background: var(--surface);
-    color: var(--teal);
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1;
-    cursor: pointer;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-  }
+  .num-cell-actions .clear-row { color: var(--ink-soft); font-size: 13px; }
+  .num-cell-actions .clear-row:hover { background: var(--surface-2); color: var(--ink); }
 
-  .num-cell:hover .add-below-row { display: flex; }
-  .num-cell .add-below-row:hover { background: var(--surface-2); }
+  .num-cell-actions .add-below-row { color: var(--teal); font-size: 13px; font-weight: 700; }
+  .num-cell-actions .add-below-row:hover { background: var(--surface-2); }
 
   /* insert-spread gaps between rows */
 
@@ -331,8 +329,8 @@
   textarea.cell {
     font-family: var(--manuscript-font);
     font-weight: 400;
-    font-size: 18px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.4;
     color: var(--ink);
     background: var(--surface);
     border: 2px solid var(--line-strong);
@@ -340,7 +338,7 @@
     padding: 12px 14px;
     resize: none;
     overflow: hidden;
-    min-height: 136px;
+    min-height: 118px;
     width: 100%;
     box-shadow: 0 1px 2px var(--shadow);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -2030,13 +2028,17 @@
         n.className = 'n';
         n.textContent = i + 1;
         num.appendChild(n);
+
+        var actions = document.createElement('div');
+        actions.className = 'num-cell-actions';
+
         if (state.rows.length > 1) {
           var del = document.createElement('button');
           del.type = 'button';
           del.className = 'remove-row';
           del.draggable = false;
           del.setAttribute('aria-label', 'Delete spread ' + (i + 1));
-          del.textContent = '×';
+          del.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6.5 5V3.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1V5M4.5 5l.6 8a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8"/></svg>';
           del.addEventListener('click', function (e) {
             e.stopPropagation();
             var removed = state.rows.splice(i, 1)[0];
@@ -2044,8 +2046,27 @@
             save();
             render();
           });
-          num.appendChild(del);
+          actions.appendChild(del);
         }
+
+        var clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'clear-row';
+        clear.draggable = false;
+        clear.setAttribute('aria-label', 'Clear spread ' + (i + 1));
+        clear.textContent = '×';
+        clear.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var old = state.rows[i];
+          if (old.verso || old.verso2 || old.recto || old.recto2 || old.illustration) {
+            state.graveyard.unshift(old);
+          }
+          state.rows[i] = blankRow();
+          save();
+          render();
+        });
+        actions.appendChild(clear);
+
         var addBelow = document.createElement('button');
         addBelow.type = 'button';
         addBelow.className = 'add-below-row';
@@ -2056,7 +2077,9 @@
           e.stopPropagation();
           insertRowAt(i + 1);
         });
-        num.appendChild(addBelow);
+        actions.appendChild(addBelow);
+
+        num.appendChild(actions);
         num.addEventListener('dragstart', function (e) {
           draggedIndex = i;
           num.classList.add('dragging');
