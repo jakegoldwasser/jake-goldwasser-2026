@@ -427,13 +427,21 @@
     border: 2px solid var(--line-strong);
     border-radius: var(--radius);
     box-shadow: 0 1px 2px var(--shadow);
-    overflow: hidden;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    /* not clipped: Clear (see .clear-side) sits just outside this box,
+       below its bottom edge, and needs to render past it uncropped. Every
+       child is already inset from the rounded corners by its own padding,
+       so nothing else relies on this clipping. */
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, margin-bottom 0.15s ease;
   }
 
   .spread-pair:focus-within {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
+    /* reserves real room below the card (grows this grid row, pushing the
+       next one down) so Clear — positioned outside the card, see
+       .clear-side — always has clear space and can't overlap the next
+       spread. */
+    margin-bottom: 32px;
   }
 
   .pair-side {
@@ -710,14 +718,19 @@
     border-color: var(--accent);
   }
 
-  /* Clear stays out of the text entirely: it renders below the box, inside
-     the card, and only takes up space once the side is actually being
-     edited — so it never has to overlap what you're typing. */
+  /* Clear stays out of the text entirely: pinned just below the box's own
+     bottom edge (outside .spread-pair's border, not fighting its flex
+     height) so it never overlaps what you're typing, and only shown once
+     the side is actually being edited. Absolutely positioned — rather than
+     a normal-flow sibling — so it can't get clipped or thrown off by the
+     row's height being recalculated as it appears/disappears. */
   .clear-side {
     display: none;
-    align-self: flex-end;
-    flex: 0 0 auto;
-    margin: 4px 4px 0 auto;
+    position: absolute;
+    left: auto;
+    right: 0;
+    bottom: -28px;
+    z-index: 3;
     color: var(--danger);
   }
 
