@@ -935,6 +935,17 @@
     };
   }
 
+  // True only when the current book has real, typed content that hasn't
+  // reached a library entry yet. Once state.chapbookId is set, persist()
+  // keeps that entry in sync on every edit (see syncCurrentIntoLibrary), so
+  // there's nothing left to lose by switching away -- and the untouched
+  // built-in example isn't the poet's own work either.
+  function hasUnsavedWork() {
+    if (state.chapbookId) return false;
+    if (state.isExample) return false;
+    return !!((state.poems && state.poems.length) || (state.bookTitle && state.bookTitle.trim()));
+  }
+
   // A brand-new, empty chapbook -- used by "New chapbook" in the library menu.
   function blankChapbookState() {
     var s = defaultSettings();
@@ -1186,6 +1197,7 @@
     if (!googleIdToken) return;
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
+      if (res.status === 401) { handleExpiredGoogleToken(); return; }
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
       var data = await res.json();
       // The cloud blob is namespaced per app now (see CLOUD_API_URL's
@@ -1232,6 +1244,7 @@
         headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash } })
       });
+      if (res.status === 401) { handleExpiredGoogleToken(); return; }
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
       setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
     } catch (e) {
@@ -1252,30 +1265,54 @@
       // signed in." itp_support does the Safari equivalent.
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true,
-        use_fedcm_for_prompt: true, itp_support: true
+        use_fedcm_for_prompt: true, itp_support: true,
+        // A stray click elsewhere on the page (e.g. into the editor) would
+        // otherwise count as dismissing the One Tap card and push Google's
+        // cooldown out further -- this keeps that from counting against us.
+        cancel_on_tap_outside: false
       });
       google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
-      // If the silent prompt never actually shows or gets skipped (no
-      // active Google session, third-party cookies/FedCM blocked, or
-      // it's been dismissed enough times that Google cools it down), we
-      // land here still signed out -- with nothing said about it, that
-      // reads as "the site just logged me out." Naming who we remember
-      // and pointing at the still-present Sign in button makes clear
-      // that's a one click away, not a lost session.
-      google.accounts.id.prompt(function (notification) {
-        if (googleIdToken) return;
-        var lastUser = getLastGoogleUser();
-        if (!lastUser) return;
-        var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
-          (notification.isSkippedMoment && notification.isSkippedMoment());
-        if (skipped) {
-          setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
-        }
-      });
+      retryGoogleSilentSignIn();
       return;
     }
     if (retriesLeft <= 0) return;
     setTimeout(function () { waitForGoogleIdentity(retriesLeft - 1); }, 200);
+  }
+
+  // Google's own platform never offers true silent (no-UI) sign-in, and
+  // rate-limits automatic re-auth to roughly once per 10 minutes per origin
+  // (longer if a prompt gets dismissed) -- see
+  // https://developers.google.com/identity/gsi/web/guides/features. A
+  // single attempt at page load only catches a visitor who happens to load
+  // the page right after that window opens, so this re-tries periodically
+  // for as long as the tab stays open and we're not signed in, giving every
+  // 10-minute window a chance instead of just the first one.
+  var silentSignInRetryTimer = null;
+  function retryGoogleSilentSignIn() {
+    clearTimeout(silentSignInRetryTimer);
+    if (googleIdToken) return;
+    google.accounts.id.prompt(function (notification) {
+      if (googleIdToken) return;
+      var lastUser = getLastGoogleUser();
+      var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
+        (notification.isSkippedMoment && notification.isSkippedMoment());
+      if (skipped && lastUser) {
+        setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
+      }
+      silentSignInRetryTimer = setTimeout(retryGoogleSilentSignIn, 5 * 60 * 1000);
+    });
+  }
+
+  // An ID token is a short-lived JWT (~1hr) -- if the tab is left open
+  // longer than that, cloud calls start failing with 401 until a fresh one
+  // is minted. Treat that as "not really signed in anymore" and let the
+  // retry loop above pick up a new token on its own, rather than leaving
+  // the poet's edits stuck local-only with no explanation.
+  function handleExpiredGoogleToken() {
+    if (!googleIdToken) return;
+    googleIdToken = null;
+    updateAutosaveIndicator();
+    retryGoogleSilentSignIn();
   }
 
   // ---------------------------------------------------------------------
@@ -3452,8 +3489,10 @@
   async function loadChapbook(id) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
-    var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current book will be lost.');
-    if (!ok) return;
+    if (hasUnsavedWork()) {
+      var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current book will be lost.');
+      if (!ok) return;
+    }
     state = JSON.parse(JSON.stringify(entry.data));
     state.isExample = false;
     persist();
@@ -3502,8 +3541,10 @@
   }
 
   async function onNewChapbookClick() {
-    var ok = await confirmDialog('Start a new, blank book? Any unsaved changes to the current one will be lost.');
-    if (!ok) return;
+    if (hasUnsavedWork()) {
+      var ok = await confirmDialog('Start a new, blank book? Any unsaved changes to the current one will be lost.');
+      if (!ok) return;
+    }
     state = blankChapbookState();
     if (googleUserName) state.author = googleUserName;
     persist();
