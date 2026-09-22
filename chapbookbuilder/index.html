@@ -352,6 +352,7 @@
     .poem-card.is-writing .poem-meta-row {
       flex: 0 0 auto; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
     }
+    .poem-card.is-writing .poem-collapse-btn,
     .poem-card.is-writing .poem-meta-row .title-align,
     .poem-card.is-writing .poem-meta-row .btn-danger { display: none; }
   }
@@ -384,7 +385,8 @@
   }
   button.poem-title-compact-toggle.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   button.poem-title-compact-toggle:hover { color: var(--accent); }
-  .poem-compact-expanded { margin: 0 0 4px 34px; }
+  .poem-compact-expanded { margin: 0 0 4px; }
+  .poem-collapse-btn { flex: 0 0 auto; font-size: 16px; line-height: 1; padding: 6px 10px; }
 
   .poem-gap { height: 9px; margin: -3px 0 -1px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 34px; right: 0; height: 1px; background: transparent; }
@@ -3059,14 +3061,27 @@
       renderAll();
     });
 
-    var out = document.createDocumentFragment();
-    out.appendChild(row);
+    // An opened entry replaces its title row rather than appearing
+    // beneath it -- otherwise the number and title show twice, once in
+    // the row and again in the card. The card gets its own collapse
+    // button in place of the row's click-to-close.
     if (expandedCompactIds[poem.id]) {
       var expandedCard = makeCard(poem, index, plan, entryNum);
       expandedCard.classList.add('poem-compact-expanded');
-      out.appendChild(expandedCard);
+      var collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.className = 'btn btn-ghost poem-collapse-btn';
+      collapseBtn.title = 'Collapse to title';
+      collapseBtn.setAttribute('aria-label', 'Collapse to title');
+      collapseBtn.textContent = '▴';
+      collapseBtn.addEventListener('click', function () {
+        delete expandedCompactIds[poem.id];
+        renderPoems();
+      });
+      expandedCard.querySelector('.poem-title-row').appendChild(collapseBtn);
+      return expandedCard;
     }
-    return out;
+    return row;
   }
 
   var poemsViewMode = 'compact';
