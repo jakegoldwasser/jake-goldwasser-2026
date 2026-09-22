@@ -315,6 +315,47 @@
   .poem-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
   .poem-meta { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
+  /* Phone writing mode: focusing an entry's title or body turns that
+     card itself into a full-screen editor (Notes / Google Docs style)
+     instead of typing into a narrow box nested three panels deep. The
+     card is moved with position: fixed rather than copied into an
+     overlay, so there's only ever one textarea to keep in sync. Top and
+     height are set from visualViewport in JS so the editor ends at the
+     top of the on-screen keyboard instead of running underneath it. */
+  .poem-writer-bar { display: none; }
+  @media (max-width: 700px) {
+    html.is-writing, html.is-writing body { overflow: hidden; }
+    .poem-card.is-writing {
+      position: fixed; left: 0; right: 0; top: 0; height: 100vh; height: 100dvh; z-index: 60;
+      margin: 0; border: none; border-radius: 0; background: var(--surface);
+      padding: env(safe-area-inset-top) 16px 0;
+    }
+    .poem-card.is-writing .poem-handle { display: none; }
+    .poem-card.is-writing .poem-body { height: 100%; gap: 6px; }
+    .poem-card.is-writing .poem-writer-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      flex: 0 0 auto; padding: 8px 0 4px;
+    }
+    .poem-writer-label {
+      font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint);
+    }
+    .poem-writer-done { padding: 8px 18px; font-size: 15px; }
+    .poem-card.is-writing .poem-title-row { flex: 0 0 auto; }
+    .poem-card.is-writing input.poem-title { font-size: 24px !important; padding: 6px 0 10px; }
+    .poem-card.is-writing .format-toolbar { flex: 0 0 auto; gap: 8px; margin: 2px 0 0; }
+    .poem-card.is-writing .format-toolbar button { width: 44px; height: 36px; font-size: 16px; border-radius: 8px; }
+    .poem-card.is-writing textarea.poem-text {
+      flex: 1 1 auto; min-height: 0; height: auto !important; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      border: none; border-radius: 0; background: transparent; padding: 10px 0 24px;
+      font-size: 18px !important;
+    }
+    .poem-card.is-writing .poem-meta-row {
+      flex: 0 0 auto; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
+    }
+    .poem-card.is-writing .poem-meta-row .title-align,
+    .poem-card.is-writing .poem-meta-row .btn-danger { display: none; }
+  }
+
   .title-align { display: flex; align-items: center; gap: 6px; }
   .title-align span {
     font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
@@ -2560,6 +2601,64 @@
 
   function autoGrow(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
 
+  // Phone writing mode (CSS: .poem-card.is-writing). Entering pushes a
+  // history entry so the Android back button / back-swipe closes the
+  // editor rather than leaving the page; Done goes back through that
+  // same entry so the two paths stay in step.
+  var writerMQ = window.matchMedia('(max-width: 700px)');
+  var writingCard = null;
+  var writingPoemId = null;
+  function syncWriterViewport() {
+    var vv = window.visualViewport;
+    if (!writingCard || !vv) return;
+    writingCard.style.top = vv.offsetTop + 'px';
+    writingCard.style.height = vv.height + 'px';
+  }
+  function enterWriting(card, poemId) {
+    if (writingCard === card) return;
+    if (writingCard) exitWriting();
+    writingCard = card;
+    writingPoemId = poemId;
+    card.classList.add('is-writing');
+    document.documentElement.classList.add('is-writing');
+    syncWriterViewport();
+    if (!(history.state && history.state.booklouseWriting)) {
+      try { history.pushState({ booklouseWriting: true }, ''); } catch (e) {}
+    }
+  }
+  function exitWriting() {
+    var card = writingCard;
+    var poemId = writingPoemId;
+    writingCard = null;
+    writingPoemId = null;
+    document.documentElement.classList.remove('is-writing');
+    if (!card) return;
+    card.classList.remove('is-writing');
+    card.style.top = '';
+    card.style.height = '';
+    if (card.contains(document.activeElement)) document.activeElement.blur();
+    // Opened from the titles-only list: fold back to just its title row
+    // (which also picks up any rename made while writing).
+    if (card.classList.contains('poem-compact-expanded') && poemList.contains(card)) {
+      delete expandedCompactIds[poemId];
+      renderPoems();
+      return;
+    }
+    var ta = card.querySelector('textarea.poem-text');
+    if (ta) autoGrow(ta);
+    card.scrollIntoView({ block: 'nearest' });
+  }
+  function finishWriting() {
+    if (history.state && history.state.booklouseWriting) history.back();
+    else exitWriting();
+  }
+  window.addEventListener('popstate', function () { if (writingCard) exitWriting(); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncWriterViewport);
+    window.visualViewport.addEventListener('scroll', syncWriterViewport);
+  }
+  writerMQ.addEventListener('change', function () { if (!writerMQ.matches && writingCard) finishWriting(); });
+
   function getLayoutFor(poem) {
     try {
       var plan = planBooklet(state);
@@ -2663,6 +2762,9 @@
       btn.className = 'format-btn format-btn-' + spec[3];
       btn.textContent = spec[0];
       btn.title = spec[4] + ' the selected text';
+      // Keep focus (and the phone keyboard) in the textarea while
+      // tapping these, instead of blurring it for a moment first.
+      btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
       btn.addEventListener('click', function () { wrapSelection(textarea, spec[1], spec[2]); });
       wrap.appendChild(btn);
     });
@@ -2752,6 +2854,7 @@
   function makeCard(poem, index, initialPlan, entryNum) {
     var card = document.createElement('div');
     card.className = 'poem-card';
+    card.dataset.poemId = poem.id;
     card.draggable = true;
 
     var handle = document.createElement('div');
@@ -2839,12 +2942,42 @@
     });
     metaRow.appendChild(removeBtn);
 
+    // Only shown in phone writing mode (see .poem-card.is-writing).
+    var writerBar = document.createElement('div');
+    writerBar.className = 'poem-writer-bar';
+    var writerLabel = document.createElement('span');
+    writerLabel.className = 'poem-writer-label';
+    writerLabel.textContent = 'Entry ' + entryNum;
+    var doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'btn btn-primary poem-writer-done';
+    doneBtn.textContent = 'Done';
+    doneBtn.addEventListener('click', finishWriting);
+    writerBar.appendChild(writerLabel);
+    writerBar.appendChild(doneBtn);
+
+    body.appendChild(writerBar);
     body.appendChild(titleRow);
     body.appendChild(makeFormatToolbar(textarea));
     body.appendChild(textarea);
     body.appendChild(metaRow);
     card.appendChild(handle);
     card.appendChild(body);
+
+    card.addEventListener('focusin', function (e) {
+      if ((e.target === titleInput || e.target === textarea) && writerMQ.matches) enterWriting(card, poem.id);
+    });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && card.classList.contains('is-writing')) finishWriting();
+    });
+    // A re-render while writing (e.g. a cloud sync landing) swaps this
+    // card out from under the editor -- carry writing mode over to the
+    // fresh card for the same entry.
+    if (writingPoemId === poem.id) {
+      writingCard = card;
+      card.classList.add('is-writing');
+      setTimeout(syncWriterViewport, 0);
+    }
 
     card.addEventListener('dragstart', function (e) {
       dragFromIndex = index;
@@ -2888,6 +3021,12 @@
       if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
       else expandedCompactIds[poem.id] = true;
       renderPoems();
+      // On a phone, skip the cramped inline card and go straight into
+      // the full-screen writer (focusing it is what opens that).
+      if (expandedCompactIds[poem.id] && writerMQ.matches) {
+        var ta = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-text');
+        if (ta) ta.focus();
+      }
     });
 
     var removeBtn = document.createElement('button');
@@ -3040,6 +3179,9 @@
     poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
     updateArchiveButton();
     exampleBanner.hidden = !state.isExample;
+    // The entry being written in may not have been re-rendered as a full
+    // card (e.g. collapsed in compact view) -- don't leave the page locked.
+    if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
   }
 
   // ---------------------------------------------------------------------
