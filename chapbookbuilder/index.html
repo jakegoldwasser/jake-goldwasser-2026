@@ -31,6 +31,8 @@
     --accent-soft: #E0E6CB;
     --danger: #8B3A2B;
     --danger-soft: #E9D6C7;
+    --warning: #9C6B12;
+    --warning-soft: #F1DFAF;
     --shadow: rgba(46, 32, 19, 0.14);
     --radius: 8px;
 
@@ -126,9 +128,46 @@
   }
   .btn-link:hover { color: var(--accent); }
 
+  /* Sign-in/save state used to be a bare line of small gray text -- easy
+     to miss, and the "your session expired, sign in again" case looked
+     no different from any other quiet status update. Both are now
+     pill badges with a colored dot, and the expired state gets its own
+     loud amber treatment instead of blending in. */
+  .status-line.status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px 3px 8px; border-radius: 999px;
+    background: var(--surface-2); border: 1px solid var(--line-strong);
+    font-weight: 600; margin-top: 0;
+  }
+  .status-badge::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    background: var(--ink-faint);
+  }
+  .status-badge.is-synced { color: var(--swatch-green); border-color: var(--swatch-green); background: color-mix(in srgb, var(--swatch-green) 12%, var(--surface-2)); }
+  .status-badge.is-synced::before { background: var(--swatch-green); }
+  .status-badge.error,
+  .status-badge.is-error { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+  .status-badge.error::before,
+  .status-badge.is-error::before { background: var(--danger); }
+  .status-badge.needs-reauth {
+    color: var(--warning); border-color: var(--warning); background: var(--warning-soft);
+    animation: statusBadgePulse 1.8s ease-in-out infinite;
+  }
+  .status-badge.needs-reauth::before { background: var(--warning); }
+  @keyframes statusBadgePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(156, 107, 18, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(156, 107, 18, 0.22); }
+  }
+
   .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
-  .autosave-indicator { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
-  .autosave-indicator.is-synced { color: var(--swatch-green); }
+  .autosave-indicator {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    font-size: 11.5px; font-weight: 600; color: var(--ink-faint); margin-top: 2px;
+    padding: 3px 10px 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .autosave-indicator::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-faint); }
+  .autosave-indicator.is-synced { color: var(--swatch-green); border-color: var(--swatch-green); background: color-mix(in srgb, var(--swatch-green) 12%, var(--surface-2)); }
+  .autosave-indicator.is-synced::before { background: var(--swatch-green); }
   #bookTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid var(--line-strong);
@@ -1189,11 +1228,18 @@
     try { return localStorage.getItem(LAST_GOOGLE_USER_KEY) || ''; } catch (e) { return ''; }
   }
 
-  function setAccountStatus(msg, isError) {
+  // kind: 'error' | 'synced' | 'needs-reauth' | undefined (neutral/in-progress).
+  // Accepts a boolean too (legacy callers) as shorthand for 'error'.
+  function setAccountStatus(msg, kind) {
     var el = document.getElementById('accountStatus');
     if (!el) return;
+    if (kind === true) kind = 'error';
     el.textContent = msg || '';
-    el.classList.toggle('error', !!isError);
+    el.hidden = !msg;
+    el.classList.toggle('status-badge', !!msg);
+    el.classList.toggle('error', kind === 'error');
+    el.classList.toggle('is-synced', kind === 'synced');
+    el.classList.toggle('needs-reauth', kind === 'needs-reauth');
   }
 
   function decodeJwtPayload(token) {
@@ -1241,7 +1287,7 @@
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
       if (res.status === 401) { handleExpiredGoogleToken(); return; }
-      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
+      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', 'error'); return; }
       var data = await res.json();
       // The cloud blob is namespaced per app now (see CLOUD_API_URL's
       // Lambda) since Dummy Builder shares this same backend/user
@@ -1266,15 +1312,15 @@
           persist();
           renderAll();
         }
-        setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.');
+        setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.', 'synced');
       } else if (library.length || trash.length) {
         setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your books to the cloud…');
         await syncLibraryToCloud();
       } else {
-        setAccountStatus('Signed in as ' + googleUserEmail + '.');
+        setAccountStatus('Signed in as ' + googleUserEmail + '.', 'synced');
       }
     } catch (e) {
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', true);
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', 'error');
     }
   }
 
@@ -1288,10 +1334,10 @@
         body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash } })
       });
       if (res.status === 401) { handleExpiredGoogleToken(); return; }
-      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
+      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', 'error'); return; }
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.', 'synced');
     } catch (e) {
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', true);
+      setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', 'error');
     }
   }
 
@@ -1340,7 +1386,7 @@
       var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
         (notification.isSkippedMoment && notification.isSkippedMoment());
       if (skipped && lastUser) {
-        setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
+        setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
       }
       silentSignInRetryTimer = setTimeout(retryGoogleSilentSignIn, 5 * 60 * 1000);
     });
@@ -1350,10 +1396,14 @@
   // longer than that, cloud calls start failing with 401 until a fresh one
   // is minted. Treat that as "not really signed in anymore" and let the
   // retry loop above pick up a new token on its own, rather than leaving
-  // the poet's edits stuck local-only with no explanation.
+  // the poet's edits stuck local-only with no explanation. The badge
+  // flips to its loud amber "needs-reauth" state immediately, rather than
+  // waiting for the next silent-retry cycle to notice and say so.
   function handleExpiredGoogleToken() {
     if (!googleIdToken) return;
     googleIdToken = null;
+    var lastUser = getLastGoogleUser() || googleUserEmail;
+    if (lastUser) setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
     updateAutosaveIndicator();
     retryGoogleSilentSignIn();
   }

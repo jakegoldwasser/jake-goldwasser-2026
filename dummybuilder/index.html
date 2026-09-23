@@ -30,6 +30,8 @@
     --teal: #00A99A;
     --danger: #BD5138;
     --danger-soft: #FAEAE4;
+    --warning: #A6740A;
+    --warning-soft: #FBEED2;
     --magenta: #B23E7E;
     --magenta-soft: #FBEAF3;
     --shadow: rgba(20, 45, 56, 0.08);
@@ -1134,6 +1136,27 @@
   .email-btn[aria-expanded="true"] { background: var(--surface-2); }
   .email-btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
 
+  /* Sign-in/save state for Dummy Builder used to be invisible until you
+     opened the Account panel -- there was no way to tell at a glance
+     whether you were signed in, or whether a saved session had quietly
+     expired. This dot (and the needs-reauth variant below) put that
+     state on the closed button itself. */
+  .account-status-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 7px; background: var(--ink-faint); flex-shrink: 0;
+  }
+  #google-btn.is-signed-in { color: var(--teal); border-color: var(--teal); }
+  #google-btn.is-signed-in .account-status-dot { background: var(--teal); }
+  #google-btn.needs-reauth {
+    color: var(--warning); border-color: var(--warning); background: var(--warning-soft);
+    animation: acctBtnPulse 1.8s ease-in-out infinite;
+  }
+  #google-btn.needs-reauth .account-status-dot { background: var(--warning); }
+  @keyframes acctBtnPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(166, 116, 10, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(166, 116, 10, 0.25); }
+  }
+
   .email-panel {
     position: absolute;
     bottom: calc(100% + 8px);
@@ -1379,7 +1402,7 @@
         </div>
       </div>
       <div class="email-menu" id="google-menu">
-        <button class="email-btn" id="google-btn" type="button" aria-expanded="false">Account ▾</button>
+        <button class="email-btn" id="google-btn" type="button" aria-expanded="false"><span class="account-status-dot" id="googleBtnDot"></span><span id="googleBtnLabel">Account ▾</span></button>
         <div class="email-panel" id="google-panel" hidden>
           <div id="google-signedout-view">
             <p class="github-help">Sign in with Google to save your dummies to the cloud and pick them up on any device — anyone can sign in with their own account, not just Jake.</p>
@@ -2874,17 +2897,35 @@
     var googleAccountEmailEl = document.getElementById('google-account-email');
     var googleSignOutBtn = document.getElementById('google-signout-btn');
     var googleStatusEl = document.getElementById('google-status');
+    var googleBtnDot = document.getElementById('googleBtnDot');
+    var googleBtnLabel = document.getElementById('googleBtnLabel');
+    // Set once a cloud call comes back 401 (the ~1hr ID token expired) --
+    // distinct from plain signed-out, so the button and status line can
+    // say "your session dropped, sign in again" instead of just quietly
+    // reverting to "not signed in" with no explanation.
+    var googleNeedsReauth = false;
 
-    function setGoogleStatus(msg, isError) {
+    // kind: 'error' | 'needs-reauth' | undefined (neutral/in-progress).
+    // Accepts a boolean too (legacy callers) as shorthand for 'error'.
+    function setGoogleStatus(msg, kind) {
+      if (kind === true) kind = 'error';
       googleStatusEl.textContent = msg || '';
-      googleStatusEl.style.color = isError ? 'var(--danger)' : '';
+      googleStatusEl.style.color = kind === 'error' ? 'var(--danger)' : (kind === 'needs-reauth' ? 'var(--warning)' : '');
+      googleStatusEl.style.fontWeight = kind === 'needs-reauth' ? '700' : '';
     }
 
+    // Puts sign-in/save state on the closed Account button itself (a dot
+    // plus, for the needs-reauth case, a loud amber outline) so it's
+    // never necessary to open the panel just to tell whether this browser
+    // is actually signed in and syncing right now.
     function refreshGoogleView() {
       var signedIn = !!googleIdToken;
       googleSignedOutView.hidden = signedIn;
       googleSignedInView.hidden = !signedIn;
       if (signedIn) googleAccountEmailEl.textContent = googleUserEmail;
+      googleBtn.classList.toggle('is-signed-in', signedIn);
+      googleBtn.classList.toggle('needs-reauth', googleNeedsReauth);
+      googleBtnLabel.textContent = googleNeedsReauth ? 'Sign in again ▾' : 'Account ▾';
     }
 
     function openGooglePanel() {
@@ -2936,7 +2977,8 @@
       if (!googleIdToken) return;
       try {
         var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
-        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', true); return; }
+        if (res.status === 401) { handleExpiredGoogleToken(); return; }
+        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', 'error'); return; }
         var data = await res.json();
         var ours = (data.state && data.state.dummybuilder) || null;
         var cloudDummies = (ours && ours.dummies) || null;
@@ -2952,7 +2994,7 @@
           setGoogleStatus('Signed in as ' + googleUserEmail + '.');
         }
       } catch (e) {
-        setGoogleStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', true);
+        setGoogleStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', 'error');
       }
     }
 
@@ -2964,10 +3006,11 @@
           headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
           body: JSON.stringify({ app: 'dummybuilder', data: { dummies: buildDummiesLibraryArray() } })
         });
-        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', true); return; }
+        if (res.status === 401) { handleExpiredGoogleToken(); return; }
+        if (!res.ok) { setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', 'error'); return; }
         setGoogleStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.');
       } catch (e) {
-        setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', true);
+        setGoogleStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', 'error');
       }
     }
 
@@ -2983,6 +3026,7 @@
 
     async function handleGoogleCredential(response) {
       googleIdToken = response.credential;
+      googleNeedsReauth = false;
       var payload = decodeJwtPayload(googleIdToken);
       googleUserEmail = payload.email || 'your account';
       rememberLastGoogleUser(googleUserEmail);
@@ -2994,12 +3038,57 @@
     function googleSignOut() {
       googleIdToken = null;
       googleUserEmail = '';
+      googleNeedsReauth = false;
       forgetLastGoogleUser();
       refreshGoogleView();
       setGoogleStatus('');
       try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
     }
     googleSignOutBtn.addEventListener('click', googleSignOut);
+
+    // An ID token is a short-lived JWT (~1hr) -- if the tab is left open
+    // longer than that, cloud calls start failing with 401 until a fresh
+    // one is minted. Without this, googleIdToken stayed set and the
+    // Account button kept reading "signed in" while saves silently
+    // failed in the background -- exactly the "unclear whether my work
+    // is saved" problem. Flip to the loud needs-reauth state right away
+    // and let the retry loop below pick up a new token on its own.
+    function handleExpiredGoogleToken() {
+      if (!googleIdToken) return;
+      googleIdToken = null;
+      googleNeedsReauth = true;
+      refreshGoogleView();
+      var lastUser = getLastGoogleUser() || googleUserEmail;
+      if (lastUser) setGoogleStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
+      retryGoogleSilentSignIn();
+    }
+
+    // Google's own platform never offers true silent (no-UI) sign-in, and
+    // rate-limits automatic re-auth to roughly once per 10 minutes per
+    // origin (longer if a prompt gets dismissed). A single attempt at page
+    // load only catches a visitor who happens to load the page right after
+    // that window opens, so this re-tries periodically for as long as the
+    // tab stays open and we're not signed in, giving every 10-minute
+    // window a chance instead of just the first one -- previously this
+    // tool only ever tried once, so a skipped prompt meant staying signed
+    // out until a manual reload.
+    var silentSignInRetryTimer = null;
+    function retryGoogleSilentSignIn() {
+      clearTimeout(silentSignInRetryTimer);
+      if (googleIdToken || !window.google || !google.accounts || !google.accounts.id) return;
+      google.accounts.id.prompt(function (notification) {
+        if (googleIdToken) return;
+        var lastUser = getLastGoogleUser();
+        var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
+          (notification.isSkippedMoment && notification.isSkippedMoment());
+        if (skipped && lastUser) {
+          googleNeedsReauth = true;
+          refreshGoogleView();
+          setGoogleStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
+        }
+        silentSignInRetryTimer = setTimeout(retryGoogleSilentSignIn, 5 * 60 * 1000);
+      });
+    }
 
     function waitForGoogleIdentity(retriesLeft) {
       if (window.google && google.accounts && google.accounts.id) {
@@ -3014,17 +3103,14 @@
         // does the Safari equivalent.
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: true,
-          use_fedcm_for_prompt: true, itp_support: true
+          use_fedcm_for_prompt: true, itp_support: true,
+          // A stray click elsewhere on the page while the One Tap card is
+          // up would otherwise count as dismissing it and push Google's
+          // cooldown out further -- this keeps that from counting against us.
+          cancel_on_tap_outside: false
         });
         google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
-        google.accounts.id.prompt(function (notification) {
-          if (googleIdToken) return;
-          var lastUser = getLastGoogleUser();
-          if (!lastUser) return;
-          var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
-            (notification.isSkippedMoment && notification.isSkippedMoment());
-          if (skipped) setGoogleStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.');
-        });
+        retryGoogleSilentSignIn();
         return;
       }
       if (retriesLeft <= 0) return;
