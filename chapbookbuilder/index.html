@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Booklouse — Jake Goldwasser</title>
+<title>BookBug — Jake Goldwasser</title>
 <link rel="icon" type="image/png" sizes="96x96" href="../favicon-96.png">
 <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
 <link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
@@ -586,7 +586,7 @@
 
   <div class="masthead">
     <div>
-      <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">l</span><span class="c3">o</span><span class="c4">u</span><span class="c2">s</span><span class="c1">e</span></h1>
+      <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
       <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
@@ -2624,8 +2624,8 @@
     card.classList.add('is-writing');
     document.documentElement.classList.add('is-writing');
     syncWriterViewport();
-    if (!(history.state && history.state.booklouseWriting)) {
-      try { history.pushState({ booklouseWriting: true }, ''); } catch (e) {}
+    if (!(history.state && history.state.bookbugWriting)) {
+      try { history.pushState({ bookbugWriting: true }, ''); } catch (e) {}
     }
   }
   function exitWriting() {
@@ -2651,7 +2651,7 @@
     card.scrollIntoView({ block: 'nearest' });
   }
   function finishWriting() {
-    if (history.state && history.state.booklouseWriting) history.back();
+    if (history.state && history.state.bookbugWriting) history.back();
     else exitWriting();
   }
   window.addEventListener('popstate', function () { if (writingCard) exitWriting(); });
@@ -2857,10 +2857,18 @@
     var card = document.createElement('div');
     card.className = 'poem-card';
     card.dataset.poemId = poem.id;
-    card.draggable = true;
+    // makeCard IS the open editor for this entry -- keeping it draggable
+    // meant a click-and-drag gesture anywhere on the card (not just the
+    // title/text inputs) could get hijacked into a reorder instead of a
+    // text selection. Reordering by drag only makes sense once the entry
+    // is collapsed back to its compact row (see makeCompactRow's
+    // row.draggable). The card stays a valid drop target below, so a
+    // dragged row can still be reordered around an open card.
+    card.draggable = false;
 
     var handle = document.createElement('div');
     handle.className = 'poem-handle';
+    handle.style.cursor = 'default';
     handle.innerHTML = '<div class="poem-num">' + entryNum + '</div><div class="poem-grip">⋮⋮</div>';
 
     var body = document.createElement('div');
@@ -2870,10 +2878,9 @@
     titleRow.className = 'poem-title-row';
     var titleInput = document.createElement('input');
     titleInput.className = 'poem-title';
-    // The card itself is draggable (for reordering by its handle), but
-    // that must not swallow ordinary click-and-drag text selection
-    // inside this input -- an explicit draggable="false" here keeps the
-    // browser from treating a drag gesture starting here as a card drag.
+    // The card itself is no longer draggable (see card.draggable above),
+    // but this stays explicit so text selection here is never swallowed
+    // by a drag gesture even if that changes back.
     titleInput.draggable = false;
     titleInput.placeholder = 'Untitled';
     titleInput.value = poem.title;
