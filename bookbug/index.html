@@ -297,14 +297,14 @@
     .workspace.rail-mode .side-rail { display: flex; }
   }
   .side-rail { position: sticky; top: 24px; flex-direction: column; gap: 8px; }
-  .side-rail button {
-    writing-mode: vertical-rl; appearance: none; cursor: pointer; padding: 16px 0; width: 44px;
-    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
-    box-shadow: 0 1px 2px var(--shadow); color: var(--ink-soft); font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em;
+  .side-rail button { width: 44px; height: 72px; font-size: 20px; border-radius: 8px; box-shadow: 0 1px 2px var(--shadow); }
+  .sidebar-fold-btn, .side-rail button {
+    appearance: none; cursor: pointer; background: var(--surface); border: 1px solid var(--line-strong);
+    color: var(--ink-soft); font-size: 17px; line-height: 1; border-radius: 7px;
   }
-  .side-rail button:hover { color: var(--accent); border-color: var(--accent); }
-  .sidebar-fold-row { display: flex; justify-content: flex-end; }
-  .sidebar-fold-row[hidden] { display: none; }
+  .sidebar-fold-btn { flex: 0 0 auto; width: 30px; height: 30px; margin-left: -8px; }
+  .sidebar-fold-btn[hidden] { display: none; }
+  .sidebar-fold-btn:hover, .side-rail button:hover { color: var(--accent); border-color: var(--accent); }
 
   /* iOS Safari auto-zooms the whole page when a focused text field's
      font-size is under 16px -- jarring on every tap, and it doesn't
@@ -601,17 +601,19 @@
   }
   .text-target-pane[hidden] { display: none; }
 
-  .formatting-panel:not(.is-open) { padding-top: 14px; padding-bottom: 14px; }
-  .formatting-toggle {
+  /* Panels that start closed as a single header bar (Formatting, Export). */
+  .collapsible-panel:not(.is-open) { padding-top: 14px; padding-bottom: 14px; }
+  .panel-head-row { display: flex; align-items: center; gap: 8px; }
+  .panel-toggle {
     appearance: none; background: none; border: none; padding: 0; width: 100%; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink); text-align: left;
   }
-  .formatting-toggle .panel-title { margin: 0; }
-  .formatting-chevron { font-size: 14px; color: var(--ink-soft); transition: transform .15s ease; }
-  .formatting-panel.is-open .formatting-chevron { transform: rotate(180deg); }
-  .formatting-toggle:hover .formatting-chevron { color: var(--accent); }
-  #formattingBody { margin-top: 12px; }
-  #formattingBody[hidden] { display: none; }
+  .panel-toggle .panel-title { margin: 0; }
+  .panel-chevron { font-size: 14px; color: var(--ink-soft); transition: transform .15s ease; }
+  .collapsible-panel.is-open .panel-chevron { transform: rotate(180deg); }
+  .panel-toggle:hover .panel-chevron { color: var(--accent); }
+  .panel-body { margin-top: 12px; }
+  .panel-body[hidden] { display: none; }
   .seg-fonts button {
     flex: 0 0 25%; box-sizing: border-box; height: 34px; padding: 0 2px; font-size: 10.5px;
     border-bottom: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: center;
@@ -643,8 +645,7 @@
   .stat-row {
     display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line);
   }
-  .stat-row:first-child, .panel-title + .stat-row { border-top: none; }
-  .stat-row:first-child { padding-top: 0; }
+  .stat-row:first-child { border-top: none; padding-top: 0; }
   .stat-num { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 20px; font-variant-numeric: tabular-nums; }
   .stat-label { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
 
@@ -880,7 +881,6 @@
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
           <div style="display:flex; align-items:center; gap:10px;">
-            <div class="panel-title" style="margin:0;">Entries</div>
             <div class="zoom-control">
               <button id="zoomOutBtn" type="button" aria-label="Zoom editor text out">−</button>
               <span id="zoomLabel">100%</span>
@@ -889,15 +889,16 @@
           </div>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
-            <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
             <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>
           </div>
         </div>
         <div id="poemGapTop"></div>
         <div id="poemList"></div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
           <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
+          <!-- Down here beside the archive it opens, not up in the header. -->
+          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;">View archive</button>
         </div>
       </div>
 
@@ -911,17 +912,18 @@
     </div>
 
     <div class="sidebar">
-      <div class="sidebar-fold-row" id="sidebarFoldRow" hidden>
-        <button class="btn btn-sm" id="sidebarFoldBtn" type="button" title="Tuck these away for more writing room">Hide tools</button>
-      </div>
       <div class="sidebar-scroll">
-        <div class="panel formatting-panel" id="formattingPanel">
+        <div class="panel collapsible-panel" id="formattingPanel">
           <!-- Closed by default -- the settings are occasional, not something
                to keep in view while writing. -->
-          <button type="button" class="formatting-toggle" id="formattingToggle" aria-expanded="false" aria-controls="formattingBody">
-            <span class="panel-title">Formatting</span><span class="formatting-chevron" aria-hidden="true">▾</span>
-          </button>
-          <div id="formattingBody" hidden>
+          <div class="panel-head-row">
+            <!-- Folds the whole column away (only while an entry is open). -->
+            <button class="sidebar-fold-btn" id="sidebarFoldBtn" type="button" title="Hide tools" aria-label="Hide tools" hidden>»</button>
+            <button type="button" class="panel-toggle" id="formattingToggle" aria-expanded="false" aria-controls="formattingBody">
+              <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
+            </button>
+          </div>
+          <div class="panel-body" id="formattingBody" hidden>
           <div class="field">
             <label for="trimSelect">Trim size</label>
             <select id="trimSelect"></select>
@@ -1034,8 +1036,11 @@
           </div>
         </div>
 
-        <div class="panel" id="exportPanel">
-          <div class="panel-title">Export</div>
+        <div class="panel collapsible-panel" id="exportPanel">
+          <button type="button" class="panel-toggle" id="exportToggle" aria-expanded="false" aria-controls="exportBody">
+            <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="exportBody" hidden>
           <div class="stat-row">
             <span class="stat-label">Entries</span>
             <span class="stat-num" id="statPoems">0</span>
@@ -1050,6 +1055,7 @@
             <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
             <button class="btn" id="exportSelectBtn" style="width:100%; justify-content:center;">Export select entries…</button>
             <div class="export-status" id="exportStatus"></div>
+          </div>
           </div>
         </div>
       </div>
@@ -1068,7 +1074,7 @@
     <!-- Stands in for the sidebar while an entry is open (desktop), so the
          editor gets the width. See updateSideRail. -->
     <nav class="side-rail" id="sideRail" aria-label="Book tools">
-      <button type="button" id="showToolsBtn">Show tools</button>
+      <button type="button" id="showToolsBtn" title="Show tools" aria-label="Show tools">«</button>
     </nav>
   </div>
 
@@ -3470,9 +3476,9 @@
     return row;
   }
 
-  // While any entry is open, the sidebar folds into a slim "Show tools"
-  // tab (desktop only -- see .rail-mode) to give the editor the width.
-  // That brings the sidebar back until "Hide tools" or the next entry is
+  // While any entry is open, the sidebar folds into a slim « tab
+  // (desktop only -- see .rail-mode) to give the editor the width. That
+  // brings the sidebar back until its » button or the next entry is
   // opened; with no entry open, the sidebar just shows.
   var sidebarPinnedOpen = false;
   var entryWasOpen = false;
@@ -3481,7 +3487,7 @@
     if (open && !entryWasOpen) sidebarPinnedOpen = false;
     entryWasOpen = open;
     document.querySelector('.workspace').classList.toggle('rail-mode', open && !sidebarPinnedOpen);
-    document.getElementById('sidebarFoldRow').hidden = !(open && sidebarPinnedOpen);
+    document.getElementById('sidebarFoldBtn').hidden = !(open && sidebarPinnedOpen);
   }
   document.getElementById('showToolsBtn').addEventListener('click', function () {
     sidebarPinnedOpen = true;
@@ -3511,6 +3517,9 @@
   updatePoemsViewToggleLabel();
   poemsViewToggle.addEventListener('click', function () {
     poemsViewMode = poemsViewMode === 'full' ? 'compact' : 'full';
+    // "Titles only" means titles only -- don't reopen whatever entry was
+    // open before "Reveal All".
+    if (poemsViewMode === 'compact') expandedCompactIds = {};
     updatePoemsViewToggleLabel();
     renderPoems();
   });
@@ -3629,11 +3638,14 @@
 
   function updateArchiveButton() {
     var n = (state.archivedPoems || []).length;
-    archiveToggleBtn.textContent = 'View archive' + (n ? ' (' + n + ')' : ' (empty)');
+    archiveToggleBtn.textContent = archivePanel.hidden
+      ? 'View archive' + (n ? ' (' + n + ')' : ' (empty)')
+      : 'Hide archive';
   }
 
   archiveToggleBtn.addEventListener('click', function () {
     archivePanel.hidden = !archivePanel.hidden;
+    updateArchiveButton();
     if (!archivePanel.hidden) {
       renderArchiveList();
       archivePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4253,11 +4265,13 @@
   trimSelect.value = state.trimKey;
   trimSelect.addEventListener('change', function () { state.trimKey = trimSelect.value; persist(); renderAll(); });
 
-  document.getElementById('formattingToggle').addEventListener('click', function () {
-    var body = document.getElementById('formattingBody');
-    body.hidden = !body.hidden;
-    document.getElementById('formattingPanel').classList.toggle('is-open', !body.hidden);
-    this.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+  document.querySelectorAll('.panel-toggle').forEach(function (toggle) {
+    toggle.addEventListener('click', function () {
+      var body = document.getElementById(toggle.getAttribute('aria-controls'));
+      body.hidden = !body.hidden;
+      toggle.closest('.collapsible-panel').classList.toggle('is-open', !body.hidden);
+      toggle.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+    });
   });
 
   // Which half of the Formatting panel's Text section is showing --
