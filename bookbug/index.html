@@ -292,6 +292,8 @@
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
   .side-rail { display: none; }
   @media (min-width: 861px) {
+    .workspace.tools-pinned { grid-template-columns: 1fr 30px 320px; column-gap: 12px; }
+    .workspace.tools-pinned .sidebar-fold-col { display: block; }
     .workspace.rail-mode { grid-template-columns: 1fr 44px; }
     .workspace.rail-mode .sidebar { display: none; }
     .workspace.rail-mode .side-rail { display: flex; }
@@ -302,8 +304,8 @@
     appearance: none; cursor: pointer; background: var(--surface); border: 1px solid var(--line-strong);
     color: var(--ink-soft); font-size: 17px; line-height: 1; border-radius: 7px;
   }
-  .sidebar-fold-btn { flex: 0 0 auto; width: 30px; height: 30px; margin-left: -8px; }
-  .sidebar-fold-btn[hidden] { display: none; }
+  .sidebar-fold-btn { width: 30px; height: 72px; font-size: 20px; box-shadow: 0 1px 2px var(--shadow); }
+  .sidebar-fold-col { display: none; position: sticky; top: 24px; }
   .sidebar-fold-btn:hover, .side-rail button:hover { color: var(--accent); border-color: var(--accent); }
 
   /* iOS Safari auto-zooms the whole page when a focused text field's
@@ -603,7 +605,6 @@
 
   /* Panels that start closed as a single header bar (Formatting, Export). */
   .collapsible-panel:not(.is-open) { padding-top: 14px; padding-bottom: 14px; }
-  .panel-head-row { display: flex; align-items: center; gap: 8px; }
   .panel-toggle {
     appearance: none; background: none; border: none; padding: 0; width: 100%; cursor: pointer;
     display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink); text-align: left;
@@ -911,18 +912,21 @@
       </div>
     </div>
 
+    <!-- Its own slim column beside the tools, so it reads as folding the
+         whole column rather than any one panel (only while an entry is
+         open; see updateSideRail). -->
+    <div class="sidebar-fold-col">
+      <button class="sidebar-fold-btn" id="sidebarFoldBtn" type="button" title="Hide tools" aria-label="Hide tools">»</button>
+    </div>
+
     <div class="sidebar">
       <div class="sidebar-scroll">
         <div class="panel collapsible-panel" id="formattingPanel">
           <!-- Closed by default -- the settings are occasional, not something
                to keep in view while writing. -->
-          <div class="panel-head-row">
-            <!-- Folds the whole column away (only while an entry is open). -->
-            <button class="sidebar-fold-btn" id="sidebarFoldBtn" type="button" title="Hide tools" aria-label="Hide tools" hidden>»</button>
-            <button type="button" class="panel-toggle" id="formattingToggle" aria-expanded="false" aria-controls="formattingBody">
-              <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
-            </button>
-          </div>
+          <button type="button" class="panel-toggle" id="formattingToggle" aria-expanded="false" aria-controls="formattingBody">
+            <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
           <div class="panel-body" id="formattingBody" hidden>
           <div class="field">
             <label for="trimSelect">Trim size</label>
@@ -3487,7 +3491,7 @@
     if (open && !entryWasOpen) sidebarPinnedOpen = false;
     entryWasOpen = open;
     document.querySelector('.workspace').classList.toggle('rail-mode', open && !sidebarPinnedOpen);
-    document.getElementById('sidebarFoldBtn').hidden = !(open && sidebarPinnedOpen);
+    document.querySelector('.workspace').classList.toggle('tools-pinned', open && sidebarPinnedOpen);
   }
   document.getElementById('showToolsBtn').addEventListener('click', function () {
     sidebarPinnedOpen = true;
