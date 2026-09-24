@@ -524,6 +524,28 @@
     background: #FBF9F5; color: #241A1F; border: 1px solid var(--line); box-shadow: 0 2px 10px var(--shadow);
     overflow: hidden; position: relative; flex: 0 0 auto;
   }
+  #previewPage { cursor: zoom-in; }
+  .preview-full {
+    position: fixed; inset: 0; z-index: 90; background: rgba(28, 20, 12, 0.82);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .preview-full[hidden] { display: none; }
+  html.preview-full-open, html.preview-full-open body { overflow: hidden; }
+  .preview-full-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .preview-full .preview-page { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); border: none; }
+  .preview-full-close {
+    position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); color: #fff;
+    font-size: 26px; line-height: 1; cursor: pointer;
+  }
+  .preview-full-close:hover { background: rgba(255, 255, 255, 0.24); }
+  .preview-full-nav { display: flex; align-items: center; gap: 14px; color: #F2E7CB; font-size: 13px; }
+  .preview-full-nav button {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
+  }
+  .preview-full-nav button:disabled { opacity: 0.3; cursor: default; }
+  .preview-full-nav button:not(:disabled):hover { background: rgba(255, 255, 255, 0.24); }
   .preview-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 34px 10px; }
   /* space-between + a flexible center span keeps the arrows pinned at
      the same fixed spots regardless of how long the caption text is
@@ -740,6 +762,18 @@
 <!-- Books live in the poet's Google account, so nothing is usable until
      they've signed in. Hidden by the script as soon as a sign-in (fresh or
      remembered) is in hand; see updateSignInGate. -->
+<div class="preview-full" id="previewFull" hidden role="dialog" aria-modal="true" aria-label="Page preview">
+  <button class="preview-full-close" id="previewFullClose" type="button" aria-label="Close preview">×</button>
+  <div class="preview-full-stage">
+    <div class="preview-page" id="previewFullPage"></div>
+    <div class="preview-full-nav">
+      <button type="button" id="previewFullPrev" aria-label="Previous page">‹</button>
+      <span id="previewFullCaption"></span>
+      <button type="button" id="previewFullNext" aria-label="Next page">›</button>
+    </div>
+  </div>
+</div>
+
 <!-- Shown while the account's books are being fetched (a cold cloud
      call can take several seconds), so a blank or stale book never flashes
      up looking like the real one was lost. -->
@@ -3828,19 +3862,28 @@
   }
 
   function renderPreview() {
-    var box = document.getElementById('previewPage');
-    var caption = document.getElementById('previewCaption');
-    var prevBtn = document.getElementById('previewPrevBtn');
-    var nextBtn = document.getElementById('previewNextBtn');
-    if (!box) return;
-
     var items = buildPreviewItems(state);
     previewIndex = Math.max(0, Math.min(previewIndex, items.length - 1));
-    var item = items[previewIndex];
-    var plan = planBooklet(state);
-    var scale = PREVIEW_WIDTH_PX / plan.PAGE_W;
+    var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
+    renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), PREVIEW_WIDTH_PX, items[previewIndex]);
+    document.getElementById('previewPrevBtn').disabled = atStart;
+    document.getElementById('previewNextBtn').disabled = atEnd;
+    var full = document.getElementById('previewFull');
+    if (full && !full.hidden) {
+      renderPreviewPage(document.getElementById('previewFullPage'), document.getElementById('previewFullCaption'), fullPreviewWidth(), items[previewIndex]);
+      document.getElementById('previewFullPrev').disabled = atStart;
+      document.getElementById('previewFullNext').disabled = atEnd;
+    }
+  }
 
-    box.style.width = PREVIEW_WIDTH_PX + 'px';
+  // Draws one preview item into `box` at `widthPx` wide -- the sidebar's
+  // small preview and the full-screen one share this, differing only in
+  // scale.
+  function renderPreviewPage(box, caption, widthPx, item) {
+    var plan = planBooklet(state);
+    var scale = widthPx / plan.PAGE_W;
+
+    box.style.width = widthPx + 'px';
     box.style.height = Math.round(plan.PAGE_H * scale) + 'px';
     box.style.boxSizing = 'border-box';
     box.style.fontFamily = displayStackFor(state.bodyFontChoice);
@@ -3884,9 +3927,46 @@
       caption.textContent = 'Poem ' + (item.index + 1) + ' of ' + state.poems.length + pageNote + ' · ' + layout.sizePt + 'pt';
     }
 
-    prevBtn.disabled = previewIndex === 0;
-    nextBtn.disabled = previewIndex === items.length - 1;
   }
+
+  // Full-screen preview: opened by clicking the sidebar preview; closes
+  // with ×, Esc, or a click on the backdrop. Arrow keys page through.
+  var previewFull = document.getElementById('previewFull');
+  function fullPreviewWidth() {
+    var plan = planBooklet(state);
+    var availW = window.innerWidth - 32, availH = window.innerHeight - 150;
+    return Math.max(160, Math.floor(Math.min(availW, availH * plan.PAGE_W / plan.PAGE_H)));
+  }
+  function openFullPreview() {
+    previewFull.hidden = false;
+    document.documentElement.classList.add('preview-full-open');
+    renderPreview();
+    document.getElementById('previewFullClose').focus();
+  }
+  function closeFullPreview() {
+    if (previewFull.hidden) return;
+    previewFull.hidden = true;
+    document.documentElement.classList.remove('preview-full-open');
+  }
+  function stepPreview(delta) {
+    var items = buildPreviewItems(state);
+    previewIndex = Math.max(0, Math.min(items.length - 1, previewIndex + delta));
+    renderPreview();
+  }
+  document.getElementById('previewPage').addEventListener('click', openFullPreview);
+  document.getElementById('previewFullClose').addEventListener('click', closeFullPreview);
+  document.getElementById('previewFullPrev').addEventListener('click', function () { stepPreview(-1); });
+  document.getElementById('previewFullNext').addEventListener('click', function () { stepPreview(1); });
+  previewFull.addEventListener('click', function (e) {
+    if (e.target === previewFull || e.target.classList.contains('preview-full-stage')) closeFullPreview();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (previewFull.hidden) return;
+    if (e.key === 'Escape') closeFullPreview();
+    else if (e.key === 'ArrowLeft') stepPreview(-1);
+    else if (e.key === 'ArrowRight') stepPreview(1);
+  });
+  window.addEventListener('resize', function () { if (!previewFull.hidden) renderPreview(); });
 
   document.getElementById('previewPrevBtn').addEventListener('click', function () {
     previewIndex = Math.max(0, previewIndex - 1);
