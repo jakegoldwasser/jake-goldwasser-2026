@@ -1223,10 +1223,30 @@
   var googleUserEmail = '';
   var googleUserName = '';
 
-  // The ID token itself is a short-lived JWT (~1hr) and can't be safely
-  // reused across a refresh -- Google's own auto_select/prompt() below is
-  // what actually re-authenticates a returning visitor. This just
-  // remembers WHO that was, so if the silent prompt gets skipped (it
+  // The ID token is a short-lived JWT (~1hr). It's kept in localStorage
+  // and reused on reload until it expires, because Google's own
+  // auto_select/prompt() re-auth (below) is rate-limited to about once
+  // per 10 minutes per origin -- relying on it alone meant a refresh
+  // shortly after signing in dropped back to the sign-in button. Once the
+  // stored token lapses, the silent prompt takes over as before.
+  var GOOGLE_TOKEN_KEY = 'poetryBooklet.googleIdToken.v1';
+  function storeGoogleToken(token) {
+    try { localStorage.setItem(GOOGLE_TOKEN_KEY, token); } catch (e) {}
+  }
+  function clearStoredGoogleToken() {
+    try { localStorage.removeItem(GOOGLE_TOKEN_KEY); } catch (e) {}
+  }
+  // Returns the stored token only if it has more than a minute left.
+  function getStoredGoogleToken() {
+    var token = '';
+    try { token = localStorage.getItem(GOOGLE_TOKEN_KEY) || ''; } catch (e) {}
+    if (!token) return '';
+    var exp = decodeJwtPayload(token).exp;
+    if (!exp || exp * 1000 - Date.now() < 60 * 1000) { clearStoredGoogleToken(); return ''; }
+    return token;
+  }
+
+  // Remembers WHO was signed in, so if the silent prompt gets skipped (it
   // often does after being dismissed a few times, or without third-party
   // cookie/FedCM support) the page can say so plainly instead of looking
   // like a clean slate.
@@ -1266,6 +1286,8 @@
     googleUserEmail = payload.email || 'your account';
     googleUserName = payload.name || '';
     rememberLastGoogleUser(googleUserEmail);
+    storeGoogleToken(googleIdToken);
+    scheduleGoogleTokenExpiry(payload.exp);
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = 'none';
     document.getElementById('signOutBtn').hidden = false;
@@ -1286,6 +1308,8 @@
     googleUserEmail = '';
     googleUserName = '';
     forgetLastGoogleUser();
+    clearStoredGoogleToken();
+    clearTimeout(googleTokenExpiryTimer);
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
@@ -1415,10 +1439,22 @@
   function handleExpiredGoogleToken() {
     if (!googleIdToken) return;
     googleIdToken = null;
+    clearStoredGoogleToken();
+    clearTimeout(googleTokenExpiryTimer);
     var lastUser = getLastGoogleUser() || googleUserEmail;
     if (lastUser) setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
     updateAutosaveIndicator();
     retryGoogleSilentSignIn();
+  }
+
+  // Hand off to the expired-token path when the token lapses, instead of
+  // waiting for the next cloud call to 401 -- so the badge and the silent
+  // re-auth loop kick in on time even if the poet isn't editing.
+  var googleTokenExpiryTimer = null;
+  function scheduleGoogleTokenExpiry(exp) {
+    clearTimeout(googleTokenExpiryTimer);
+    if (!exp) return;
+    googleTokenExpiryTimer = setTimeout(handleExpiredGoogleToken, Math.max(0, exp * 1000 - Date.now() - 30 * 1000));
   }
 
   // ---------------------------------------------------------------------
@@ -4245,6 +4281,8 @@
   });
 
   renderAll();
+  var storedGoogleToken = getStoredGoogleToken();
+  if (storedGoogleToken) handleGoogleCredential({ credential: storedGoogleToken });
   waitForGoogleIdentity(25);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
