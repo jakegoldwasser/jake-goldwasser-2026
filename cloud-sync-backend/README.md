@@ -16,6 +16,18 @@ the cloud" in Chapbook Builder and Dummy Builder. Its Function URL is the
 No build step — it's one file, using the AWS SDK that's already available
 in the Lambda Node.js runtime.
 
+## Environment variables
+
+Set under **Configuration → Environment variables**:
+
+- `GOOGLE_CLIENT_ID` — the OAuth client id from the tools' `index.html`.
+  Rejects Google tokens minted for any other app.
+- `SESSION_SECRET` — a long random string (e.g. the output of
+  `openssl rand -base64 48`). Signs the 30-day session tokens that keep
+  people signed in across visits. Without it, sessions are off and
+  sign-ins last only as long as Google's ~1hr ID token. Changing it signs
+  everyone out.
+
 ## Storage
 
 One DynamoDB table (`ChapbookBuilderUsers`, despite the name — it now

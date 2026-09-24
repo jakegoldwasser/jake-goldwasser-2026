@@ -1,4 +1,5 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 // This is the AWS Lambda behind the "sign in with Google to save to the
 // cloud" feature, shared by every book-building tool on the site
@@ -22,6 +23,11 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-
 
 const TABLE_NAME = process.env.TABLE_NAME || 'ChapbookBuilderUsers';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+// Signs this backend's own session tokens (see issueSession). Any long
+// random string; changing it signs everyone out. If unset, no sessions
+// are issued and the tools fall back to Google's ~1hr ID tokens alone.
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 const ddb = new DynamoDBClient({});
 
@@ -46,6 +52,39 @@ async function verifyGoogleToken(idToken) {
   if (!info.sub) return null;
   if (GOOGLE_CLIENT_ID && info.aud !== GOOGLE_CLIENT_ID) return null;
   return info;
+}
+
+// Google ID tokens only live ~1hr, and Google rate-limits silently
+// minting new ones, so on their own they can't keep anyone signed in for
+// long. Instead, once a Google token checks out, this backend hands back
+// its own session token -- "s1.<base64url JSON payload>.<HMAC>" -- good
+// for 30 days and re-issued on every GET, so regular use keeps sliding
+// the window forward (the "stay signed in for days" behavior sites like
+// Google Docs have). The payload's sub/email/name/exp are readable by
+// the page; only the signature needs the secret.
+function b64url(buf) { return Buffer.from(buf).toString('base64url'); }
+function sign(data) { return createHmac('sha256', SESSION_SECRET).update(data).digest('base64url'); }
+
+function issueSession(info) {
+  if (!SESSION_SECRET) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const payload = b64url(JSON.stringify({
+    sub: info.sub, email: info.email || '', name: info.name || '', iat: now, exp: now + SESSION_TTL_SECONDS
+  }));
+  return 's1.' + payload + '.' + sign('s1.' + payload);
+}
+
+function verifySession(token) {
+  if (!SESSION_SECRET) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts[0] !== 's1') return null;
+  const expected = Buffer.from(sign(parts[0] + '.' + parts[1]));
+  const actual = Buffer.from(parts[2]);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return null;
+  let payload;
+  try { payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')); } catch (e) { return null; }
+  if (!payload.sub || !payload.exp || payload.exp * 1000 < Date.now()) return null;
+  return payload;
 }
 
 function migrateLegacyState(state) {
@@ -75,14 +114,17 @@ export const handler = async (event) => {
   const token = authHeader.replace(/^Bearer\s+/i, '');
   if (!token) return respond(401, { error: 'Missing bearer token' });
 
-  const info = await verifyGoogleToken(token);
+  // Session tokens are checked locally; anything else is treated as a
+  // Google ID token (sign-in, or a tool that hasn't adopted sessions yet).
+  const info = token.startsWith('s1.') ? verifySession(token) : await verifyGoogleToken(token);
   if (!info) return respond(401, { error: 'Invalid or expired token' });
 
   const userId = info.sub;
 
   if (method === 'GET') {
     const { state, updatedAt } = await getStoredState(userId);
-    return respond(200, { state, updatedAt });
+    const session = issueSession(info);
+    return respond(200, session ? { state, updatedAt, session } : { state, updatedAt });
   }
 
   if (method === 'PUT') {

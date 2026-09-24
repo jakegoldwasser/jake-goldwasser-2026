@@ -1171,7 +1171,7 @@
   // as the local autosave above.
   var cloudAutosaveTimer = null;
   function scheduleCloudAutosave() {
-    if (!state.chapbookId || !googleIdToken) return;
+    if (!state.chapbookId || !cloudAuthToken) return;
     clearTimeout(cloudAutosaveTimer);
     cloudAutosaveTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
   }
@@ -1184,7 +1184,7 @@
     if (!state.chapbookId) {
       el.textContent = 'Autosaving to this browser only — save this book to also back it up to the cloud.';
       el.classList.remove('is-synced');
-    } else if (googleIdToken) {
+    } else if (cloudAuthToken) {
       el.textContent = 'Autosaving to this browser, syncing to the cloud.';
       el.classList.add('is-synced');
     } else {
@@ -1219,30 +1219,34 @@
   var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
   var GOOGLE_API_KEY = 'AIzaSyCx7xo78YGyvASwgoRW2dhPmXZA3p0w-84'; // restricted to Picker + Docs APIs, HTTP referrer jake-goldwasser.com
   var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
-  var googleIdToken = null;
+  // Bearer credential for CLOUD_API_URL: a Google ID token right after
+  // sign-in, swapped for the backend's own 30-day session token (see
+  // cloud-sync-backend/index.mjs) as soon as the first cloud read returns one.
+  var cloudAuthToken = null;
   var googleUserEmail = '';
   var googleUserName = '';
 
-  // The ID token is a short-lived JWT (~1hr). It's kept in localStorage
-  // and reused on reload until it expires, because Google's own
-  // auto_select/prompt() re-auth (below) is rate-limited to about once
-  // per 10 minutes per origin -- relying on it alone meant a refresh
-  // shortly after signing in dropped back to the sign-in button. Once the
-  // stored token lapses, the silent prompt takes over as before.
-  var GOOGLE_TOKEN_KEY = 'poetryBooklet.googleIdToken.v1';
-  function storeGoogleToken(token) {
-    try { localStorage.setItem(GOOGLE_TOKEN_KEY, token); } catch (e) {}
+  // The current cloudAuthToken is kept in localStorage and reused on
+  // reload until it expires, so a refresh doesn't depend on Google's
+  // auto_select/prompt() re-auth (below), which Google rate-limits to
+  // about once per 10 minutes per origin. With the backend's 30-day
+  // session (renewed on every load) that means staying signed in across
+  // visits; with only a Google ID token, about an hour. Once the stored
+  // token lapses, the silent prompt takes over as before.
+  var CLOUD_AUTH_KEY = 'poetryBooklet.cloudAuth.v1';
+  function storeCloudAuthToken(token) {
+    try { localStorage.setItem(CLOUD_AUTH_KEY, token); } catch (e) {}
   }
-  function clearStoredGoogleToken() {
-    try { localStorage.removeItem(GOOGLE_TOKEN_KEY); } catch (e) {}
+  function clearStoredCloudAuthToken() {
+    try { localStorage.removeItem(CLOUD_AUTH_KEY); } catch (e) {}
   }
   // Returns the stored token only if it has more than a minute left.
-  function getStoredGoogleToken() {
+  function getStoredCloudAuthToken() {
     var token = '';
-    try { token = localStorage.getItem(GOOGLE_TOKEN_KEY) || ''; } catch (e) {}
+    try { token = localStorage.getItem(CLOUD_AUTH_KEY) || ''; } catch (e) {}
     if (!token) return '';
     var exp = decodeJwtPayload(token).exp;
-    if (!exp || exp * 1000 - Date.now() < 60 * 1000) { clearStoredGoogleToken(); return ''; }
+    if (!exp || exp * 1000 - Date.now() < 60 * 1000) { clearStoredCloudAuthToken(); return ''; }
     return token;
   }
 
@@ -1281,13 +1285,13 @@
   }
 
   async function handleGoogleCredential(response) {
-    googleIdToken = response.credential;
-    var payload = decodeJwtPayload(googleIdToken);
+    cloudAuthToken = response.credential;
+    var payload = decodeJwtPayload(cloudAuthToken);
     googleUserEmail = payload.email || 'your account';
     googleUserName = payload.name || '';
     rememberLastGoogleUser(googleUserEmail);
-    storeGoogleToken(googleIdToken);
-    scheduleGoogleTokenExpiry(payload.exp);
+    storeCloudAuthToken(cloudAuthToken);
+    scheduleCloudAuthExpiry(payload.exp);
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = 'none';
     document.getElementById('signOutBtn').hidden = false;
@@ -1304,12 +1308,12 @@
   }
 
   function signOut() {
-    googleIdToken = null;
+    cloudAuthToken = null;
     googleUserEmail = '';
     googleUserName = '';
     forgetLastGoogleUser();
-    clearStoredGoogleToken();
-    clearTimeout(googleTokenExpiryTimer);
+    clearStoredCloudAuthToken();
+    clearTimeout(cloudAuthExpiryTimer);
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
@@ -1320,12 +1324,17 @@
   document.getElementById('signOutBtn').addEventListener('click', signOut);
 
   async function pullLibraryFromCloud() {
-    if (!googleIdToken) return;
+    if (!cloudAuthToken) return;
     try {
-      var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + googleIdToken } });
-      if (res.status === 401) { handleExpiredGoogleToken(); return; }
+      var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
+      if (res.status === 401) { handleExpiredCloudAuth(); return; }
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', 'error'); return; }
       var data = await res.json();
+      if (data.session) {
+        cloudAuthToken = data.session;
+        storeCloudAuthToken(data.session);
+        scheduleCloudAuthExpiry(decodeJwtPayload(data.session).exp);
+      }
       // The cloud blob is namespaced per app now (see CLOUD_API_URL's
       // Lambda) since Dummy Builder shares this same backend/user
       // identity -- our own data lives under state.chapbookbuilder.
@@ -1362,15 +1371,15 @@
   }
 
   async function syncLibraryToCloud() {
-    if (!googleIdToken) return;
+    if (!cloudAuthToken) return;
     setAccountStatus('Signed in as ' + googleUserEmail + ' — saving to the cloud…');
     try {
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
-        headers: { Authorization: 'Bearer ' + googleIdToken, 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash } })
       });
-      if (res.status === 401) { handleExpiredGoogleToken(); return; }
+      if (res.status === 401) { handleExpiredCloudAuth(); return; }
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', 'error'); return; }
       setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.', 'synced');
     } catch (e) {
@@ -1416,9 +1425,9 @@
   var silentSignInRetryTimer = null;
   function retryGoogleSilentSignIn() {
     clearTimeout(silentSignInRetryTimer);
-    if (googleIdToken) return;
+    if (cloudAuthToken) return;
     google.accounts.id.prompt(function (notification) {
-      if (googleIdToken) return;
+      if (cloudAuthToken) return;
       var lastUser = getLastGoogleUser();
       var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
         (notification.isSkippedMoment && notification.isSkippedMoment());
@@ -1436,11 +1445,11 @@
   // the poet's edits stuck local-only with no explanation. The badge
   // flips to its loud amber "needs-reauth" state immediately, rather than
   // waiting for the next silent-retry cycle to notice and say so.
-  function handleExpiredGoogleToken() {
-    if (!googleIdToken) return;
-    googleIdToken = null;
-    clearStoredGoogleToken();
-    clearTimeout(googleTokenExpiryTimer);
+  function handleExpiredCloudAuth() {
+    if (!cloudAuthToken) return;
+    cloudAuthToken = null;
+    clearStoredCloudAuthToken();
+    clearTimeout(cloudAuthExpiryTimer);
     var lastUser = getLastGoogleUser() || googleUserEmail;
     if (lastUser) setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
     updateAutosaveIndicator();
@@ -1450,11 +1459,14 @@
   // Hand off to the expired-token path when the token lapses, instead of
   // waiting for the next cloud call to 401 -- so the badge and the silent
   // re-auth loop kick in on time even if the poet isn't editing.
-  var googleTokenExpiryTimer = null;
-  function scheduleGoogleTokenExpiry(exp) {
-    clearTimeout(googleTokenExpiryTimer);
+  var cloudAuthExpiryTimer = null;
+  function scheduleCloudAuthExpiry(exp) {
+    clearTimeout(cloudAuthExpiryTimer);
     if (!exp) return;
-    googleTokenExpiryTimer = setTimeout(handleExpiredGoogleToken, Math.max(0, exp * 1000 - Date.now() - 30 * 1000));
+    // setTimeout overflows (fires at once) past ~24.8 days, which a 30-day
+    // session can exceed -- cap it; the 401 path still catches the rest.
+    var delay = Math.min(Math.max(0, exp * 1000 - Date.now() - 30 * 1000), 0x7FFFFFFF);
+    cloudAuthExpiryTimer = setTimeout(handleExpiredCloudAuth, delay);
   }
 
   // ---------------------------------------------------------------------
@@ -3785,7 +3797,7 @@
     persistLibrary();
     persistTrash();
     renderChapbooksList();
-    if (googleIdToken) await syncLibraryToCloud();
+    if (cloudAuthToken) await syncLibraryToCloud();
     else setAccountStatus('Moved to trash — sign in to back up your books to the cloud.');
   }
 
@@ -3798,7 +3810,7 @@
     persistLibrary();
     persistTrash();
     renderChapbooksList();
-    if (googleIdToken) await syncLibraryToCloud();
+    if (cloudAuthToken) await syncLibraryToCloud();
     else setAccountStatus('Restored — sign in to back up your books to the cloud.');
   }
 
@@ -3810,7 +3822,7 @@
     trash = trash.filter(function (t) { return t.id !== id; });
     persistTrash();
     renderChapbooksList();
-    if (googleIdToken) await syncLibraryToCloud();
+    if (cloudAuthToken) await syncLibraryToCloud();
   }
 
   async function onNewChapbookClick() {
@@ -3847,7 +3859,7 @@
     persistLibrary();
     persist();
     renderAll();
-    if (googleIdToken) {
+    if (cloudAuthToken) {
       await syncLibraryToCloud();
     } else {
       setAccountStatus('Saved to this browser only — not backed up.', true);
@@ -4281,8 +4293,8 @@
   });
 
   renderAll();
-  var storedGoogleToken = getStoredGoogleToken();
-  if (storedGoogleToken) handleGoogleCredential({ credential: storedGoogleToken });
+  var storedCloudAuthToken = getStoredCloudAuthToken();
+  if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
   waitForGoogleIdentity(25);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
