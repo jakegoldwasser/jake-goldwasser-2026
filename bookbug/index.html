@@ -164,6 +164,14 @@
   .signin-gate-card h1.appname { white-space: nowrap; font-size: clamp(34px, 11vw, 58px); }
   .signin-gate-card p { margin: 0 0 6px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
   #gateSignInBtn { min-height: 44px; }
+  .loading-dots { display: flex; gap: 7px; }
+  .loading-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); opacity: .3; }
+  @media (prefers-reduced-motion: no-preference) {
+    .loading-dots span { animation: loadingDot 1.2s ease-in-out infinite; }
+    .loading-dots span:nth-child(2) { animation-delay: .15s; }
+    .loading-dots span:nth-child(3) { animation-delay: .3s; }
+  }
+  @keyframes loadingDot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
   #bookTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
@@ -621,6 +629,47 @@
   }
   .prompt-input:focus { border-color: var(--accent); }
 
+  .home-view { display: flex; flex-direction: column; gap: 18px; }
+  .home-view[hidden] { display: none; }
+  body.view-home .chapbook-header, body.view-home #intakePanel,
+  body.view-home #intakeCollapsedBar, body.view-home .workspace { display: none !important; }
+  @media (min-width: 701px) { .masthead h1.appname { cursor: pointer; } }
+  .home-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .home-title { font-family: "Fraunces", ui-serif, serif; font-weight: 600; font-size: 22px; margin: 0; }
+  .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 20px; }
+  .home-card {
+    position: relative; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: left;
+    background: none; border: none; padding: 0; font: inherit; color: inherit; outline: none;
+  }
+  /* A mini title page, in the book's own title font. */
+  .home-cover {
+    aspect-ratio: 5.5 / 8.5; background: #FBF9F5; border: 1px solid var(--line-strong); border-radius: 3px;
+    box-shadow: 0 1px 3px var(--shadow); display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 14px; text-align: center; overflow: hidden; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+  }
+  .home-card:hover .home-cover, .home-card:focus-visible .home-cover {
+    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--accent);
+  }
+  .home-cover-title { font-size: 15px; font-weight: 600; color: #241A1F; line-height: 1.25; overflow-wrap: anywhere; }
+  .home-cover-author { font-size: 10.5px; font-style: italic; color: #6B5A42; }
+  .home-card-new .home-cover { background: var(--surface); border-style: dashed; }
+  .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
+  .home-card-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .home-card-meta { font-size: 11.5px; color: var(--ink-faint); margin-top: -3px; }
+  .home-card-del {
+    position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); cursor: pointer;
+    font-size: 15px; line-height: 1; opacity: 0; transition: opacity .12s ease;
+  }
+  .home-card:hover .home-card-del, .home-card:focus-within .home-card-del { opacity: 1; }
+  .home-card-del:hover { color: var(--danger); border-color: var(--danger); }
+  @media (hover: none) { .home-card-del { opacity: 1; } }
+  .home-trash {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
+    width: 100%; max-width: 480px; align-self: flex-end;
+  }
+  .home-trash[hidden] { display: none; }
+
   .chapbooks-menu { position: relative; }
   .chapbooks-dropdown {
     position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 280px; max-height: 360px;
@@ -676,6 +725,17 @@
 <!-- Books live in the poet's Google account, so nothing is usable until
      they've signed in. Hidden by the script as soon as a sign-in (fresh or
      remembered) is in hand; see updateSignInGate. -->
+<!-- Shown while the account's books are being fetched (a cold cloud
+     call can take several seconds), so a blank or stale book never flashes
+     up looking like the real one was lost. -->
+<div class="signin-gate" id="loadingScreen" hidden>
+  <div class="signin-gate-card" role="status" aria-live="polite">
+    <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
+    <p>Loading your books…</p>
+    <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
 <div class="signin-gate" id="signInGate">
   <div class="signin-gate-card">
     <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
@@ -708,6 +768,17 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Home: every book as a cover, Google Docs style. What desktop opens
+       to; phones open straight into the last book instead. -->
+  <div class="home-view" id="homeView" hidden>
+    <div class="home-head">
+      <h2 class="home-title">Your books</h2>
+      <button class="btn btn-sm" id="homeTrashBtn" type="button">Trash</button>
+    </div>
+    <div class="home-trash" id="homeTrash" hidden></div>
+    <div class="home-grid" id="homeGrid"></div>
   </div>
 
   <div class="chapbook-header">
@@ -1235,6 +1306,9 @@
   // yanked away while the poet is writing (edits keep caching locally
   // and merge in on the next sign-in).
   var signedInThisLoad = false;
+  // Whether this page load's first cloud read has finished, successfully
+  // or not -- until then the loading screen covers the page.
+  var initialLoadDone = false;
   var googleUserEmail = '';
   var googleUserName = '';
 
@@ -1300,6 +1374,7 @@
 
   function updateSignInGate() {
     document.getElementById('signInGate').hidden = !!cloudAuthToken || signedInThisLoad;
+    document.getElementById('loadingScreen').hidden = !(cloudAuthToken && !initialLoadDone);
   }
 
   // Drops every locally cached book -- on sign-out, and when a different
@@ -1347,6 +1422,7 @@
   function signOut() {
     cloudAuthToken = null;
     signedInThisLoad = false;
+    initialLoadDone = false;
     googleUserEmail = '';
     googleUserName = '';
     forgetLastGoogleUser();
@@ -1362,12 +1438,20 @@
   }
   document.getElementById('signOutBtn').addEventListener('click', signOut);
 
+  // If the first read fails, show what's cached rather than a loading
+  // screen that never ends (the error badge says it isn't synced).
+  function finishInitialLoad() {
+    if (initialLoadDone) return;
+    initialLoadDone = true;
+    updateSignInGate();
+  }
+
   async function pullLibraryFromCloud() {
     if (!cloudAuthToken) return;
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
-      if (!res.ok) { setAccountStatus('Signed in — couldn’t reach the cloud', 'error'); return; }
+      if (!res.ok) { finishInitialLoad(); setAccountStatus('Signed in — couldn’t reach the cloud', 'error'); return; }
       var data = await res.json();
       if (data.session) {
         cloudAuthToken = data.session;
@@ -1375,7 +1459,6 @@
         scheduleCloudAuthExpiry(decodeJwtPayload(data.session).exp);
       }
       signedInThisLoad = true;
-      updateSignInGate();
       // The cloud blob is namespaced per app now (see CLOUD_API_URL's
       // Lambda) since Dummy Builder shares this same backend/user
       // identity -- our own data lives under state.chapbookbuilder.
@@ -1395,9 +1478,12 @@
         try { localStorage.setItem(LAST_OPENED_KEY, JSON.stringify(cloudOpened)); } catch (e) {}
       }
       openLastOpenedBook();
+      initialLoadDone = true;
+      updateSignInGate();
       if (merged.changed) await syncLibraryToCloud();
       else setAccountStatus('Signed in', 'synced');
     } catch (e) {
+      finishInitialLoad();
       setAccountStatus('Signed in — couldn’t reach the cloud', 'error');
     }
   }
@@ -3785,7 +3871,12 @@
     if (chapbooksDropdown.hidden) { chapbooksViewMode = 'library'; renderChapbooksList(); }
     chapbooksDropdown.hidden = !chapbooksDropdown.hidden;
   }
-  chapbooksMenuBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleChapbooksDropdown(); });
+  // Desktop has the home grid for this; phones keep the compact dropdown.
+  chapbooksMenuBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (homeMQ.matches) showHome();
+    else toggleChapbooksDropdown();
+  });
   document.addEventListener('click', function (e) {
     if (!chapbooksDropdown.hidden && !chapbooksDropdown.contains(e.target) && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
   });
@@ -3803,8 +3894,103 @@
     return d;
   }
 
+  // Trashed books, each with restore / delete-forever -- shared by the My
+  // Books dropdown and the home view.
+  function appendTrashRows(container) {
+    if (!trash.length) {
+      var empty = document.createElement('div');
+      empty.className = 'chapbooks-empty';
+      empty.textContent = 'Trash is empty.';
+      container.appendChild(empty);
+      return;
+    }
+    trash.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }).forEach(function (entry) {
+      var daysLeft = Math.max(1, Math.ceil((TRASH_RETENTION_MS - (Date.now() - entry.deletedAt)) / 86400000));
+      var row = document.createElement('div');
+      row.className = 'chapbook-row';
+      row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
+        '<button class="chapbook-restore" type="button" title="Restore">↺</button>' +
+        '<button class="chapbook-del" type="button" title="Delete forever">×</button>';
+      row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+      row.querySelector('.chapbook-meta').textContent = 'purges in ' + daysLeft + 'd';
+      row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); restoreChapbook(entry.id); });
+      row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); purgeChapbookForever(entry.id); });
+      container.appendChild(row);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Home view: a grid of every book (desktop's landing screen). The
+  // editor elements stay in the page and are just hidden while it shows.
+  // ---------------------------------------------------------------------
+  var homeMQ = window.matchMedia('(min-width: 701px)');
+  var homeView = document.getElementById('homeView');
+  var homeTrashOpen = false;
+  function isHomeShown() { return document.body.classList.contains('view-home'); }
+  function showHome() {
+    flushPendingSave();
+    closeChapbooksDropdown();
+    document.body.classList.add('view-home');
+    homeView.hidden = false;
+    renderHome();
+    window.scrollTo(0, 0);
+  }
+  function showEditor() {
+    if (!isHomeShown()) return;
+    document.body.classList.remove('view-home');
+    homeView.hidden = true;
+    window.scrollTo(0, 0);
+  }
+  function renderHome() {
+    var grid = document.getElementById('homeGrid');
+    grid.innerHTML = '';
+    var newCard = document.createElement('button');
+    newCard.type = 'button';
+    newCard.className = 'home-card home-card-new';
+    newCard.innerHTML = '<div class="home-cover"><span class="home-new-plus">+</span></div><div class="home-card-title">New book</div>';
+    newCard.addEventListener('click', startNewBook);
+    grid.appendChild(newCard);
+    library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      var data = entry.data || {};
+      var card = document.createElement('div');
+      card.className = 'home-card';
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
+        '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+        '<button class="home-card-del" type="button" title="Move to trash" aria-label="Move to trash">×</button>';
+      var title = entry.title || 'Untitled Collection';
+      var coverTitle = card.querySelector('.home-cover-title');
+      coverTitle.textContent = title;
+      coverTitle.style.fontFamily = displayStackFor(data.titleFontChoice);
+      card.querySelector('.home-cover-author').textContent = data.author || '';
+      card.querySelector('.home-card-title').textContent = title;
+      var n = countEntries(data.poems || []);
+      card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' entry' : ' entries');
+      card.addEventListener('click', function () { loadChapbook(entry.id); });
+      card.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); loadChapbook(entry.id); }
+      });
+      card.querySelector('.home-card-del').addEventListener('click', function (e) { e.stopPropagation(); deleteChapbook(entry.id); });
+      grid.appendChild(card);
+    });
+    document.getElementById('homeTrashBtn').textContent = 'Trash' + (trash.length ? ' (' + trash.length + ')' : '');
+    var trashBox = document.getElementById('homeTrash');
+    trashBox.hidden = !homeTrashOpen;
+    trashBox.innerHTML = '';
+    if (homeTrashOpen) appendTrashRows(trashBox);
+  }
+  document.getElementById('homeTrashBtn').addEventListener('click', function () {
+    homeTrashOpen = !homeTrashOpen;
+    renderHome();
+  });
+  document.querySelector('.masthead h1.appname').addEventListener('click', function () {
+    if (homeMQ.matches) showHome();
+  });
+
   function renderChapbooksList() {
     purgeOldTrash();
+    if (isHomeShown()) renderHome();
     chapbooksPane.innerHTML = '';
 
     if (chapbooksViewMode === 'trash') {
@@ -3816,26 +4002,7 @@
       chapbooksPane.appendChild(backBtn);
       chapbooksPane.appendChild(makeDivider());
 
-      if (!trash.length) {
-        var empty = document.createElement('div');
-        empty.className = 'chapbooks-empty';
-        empty.textContent = 'Trash is empty.';
-        chapbooksPane.appendChild(empty);
-      } else {
-        trash.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }).forEach(function (entry) {
-          var daysLeft = Math.max(1, Math.ceil((TRASH_RETENTION_MS - (Date.now() - entry.deletedAt)) / 86400000));
-          var row = document.createElement('div');
-          row.className = 'chapbook-row';
-          row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
-            '<button class="chapbook-restore" type="button" title="Restore">↺</button>' +
-            '<button class="chapbook-del" type="button" title="Delete forever">×</button>';
-          row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
-          row.querySelector('.chapbook-meta').textContent = 'purges in ' + daysLeft + 'd';
-          row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); restoreChapbook(entry.id); });
-          row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); purgeChapbookForever(entry.id); });
-          chapbooksPane.appendChild(row);
-        });
-      }
+      appendTrashRows(chapbooksPane);
       return;
     }
 
@@ -3888,6 +4055,7 @@
     saveStateCache();
     renderAll();
     closeChapbooksDropdown();
+    showEditor();
   }
 
   async function deleteChapbook(id) {
@@ -3941,6 +4109,7 @@
     saveStateCache();
     renderAll();
     closeChapbooksDropdown();
+    showEditor();
   }
 
   // ---------------------------------------------------------------------
@@ -4399,6 +4568,11 @@
   var storedCloudAuthToken = getStoredCloudAuthToken();
   if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
   updateSignInGate();
+  if (homeMQ.matches) showHome();
+  // The ▾ only belongs where My Books is still a dropdown (phones).
+  function syncMyBooksLabel() { chapbooksMenuBtn.textContent = homeMQ.matches ? 'My Books' : 'My Books ▾'; }
+  syncMyBooksLabel();
+  homeMQ.addEventListener('change', syncMyBooksLabel);
   waitForGoogleIdentity(25);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
