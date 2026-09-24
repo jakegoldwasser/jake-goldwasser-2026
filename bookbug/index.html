@@ -290,6 +290,21 @@
      of shrinking and letting that row's own flex-wrap kick in. */
   .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+  .side-rail { display: none; }
+  @media (min-width: 861px) {
+    .workspace.rail-mode { grid-template-columns: 1fr 44px; }
+    .workspace.rail-mode .sidebar { display: none; }
+    .workspace.rail-mode .side-rail { display: flex; }
+  }
+  .side-rail { position: sticky; top: 24px; flex-direction: column; gap: 8px; }
+  .side-rail button {
+    writing-mode: vertical-rl; appearance: none; cursor: pointer; padding: 16px 0; width: 44px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
+    box-shadow: 0 1px 2px var(--shadow); color: var(--ink-soft); font-size: 12.5px; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .side-rail button:hover { color: var(--accent); border-color: var(--accent); }
+  .sidebar-fold-row { display: flex; justify-content: flex-end; }
+  .sidebar-fold-row[hidden] { display: none; }
 
   /* iOS Safari auto-zooms the whole page when a focused text field's
      font-size is under 16px -- jarring on every tap, and it doesn't
@@ -861,6 +876,9 @@
     </div>
 
     <div class="sidebar">
+      <div class="sidebar-fold-row" id="sidebarFoldRow" hidden>
+        <button class="btn btn-sm" id="sidebarFoldBtn" type="button" title="Tuck these away for more writing room">Hide »</button>
+      </div>
       <div class="sidebar-scroll">
         <div class="panel formatting-panel" id="formattingPanel">
           <!-- Closed by default -- the settings are occasional, not something
@@ -981,7 +999,7 @@
           </div>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="exportPanel">
           <div class="stat-row">
             <span class="stat-label">Entries</span>
             <span class="stat-num" id="statPoems">0</span>
@@ -1000,7 +1018,7 @@
         </div>
       </div>
 
-      <div class="panel preview-panel">
+      <div class="panel preview-panel" id="previewPanel">
         <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
         <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
         <div class="preview-nav">
@@ -1010,6 +1028,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Stands in for the sidebar while an entry is open (desktop), so the
+         editor gets the width; each tab brings the sidebar back at that
+         section. See updateSideRail. -->
+    <nav class="side-rail" id="sideRail" aria-label="Book tools">
+      <button type="button" data-open="formattingPanel">Formatting</button>
+      <button type="button" data-open="exportPanel">Export</button>
+      <button type="button" data-open="previewPanel">Preview</button>
+    </nav>
   </div>
 
 </div>
@@ -3410,6 +3437,35 @@
     return row;
   }
 
+  // While any entry is open, the sidebar folds into a rail of tabs
+  // (desktop only -- see .rail-mode) to give the editor the width. A tab
+  // brings the sidebar back until it's hidden again or the next entry is
+  // opened; with no entry open, the sidebar just shows.
+  var sidebarPinnedOpen = false;
+  var entryWasOpen = false;
+  function updateSideRail() {
+    var open = !!poemList.querySelector('.poem-card');
+    if (open && !entryWasOpen) sidebarPinnedOpen = false;
+    entryWasOpen = open;
+    document.querySelector('.workspace').classList.toggle('rail-mode', open && !sidebarPinnedOpen);
+    document.getElementById('sidebarFoldRow').hidden = !(open && sidebarPinnedOpen);
+  }
+  document.querySelectorAll('#sideRail button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      sidebarPinnedOpen = true;
+      updateSideRail();
+      var target = document.getElementById(btn.dataset.open);
+      if (target.id === 'formattingPanel' && document.getElementById('formattingBody').hidden) {
+        document.getElementById('formattingToggle').click();
+      }
+      target.scrollIntoView({ block: 'nearest' });
+    });
+  });
+  document.getElementById('sidebarFoldBtn').addEventListener('click', function () {
+    sidebarPinnedOpen = false;
+    updateSideRail();
+  });
+
   // Sizes a title input to its own text (or placeholder), so the space
   // after it belongs to the row instead of the input.
   function fitTitleInput(input) {
@@ -3529,6 +3585,7 @@
     var entryCount = countEntries(state.poems);
     poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
     updateArchiveButton();
+    updateSideRail();
     // The entry being written in may not have been re-rendered as a full
     // card (e.g. collapsed in compact view) -- don't leave the page locked.
     if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
