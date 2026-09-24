@@ -385,6 +385,8 @@
     .poem-writer-done { padding: 8px 18px; font-size: 15px; }
     .poem-card.is-writing .poem-title-row { flex: 0 0 auto; }
     .poem-card.is-writing input.poem-title { font-size: 24px !important; padding: 6px 0 10px; }
+    .poem-card.is-writing input.poem-title { flex: 1 1 auto; width: auto !important; }
+    .poem-card.is-writing .poem-title-row { cursor: auto; }
     /* Every row but the text itself is overhead on a phone, so: B/I/U
        move up into the bar beside Done, the title steps aside while the
        poem has focus (the bar shows it instead; tap there to edit it),
@@ -439,6 +441,13 @@
   button.poem-title-compact-toggle:hover { color: var(--accent); }
   .poem-compact-expanded { margin: 0 0 4px; }
   .poem-collapse-btn { flex: 0 0 auto; font-size: 16px; line-height: 1; padding: 6px 10px; }
+  /* An opened entry's title field only spans its text (see fitTitleInput),
+     so the rest of the row is empty space that closes the entry when
+     clicked. The underline moves to the row to keep it full width. */
+  .poem-compact-expanded .poem-title-row { border-bottom: 1px solid var(--line-strong); cursor: pointer; }
+  .poem-compact-expanded .poem-title-row:focus-within { border-bottom-color: var(--accent); }
+  .poem-compact-expanded input.poem-title { flex: 0 1 auto; max-width: 100%; border-bottom: none; cursor: text; }
+  .poem-compact-expanded .poem-collapse-btn { margin-left: auto; }
 
   .poem-gap { height: 9px; margin: -3px 0 -1px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 34px; right: 0; height: 1px; background: transparent; }
@@ -528,6 +537,36 @@
   .seg-3 button { padding: 8px 3px; font-size: 11.5px; }
   .seg-4 button { padding: 8px 2px; font-size: 10.5px; }
   .seg-fonts { flex-wrap: wrap; }
+
+  /* Switches the Formatting panel between the entry-title and body-text
+     controls. Styled as a soft track with a raised active side, unlike
+     the solid green option buttons, so it reads as "which panel", not as
+     one more setting. */
+  .text-target-toggle {
+    display: flex; gap: 3px; padding: 3px; margin: 2px 0 14px; border-radius: 9px;
+    background: var(--surface-2); border: 1px solid var(--line);
+  }
+  .text-target-toggle button {
+    flex: 1; appearance: none; border: none; background: transparent; border-radius: 7px; cursor: pointer;
+    padding: 8px 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+  }
+  .text-target-toggle button:hover { color: var(--ink); }
+  .text-target-toggle button.active {
+    background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px var(--shadow), 0 0 0 1px var(--line-strong);
+  }
+  .text-target-pane[hidden] { display: none; }
+
+  .formatting-panel:not(.is-open) { padding-top: 14px; padding-bottom: 14px; }
+  .formatting-toggle {
+    appearance: none; background: none; border: none; padding: 0; width: 100%; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink); text-align: left;
+  }
+  .formatting-toggle .panel-title { margin: 0; }
+  .formatting-chevron { font-size: 14px; color: var(--ink-soft); transition: transform .15s ease; }
+  .formatting-panel.is-open .formatting-chevron { transform: rotate(180deg); }
+  .formatting-toggle:hover .formatting-chevron { color: var(--accent); }
+  #formattingBody { margin-top: 12px; }
+  #formattingBody[hidden] { display: none; }
   .seg-fonts button {
     flex: 0 0 25%; box-sizing: border-box; height: 34px; padding: 0 2px; font-size: 10.5px;
     border-bottom: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: center;
@@ -752,14 +791,26 @@
 
     <div class="sidebar">
       <div class="sidebar-scroll">
-        <div class="panel">
-          <div class="panel-title">Formatting</div>
+        <div class="panel formatting-panel" id="formattingPanel">
+          <!-- Closed by default -- the settings are occasional, not something
+               to keep in view while writing. -->
+          <button type="button" class="formatting-toggle" id="formattingToggle" aria-expanded="false" aria-controls="formattingBody">
+            <span class="panel-title">Formatting</span><span class="formatting-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div id="formattingBody" hidden>
           <div class="field">
             <label for="trimSelect">Trim size</label>
             <select id="trimSelect"></select>
           </div>
 
-          <div class="subhead">Entry title text</div>
+          <div class="subhead">Text</div>
+          <!-- Entry titles and body text each get their own panel of the
+               same controls; this switch shows one at a time. -->
+          <div class="text-target-toggle" id="textTargetToggle" role="tablist">
+            <button type="button" role="tab" data-target="title">Entry title</button>
+            <button type="button" role="tab" data-target="body">Body text</button>
+          </div>
+          <div class="text-target-pane" data-pane="title">
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-fonts" id="titleFontSeg">
@@ -789,8 +840,9 @@
               <button data-val="large">Large</button>
             </div>
           </div>
+          </div>
 
-          <div class="subhead">Body text</div>
+          <div class="text-target-pane" data-pane="body">
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-fonts" id="bodyFontSeg">
@@ -829,6 +881,7 @@
               <button data-val="2">2.0</button>
             </div>
           </div>
+          </div>
 
           <div class="subhead">Layout</div>
           <div class="checkline">
@@ -853,6 +906,7 @@
           <div class="checkline">
             <input type="checkbox" id="cutLinesCheck" checked>
             <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines (print-ready export)</label>
+          </div>
           </div>
         </div>
 
@@ -1376,7 +1430,9 @@
   }
 
   // Opens the last-opened book if it's still in the library, else the
-  // most recently edited one, else a fresh blank book.
+  // most recently edited one, else a fresh blank book -- or, if the
+  // library is empty, keeps a new book that just hasn't got content yet
+  // (so settings picked on it survive a reload).
   function openLastOpenedBook() {
     var last = getLastOpened();
     var entry = (last && library.filter(function (c) { return c.id === last.id; })[0]) ||
@@ -1385,7 +1441,7 @@
       state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
       state.chapbookId = entry.id;
       markOpened(entry.id);
-    } else {
+    } else if (state.chapbookId || state.isExample) {
       state = blankChapbookState();
       if (googleUserName) state.author = googleUserName;
     }
@@ -1707,8 +1763,10 @@
 
   // Books saved before Lora/Spectral/Crimson Text were replaced keep
   // their look as closely as possible by moving to the stand-ins.
-  var RETIRED_FONT_KEYS = { lora: 'baskerville', spectral: 'didot', crimsontext: 'futura' };
+  // The map lives inside the function: this runs while the saved book is
+  // restored at startup, before a top-level var further down would be set.
   function migrateFontKeys(s) {
+    var RETIRED_FONT_KEYS = { lora: 'baskerville', spectral: 'didot', crimsontext: 'futura' };
     if (!s) return s;
     if (RETIRED_FONT_KEYS[s.bodyFontChoice]) s.bodyFontChoice = RETIRED_FONT_KEYS[s.bodyFontChoice];
     if (RETIRED_FONT_KEYS[s.titleFontChoice]) s.titleFontChoice = RETIRED_FONT_KEYS[s.titleFontChoice];
@@ -3253,10 +3311,27 @@
         delete expandedCompactIds[poem.id];
         renderPoems();
       });
-      expandedCard.querySelector('.poem-title-row').appendChild(collapseBtn);
+      var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
+      expandedTitleRow.appendChild(collapseBtn);
+      expandedTitleRow.addEventListener('click', function (e) {
+        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) collapseBtn.click();
+      });
+      var expandedTitleInput = expandedCard.querySelector('input.poem-title');
+      expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
+      requestAnimationFrame(function () { fitTitleInput(expandedTitleInput); });
       return expandedCard;
     }
     return row;
+  }
+
+  // Sizes a title input to its own text (or placeholder), so the space
+  // after it belongs to the row instead of the input.
+  function fitTitleInput(input) {
+    if (!input.isConnected) return;
+    var cs = getComputedStyle(input);
+    measureCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    var textW = measureCtx.measureText(input.value || input.placeholder || '').width;
+    input.style.width = Math.ceil(textW + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 14) + 'px';
   }
 
   var poemsViewMode = 'compact';
@@ -3880,6 +3955,32 @@
   trimSelect.value = state.trimKey;
   trimSelect.addEventListener('change', function () { state.trimKey = trimSelect.value; persist(); renderAll(); });
 
+  document.getElementById('formattingToggle').addEventListener('click', function () {
+    var body = document.getElementById('formattingBody');
+    body.hidden = !body.hidden;
+    document.getElementById('formattingPanel').classList.toggle('is-open', !body.hidden);
+    this.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+  });
+
+  // Which half of the Formatting panel's Text section is showing --
+  // a per-browser convenience, so it's only remembered locally.
+  var TEXT_TARGET_KEY = 'poetryBooklet.textTarget.v1';
+  function showTextTarget(target) {
+    document.querySelectorAll('#textTargetToggle button').forEach(function (b) {
+      var on = b.dataset.target === target;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.text-target-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== target; });
+    try { localStorage.setItem(TEXT_TARGET_KEY, target); } catch (e) {}
+  }
+  document.querySelectorAll('#textTargetToggle button').forEach(function (b) {
+    b.addEventListener('click', function () { showTextTarget(b.dataset.target); });
+  });
+  var savedTextTarget = 'body';
+  try { savedTextTarget = localStorage.getItem(TEXT_TARGET_KEY) === 'title' ? 'title' : 'body'; } catch (e) {}
+  showTextTarget(savedTextTarget);
+
   function wireSeg(id, onChange) {
     var seg = document.getElementById(id);
     seg.querySelectorAll('button').forEach(function (btn) {
@@ -4302,6 +4403,7 @@
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
       document.querySelectorAll('.poem-text').forEach(autoGrow);
+      document.querySelectorAll('.poem-compact-expanded input.poem-title').forEach(fitTitleInput);
     });
   }
 })();
