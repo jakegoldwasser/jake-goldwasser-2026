@@ -108,18 +108,13 @@
 
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
-  /* top-actions-main (My Books / Save book / Start over) never wraps or
+  /* top-actions-main (My Books / New book) never wraps or
      shrinks -- it always stays on the wordmark's own row. account-area
      (sign-in/status, unpredictable length) is the only part allowed to
      drop to its own line when space runs out. */
   .top-actions { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .top-actions-main { display: flex; gap: 10px 14px; align-items: center; flex-wrap: nowrap; flex-shrink: 0; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  #googleSignInBtn.signin-attention { animation: signinPulse 0.6s ease-in-out 3; border-radius: 4px; }
-  @keyframes signinPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(193, 96, 42, 0); }
-    50% { box-shadow: 0 0 0 5px rgba(193, 96, 42, 0.35); }
-  }
   .account-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .account-status-row .status-line { min-height: 0; margin-top: 0; text-align: right; }
   .btn-link {
@@ -160,6 +155,18 @@
   }
 
   .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
+
+  .signin-gate {
+    position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px; background: var(--paper);
+  }
+  .signin-gate[hidden] { display: none; }
+  .signin-gate-card {
+    max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  }
+  .signin-gate-card h1.appname { white-space: nowrap; font-size: clamp(34px, 11vw, 58px); }
+  .signin-gate-card p { margin: 0 0 6px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
+  #gateSignInBtn { min-height: 44px; }
   .autosave-indicator {
     display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
     font-size: 11.5px; font-weight: 600; color: var(--ink-faint); margin-top: 2px;
@@ -170,16 +177,20 @@
   .autosave-indicator.is-synced::before { background: var(--swatch-green); }
   #bookTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
-    color: var(--ink); background: transparent; border: none; border-bottom: 2px solid var(--line-strong);
+    color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
     padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
   }
+  /* The rules under the book title and author only show on hover (and
+     while typing, which is the only cue a touch screen gets). */
+  #bookTitleInput:hover { border-bottom-color: var(--line-strong); }
   #bookTitleInput:focus { border-bottom-color: var(--accent); }
   #bookTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
   #authorInput {
     font-family: "Work Sans", sans-serif; font-size: 14px; color: var(--ink-soft); background: transparent;
-    border: none; border-bottom: 1px solid var(--line); padding: 2px 2px 6px; outline: none; width: 100%;
+    border: none; border-bottom: 1px solid transparent; padding: 2px 2px 6px; outline: none; width: 100%;
     max-width: 320px; transition: border-color .15s ease;
   }
+  #authorInput:hover { border-bottom-color: var(--line); }
   #authorInput:focus { border-bottom-color: var(--accent); }
   #authorInput::placeholder { color: var(--ink-faint); }
 
@@ -379,28 +390,34 @@
     .poem-card.is-writing .poem-handle { display: none; }
     .poem-card.is-writing .poem-body { height: 100%; gap: 6px; }
     .poem-card.is-writing .poem-writer-bar {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
       flex: 0 0 auto; padding: 8px 0 4px;
-    }
-    .poem-writer-label {
-      font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint);
     }
     .poem-writer-done { padding: 8px 18px; font-size: 15px; }
     .poem-card.is-writing .poem-title-row { flex: 0 0 auto; }
     .poem-card.is-writing input.poem-title { font-size: 24px !important; padding: 6px 0 10px; }
-    .poem-card.is-writing .format-toolbar { flex: 0 0 auto; gap: 8px; margin: 2px 0 0; }
-    .poem-card.is-writing .format-toolbar button { width: 44px; height: 36px; font-size: 16px; border-radius: 8px; }
+    /* Every row but the text itself is overhead on a phone, so: B/I/U
+       move up into the bar beside Done, the title steps aside while the
+       poem has focus (the bar shows it instead; tap there to edit it),
+       and the line/page count is left for the full editor. */
+    .poem-card.is-writing .poem-body > .format-toolbar { display: none; }
+    .poem-card.is-writing.is-body-focus .poem-title-row { display: none; }
+    .poem-writer-bar .format-toolbar { flex: 0 0 auto; gap: 6px; }
+    .poem-writer-bar .format-toolbar button { width: 40px; height: 34px; font-size: 15px; border-radius: 8px; }
+    .poem-writer-title {
+      flex: 1; min-width: 0; appearance: none; background: none; border: none; padding: 6px 0; text-align: left;
+      font-family: "Fraunces", ui-serif, serif; font-size: 16px; font-weight: 600; color: var(--ink);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
+    }
+    .poem-writer-title.is-placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
+    .poem-card.is-writing:not(.is-body-focus) .poem-writer-title { visibility: hidden; }
     .poem-card.is-writing textarea.poem-text {
       flex: 1 1 auto; min-height: 0; height: auto !important; overflow-y: auto; -webkit-overflow-scrolling: touch;
-      border: none; border-radius: 0; background: transparent; padding: 10px 0 24px;
+      border: none; border-radius: 0; background: transparent; padding: 10px 0 calc(24px + env(safe-area-inset-bottom));
       font-size: 18px !important;
     }
-    .poem-card.is-writing .poem-meta-row {
-      flex: 0 0 auto; padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
-    }
-    .poem-card.is-writing .poem-collapse-btn,
-    .poem-card.is-writing .poem-meta-row .title-align,
-    .poem-card.is-writing .poem-meta-row .btn-danger { display: none; }
+    .poem-card.is-writing .poem-meta-row,
+    .poem-card.is-writing .poem-collapse-btn { display: none; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -466,12 +483,6 @@
   input.section-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   input.section-title:focus { border-bottom-color: var(--accent); }
 
-  .example-banner {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-    background: var(--accent-soft); border: 1px solid var(--line-strong); border-radius: 9px;
-    padding: 10px 14px; font-size: 12.5px; color: var(--ink); margin-bottom: 14px;
-  }
-  .example-banner[hidden] { display: none; }
 
   /* The whole right column -- Booklet settings, stats/export, and Preview
      -- shares one viewport-bounded scroll region, so reaching Preview/
@@ -634,6 +645,17 @@
 </head>
 <body>
 
+<!-- Books live in the poet's Google account, so nothing is usable until
+     they've signed in. Hidden by the script as soon as a sign-in (fresh or
+     remembered) is in hand; see updateSignInGate. -->
+<div class="signin-gate" id="signInGate">
+  <div class="signin-gate-card">
+    <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
+    <p>Sign in with Google to start. Your books save to your account as you write, so they’re there on every device.</p>
+    <div id="gateSignInBtn"></div>
+  </div>
+</div>
+
 <div class="page">
 
   <div class="masthead">
@@ -649,8 +671,7 @@
             <div id="chapbooksPane"></div>
           </div>
         </div>
-        <button class="btn btn-primary" id="saveChapbookBtn" type="button" title="Adds this book to your My Books list, saved to this browser (and backed up to the cloud if you're signed in with Google).">Save book</button>
-        <button class="btn" id="startOverBtn" title="Clear everything and start over">Start over</button>
+        <button class="btn" id="newBookBtn" type="button" title="Start a new, blank book. This one stays in My Books.">New book</button>
       </div>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
@@ -724,10 +745,6 @@
             <button class="btn btn-sm" id="archiveToggleBtn" type="button">Archive</button>
             <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>
           </div>
-        </div>
-        <div id="exampleBanner" class="example-banner" hidden>
-          <span>These three Emily Dickinson poems are just a working example — import or paste your own above to replace them.</span>
-          <button class="btn btn-sm" id="clearExampleBtn">Clear examples</button>
         </div>
         <div id="poemGapTop"></div>
         <div id="poemList"></div>
@@ -1030,86 +1047,20 @@
     };
   }
 
-  // True only when the current book has real, typed content that hasn't
-  // reached a library entry yet. Once state.chapbookId is set, persist()
-  // keeps that entry in sync on every edit (see syncCurrentIntoLibrary), so
-  // there's nothing left to lose by switching away -- and the untouched
-  // built-in example isn't the poet's own work either.
-  function hasUnsavedWork() {
-    if (state.chapbookId) return false;
-    if (state.isExample) return false;
-    return !!((state.poems && state.poems.length) || (state.bookTitle && state.bookTitle.trim()));
+  // Whether a book has anything worth keeping. An untouched blank book
+  // isn't added to My Books until it does (see ensureCurrentInLibrary),
+  // so "New book" clicks don't leave a trail of empty entries.
+  function hasContent(s) {
+    return !!(countEntries(s.poems) || (s.archivedPoems && s.archivedPoems.length) ||
+      (s.bookTitle && s.bookTitle.trim()));
   }
 
-  // A brand-new, empty chapbook -- used by "New chapbook" in the library menu.
+  // A brand-new, empty book -- used by "New book" and after sign-in when
+  // the account has no books yet.
   function blankChapbookState() {
     var s = defaultSettings();
     s.isExample = false;
     s.poems = [];
-    return s;
-  }
-
-  function exampleState() {
-    var s = defaultSettings();
-    s.isExample = true;
-    s.author = 'Emily Dickinson';
-    s.poems = [
-        {
-          id: 'ex1',
-          title: 'I dwell in Possibility',
-          lines: [
-            'I dwell in Possibility –',
-            'A fairer House than Prose –',
-            'More numerous of Windows –',
-            'Superior – for Doors –',
-            '',
-            'Of Chambers as the Cedars –',
-            'Impregnable of Eye –',
-            'And for an Everlasting Roof',
-            'The Gambrels of the Sky –',
-            '',
-            'Of Visitors – the fairest –',
-            'For Occupation – This –',
-            'The spreading wide my narrow Hands',
-            'To gather Paradise –'
-          ]
-        },
-        {
-          id: 'ex2',
-          title: 'The Brain—is wider than the Sky',
-          lines: [
-            'The Brain—is wider than the Sky—',
-            'For—put them side by side—',
-            'The one the other will contain',
-            'With ease—and You—beside—',
-            '',
-            'The Brain is deeper than the sea—',
-            'For—hold them—Blue to Blue—',
-            'The one the other will absorb—',
-            'As Sponges—Buckets—do—',
-            '',
-            'The Brain is just the weight of God—',
-            'For—Heft them—Pound for Pound—',
-            'And they will differ—if they do—',
-            'As Syllable from Sound—'
-          ]
-        },
-        {
-          id: 'ex3',
-          title: 'This is my letter to the World',
-          lines: [
-            'This is my letter to the World',
-            'That never wrote to Me –',
-            'The simple News that Nature told –',
-            'With tender Majesty',
-            '',
-            'Her Message is committed',
-            'To Hands I cannot see –',
-            'For love of Her – Sweet – countrymen –',
-            'Judge tenderly – of Me'
-          ]
-        }
-      ];
     return s;
   }
 
@@ -1118,16 +1069,17 @@
     var saved = localStorage.getItem(STORAGE_KEY);
     state = saved ? migrateFontKeys(JSON.parse(saved)) : null;
   } catch (e) { state = null; }
-  if (!state || !state.poems) state = exampleState();
+  // The old built-in Emily Dickinson example isn't anyone's book.
+  if (!state || !state.poems || state.isExample) state = blankChapbookState();
 
   // ---------------------------------------------------------------------
-  // "My Chapbooks" library -- a list of named, explicitly-saved chapbooks,
-  // separate from the live scratch `state` above (which autosaves to
-  // localStorage continuously regardless of whether it's ever been
-  // saved into the library). Once a chapbook has been saved once,
-  // further local edits keep its library copy in sync automatically;
-  // pushing to the cloud only happens on an explicit save/delete, not
-  // on every keystroke.
+  // "My Books" library. Every book with any content is in it -- there's
+  // no save step: persist() adds the live `state` to the library the
+  // first time it has something in it and keeps that copy current, and
+  // (when signed in) pushes the library to the cloud a few seconds after
+  // edits settle. localStorage here is only a cache of the signed-in
+  // account's books, for fast reloads and so edits made while a sign-in
+  // has lapsed aren't lost; signing out clears it.
   // ---------------------------------------------------------------------
   var LIBRARY_KEY = 'poetryBooklet.library.v1';
   var TRASH_KEY = 'poetryBooklet.trash.v1';
@@ -1145,6 +1097,26 @@
     try { localStorage.setItem(TRASH_KEY, JSON.stringify(trash)); } catch (e) {}
   }
 
+  // Which book was open last, and when -- synced with the library so
+  // signing in on any device reopens it.
+  var LAST_OPENED_KEY = 'poetryBooklet.lastOpened.v1';
+  function getLastOpened() {
+    try { return JSON.parse(localStorage.getItem(LAST_OPENED_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function markOpened(id) {
+    var cur = getLastOpened();
+    if (!id || (cur && cur.id === id)) return;
+    try { localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({ id: id, at: Date.now() })); } catch (e) {}
+    scheduleCloudAutosave();
+  }
+
+  function ensureCurrentInLibrary() {
+    if (state.chapbookId || !hasContent(state)) return;
+    state.chapbookId = makeChapbookId();
+    library.push({ id: state.chapbookId, title: state.bookTitle || 'Untitled Collection', updatedAt: Date.now(), data: null });
+    markOpened(state.chapbookId);
+  }
+
   function syncCurrentIntoLibrary() {
     if (!state.chapbookId) return;
     var entry = library.filter(function (c) { return c.id === state.chapbookId; })[0];
@@ -1156,22 +1128,32 @@
   }
 
   var saveTimer = null;
+  function flushSave() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    ensureCurrentInLibrary();
+    saveStateCache();
+    syncCurrentIntoLibrary();
+    scheduleCloudAutosave();
+  }
   function persist() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-      syncCurrentIntoLibrary();
-      scheduleCloudAutosave();
-    }, 300);
+    saveTimer = setTimeout(flushSave, 300);
+  }
+  // Run a pending persist() now -- before switching books, so the last
+  // few keystrokes land in the book they were typed into.
+  function flushPendingSave() { if (saveTimer) flushSave(); }
+  // Just the live-book cache, without touching the library -- used when
+  // opening a book, which shouldn't bump its "last edited" time.
+  function saveStateCache() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
   }
 
-  // Once a chapbook has been named and saved at least once (chapbookId
-  // set), further edits keep syncing to the cloud on their own -- not on
-  // every keystroke, but a few seconds after typing settles, same spirit
-  // as the local autosave above.
+  // Edits reach the cloud a few seconds after typing settles rather than
+  // on every keystroke, same spirit as the local autosave above.
   var cloudAutosaveTimer = null;
   function scheduleCloudAutosave() {
-    if (!state.chapbookId || !cloudAuthToken) return;
+    if (!cloudAuthToken) return;
     clearTimeout(cloudAutosaveTimer);
     cloudAutosaveTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
   }
@@ -1181,14 +1163,11 @@
   function updateAutosaveIndicator() {
     var el = document.getElementById('autosaveIndicator');
     if (!el) return;
-    if (!state.chapbookId) {
-      el.textContent = 'Autosaving to this browser only — save this book to also back it up to the cloud.';
-      el.classList.remove('is-synced');
-    } else if (cloudAuthToken) {
-      el.textContent = 'Autosaving to this browser, syncing to the cloud.';
+    if (cloudAuthToken) {
+      el.textContent = 'Saving automatically to your Google account.';
       el.classList.add('is-synced');
     } else {
-      el.textContent = 'Autosaving to this browser only — sign in with Google to also sync to the cloud.';
+      el.textContent = 'Not syncing — sign in again to save your latest changes to your account.';
       el.classList.remove('is-synced');
     }
   }
@@ -1223,6 +1202,12 @@
   // sign-in, swapped for the backend's own 30-day session token (see
   // cloud-sync-backend/index.mjs) as soon as the first cloud read returns one.
   var cloudAuthToken = null;
+  // Set once a cloud read has succeeded on this page load. Until then a
+  // missing/expired sign-in shows the full-page sign-in gate; after it, a
+  // lapse mid-session only shows the amber badge, so the editor isn't
+  // yanked away while the poet is writing (edits keep caching locally
+  // and merge in on the next sign-in).
+  var signedInThisLoad = false;
   var googleUserEmail = '';
   var googleUserName = '';
 
@@ -1284,12 +1269,36 @@
     catch (e) { return {}; }
   }
 
+  function updateSignInGate() {
+    document.getElementById('signInGate').hidden = !!cloudAuthToken || signedInThisLoad;
+  }
+
+  // Drops every locally cached book -- on sign-out, and when a different
+  // account signs in on this browser, so one person's books are never
+  // shown to (or merged into) another's.
+  function clearLocalBooks() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    library = [];
+    trash = [];
+    persistLibrary();
+    persistTrash();
+    try { localStorage.removeItem(LAST_OPENED_KEY); } catch (e) {}
+    state = blankChapbookState();
+    saveStateCache();
+    renderAll();
+    renderChapbooksList();
+  }
+
   async function handleGoogleCredential(response) {
     cloudAuthToken = response.credential;
     var payload = decodeJwtPayload(cloudAuthToken);
     googleUserEmail = payload.email || 'your account';
     googleUserName = payload.name || '';
+    var previousUser = getLastGoogleUser();
+    if (previousUser && previousUser !== googleUserEmail) clearLocalBooks();
     rememberLastGoogleUser(googleUserEmail);
+    updateSignInGate();
     storeCloudAuthToken(cloudAuthToken);
     scheduleCloudAuthExpiry(payload.exp);
     var btn = document.getElementById('googleSignInBtn');
@@ -1309,11 +1318,14 @@
 
   function signOut() {
     cloudAuthToken = null;
+    signedInThisLoad = false;
     googleUserEmail = '';
     googleUserName = '';
     forgetLastGoogleUser();
     clearStoredCloudAuthToken();
     clearTimeout(cloudAuthExpiryTimer);
+    clearLocalBooks();
+    updateSignInGate();
     var btn = document.getElementById('googleSignInBtn');
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
@@ -1335,49 +1347,92 @@
         storeCloudAuthToken(data.session);
         scheduleCloudAuthExpiry(decodeJwtPayload(data.session).exp);
       }
+      signedInThisLoad = true;
+      updateSignInGate();
       // The cloud blob is namespaced per app now (see CLOUD_API_URL's
       // Lambda) since Dummy Builder shares this same backend/user
       // identity -- our own data lives under state.chapbookbuilder.
-      var ours = (data.state && data.state.chapbookbuilder) || null;
-      var cloudChapbooks = (ours && ours.chapbooks) || null;
-      var cloudTrash = (ours && ours.trash) || [];
-      if (cloudChapbooks && cloudChapbooks.length) {
-        // The cloud is the default source of truth once signed in -- import
-        // straight away with no confirmation, then jump to whichever book
-        // was edited most recently so the poet lands right back where they
-        // left off instead of on the empty-state screen.
-        library = cloudChapbooks;
-        trash = cloudTrash;
-        persistLibrary();
-        persistTrash();
-        renderChapbooksList();
-        var mostRecent = library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
-        if (mostRecent) {
-          state = migrateFontKeys(JSON.parse(JSON.stringify(mostRecent.data)));
-          state.isExample = false;
-          persist();
-          renderAll();
-        }
-        setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.', 'synced');
-      } else if (library.length || trash.length) {
-        setAccountStatus('Signed in as ' + googleUserEmail + ' — backing up your books to the cloud…');
-        await syncLibraryToCloud();
-      } else {
-        setAccountStatus('Signed in as ' + googleUserEmail + '.', 'synced');
+      var ours = (data.state && data.state.chapbookbuilder) || {};
+      // Fold whatever is cached here (edits made while a sign-in had
+      // lapsed, or books from before sign-in was required) into the
+      // account rather than letting either side overwrite the other.
+      flushPendingSave();
+      var merged = mergeLibraries(library, trash, ours.chapbooks || [], ours.trash || []);
+      library = merged.library;
+      trash = merged.trash;
+      persistLibrary();
+      persistTrash();
+      var cloudOpened = ours.lastOpened || null;
+      var localOpened = getLastOpened();
+      if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
+        try { localStorage.setItem(LAST_OPENED_KEY, JSON.stringify(cloudOpened)); } catch (e) {}
       }
+      openLastOpenedBook();
+      if (merged.changed) await syncLibraryToCloud();
+      else setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.', 'synced');
     } catch (e) {
       setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', 'error');
     }
   }
 
+  // Union of two copies of the library + trash, keyed by book id; where
+  // both have a book, whichever copy changed last wins (a trashed copy
+  // counts from when it was deleted). `changed` says whether anything
+  // came from the local side, i.e. whether the cloud needs the result.
+  function mergeLibraries(localLib, localTrash, cloudLib, cloudTrash) {
+    var winners = {};
+    var order = [];
+    function stamp(e) { return e.deletedAt || e.updatedAt || 0; }
+    function consider(entry, inTrash, fromLocal) {
+      if (!entry || !entry.id) return;
+      var cur = winners[entry.id];
+      if (!cur) order.push(entry.id);
+      if (!cur || stamp(entry) > stamp(cur.entry)) winners[entry.id] = { entry: entry, inTrash: inTrash, fromLocal: fromLocal };
+    }
+    cloudLib.forEach(function (e) { consider(e, false, false); });
+    cloudTrash.forEach(function (e) { consider(e, true, false); });
+    localLib.forEach(function (e) { consider(e, false, true); });
+    localTrash.forEach(function (e) { consider(e, true, true); });
+    var out = { library: [], trash: [], changed: false };
+    order.forEach(function (id) {
+      var w = winners[id];
+      (w.inTrash ? out.trash : out.library).push(w.entry);
+      if (w.fromLocal) out.changed = true;
+    });
+    return out;
+  }
+
+  // Opens the last-opened book if it's still in the library, else the
+  // most recently edited one, else a fresh blank book.
+  function openLastOpenedBook() {
+    var last = getLastOpened();
+    var entry = (last && library.filter(function (c) { return c.id === last.id; })[0]) ||
+      library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
+    if (entry && entry.data) {
+      state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
+      state.chapbookId = entry.id;
+      markOpened(entry.id);
+    } else {
+      state = blankChapbookState();
+      if (googleUserName) state.author = googleUserName;
+    }
+    state.isExample = false;
+    saveStateCache();
+    renderAll();
+    renderChapbooksList();
+  }
+
   async function syncLibraryToCloud() {
-    if (!cloudAuthToken) return;
+    // Never push before this page load's first pull has merged the
+    // account's books in -- the local copy could be empty or stale (a new
+    // device, a slow network), and a PUT replaces the cloud copy wholesale.
+    if (!cloudAuthToken || !signedInThisLoad) return;
     setAccountStatus('Signed in as ' + googleUserEmail + ' — saving to the cloud…');
     try {
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash } })
+        body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash, lastOpened: getLastOpened() } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
       if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', 'error'); return; }
@@ -1407,6 +1462,7 @@
         cancel_on_tap_outside: false
       });
       google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'medium', type: 'standard' });
+      google.accounts.id.renderButton(document.getElementById('gateSignInBtn'), { theme: 'filled_black', size: 'large', type: 'standard', shape: 'pill', text: 'signin_with' });
       retryGoogleSilentSignIn();
       return;
     }
@@ -1450,6 +1506,7 @@
     cloudAuthToken = null;
     clearStoredCloudAuthToken();
     clearTimeout(cloudAuthExpiryTimer);
+    updateSignInGate();
     var lastUser = getLastGoogleUser() || googleUserEmail;
     if (lastUser) setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
     updateAutosaveIndicator();
@@ -2576,6 +2633,7 @@
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = title;
+    state.sourceAdded = true;
     if (!state.bookTitle) state.bookTitle = title;
     var msg = (wasExample ? 'Imported ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
     if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
@@ -2708,6 +2766,7 @@
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
+    state.sourceAdded = true;
     var msg = (wasExample ? 'Parsed ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
     if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
     pasteStatus.textContent = msg + '.';
@@ -2720,7 +2779,6 @@
   // ---------------------------------------------------------------------
   var poemList = document.getElementById('poemList');
   var poemsCount = document.getElementById('poemsCount');
-  var exampleBanner = document.getElementById('exampleBanner');
 
   function autoGrow(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
 
@@ -3075,15 +3133,33 @@
     // Only shown in phone writing mode (see .poem-card.is-writing).
     var writerBar = document.createElement('div');
     writerBar.className = 'poem-writer-bar';
-    var writerLabel = document.createElement('span');
-    writerLabel.className = 'poem-writer-label';
-    writerLabel.textContent = 'Entry ' + entryNum;
+    // Stands in for the title row while the poem itself has focus; tap it
+    // to bring the title back and edit it.
+    var writerTitle = document.createElement('button');
+    writerTitle.type = 'button';
+    writerTitle.className = 'poem-writer-title';
+    function updateWriterTitle() {
+      writerTitle.textContent = poem.title || 'Untitled';
+      writerTitle.classList.toggle('is-placeholder', !poem.title);
+    }
+    updateWriterTitle();
+    // Without this, pressing it blurs the textarea first, which hides this
+    // very button mid-tap (see .is-body-focus) and the click never lands.
+    writerTitle.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    writerTitle.addEventListener('click', function () {
+      card.classList.remove('is-body-focus');
+      titleInput.focus();
+    });
+    titleInput.addEventListener('input', updateWriterTitle);
+    textarea.addEventListener('focus', function () { card.classList.add('is-body-focus'); });
+    textarea.addEventListener('blur', function () { card.classList.remove('is-body-focus'); });
     var doneBtn = document.createElement('button');
     doneBtn.type = 'button';
     doneBtn.className = 'btn btn-primary poem-writer-done';
     doneBtn.textContent = 'Done';
     doneBtn.addEventListener('click', finishWriting);
-    writerBar.appendChild(writerLabel);
+    writerBar.appendChild(makeFormatToolbar(textarea));
+    writerBar.appendChild(writerTitle);
     writerBar.appendChild(doneBtn);
 
     body.appendChild(writerBar);
@@ -3321,7 +3397,6 @@
     var entryCount = countEntries(state.poems);
     poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
     updateArchiveButton();
-    exampleBanner.hidden = !state.isExample;
     // The entry being written in may not have been re-rendered as a full
     // card (e.g. collapsed in compact view) -- don't leave the page locked.
     if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
@@ -3648,22 +3723,7 @@
     persist();
     renderAll();
   });
-  document.getElementById('clearExampleBtn').addEventListener('click', function () {
-    state.poems = [];
-    if (state.author === 'Emily Dickinson') state.author = '';
-    state.isExample = false;
-    persist();
-    renderAll();
-  });
-  document.getElementById('startOverBtn').addEventListener('click', async function () {
-    var ok = await confirmDialog('Clear the title, author, and all entries and start over?');
-    if (!ok) return;
-    state = exampleState();
-    persist();
-    document.getElementById('bookTitleInput').value = '';
-    document.getElementById('authorInput').value = '';
-    renderAll();
-  });
+  document.getElementById('newBookBtn').addEventListener('click', startNewBook);
 
   // ---------------------------------------------------------------------
   // UI: "My Chapbooks" library menu, plus a 7-day trash bin for deletes
@@ -3737,14 +3797,14 @@
     newBtn.className = 'chapbooks-new';
     newBtn.type = 'button';
     newBtn.textContent = '+ New book';
-    newBtn.addEventListener('click', onNewChapbookClick);
+    newBtn.addEventListener('click', startNewBook);
     chapbooksPane.appendChild(newBtn);
     chapbooksPane.appendChild(makeDivider());
 
     if (!library.length) {
       var emptyLib = document.createElement('div');
       emptyLib.className = 'chapbooks-empty';
-      emptyLib.textContent = 'No saved books yet — use “Save book” to add this one.';
+      emptyLib.textContent = 'No books yet — this one is saved here as soon as you add something to it.';
       chapbooksPane.appendChild(emptyLib);
     } else {
       library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
@@ -3771,16 +3831,15 @@
     chapbooksPane.appendChild(trashLink);
   }
 
-  async function loadChapbook(id) {
+  function loadChapbook(id) {
+    flushPendingSave();
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
-    if (hasUnsavedWork()) {
-      var ok = await confirmDialog('Switch to “' + (entry.title || 'Untitled Collection') + '”? Any unsaved changes to the current book will be lost.');
-      if (!ok) return;
-    }
     state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
+    state.chapbookId = entry.id;
     state.isExample = false;
-    persist();
+    markOpened(entry.id);
+    saveStateCache();
     renderAll();
     closeChapbooksDropdown();
   }
@@ -3793,12 +3852,12 @@
     library = library.filter(function (c) { return c.id !== id; });
     entry.deletedAt = Date.now();
     trash.push(entry);
-    if (state.chapbookId === id) { state.chapbookId = null; persist(); }
     persistLibrary();
     persistTrash();
+    // Keeping the trashed book open would just re-add it on the next edit.
+    if (state.chapbookId === id) { clearTimeout(saveTimer); saveTimer = null; openLastOpenedBook(); }
     renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
-    else setAccountStatus('Moved to trash — sign in to back up your books to the cloud.');
   }
 
   async function restoreChapbook(id) {
@@ -3806,12 +3865,14 @@
     if (!entry) return;
     trash = trash.filter(function (t) { return t.id !== id; });
     delete entry.deletedAt;
+    // Newer than the trashed copy, so a merge with another device's
+    // library keeps it restored.
+    entry.updatedAt = Date.now();
     library.push(entry);
     persistLibrary();
     persistTrash();
     renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
-    else setAccountStatus('Restored — sign in to back up your books to the cloud.');
   }
 
   async function purgeChapbookForever(id) {
@@ -3825,55 +3886,15 @@
     if (cloudAuthToken) await syncLibraryToCloud();
   }
 
-  async function onNewChapbookClick() {
-    if (hasUnsavedWork()) {
-      var ok = await confirmDialog('Start a new, blank book? Any unsaved changes to the current one will be lost.');
-      if (!ok) return;
-    }
+  // The current book is already in My Books (or empty), so there's
+  // nothing to confirm -- just switch.
+  function startNewBook() {
+    flushPendingSave();
     state = blankChapbookState();
     if (googleUserName) state.author = googleUserName;
-    persist();
+    saveStateCache();
     renderAll();
     closeChapbooksDropdown();
-  }
-
-  document.getElementById('saveChapbookBtn').addEventListener('click', async function () {
-    var title = (state.bookTitle || '').trim();
-    if (!title) {
-      title = await promptDialog('Save this book as:', 'Untitled Collection');
-      if (title === null) return;
-      title = title.trim() || 'Untitled Collection';
-    }
-    state.bookTitle = title;
-    state.isExample = false;
-    var now = Date.now();
-    var entry = state.chapbookId ? library.filter(function (c) { return c.id === state.chapbookId; })[0] : null;
-    if (!entry) {
-      state.chapbookId = makeChapbookId();
-      entry = { id: state.chapbookId, title: title, updatedAt: now, data: null };
-      library.push(entry);
-    }
-    entry.title = title;
-    entry.updatedAt = now;
-    entry.data = JSON.parse(JSON.stringify(state));
-    persistLibrary();
-    persist();
-    renderAll();
-    if (cloudAuthToken) {
-      await syncLibraryToCloud();
-    } else {
-      setAccountStatus('Saved to this browser only — not backed up.', true);
-      var wantsSignIn = await confirmDialog('Saved — but only to this browser. It won’t back up to the cloud or show up on your other devices unless you sign in with Google. Sign in now?');
-      if (wantsSignIn) promptGoogleSignIn();
-    }
-  });
-
-  function promptGoogleSignIn() {
-    var btn = document.getElementById('googleSignInBtn');
-    if (!btn) return;
-    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    btn.classList.add('signin-attention');
-    setTimeout(function () { btn.classList.remove('signin-attention'); }, 2400);
   }
 
   // ---------------------------------------------------------------------
@@ -3957,6 +3978,17 @@
   }
 
   function applyIntakeCollapsedView() {
+    // Getting entries in is the first thing a new book needs, so the
+    // intake panel leads the page -- until a source has been added or an
+    // entry exists, after which it drops below the editor, out of the way.
+    var workspace = document.querySelector('.workspace');
+    var intakePanel = document.getElementById('intakePanel');
+    var intakeBar = document.getElementById('intakeCollapsedBar');
+    var belowEditor = !!state.sourceAdded || countEntries(state.poems) > 0;
+    if (belowEditor !== (intakePanel.previousElementSibling === workspace)) {
+      if (belowEditor) workspace.after(intakePanel, intakeBar);
+      else workspace.before(intakePanel, intakeBar);
+    }
     var collapsed = !!state.intakeCollapsed;
     document.getElementById('intakePanel').hidden = collapsed;
     document.getElementById('intakeCollapsedBar').hidden = !collapsed;
@@ -4295,6 +4327,7 @@
   renderAll();
   var storedCloudAuthToken = getStoredCloudAuthToken();
   if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
+  updateSignInGate();
   waitForGoogleIdentity(25);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
