@@ -59,7 +59,7 @@
      letting --top-actions shrink) forces its own internal flex-wrap to
      kick in when space is tight, so the account/save/library controls
      stay pinned beside the wordmark instead of dropping to a whole new
-     line below the tagline. Only true narrow/mobile widths fall back to
+     line below the wordmark. Only true narrow/mobile widths fall back to
      stacking the two halves, via the media query below. */
   .masthead { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
   .masthead > div:first-child { flex-shrink: 0; }
@@ -72,7 +72,7 @@
     font-family: "BioRhyme Expanded", "Work Sans", ui-sans-serif, system-ui, sans-serif;
     font-weight: 800;
     letter-spacing: 0.03em;
-    font-size: clamp(30px, 5vw, 58px);
+    font-size: clamp(26px, 4vw, 46px);
     margin: 0 0 8px;
     color: var(--accent);
     text-wrap: balance;
@@ -106,13 +106,10 @@
     100% { transform: translate(0, 0) rotate(0deg); }
   }
 
-  .tagline { color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height: 1.5; }
 
-  /* top-actions-main (My Books / New book) never wraps or
-     shrinks -- it always stays on the wordmark's own row. account-area
-     (sign-in/status, unpredictable length) is the only part allowed to
-     drop to its own line when space runs out. */
-  .top-actions { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+  /* My Books / New book on top, sign-in status (or the sign-in button)
+     right-aligned beneath them. */
+  .top-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; min-width: 0; }
   .top-actions-main { display: flex; gap: 10px 14px; align-items: center; flex-wrap: nowrap; flex-shrink: 0; }
   .account-area { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .account-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -167,14 +164,6 @@
   .signin-gate-card h1.appname { white-space: nowrap; font-size: clamp(34px, 11vw, 58px); }
   .signin-gate-card p { margin: 0 0 6px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
   #gateSignInBtn { min-height: 44px; }
-  .autosave-indicator {
-    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-    font-size: 11.5px; font-weight: 600; color: var(--ink-faint); margin-top: 2px;
-    padding: 3px 10px 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line);
-  }
-  .autosave-indicator::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ink-faint); }
-  .autosave-indicator.is-synced { color: var(--swatch-green); border-color: var(--swatch-green); background: color-mix(in srgb, var(--swatch-green) 12%, var(--surface-2)); }
-  .autosave-indicator.is-synced::before { background: var(--swatch-green); }
   #bookTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
@@ -661,7 +650,6 @@
   <div class="masthead">
     <div>
       <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
-      <div class="tagline">Bring in entries from a neatly formatted Google Doc — Heading for the title, Normal text for the entry — and export a paginated, print-ready PDF with one entry per page.</div>
     </div>
     <div class="top-actions">
       <div class="top-actions-main">
@@ -686,7 +674,6 @@
   <div class="chapbook-header">
     <input type="text" id="bookTitleInput" placeholder="Book title">
     <input type="text" id="authorInput" placeholder="Author name">
-    <div class="autosave-indicator" id="autosaveIndicator"></div>
   </div>
 
   <div class="panel" id="intakePanel">
@@ -1158,20 +1145,6 @@
     cloudAutosaveTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
   }
 
-  // Always-visible, so it's never ambiguous whether edits are only
-  // local or also reaching the cloud.
-  function updateAutosaveIndicator() {
-    var el = document.getElementById('autosaveIndicator');
-    if (!el) return;
-    if (cloudAuthToken) {
-      el.textContent = 'Saving automatically to your Google account.';
-      el.classList.add('is-synced');
-    } else {
-      el.textContent = 'Not syncing — sign in again to save your latest changes to your account.';
-      el.classList.remove('is-synced');
-    }
-  }
-
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // A named section break -- the middle tier of the book > section >
@@ -1257,6 +1230,8 @@
     if (!el) return;
     if (kind === true) kind = 'error';
     el.textContent = msg || '';
+    // The badge just says "Signed in"; which account is a hover away.
+    el.title = googleUserEmail || getLastGoogleUser() || '';
     el.hidden = !msg;
     el.classList.toggle('status-badge', !!msg);
     el.classList.toggle('error', kind === 'error');
@@ -1311,8 +1286,7 @@
       persist();
       syncSidebarFromState();
     }
-    setAccountStatus('Signed in as ' + googleUserEmail + ' — checking the cloud…');
-    updateAutosaveIndicator();
+    setAccountStatus('Signed in', 'synced');
     await pullLibraryFromCloud();
   }
 
@@ -1330,7 +1304,6 @@
     if (btn) btn.style.display = '';
     document.getElementById('signOutBtn').hidden = true;
     setAccountStatus('');
-    updateAutosaveIndicator();
     try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
   }
   document.getElementById('signOutBtn').addEventListener('click', signOut);
@@ -1340,7 +1313,7 @@
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
-      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud unavailable (' + res.status + ').', 'error'); return; }
+      if (!res.ok) { setAccountStatus('Signed in — couldn’t reach the cloud', 'error'); return; }
       var data = await res.json();
       if (data.session) {
         cloudAuthToken = data.session;
@@ -1369,9 +1342,9 @@
       }
       openLastOpenedBook();
       if (merged.changed) await syncLibraryToCloud();
-      else setAccountStatus('Signed in as ' + googleUserEmail + ' — synced.', 'synced');
+      else setAccountStatus('Signed in', 'synced');
     } catch (e) {
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — couldn’t reach the cloud.', 'error');
+      setAccountStatus('Signed in — couldn’t reach the cloud', 'error');
     }
   }
 
@@ -1427,7 +1400,6 @@
     // account's books in -- the local copy could be empty or stale (a new
     // device, a slow network), and a PUT replaces the cloud copy wholesale.
     if (!cloudAuthToken || !signedInThisLoad) return;
-    setAccountStatus('Signed in as ' + googleUserEmail + ' — saving to the cloud…');
     try {
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
@@ -1435,10 +1407,10 @@
         body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash, lastOpened: getLastOpened() } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
-      if (!res.ok) { setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed (' + res.status + ').', 'error'); return; }
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — saved to the cloud.', 'synced');
+      if (!res.ok) { setAccountStatus('Signed in — couldn’t save to the cloud', 'error'); return; }
+      setAccountStatus('Signed in', 'synced');
     } catch (e) {
-      setAccountStatus('Signed in as ' + googleUserEmail + ' — cloud save failed.', 'error');
+      setAccountStatus('Signed in — couldn’t save to the cloud', 'error');
     }
   }
 
@@ -1488,7 +1460,7 @@
       var skipped = (notification.isNotDisplayed && notification.isNotDisplayed()) ||
         (notification.isSkippedMoment && notification.isSkippedMoment());
       if (skipped && lastUser) {
-        setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
+        setAccountStatus('Signed out — sign in again to keep saving', 'needs-reauth');
       }
       silentSignInRetryTimer = setTimeout(retryGoogleSilentSignIn, 5 * 60 * 1000);
     });
@@ -1508,8 +1480,7 @@
     clearTimeout(cloudAuthExpiryTimer);
     updateSignInGate();
     var lastUser = getLastGoogleUser() || googleUserEmail;
-    if (lastUser) setAccountStatus('Was syncing as ' + lastUser + ' — sign in again above to resume.', 'needs-reauth');
-    updateAutosaveIndicator();
+    if (lastUser) setAccountStatus('Signed out — sign in again to keep saving', 'needs-reauth');
     retryGoogleSilentSignIn();
   }
 
@@ -4019,7 +3990,6 @@
     renderPoems();
     updateStats();
     applyIntakeCollapsedView();
-    updateAutosaveIndicator();
   }
 
   // ---------------------------------------------------------------------
