@@ -911,7 +911,7 @@
 
     <div class="sidebar">
       <div class="sidebar-fold-row" id="sidebarFoldRow" hidden>
-        <button class="btn btn-sm" id="sidebarFoldBtn" type="button" title="Tuck these away for more writing room">Hide »</button>
+        <button class="btn btn-sm" id="sidebarFoldBtn" type="button" title="Tuck these away for more writing room">Hide tools</button>
       </div>
       <div class="sidebar-scroll">
         <div class="panel formatting-panel" id="formattingPanel">
@@ -1064,12 +1064,9 @@
     </div>
 
     <!-- Stands in for the sidebar while an entry is open (desktop), so the
-         editor gets the width; each tab brings the sidebar back at that
-         section. See updateSideRail. -->
+         editor gets the width. See updateSideRail. -->
     <nav class="side-rail" id="sideRail" aria-label="Book tools">
-      <button type="button" data-open="formattingPanel">Formatting</button>
-      <button type="button" data-open="exportPanel">Export</button>
-      <button type="button" data-open="previewPanel">Preview</button>
+      <button type="button" id="showToolsBtn">Show tools</button>
     </nav>
   </div>
 
@@ -3471,9 +3468,9 @@
     return row;
   }
 
-  // While any entry is open, the sidebar folds into a rail of tabs
-  // (desktop only -- see .rail-mode) to give the editor the width. A tab
-  // brings the sidebar back until it's hidden again or the next entry is
+  // While any entry is open, the sidebar folds into a slim "Show tools"
+  // tab (desktop only -- see .rail-mode) to give the editor the width.
+  // That brings the sidebar back until "Hide tools" or the next entry is
   // opened; with no entry open, the sidebar just shows.
   var sidebarPinnedOpen = false;
   var entryWasOpen = false;
@@ -3484,16 +3481,9 @@
     document.querySelector('.workspace').classList.toggle('rail-mode', open && !sidebarPinnedOpen);
     document.getElementById('sidebarFoldRow').hidden = !(open && sidebarPinnedOpen);
   }
-  document.querySelectorAll('#sideRail button').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      sidebarPinnedOpen = true;
-      updateSideRail();
-      var target = document.getElementById(btn.dataset.open);
-      if (target.id === 'formattingPanel' && document.getElementById('formattingBody').hidden) {
-        document.getElementById('formattingToggle').click();
-      }
-      target.scrollIntoView({ block: 'nearest' });
-    });
+  document.getElementById('showToolsBtn').addEventListener('click', function () {
+    sidebarPinnedOpen = true;
+    updateSideRail();
   });
   document.getElementById('sidebarFoldBtn').addEventListener('click', function () {
     sidebarPinnedOpen = false;
