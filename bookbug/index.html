@@ -145,6 +145,19 @@
     content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     background: var(--ink-faint);
   }
+  /* Which account: an instant tooltip on hover/focus (or tap, on touch),
+     since a native title tooltip is slow and never shows on phones. */
+  .status-badge[data-tip] { position: relative; cursor: default; }
+  .status-badge[data-tip]::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+    white-space: nowrap; padding: 5px 9px; border-radius: 6px;
+    background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 500;
+    box-shadow: 0 4px 12px var(--shadow); opacity: 0; transform: translateY(-2px);
+    pointer-events: none; transition: opacity .12s ease, transform .12s ease;
+  }
+  .status-badge[data-tip]:hover::after, .status-badge[data-tip]:focus-visible::after,
+  .status-badge[data-tip].show-tip::after { opacity: 1; transform: none; }
+  @media (max-width: 700px) { .status-badge[data-tip]::after { right: auto; left: 0; } }
   .status-badge.is-synced { color: var(--swatch-green); border-color: var(--swatch-green); background: color-mix(in srgb, var(--swatch-green) 12%, var(--surface-2)); }
   .status-badge.is-synced::before { background: var(--swatch-green); }
   .status-badge.error,
@@ -1575,13 +1588,36 @@
     if (kind === true) kind = 'error';
     el.textContent = msg || '';
     // The badge just says "Signed in"; which account is a hover away.
-    el.title = googleUserEmail || getLastGoogleUser() || '';
+    var email = googleUserEmail && googleUserEmail !== 'your account' ? googleUserEmail : getLastGoogleUser();
+    if (msg && email) {
+      var tip = (kind === 'needs-reauth' ? 'Last signed in as ' : 'Signed in as ') + email;
+      el.dataset.tip = tip;
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', msg + '. ' + tip);
+    } else {
+      delete el.dataset.tip;
+      el.removeAttribute('tabindex');
+      el.removeAttribute('aria-label');
+    }
+    el.classList.remove('show-tip');
     el.hidden = !msg;
     el.classList.toggle('status-badge', !!msg);
     el.classList.toggle('error', kind === 'error');
     el.classList.toggle('is-synced', kind === 'synced');
     el.classList.toggle('needs-reauth', kind === 'needs-reauth');
   }
+
+  // Touch screens have no hover, so a tap toggles the account tooltip.
+  (function () {
+    var el = document.getElementById('accountStatus');
+    if (!el) return;
+    el.addEventListener('click', function (e) {
+      if (!el.dataset.tip) return;
+      e.stopPropagation();
+      el.classList.toggle('show-tip');
+    });
+    document.addEventListener('click', function () { el.classList.remove('show-tip'); });
+  })();
 
   function decodeJwtPayload(token) {
     try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); }
@@ -3193,8 +3229,31 @@
         driveAccessToken = resp.access_token;
         resolve(resp.access_token);
       };
-      client.requestAccessToken({ prompt: forceConsent ? 'consent' : '' });
+      // Pre-selects the signed-in account in Google's chooser; the
+      // account check in openDrivePicker is what actually enforces it.
+      client.requestAccessToken({ prompt: forceConsent ? 'consent' : '', login_hint: signedInEmail() });
     });
+  }
+
+  function signedInEmail() {
+    var email = googleUserEmail && googleUserEmail !== 'your account' ? googleUserEmail : getLastGoogleUser();
+    return (email || '').trim();
+  }
+
+  // Imports may only come from the Google account BookBug is signed in
+  // with -- Google's popup lets you pick any account you're logged into,
+  // so ask Drive whose token this is before opening the picker.
+  async function driveTokenEmail(token) {
+    var res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('about_' + res.status);
+    var data = await res.json();
+    return ((data.user && data.user.emailAddress) || '').trim();
+  }
+  function dropDriveToken(token) {
+    driveAccessToken = null;
+    try { google.accounts.oauth2.revoke(token, function () {}); } catch (e) {}
   }
 
   function loadDrivePicker() {
@@ -3211,9 +3270,18 @@
       if (pane) pane.innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
       return;
     }
+    var accountEmail = signedInEmail();
+    if (!accountEmail) { setDriveStatus('Sign in with Google first — imports come from the account you’re signed in with.', true); return; }
     setDriveStatus('Connecting to Google Drive…');
     try {
       var token = await requestDriveAccessToken();
+      var tokenEmail = await driveTokenEmail(token);
+      if (tokenEmail.toLowerCase() !== accountEmail.toLowerCase()) {
+        dropDriveToken(token);
+        setDriveStatus('That was ' + (tokenEmail || 'a different Google account') + '. You can only import from ' +
+          accountEmail + ', the account you’re signed in with — try again and choose it.', true);
+        return;
+      }
       var ok = await loadDrivePicker();
       if (!ok) { setDriveStatus('Couldn’t load the Google Drive picker.', true); return; }
       var view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/vnd.google-apps.document');
