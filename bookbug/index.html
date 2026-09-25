@@ -426,6 +426,22 @@
   }
   .ed-image:hover .ed-image-remove, .ed-image-remove:focus-visible { opacity: 1; }
   @media (hover: none) { .ed-image-remove { opacity: 1; } }
+  .poem-text .ed-image { flex-direction: column; align-items: center; gap: 6px; }
+  .ed-image-tools {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px; line-height: 1; text-indent: 0; opacity: 0; transition: opacity .12s ease; user-select: none;
+  }
+  .ed-image:hover .ed-image-tools, .ed-image:focus-within .ed-image-tools { opacity: 1; }
+  @media (hover: none) { .ed-image-tools { opacity: 1; } }
+  .ed-image-place { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; background: var(--surface); }
+  .ed-image-place button, .ed-image-add {
+    appearance: none; border: none; background: none; color: var(--ink-soft); cursor: pointer;
+    font: inherit; font-weight: 600; padding: 6px 9px;
+  }
+  .ed-image-place button + button { border-left: 1px solid var(--line-strong); }
+  .ed-image-place button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .ed-image-place button:hover:not([aria-pressed="true"]), .ed-image-add:hover { color: var(--accent); }
+  .ed-image-add { border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); }
   .format-toolbar button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .poem-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
@@ -2358,12 +2374,24 @@
   // An image sits in an entry's text as its own "[image N]" line,
   // pointing at state.images['imgN'] (a downscaled JPEG data URL plus
   // its pixel size). A token with no matching image is just text.
-  var IMAGE_LINE_RE = /^\s*\[image (\d+)\]\s*$/;
+  // An optional placement rides in the token -- "[image 3 middle]" --
+  // saying where the image sits on its page: "top" (the default, just
+  // flowing with the text), "middle", or "bottom".
+  var IMAGE_LINE_RE = /^\s*\[image (\d+)(?: (top|middle|bottom))?\]\s*$/;
   function imageKeyForLine(line, st) {
     var m = IMAGE_LINE_RE.exec(line || '');
     if (!m) return null;
     var key = 'img' + m[1];
     return st.images && st.images[key] ? key : null;
+  }
+  function imagePlaceForLine(line) {
+    var m = IMAGE_LINE_RE.exec(line || '');
+    return (m && m[2]) || 'top';
+  }
+  function imageTokenWithPlace(token, place) {
+    var m = IMAGE_LINE_RE.exec(token || '');
+    if (!m) return token;
+    return '[image ' + m[1] + (place && place !== 'top' ? ' ' + place : '') + ']';
   }
 
   function ellipsize(text, maxWidthPt, sizePt, fontFamily, weight) {
@@ -2420,7 +2448,7 @@
         var w = Math.min(contentWidthPt, im.w * 72 / 150);
         var h = w * im.h / im.w;
         if (h > maxH) { h = maxH; w = h * im.w / im.h; }
-        renderLines.push({ image: imgKey, w: w, h: h, rows: Math.min(firstCap, Math.ceil((h + lineHeight * 0.5) / lineHeight)) });
+        renderLines.push({ image: imgKey, place: imagePlaceForLine(line), w: w, h: h, rows: Math.min(firstCap, Math.ceil((h + lineHeight * 0.5) / lineHeight)) });
         return;
       }
       var wrapped = wrapFormatted(line, contentWidthPt, sizePt, state.bodyFontChoice, hangPt);
@@ -2440,6 +2468,31 @@
       cur.push(rl); used += rows;
     });
     if (cur.length || !pages.length) pages.push(cur);
+
+    // A "middle" or "bottom" image gets blank space before it on its
+    // page: middle centers the image on the page (title included), bottom
+    // pushes it -- and any text after it on that page -- down to the
+    // bottom margin. Text before it still starts at the top. Only the
+    // first placed image on a page counts; if the text around it already
+    // fills the page, it simply stays in the flow.
+    pages.forEach(function (pg, pageIdx) {
+      var cap = pageIdx === 0 ? firstCap : laterCap;
+      var idx = -1;
+      for (var i = 0; i < pg.length; i++) if (pg[i].image && pg[i].place !== 'top') { idx = i; break; }
+      if (idx < 0) return;
+      var before = 0, used = 0;
+      pg.forEach(function (rl, i) { var r = rl.rows || 1; used += r; if (i < idx) before += r; });
+      var img = pg[idx], spacer;
+      if (img.place === 'bottom') {
+        spacer = cap - used;
+      } else {
+        var offsetRows = pageIdx === 0 ? titleH / lineHeight : 0;
+        var pageRows = contentHeightPt / lineHeight;
+        spacer = Math.min((pageRows - img.rows) / 2 - offsetRows - before, cap - used);
+      }
+      if (spacer > 0.05) pg.splice(idx, 0, { blank: true, spacer: true, rows: spacer });
+    });
+
     return {
       sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
       titleLines: titleLines, titleH: titleH, pages: pages,
@@ -3577,6 +3630,7 @@
       rm.setAttribute('aria-label', 'Remove image');
       div.appendChild(img);
       div.appendChild(rm);
+      div.appendChild(makeImageTools(imagePlaceForLine(line)));
       return div;
     }
     parseInlineRuns(line).forEach(function (run) {
@@ -3590,6 +3644,34 @@
     if (!div.firstChild) div.appendChild(document.createElement('br'));
     return div;
   }
+  // Beside each image: where it sits on its page, and a way to add a
+  // line of text above or below it (an image is an uneditable block, so
+  // there's otherwise no caret position above one that starts an entry).
+  function makeImageTools(place) {
+    var tools = document.createElement('div');
+    tools.className = 'ed-image-tools';
+    tools.innerHTML =
+      '<div class="ed-image-place" role="group" aria-label="Position on the page">' +
+      '<button type="button" data-place="top">Top</button>' +
+      '<button type="button" data-place="middle">Middle</button>' +
+      '<button type="button" data-place="bottom">Bottom</button></div>' +
+      '<button type="button" class="ed-image-add" data-add="above">+ Text above</button>' +
+      '<button type="button" class="ed-image-add" data-add="below">+ Text below</button>';
+    tools.querySelectorAll('[data-place]').forEach(function (b) {
+      b.title = 'Put this image at the ' + b.dataset.place + ' of its page';
+      b.setAttribute('aria-pressed', b.dataset.place === place ? 'true' : 'false');
+    });
+    return tools;
+  }
+  function placeCaretIn(el) {
+    var r = document.createRange();
+    r.setStart(el, 0);
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
   function renderEditor(ed, lines) {
     ed.innerHTML = '';
     (lines && lines.length ? lines : ['']).forEach(function (l) { ed.appendChild(makeEditorLine(l)); });
@@ -4223,9 +4305,30 @@
       if (text) document.execCommand('insertText', false, text.replace(/\r\n?/g, '\n'));
     });
     editor.addEventListener('mousedown', function (e) {
-      if (e.target.closest('.ed-image-remove')) e.preventDefault();
+      if (e.target.closest('.ed-image-remove, .ed-image-tools')) e.preventDefault();
     });
     editor.addEventListener('click', function (e) {
+      var placeBtn = e.target.closest('.ed-image-tools [data-place]');
+      if (placeBtn) {
+        var block = placeBtn.closest('.ed-image');
+        block.dataset.token = imageTokenWithPlace(block.dataset.token, placeBtn.dataset.place);
+        block.querySelectorAll('[data-place]').forEach(function (b) {
+          b.setAttribute('aria-pressed', b === placeBtn ? 'true' : 'false');
+        });
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+      var addBtn = e.target.closest('.ed-image-add');
+      if (addBtn) {
+        var imgBlock = addBtn.closest('.ed-image');
+        var line = document.createElement('div');
+        line.appendChild(document.createElement('br'));
+        imgBlock.parentNode.insertBefore(line, addBtn.dataset.add === 'above' ? imgBlock : imgBlock.nextSibling);
+        editor.focus();
+        placeCaretIn(line);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
       var rm = e.target.closest('.ed-image-remove');
       if (!rm) return;
       rm.closest('.ed-image').remove();
@@ -4991,6 +5094,10 @@
       }
       html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
       (layout.pages[pageIndex] || []).forEach(function (rl) {
+        if (rl.spacer) {
+          html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px;"></div>';
+          return;
+        }
         if (rl.image) {
           html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px; display:flex; align-items:center; justify-content:center;">' +
             '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
