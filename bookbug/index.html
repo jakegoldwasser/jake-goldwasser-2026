@@ -603,8 +603,12 @@
     background: var(--accent-soft); padding: 6px 10px; margin-bottom: 4px;
   }
   .section-row.dragging { opacity: 0.4; }
-  #sectionsViewToggle[hidden], #poemsViewToggle[hidden] { display: none; }
-  #sectionsViewToggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .section-row { cursor: grab; }
+  .drop-before { box-shadow: 0 -5px 0 -1px var(--accent); }
+  .drop-after { box-shadow: 0 5px 0 -1px var(--accent); }
+  /* Sections | Titles | Entries -- the highlighted one is the view you're in. */
+  .view-seg button { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
+  .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
   .section-block-row.drop-target { box-shadow: 0 0 0 3px var(--accent); }
@@ -615,6 +619,13 @@
   }
   .section-move-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .section-move-btn:disabled { opacity: 0.35; cursor: default; }
+  .section-expand-btn {
+    flex: 0 0 auto; width: 22px; height: 22px; border: none; background: none; color: var(--ink);
+    cursor: pointer; font-size: 13px; line-height: 1; padding: 0; border-radius: 4px;
+  }
+  .section-expand-btn:hover { background: var(--surface); }
+  .section-block-entries { margin: 2px 0 10px 18px; display: flex; flex-direction: column; gap: 4px; }
+  .section-block-empty { font-size: 12.5px; color: var(--ink-faint); padding: 4px 8px; }
   .section-lead-row {
     border: 1px dashed var(--line-strong); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px;
     font-size: 12.5px; color: var(--ink-soft);
@@ -1080,8 +1091,11 @@
           </div>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
-            <button class="btn btn-sm" id="sectionsViewToggle" type="button" aria-pressed="false" title="Show only section headings, to reorder whole sections" hidden>Sections only</button>
-            <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>
+            <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
+              <button type="button" data-view="sections" title="Just the section headings, to rename or reorder whole sections">Sections</button>
+              <button type="button" data-view="titles" title="One row per entry; click a title to open it">Titles</button>
+              <button type="button" data-view="entries" title="Every entry open in full">Entries</button>
+            </div>
           </div>
         </div>
         <div id="poemGapTop"></div>
@@ -4168,6 +4182,41 @@
   }
 
   var dragFromIndex = null;
+
+  // Drag-to-reorder for entries and headings: a line shows whether the
+  // dragged item will land above or below the row under the pointer,
+  // and it lands exactly there (it used to overshoot by one when
+  // dragged downward).
+  function clearDropMarks() {
+    document.querySelectorAll('.drop-before, .drop-after').forEach(function (x) { x.classList.remove('drop-before', 'drop-after'); });
+  }
+  function reorderDragOver(e, el) {
+    if (dragFromIndex === null) return;
+    e.preventDefault();
+    var r = el.getBoundingClientRect();
+    var after = e.clientY > r.top + r.height / 2;
+    if (el.classList.contains(after ? 'drop-after' : 'drop-before')) return;
+    clearDropMarks();
+    el.classList.add(after ? 'drop-after' : 'drop-before');
+  }
+  function reorderDrop(el, index) {
+    var after = el.classList.contains('drop-after');
+    clearDropMarks();
+    if (dragFromIndex === null) return;
+    var from = dragFromIndex, to = index + (after ? 1 : 0);
+    dragFromIndex = null;
+    if (to > from) to--;
+    if (to === from) return;
+    moveItem(from, to);
+  }
+  function moveItem(from, to) {
+    var moved = state.poems.splice(from, 1)[0];
+    state.poems.splice(to, 0, moved);
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+  document.addEventListener('dragend', clearDropMarks);
   // Set right before renderAll() when a new section was just inserted,
   // so its title input can auto-focus once the list re-renders -- the
   // insert point (a gap button) isn't the input itself, so this can't
@@ -4435,8 +4484,8 @@
     });
     card.addEventListener('dragend', function () { card.classList.remove('dragging'); dragFromIndex = null; });
     card.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      if (hasDraggedFiles(e)) card.classList.add('drop-target');
+      if (hasDraggedFiles(e)) { e.preventDefault(); card.classList.add('drop-target'); return; }
+      reorderDragOver(e, card);
     });
     card.addEventListener('dragleave', function (e) {
       if (!card.contains(e.relatedTarget)) card.classList.remove('drop-target');
@@ -4450,11 +4499,7 @@
         insertImagesIntoEditor(editor, files);
         return;
       }
-      if (dragFromIndex === null || dragFromIndex === index) return;
-      var moved = state.poems.splice(dragFromIndex, 1)[0];
-      state.poems.splice(index, 0, moved);
-      persist();
-      renderAll();
+      reorderDrop(card, index);
     });
 
     setTimeout(function () { autoGrow(titleInput); }, 0);
@@ -4501,7 +4546,10 @@
       e.dataTransfer.effectAllowed = 'move';
     });
     row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
-    row.addEventListener('dragover', function (e) { e.preventDefault(); });
+    row.addEventListener('dragover', function (e) {
+      if (hasDraggedFiles(e)) { e.preventDefault(); return; }
+      reorderDragOver(e, row);
+    });
     row.addEventListener('drop', async function (e) {
       e.preventDefault();
       // An image dropped on a closed entry goes at the end of its text.
@@ -4515,11 +4563,7 @@
         renderAll();
         return;
       }
-      if (dragFromIndex === null || dragFromIndex === index) return;
-      var moved = state.poems.splice(dragFromIndex, 1)[0];
-      state.poems.splice(index, 0, moved);
-      persist();
-      renderAll();
+      reorderDrop(row, index);
     });
 
     // An opened entry replaces its title row rather than appearing
@@ -4583,18 +4627,35 @@
   }
 
   var poemsViewMode = 'compact';
+  var sectionsOnly = false;
   var expandedCompactIds = {};
-  var poemsViewToggle = document.getElementById('poemsViewToggle');
-  function updatePoemsViewToggleLabel() {
-    poemsViewToggle.textContent = poemsViewMode === 'compact' ? 'Reveal All Entries' : 'Titles only';
+  // The Sections | Titles | Entries switch above the list. Titles is
+  // poemsViewMode 'compact', Entries is 'full'; Sections is sectionsOnly
+  // (below), available once the book has at least one section.
+  var entriesViewSeg = document.getElementById('entriesViewSeg');
+  function currentEntriesView() {
+    return sectionsOnly ? 'sections' : (poemsViewMode === 'compact' ? 'titles' : 'entries');
   }
-  updatePoemsViewToggleLabel();
-  poemsViewToggle.addEventListener('click', function () {
-    poemsViewMode = poemsViewMode === 'full' ? 'compact' : 'full';
+  function updateEntriesViewSeg(hasSections) {
+    var view = currentEntriesView();
+    entriesViewSeg.querySelectorAll('button').forEach(function (b) {
+      var on = b.dataset.view === view;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (b.dataset.view === 'sections') {
+        b.disabled = !hasSections;
+        b.title = hasSections ? 'Just the section headings, to rename or reorder whole sections' : 'Add a section to use this view';
+      }
+    });
+  }
+  entriesViewSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-view]');
+    if (!b || b.disabled || b.dataset.view === currentEntriesView()) return;
+    sectionsOnly = b.dataset.view === 'sections';
+    if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' ? 'compact' : 'full';
     // "Titles only" means titles only -- don't reopen whatever entry was
     // open before "Reveal All".
-    if (poemsViewMode === 'compact') expandedCompactIds = {};
-    updatePoemsViewToggleLabel();
+    if (b.dataset.view === 'titles') expandedCompactIds = {};
     renderPoems();
   });
 
@@ -4648,6 +4709,21 @@
     row.appendChild(handle);
     row.appendChild(label);
     row.appendChild(titleInput);
+    // One step at a time: up pulls the entry above into this section,
+    // down hands this section's first entry to the one before it.
+    [['-1', '↑', 'Move this heading up one place (the entry above joins this section)'],
+     ['1', '↓', 'Move this heading down one place (its first entry joins the section before)']].forEach(function (d) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'section-move-btn';
+      btn.textContent = d[1];
+      btn.title = d[2];
+      btn.setAttribute('aria-label', d[2]);
+      var to = index + Number(d[0]);
+      btn.disabled = to < 0 || to >= state.poems.length;
+      btn.addEventListener('click', function () { moveItem(index, to); });
+      row.appendChild(btn);
+    });
     row.appendChild(makeDotsBtn(index));
 
     row.addEventListener('dragstart', function (e) {
@@ -4656,14 +4732,10 @@
       e.dataTransfer.effectAllowed = 'move';
     });
     row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
-    row.addEventListener('dragover', function (e) { e.preventDefault(); });
+    row.addEventListener('dragover', function (e) { reorderDragOver(e, row); });
     row.addEventListener('drop', function (e) {
       e.preventDefault();
-      if (dragFromIndex === null || dragFromIndex === index) return;
-      var moved = state.poems.splice(dragFromIndex, 1)[0];
-      state.poems.splice(index, 0, moved);
-      persist();
-      renderAll();
+      reorderDrop(row, index);
     });
 
     if (pendingFocusId === section.id) {
@@ -4681,13 +4753,9 @@
   // normal views, dragging a heading still moves just the heading.)
   // Entries before the first heading belong to no section and stay put.
   // ---------------------------------------------------------------------
-  var sectionsOnly = false;
-  var sectionsViewToggle = document.getElementById('sectionsViewToggle');
   var dragBlockFrom = null;
-  sectionsViewToggle.addEventListener('click', function () {
-    sectionsOnly = !sectionsOnly;
-    renderPoems();
-  });
+  // Sections whose entry titles are revealed beneath them (▸ / ▾).
+  var expandedSectionIds = {};
 
   function splitSectionBlocks() {
     var lead = [], blocks = [];
@@ -4712,9 +4780,12 @@
 
   function renderSectionsOnly() {
     var parts = splitSectionBlocks();
+    var plan = planBooklet(state);
+    var entryNumAt = {}, num = 0;
+    state.poems.forEach(function (p, i) { if (!isSection(p)) entryNumAt[i] = ++num; });
     var hint = document.createElement('p');
     hint.className = 'sections-only-hint';
-    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries.';
+    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries. ▸ shows what’s in it.';
     poemList.appendChild(hint);
     if (parts.lead.length) {
       var leadRow = document.createElement('div');
@@ -4729,7 +4800,10 @@
       var row = document.createElement('div');
       row.className = 'section-row section-block-row';
       row.draggable = true;
+      var open = !!expandedSectionIds[section.id];
       row.innerHTML = '<div class="poem-handle"><div class="poem-grip">⋮⋮</div></div>' +
+        '<button class="section-expand-btn" type="button" aria-expanded="' + open + '"' +
+        ' title="' + (open ? 'Hide' : 'Show') + ' this section’s entries">' + (open ? '▾' : '▸') + '</button>' +
         '<div class="section-row-label">Section</div>' +
         '<div class="section-block-count"></div>' +
         '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move section up">↑</button>' +
@@ -4753,6 +4827,11 @@
       title.addEventListener('blur', function () { row.draggable = true; });
       row.insertBefore(title, row.querySelector('.section-block-count'));
       row.querySelector('.section-block-count').textContent = n + (n === 1 ? ' entry' : ' entries');
+      row.querySelector('.section-expand-btn').addEventListener('click', function () {
+        if (open) delete expandedSectionIds[section.id];
+        else expandedSectionIds[section.id] = true;
+        renderPoems();
+      });
       row.querySelectorAll('.section-move-btn').forEach(function (btn) {
         var to = k + Number(btn.dataset.dir);
         btn.disabled = to < 0 || to >= parts.blocks.length;
@@ -4781,6 +4860,24 @@
         moveSectionBlock(from, k);
       });
       poemList.appendChild(row);
+      // Revealed entries behave as in the Titles view: click a title to
+      // open that entry in full, drag to reorder.
+      if (open) {
+        var wrap = document.createElement('div');
+        wrap.className = 'section-block-entries';
+        var start = state.poems.indexOf(section);
+        block.slice(1).forEach(function (poem, j) {
+          var idx = start + 1 + j;
+          wrap.appendChild(makeCompactRow(poem, idx, plan, entryNumAt[idx]));
+        });
+        if (block.length === 1) {
+          var none = document.createElement('div');
+          none.className = 'section-block-empty';
+          none.textContent = 'No entries in this section yet.';
+          wrap.appendChild(none);
+        }
+        poemList.appendChild(wrap);
+      }
     });
   }
 
@@ -4788,15 +4885,13 @@
     poemList.innerHTML = '';
     var hasSections = state.poems.some(isSection);
     if (!hasSections) sectionsOnly = false;
-    sectionsViewToggle.hidden = !hasSections;
-    sectionsViewToggle.setAttribute('aria-pressed', sectionsOnly ? 'true' : 'false');
-    poemsViewToggle.hidden = sectionsOnly;
+    updateEntriesViewSeg(hasSections);
     if (sectionsOnly) {
       renderSectionsOnly();
       var total = countEntries(state.poems);
       poemsCount.textContent = total + (total === 1 ? ' entry' : ' entries');
       updateArchiveButton();
-      if (writingPoemId) exitWriting();
+      if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
       return;
     }
     poemList.appendChild(makeGap(0));
