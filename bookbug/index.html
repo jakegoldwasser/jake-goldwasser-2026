@@ -188,6 +188,16 @@
   .signin-gate-card p { margin: 0 0 6px; color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
   #gateSignInBtn { min-height: 44px; }
   .signin-gate-card p.gate-legal { font-size: 13px; margin: 0; }
+  /* Google's Drive Picker positions its dialog from the top of the
+     document, so on a scrolled page it opened partly off-screen above
+     the viewport. Pin it (and its dimmed backdrop) to the viewport and
+     center it instead; shrink it to fit on smaller windows. */
+  .picker-dialog-bg { position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important; }
+  .picker-dialog {
+    position: fixed !important; top: 50% !important; left: 50% !important;
+    transform: translate(-50%, -50%); max-width: calc(100vw - 24px); max-height: calc(100vh - 24px);
+  }
+  .picker-dialog .picker-dialog-content, .picker-dialog iframe { max-width: calc(100vw - 24px) !important; max-height: calc(100vh - 24px) !important; }
   .gate-privacy { font-size: 13px; color: var(--ink-soft); text-underline-offset: 2px; }
   .loading-dots { display: flex; gap: 7px; }
   .loading-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); opacity: .3; }
@@ -3416,6 +3426,8 @@
         // "appNotAuthorizedToFile" even though Picker showed it fine.
         .setAppId(GOOGLE_CLIENT_ID.split('-')[0])
         .setCallback(onDrivePickerResult)
+        // Google's default is 1051×650; keep it inside smaller windows.
+        .setSize(Math.min(1051, window.innerWidth - 40), Math.min(650, window.innerHeight - 40))
         .build();
       picker.setVisible(true);
       setDriveStatus('');
