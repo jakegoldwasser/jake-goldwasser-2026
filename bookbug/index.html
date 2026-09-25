@@ -3,6 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // iOS Safari zooms the whole page in whenever a text field under 16px
+  // is focused (e.g. the editor at 70-80%), shoving text off screen.
+  // maximum-scale=1 stops that auto-zoom; iOS still honors pinch-zoom
+  // regardless, so it's only applied there (on Android it would block
+  // pinch-zoom outright).
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1');
+  }
+</script>
 <title>BookBug — Jake Goldwasser</title>
 <link rel="icon" type="image/png" sizes="96x96" href="../favicon-96.png">
 <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
@@ -176,6 +186,7 @@
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
     padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
+    resize: none; overflow: hidden; display: block; line-height: 1.2;
   }
   /* The rules under the book title and author only show on hover (and
      while typing, which is the only cue a touch screen gets). */
@@ -358,16 +369,20 @@
   .format-btn-bold { font-weight: 700; }
   .format-btn-italic { font-style: italic; }
   .format-btn-underline { text-decoration: underline; }
-  input.poem-title {
+  /* A one-row textarea rather than an <input>, so a long title wraps
+     onto a second line on a narrow screen instead of scrolling out of
+     sight. Enter/newlines are blocked in JS (see wireSingleLine), so it
+     still behaves like a single-line field. */
+  textarea.poem-title {
     /* min-width: 0 overrides a flex item's default content-based minimum
-       -- without it, this input's own intrinsic minimum width could
+       -- without it, this field's own intrinsic minimum width could
        force the whole card (and page) wider than a narrow viewport. */
     flex: 1; min-width: 0; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
     font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 17px; padding: 3px 2px 7px; outline: none;
-    color: var(--ink);
+    color: var(--ink); resize: none; overflow: hidden; line-height: 1.2; display: block;
   }
-  input.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
-  input.poem-title:focus { border-bottom-color: var(--accent); }
+  textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  textarea.poem-title:focus { border-bottom-color: var(--accent); }
 
   textarea.poem-text {
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
@@ -379,12 +394,59 @@
      the card's 10px gap) so its left inset matches the right, and give
      the text a page-like half-inch margin inside the box. */
   @media (min-width: 701px) {
-    .poem-card textarea.poem-text { margin-left: -36px; width: calc(100% + 36px); padding: 0.5in; }
+    .poem-card textarea.poem-text, .poem-card .poem-text-display { margin-left: -36px; width: calc(100% + 36px); padding: 0.5in; }
     .poem-card .format-toolbar { margin-left: -36px; }
   }
+  /* Stand-in for the textarea in browsers whose textareas can't do a
+     per-line hanging indent (Chrome) -- see TEXTAREA_HANGS. Same box
+     as the textarea, shown only while the entry isn't being typed in. */
+  .poem-text-display {
+    width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+    font-family: inherit; font-size: 14.5px; line-height: 1.15; padding: 10px 12px;
+    color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; cursor: text; min-height: 2.5em;
+    text-indent: 1.5em hanging each-line;
+  }
+  .poem-text-display[hidden] { display: none; }
+  /* Lineated verse: a line too long for the box wraps with its
+     continuation indented (a hanging indent), the same way the printed
+     page turns it over -- so a wrapped line never reads as a new line
+     of the poem. Prose entries don't get the class and wrap flush. */
+  html.textarea-hangs textarea.poem-text.is-verse { text-indent: 1.5em hanging each-line; }
+
+  /* Images live in the text as their own "[image N]" line; the card
+     shows each one below the text so it's clear what that line is. */
+  .poem-images { display: flex; flex-wrap: wrap; gap: 8px; }
+  .poem-images:empty { display: none; }
+  .poem-image-chip {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  }
+  .poem-image-chip img {
+    display: block; max-width: 96px; max-height: 72px; border-radius: 4px; border: 1px solid var(--line);
+    background: #fff;
+  }
+  .poem-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
   .poem-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
   .poem-meta { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  /* The per-entry "⋯" menu (Duplicate / Archive). One shared popover,
+     positioned in JS beside whichever button opened it. */
+  .dots-btn {
+    appearance: none; background: none; border: 1px solid transparent; color: var(--ink-faint); cursor: pointer;
+    font-size: 18px; line-height: 1; letter-spacing: 1px; padding: 2px 8px 6px; border-radius: 6px; flex: 0 0 auto;
+  }
+  .dots-btn:hover, .dots-btn[aria-expanded="true"] { color: var(--ink); background: var(--surface); border-color: var(--line); }
+  .entry-menu {
+    position: fixed; z-index: 70; min-width: 160px; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 9px; box-shadow: 0 8px 24px var(--shadow); padding: 5px;
+  }
+  .entry-menu[hidden] { display: none; }
+  .entry-menu button {
+    display: block; width: 100%; text-align: left; appearance: none; background: none; border: none; border-radius: 6px;
+    padding: 9px 11px; font-size: 13.5px; font-weight: 500; color: var(--ink); cursor: pointer;
+  }
+  .entry-menu button:hover { background: var(--surface-2); }
 
   /* Phone writing mode: focusing an entry's title or body turns that
      card itself into a full-screen editor (Notes / Google Docs style)
@@ -392,34 +454,53 @@
      card is moved with position: fixed rather than copied into an
      overlay, so there's only ever one textarea to keep in sync. Top and
      height are set from visualViewport in JS so the editor ends at the
-     top of the on-screen keyboard instead of running underneath it. */
+     top of the on-screen keyboard instead of running underneath it.
+     Everything else on the page is display:none'd while writing (JS
+     tags the card's ancestors .writing-path so they survive) -- with
+     nothing left to scroll, iOS can't slide the page around under the
+     editor, which is what let the entries list peek through and threw
+     taps off so the cursor landed away from the finger. The formatting
+     bar sits at the bottom, directly on top of the keyboard, the way
+     Notes' own formatting strip does. */
   .poem-writer-bar { display: none; }
   @media (max-width: 700px) {
-    html.is-writing, html.is-writing body { overflow: hidden; }
+    html.is-writing, html.is-writing body { overflow: hidden; height: 100%; background: var(--surface); }
+    html.is-writing body { padding: 0; }
+    html.is-writing .writing-path > :not(.writing-path):not(.is-writing):not(.modal-overlay):not(.entry-menu) { display: none !important; }
     .poem-card.is-writing {
       position: fixed; left: 0; right: 0; top: 0; height: 100vh; height: 100dvh; z-index: 60;
       margin: 0; border: none; border-radius: 0; background: var(--surface);
       padding: env(safe-area-inset-top) 16px 0;
+      /* Paints over anything that might still show around the editor
+         during iOS's keyboard animation. */
+      box-shadow: 0 0 0 100vmax var(--surface);
     }
     .poem-card.is-writing .poem-handle { display: none; }
-    .poem-card.is-writing .poem-body { height: 100%; gap: 6px; }
+    .poem-card.is-writing .poem-body { height: 100%; gap: 2px; }
     .poem-card.is-writing .poem-writer-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      flex: 0 0 auto; padding: 8px 0 4px;
+      flex: 0 0 auto; padding: 6px 0 2px;
     }
-    .poem-writer-done { padding: 8px 18px; font-size: 15px; }
-    .poem-card.is-writing .poem-title-row { flex: 0 0 auto; }
-    .poem-card.is-writing input.poem-title { font-size: 24px !important; padding: 6px 0 10px; }
-    .poem-card.is-writing input.poem-title { flex: 1 1 auto; width: auto !important; }
-    .poem-card.is-writing .poem-title-row { cursor: auto; }
-    /* Every row but the text itself is overhead on a phone, so: B/I/U
-       move up into the bar beside Done, the title steps aside while the
-       poem has focus (the bar shows it instead; tap there to edit it),
-       and the line/page count is left for the full editor. */
-    .poem-card.is-writing .poem-body > .format-toolbar { display: none; }
+    .poem-writer-done {
+      appearance: none; background: none; border: none; color: var(--accent); font-weight: 700; font-size: 16px;
+      padding: 8px 0 8px 16px; cursor: pointer; flex: 0 0 auto;
+    }
+    .poem-card.is-writing .poem-title-row { flex: 0 0 auto; cursor: auto; }
+    .poem-card.is-writing textarea.poem-title {
+      flex: 1 1 auto; width: auto !important;
+      font-size: calc(24px * var(--editor-zoom, 1)) !important; padding: 2px 0 8px;
+    }
+    /* Every row but the text itself is overhead on a phone: the title
+       steps aside while the poem has focus (the bar shows it instead; tap
+       there to edit it), the line/page count is left for the full editor,
+       and the formatting buttons sit at the very bottom -- directly on top
+       of the keyboard, like Notes' own formatting strip. */
     .poem-card.is-writing.is-body-focus .poem-title-row { display: none; }
-    .poem-writer-bar .format-toolbar { flex: 0 0 auto; gap: 6px; }
-    .poem-writer-bar .format-toolbar button { width: 40px; height: 34px; font-size: 15px; border-radius: 8px; }
+    .poem-card.is-writing .format-toolbar {
+      order: 10; flex: 0 0 auto; gap: 6px; margin: 0 -16px; padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+      background: var(--surface-2); border-top: 1px solid var(--line);
+    }
+    .poem-card.is-writing .format-toolbar button { flex: 1 1 0; width: auto; max-width: 64px; height: 36px; font-size: 16px; border-radius: 8px; }
     .poem-writer-title {
       flex: 1; min-width: 0; appearance: none; background: none; border: none; padding: 6px 0; text-align: left;
       font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; color: var(--ink);
@@ -429,9 +510,10 @@
     .poem-card.is-writing:not(.is-body-focus) .poem-writer-title { visibility: hidden; }
     .poem-card.is-writing textarea.poem-text {
       flex: 1 1 auto; min-height: 0; height: auto !important; overflow-y: auto; -webkit-overflow-scrolling: touch;
-      border: none; border-radius: 0; background: transparent; padding: 10px 0 calc(24px + env(safe-area-inset-bottom));
-      font-size: 18px !important;
+      border: none; border-radius: 0; background: transparent; padding: 10px 0 24px;
+      font-size: calc(18px * var(--editor-zoom, 1)) !important;
     }
+    .poem-card.is-writing .poem-images { flex: 0 0 auto; padding: 4px 0; }
     .poem-card.is-writing .poem-meta-row,
     .poem-card.is-writing .poem-collapse-btn { display: none; }
   }
@@ -471,8 +553,8 @@
      clicked. The underline moves to the row to keep it full width. */
   .poem-compact-expanded .poem-title-row { border-bottom: 1px solid var(--line-strong); cursor: pointer; }
   .poem-compact-expanded .poem-title-row:focus-within { border-bottom-color: var(--accent); }
-  .poem-compact-expanded input.poem-title { flex: 0 1 auto; max-width: 100%; border-bottom: none; cursor: text; }
-  .poem-compact-expanded .poem-collapse-btn { margin-left: auto; }
+  .poem-compact-expanded textarea.poem-title { flex: 0 1 auto; max-width: 100%; border-bottom: none; cursor: text; }
+  .poem-compact-expanded .dots-btn { margin-left: auto; }
 
   .poem-gap { height: 9px; margin: -3px 0 -1px; position: relative; display: flex; align-items: center; justify-content: center; }
   .poem-gap-line { position: absolute; left: 34px; right: 0; height: 1px; background: transparent; }
@@ -514,7 +596,7 @@
      sidebar itself. */
   .sidebar {
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
-    max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden;
+    max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
   }
   .sidebar-scroll {
     display: flex; flex-direction: column; gap: 16px;
@@ -541,7 +623,14 @@
     font-size: 26px; line-height: 1; cursor: pointer;
   }
   .preview-full-close:hover { background: rgba(255, 255, 255, 0.24); }
-  .preview-full-nav { display: flex; align-items: center; gap: 14px; color: #F2E7CB; font-size: 13px; }
+  /* Fixed grid: the arrows stay put no matter how long the caption
+     between them is ("Front cover" vs "Poem 12 of 40, page 2 of 3"). */
+  .preview-full-nav {
+    display: grid; grid-template-columns: 44px min(260px, calc(100vw - 140px)) 44px; align-items: center; gap: 14px;
+    color: #F2E7CB; font-size: 13px;
+  }
+  .preview-full-nav span { min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .preview-full-nav button { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
   .preview-full-nav button {
     width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35);
     background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
@@ -549,19 +638,23 @@
   .preview-full-nav button:disabled { opacity: 0.3; cursor: default; }
   .preview-full-nav button:not(:disabled):hover { background: rgba(255, 255, 255, 0.24); }
   .preview-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 34px 10px; }
-  /* space-between + a flexible center span keeps the arrows pinned at
-     the same fixed spots regardless of how long the caption text is
-     ("Front cover" vs. "Poem 12 of 40, page 2 of 3 · 12pt") -- only the
-     caption grows/shrinks (and truncates) between them. */
-  .preview-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  /* The arrows must never move while clicking through the book: a
+     fixed three-column grid (fixed-size arrow cells, the caption
+     truncating in the middle), a fixed-height stage, a stable scrollbar
+     gutter on the sidebar, no focus-scroll on click, and no iOS
+     double-tap zoom -- any one of those alone could nudge them. */
+  .preview-stage { height: var(--preview-h, auto); align-items: flex-start; }
+  .preview-nav { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; height: 36px; margin-top: 8px; }
   .preview-nav button {
-    background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 17px; padding: 2px 6px; line-height: 1; flex: 0 0 auto;
+    width: 44px; height: 36px; display: flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 20px; padding: 0; line-height: 1;
+    touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   }
   .preview-nav button:hover:not(:disabled) { color: var(--accent); }
   .preview-nav button:disabled { opacity: 0.3; cursor: default; }
   .preview-nav span {
-    flex: 1 1 auto; min-width: 0; text-align: center; font-size: 11.5px; color: var(--ink-faint);
-    font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px;
+    min-width: 0; text-align: center; font-size: 11.5px; color: var(--ink-faint);
+    font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;
   }
 
   .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
@@ -655,7 +748,7 @@
   /* ---- custom confirm modal (native confirm() is unavailable in this frame) ---- */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(20, 10, 15, 0.45); display: none;
-    align-items: center; justify-content: center; z-index: 50; padding: 20px;
+    align-items: center; justify-content: center; z-index: 80; padding: 20px;
   }
   .modal-overlay.open { display: flex; }
   .modal-box {
@@ -756,6 +849,36 @@
   .select-entry-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); flex: 0 0 auto; }
   .select-entry-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* ---- Phones: one margin, not three ----
+     The page gutter, the Entries panel's padding, each card's padding,
+     the number/grip column and the textarea's own box used to stack up
+     into ~60px of dead space left of every line. On a phone the Entries
+     panel drops its chrome entirely (cards sit straight on the page),
+     the number column goes, and the text box loses its inner border, so
+     text starts ~25px from the screen edge. */
+  @media (max-width: 700px) {
+    body { padding: 16px 12px 60px; }
+    .page { gap: 16px; }
+    .masthead { flex-direction: column; align-items: stretch; gap: 10px; }
+    .top-actions, .top-actions-main { justify-content: flex-start; }
+    .top-actions { gap: 8px; align-items: flex-start; }
+    .top-actions-main { gap: 8px; flex-wrap: wrap; flex-shrink: 1; }
+    .top-actions-main .btn { padding: 7px 12px; font-size: 13px; }
+    .account-area, .account-status-row { align-items: flex-start; justify-content: flex-start; }
+    .chapbooks-dropdown { left: 0; width: min(280px, calc(100vw - 24px)); }
+    .panel { padding: 16px 14px; }
+    #poemsPanel { padding: 0; background: none; border: none; box-shadow: none; }
+    .poems-head { gap: 8px; margin-bottom: 10px; }
+    .poems-head .btn-sm { padding: 5px 9px; font-size: 12px; }
+    .poem-card { padding: 10px 12px 10px; gap: 0; }
+    .poem-card .poem-handle { display: none; }
+    .poem-card textarea.poem-text, .poem-card .poem-text-display { border: none; background: transparent; padding: 4px 0; border-radius: 0; }
+    .poem-compact-row { padding: 6px 6px 6px 4px; }
+    .poem-gap-line { left: 0; }
+    .sidebar { position: static; max-height: none; overflow: visible; }
+    .title-align-seg button { padding: 4px 7px; }
+  }
+
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
 </style>
@@ -834,7 +957,7 @@
   </div>
 
   <div class="chapbook-header">
-    <input type="text" id="bookTitleInput" placeholder="Book title">
+    <textarea id="bookTitleInput" rows="1" placeholder="Book title"></textarea>
     <input type="text" id="authorInput" placeholder="Author name">
   </div>
 
@@ -899,7 +1022,7 @@
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
           <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
           <!-- Down here beside the archive it opens, not up in the header. -->
-          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;">View archive</button>
+          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;" title="View archived entries">Archive</button>
         </div>
       </div>
 
@@ -1084,6 +1207,11 @@
 
 </div>
 
+<div class="entry-menu" id="entryMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+  <button type="button" role="menuitem" data-action="archive">Archive</button>
+</div>
+
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal-box">
     <p id="modalMessage"></p>
@@ -1193,13 +1321,16 @@
 
   // Editor-only text scale -- a personal display preference, not part of
   // the chapbook's own saved state, so it lives in its own key.
-  var EDITOR_ZOOM_KEY = 'poetryBooklet.editorZoom.v1';
+  // Phones get their own key and a 90% default: the desktop-sized text
+  // read a notch too large on a phone screen.
+  var IS_PHONE = window.matchMedia('(max-width: 700px)').matches;
+  var EDITOR_ZOOM_KEY = IS_PHONE ? 'poetryBooklet.editorZoom.phone.v1' : 'poetryBooklet.editorZoom.v1';
   // The zoom control's own 0.7-2 / 100%-labeled range was rendering too
   // small at "100%" -- this constant shifts the whole scale up so what
   // used to look like 120% is now what "100%" looks like, without
   // changing the control's displayed percentages or range.
   var EDITOR_ZOOM_BASE = 1.2;
-  var editorZoom = 1;
+  var editorZoom = IS_PHONE ? 0.9 : 1;
   try {
     var savedZoom = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
     if (savedZoom && savedZoom > 0) editorZoom = savedZoom;
@@ -1328,7 +1459,12 @@
   // Just the live-book cache, without touching the library -- used when
   // opening a book, which shouldn't bump its "last edited" time.
   function saveStateCache() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {
+      // Almost always the ~5MB localStorage quota -- images are what get
+      // a book there. Say so instead of silently not saving.
+      var ind = document.getElementById('autosaveIndicator');
+      if (ind) { ind.textContent = 'Couldn’t autosave — this browser’s storage is full. Try removing an image.'; ind.classList.remove('is-synced'); }
+    }
   }
 
   // Edits reach the cloud a few seconds after typing settles rather than
@@ -1995,6 +2131,68 @@
     return out;
   }
 
+  // Wraps one line of verse with a hanging indent: the first piece keeps
+  // the full width, and every turnover after it is indented by hangPt
+  // (plus the line's own leading spaces) so it reads as the same line
+  // carried over, not a new one. Returns [{ text, indent }].
+  function wrapVerseLine(text, maxWidthPt, sizePt, fontFamily, weight, hangPt) {
+    var first = wrapLine(text, maxWidthPt, sizePt, fontFamily, weight);
+    if (first.length <= 1) return [{ text: first[0], indent: 0 }];
+    var lead = (text.match(/^ +/) || [''])[0];
+    var indent = measure(lead, sizePt, fontFamily, weight) + hangPt;
+    // wrapLine's pieces are always a prefix of the original line.
+    var rest = text.slice(first[0].length).replace(/^ +/, '');
+    var out = [{ text: first[0], indent: 0 }];
+    wrapLine(rest, Math.max(maxWidthPt - indent, maxWidthPt * 0.4), sizePt, fontFamily, weight).forEach(function (t) {
+      out.push({ text: t, indent: indent });
+    });
+    return out;
+  }
+
+  // Verse or prose? A lineated poem is mostly short lines broken by
+  // hand; prose is mostly paragraph-length lines that are *meant* to
+  // reflow. Only verse gets hanging-indented turnovers and the "line
+  // too long" warning -- prose wrapping is just normal typesetting.
+  var PROSE_LINE_CHARS = 140;
+  // Does this browser's <textarea> honor "text-indent: hanging
+  // each-line"? WebKit's does; Chrome's indents every line after the
+  // first instead (it ignores forced breaks inside a textarea). Probe:
+  // with the indent working, "bb bb" on its own line still fits and the
+  // height doesn't change; if broken, it gets squeezed and wraps.
+  var TEXTAREA_HANGS = (function () {
+    try {
+      if (!CSS.supports('text-indent', '1em hanging each-line')) return false;
+      var a = document.createElement('textarea');
+      a.style.cssText = 'position:absolute;left:-9999px;top:0;width:100px;height:10px;font:16px monospace;padding:0;border:0;white-space:pre-wrap;overflow:hidden';
+      a.value = 'a\nbb bb';
+      document.body.appendChild(a);
+      var h0 = a.scrollHeight;
+      a.style.textIndent = '80px hanging each-line';
+      var h1 = a.scrollHeight;
+      a.remove();
+      return h0 === h1;
+    } catch (e) { return false; }
+  })();
+  if (TEXTAREA_HANGS) document.documentElement.classList.add('textarea-hangs');
+
+  function isLineated(poem) {
+    var lines = (poem.lines || []).filter(function (l) { return l && l.trim() !== '' && !IMAGE_LINE_RE.test(l); });
+    if (!lines.length) return true;
+    var long = lines.filter(function (l) { return stripFormatMarkers(l).trim().length > PROSE_LINE_CHARS; }).length;
+    return long / lines.length < 0.5;
+  }
+
+  // An image sits in an entry's text as its own "[image N]" line,
+  // pointing at state.images['imgN'] (a downscaled JPEG data URL plus
+  // its pixel size). A token with no matching image is just text.
+  var IMAGE_LINE_RE = /^\s*\[image (\d+)\]\s*$/;
+  function imageKeyForLine(line, st) {
+    var m = IMAGE_LINE_RE.exec(line || '');
+    if (!m) return null;
+    var key = 'img' + m[1];
+    return st.images && st.images[key] ? key : null;
+  }
+
   function ellipsize(text, maxWidthPt, sizePt, fontFamily, weight) {
     if (measure(text, sizePt, fontFamily, weight) <= maxWidthPt) return text;
     var s = text;
@@ -2026,35 +2224,55 @@
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
     var lineHeight = sizePt * 1.55;
-    var renderLines = [];
-    var wasWrapped = false;
-    poem.lines.forEach(function (line) {
-      if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
-      var wrapped = wrapLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400);
-      if (wrapped.length > 1) wasWrapped = true;
-      wrapped.forEach(function (w) {
-        renderLines.push({ blank: false, text: w });
-      });
-    });
-
     var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
     // A continuation page carries no title or label of its own -- readers
     // expect an entry to simply carry on onto the next page -- so it gets
     // the full content height, same as any other untitled page.
     var laterCap = Math.max(1, Math.floor(contentHeightPt / lineHeight));
 
-    var pages = [];
-    if (renderLines.length === 0) pages.push([]);
-    var i = 0, first = true;
-    while (i < renderLines.length) {
-      var cap = first ? firstCap : laterCap;
-      pages.push(renderLines.slice(i, i + cap));
-      i += cap; first = false;
-    }
+    var verse = isLineated(poem);
+    var bodyAlign = poem.bodyAlign || state.bodyAlignment;
+    // Hanging turnovers only make sense against a left margin.
+    var hangPt = verse && bodyAlign === 'left' ? sizePt * 1.5 : 0;
+    var renderLines = [];
+    var wasWrapped = false;
+    poem.lines.forEach(function (line) {
+      if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
+      var imgKey = imageKeyForLine(line, state);
+      if (imgKey) {
+        // Centered, at most the text column's width, and never taller
+        // than the first page's room, so it always fits whole on a page.
+        var im = state.images[imgKey];
+        var maxH = firstCap * lineHeight - lineHeight * 0.5;
+        var w = Math.min(contentWidthPt, im.w * 72 / 150);
+        var h = w * im.h / im.w;
+        if (h > maxH) { h = maxH; w = h * im.w / im.h; }
+        renderLines.push({ image: imgKey, w: w, h: h, rows: Math.min(firstCap, Math.ceil((h + lineHeight * 0.5) / lineHeight)) });
+        return;
+      }
+      var wrapped = hangPt
+        ? wrapVerseLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400, hangPt)
+        : wrapLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400).map(function (t) { return { text: t, indent: 0 }; });
+      if (wrapped.length > 1 && verse) wasWrapped = true;
+      wrapped.forEach(function (w) {
+        renderLines.push({ blank: false, text: w.text, indent: w.indent });
+      });
+    });
+
+    // Fill pages by rows rather than a fixed line count -- an image
+    // takes several rows, and moves whole to the next page if it
+    // doesn't fit in what's left.
+    var pages = [], cur = [], used = 0, cap = firstCap;
+    renderLines.forEach(function (rl) {
+      var rows = rl.rows || 1;
+      if (cur.length && used + rows > cap) { pages.push(cur); cur = []; used = 0; cap = laterCap; }
+      cur.push(rl); used += rows;
+    });
+    if (cur.length || !pages.length) pages.push(cur);
     return {
       sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
       titleLines: titleLines, titleH: titleH, pages: pages,
-      wasWrapped: wasWrapped
+      wasWrapped: wasWrapped, isVerse: verse
     };
   }
 
@@ -2313,6 +2531,7 @@
     var contentTop = plan.PAGE_H - plan.marginTop;
     var footerY = 36, cornerY = 30;
     var contents = [];
+    var imagesUsed = [];
     var hasSections = state.poems.some(isSection);
 
     function pageNumberOp(bytes, n) {
@@ -2425,11 +2644,23 @@
           });
           y -= layout.titleH;
         }
-        pageLines.forEach(function (rl, li) {
-          var lineY = y - (li + 1) * layout.lineHeight + layout.lineHeight * 0.28;
+        var rowsUsed = 0;
+        pageLines.forEach(function (rl) {
+          var top = y - rowsUsed * layout.lineHeight;
+          var rows = rl.rows || 1;
+          rowsUsed += rows;
           if (rl.blank) return;
+          if (rl.image) {
+            var blockH = rows * layout.lineHeight;
+            var ix = (contentLeft + contentRight) / 2 - rl.w / 2;
+            var iy = top - blockH / 2 - rl.h / 2;
+            pushAscii(bytes, 'q\n' + rl.w.toFixed(2) + ' 0 0 ' + rl.h.toFixed(2) + ' ' + ix.toFixed(2) + ' ' + iy.toFixed(2) + ' cm\n/' + rl.image + ' Do\nQ\n');
+            if (imagesUsed.indexOf(rl.image) === -1) imagesUsed.push(rl.image);
+            return;
+          }
+          var lineY = top - layout.lineHeight + layout.lineHeight * 0.28;
           var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice, 400);
-          var x = resolveX(effBodyAlign, w, contentLeft, contentRight);
+          var x = resolveX(effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
           drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
@@ -2453,7 +2684,7 @@
     });
     contents.push(backBytes);
 
-    return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents };
+    return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents, imagesUsed: imagesUsed };
   }
 
   // Writes each font's PDF object(s). A base-14 entry is a plain Type1
@@ -2509,6 +2740,32 @@
     });
   }
 
+  function dataUrlToBytes(dataUrl) {
+    var bin = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  // Every stored image is a canvas-made baseline JPEG, so it embeds
+  // as-is under DCTDecode -- no decoding or re-encoding here.
+  function allocImageRefs(w, state, keys) {
+    return keys.map(function (key) { return { key: key, img: state.images[key], objNum: w.allocObj() }; });
+  }
+  function imageXObjectStr(imageRefs) {
+    return imageRefs.length ? ' /XObject << ' + imageRefs.map(function (r) { return '/' + r.key + ' ' + r.objNum + ' 0 R'; }).join(' ') + ' >>' : '';
+  }
+  function writeImageObjects(w, imageRefs) {
+    imageRefs.forEach(function (r) {
+      var bytes = dataUrlToBytes(r.img.data);
+      w.beginObj(r.objNum);
+      w.pushPart('<< /Type /XObject /Subtype /Image /Width ' + r.img.w + ' /Height ' + r.img.h +
+        ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + bytes.length + ' >>\nstream\n');
+      w.pushPart(bytes);
+      w.pushPart('\nendstream\n');
+      w.endObj();
+    });
+  }
+
   async function buildBookletPdf(state) {
     var fontPlan = planFonts(state);
     var fontBytesMap = await fetchNeededFontBytes(fontPlan);
@@ -2518,7 +2775,8 @@
     var catalogNum = w.allocObj();
     var pagesNum = w.allocObj();
     fontPlan.fonts.forEach(function (f) { f.objNum = w.allocObj(); });
-    var resourcesStr = fontResourcesStr(fontPlan.fonts) + ' >>';
+    var imageRefs = allocImageRefs(w, state, built.imagesUsed);
+    var resourcesStr = fontResourcesStr(fontPlan.fonts) + imageXObjectStr(imageRefs) + ' >>';
 
     var kids = [];
     built.contents.forEach(function (contentBytesArr) {
@@ -2543,6 +2801,7 @@
     w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
     w.endObj();
     writeFontObjects(w, fontPlan.fonts, fontBytesMap);
+    writeImageObjects(w, imageRefs);
 
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
@@ -2599,9 +2858,10 @@
     var pagesNum = w.allocObj();
     fontPlan.fonts.forEach(function (f) { f.objNum = w.allocObj(); });
     var formNums = contents.map(function () { return w.allocObj(); });
+    var imageRefs = allocImageRefs(w, state, built.imagesUsed);
     var xobjEntries = formNums.map(function (num, i) { return '/Fm' + i + ' ' + num + ' 0 R'; }).join(' ');
     var pageResourcesStr = fontResourcesStr(fontPlan.fonts) + ' /XObject << ' + xobjEntries + ' >> >>';
-    var formResourcesStr = fontResourcesStr(fontPlan.fonts) + ' >>';
+    var formResourcesStr = fontResourcesStr(fontPlan.fonts) + imageXObjectStr(imageRefs) + ' >>';
 
     var kids = [];
     function placeForm(bytes, contentIdx, x, y) {
@@ -2654,6 +2914,7 @@
     w.pushPart('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
     w.endObj();
     writeFontObjects(w, fontPlan.fonts, fontBytesMap);
+    writeImageObjects(w, imageRefs);
 
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
@@ -2965,7 +3226,13 @@
   var poemList = document.getElementById('poemList');
   var poemsCount = document.getElementById('poemsCount');
 
-  function autoGrow(ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
+  function autoGrow(ta) {
+    // Can't measure while hidden (e.g. behind the home screen) -- leave
+    // it at its natural height rather than collapsing it to 2px.
+    if (!ta.offsetParent && getComputedStyle(ta).position !== 'fixed') { ta.style.height = ''; return; }
+    ta.style.height = 'auto';
+    ta.style.height = (ta.scrollHeight + 2) + 'px';
+  }
 
   // Phone writing mode (CSS: .poem-card.is-writing). Entering pushes a
   // history entry so the Android back button / back-swipe closes the
@@ -2979,15 +3246,58 @@
     if (!writingCard || !vv) return;
     writingCard.style.top = vv.offsetTop + 'px';
     writingCard.style.height = vv.height + 'px';
+    var ta = writingCard.querySelector('textarea.poem-text');
+    if (ta && document.activeElement === ta) scrollCaretIntoView(ta);
+  }
+  // Tags the card's ancestors so the writing-mode CSS can hide every
+  // other element on the page (see html.is-writing .writing-path).
+  function markWritingPath(card, on) {
+    document.querySelectorAll('.writing-path').forEach(function (el) { el.classList.remove('writing-path'); });
+    if (!on) return;
+    for (var el = card.parentElement; el && el !== document.documentElement; el = el.parentElement) el.classList.add('writing-path');
+  }
+  // The editor re-lays its text out bigger when it goes full screen, so
+  // the line the cursor is on can end up below the fold. Measures the
+  // caret's height in an offscreen copy of the textarea and scrolls it
+  // into the upper part of the editor.
+  function scrollCaretIntoView(ta) {
+    var cs = getComputedStyle(ta);
+    var m = document.createElement('div');
+    ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent',
+      'paddingTop', 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].forEach(function (k) { m.style[k] = cs[k]; });
+    m.style.position = 'absolute';
+    m.style.visibility = 'hidden';
+    m.style.left = '-9999px';
+    m.style.whiteSpace = 'pre-wrap';
+    m.style.overflowWrap = 'break-word';
+    m.style.boxSizing = 'border-box';
+    m.style.width = ta.offsetWidth + 'px';
+    m.textContent = ta.value.slice(0, ta.selectionStart) + '\u200b';
+    ta.parentNode.appendChild(m);
+    var caretY = m.offsetHeight;
+    m.parentNode.removeChild(m);
+    var lineH = parseFloat(cs.lineHeight) || 24;
+    if (caretY - lineH < ta.scrollTop || caretY > ta.scrollTop + ta.clientHeight - lineH) {
+      ta.scrollTop = Math.max(0, caretY - ta.clientHeight / 3);
+    }
   }
   function enterWriting(card, poemId) {
     if (writingCard === card) return;
     if (writingCard) exitWriting();
     writingCard = card;
     writingPoemId = poemId;
+    closeEntryMenu();
+    markWritingPath(card, true);
     card.classList.add('is-writing');
     document.documentElement.classList.add('is-writing');
+    window.scrollTo(0, 0);
     syncWriterViewport();
+    var title = card.querySelector('textarea.poem-title');
+    if (title) autoGrow(title);
+    requestAnimationFrame(function () {
+      var ta = card.querySelector('textarea.poem-text');
+      if (ta && document.activeElement === ta) scrollCaretIntoView(ta);
+    });
     if (!(history.state && history.state.bookbugWriting)) {
       try { history.pushState({ bookbugWriting: true }, ''); } catch (e) {}
     }
@@ -2998,10 +3308,13 @@
     writingCard = null;
     writingPoemId = null;
     document.documentElement.classList.remove('is-writing');
+    markWritingPath(null, false);
     if (!card) return;
     card.classList.remove('is-writing');
     card.style.top = '';
     card.style.height = '';
+    var title = card.querySelector('textarea.poem-title');
+    if (title) autoGrow(title);
     if (card.contains(document.activeElement)) document.activeElement.blur();
     // Opened from the titles-only list: fold back to just its title row
     // (which also picks up any rename made while writing).
@@ -3012,7 +3325,7 @@
     }
     var ta = card.querySelector('textarea.poem-text');
     if (ta) autoGrow(ta);
-    card.scrollIntoView({ block: 'nearest' });
+    card.scrollIntoView({ block: 'center' });
   }
   function finishWriting() {
     if (history.state && history.state.bookbugWriting) history.back();
@@ -3115,26 +3428,255 @@
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  // Indents (or outdents) every line the selection touches by one
+  // 4-space stop -- the same stop Tab/Shift+Tab use -- so it works on a
+  // phone, which has no Tab key.
+  function indentLines(textarea, outdent) {
+    var val = textarea.value, start = textarea.selectionStart, end = textarea.selectionEnd;
+    var lineStart = val.lastIndexOf('\n', start - 1) + 1;
+    var lineEnd = val.indexOf('\n', Math.max(end - (end > start && val[end - 1] === '\n' ? 1 : 0), start));
+    if (lineEnd === -1) lineEnd = val.length;
+    var lines = val.slice(lineStart, lineEnd).split('\n');
+    var firstDelta = 0, totalDelta = 0;
+    lines = lines.map(function (l, i) {
+      var d;
+      if (outdent) { d = -Math.min(4, (l.match(/^ */) || [''])[0].length); l = l.slice(-d); }
+      else { d = 4; l = '    ' + l; }
+      if (i === 0) firstDelta = d;
+      totalDelta += d;
+      return l;
+    });
+    textarea.focus();
+    textarea.value = val.slice(0, lineStart) + lines.join('\n') + val.slice(lineEnd);
+    textarea.selectionStart = Math.max(lineStart, start + firstDelta);
+    textarea.selectionEnd = Math.max(textarea.selectionStart, end + totalDelta);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  var ICON_INDENT = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M1 4l3 3-3 3"/></svg>';
+  var ICON_OUTDENT = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M4 4L1 7l3 3"/></svg>';
+  var ICON_IMAGE = '<svg width="17" height="14" viewBox="0 0 17 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="1" width="15" height="12" rx="2"/><circle cx="5.5" cy="5" r="1.4"/><path d="M1.5 11.5l4.5-4 3.5 3 2.5-2 3.5 3"/></svg>';
+
   function makeFormatToolbar(textarea) {
     var wrap = document.createElement('div');
     wrap.className = 'format-toolbar';
+    function addBtn(cls, html, title, onClick) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'format-btn ' + cls;
+      btn.innerHTML = html;
+      btn.title = title;
+      btn.setAttribute('aria-label', title);
+      // Keep focus (and the phone keyboard) in the textarea while
+      // tapping these, instead of blurring it for a moment first.
+      btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+      btn.addEventListener('click', onClick);
+      wrap.appendChild(btn);
+      return btn;
+    }
     [
       ['B', '**', '**', 'bold', 'Bold'],
       ['I', '*', '*', 'italic', 'Italic'],
       ['U', '++', '++', 'underline', 'Underline']
     ].forEach(function (spec) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'format-btn format-btn-' + spec[3];
-      btn.textContent = spec[0];
-      btn.title = spec[4] + ' the selected text';
-      // Keep focus (and the phone keyboard) in the textarea while
-      // tapping these, instead of blurring it for a moment first.
-      btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
-      btn.addEventListener('click', function () { wrapSelection(textarea, spec[1], spec[2]); });
-      wrap.appendChild(btn);
+      addBtn('format-btn-' + spec[3], spec[0], spec[4] + ' the selected text', function () { wrapSelection(textarea, spec[1], spec[2]); });
     });
+    addBtn('format-btn-indent', ICON_OUTDENT, 'Outdent line', function () { indentLines(textarea, true); });
+    addBtn('format-btn-indent', ICON_INDENT, 'Indent line', function () { indentLines(textarea, false); });
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.multiple = true;
+    fileInput.hidden = true;
+    fileInput.addEventListener('change', function () {
+      insertImagesIntoTextarea(textarea, imageFilesFrom(fileInput.files));
+      fileInput.value = '';
+    });
+    wrap.appendChild(fileInput);
+    // No pointerdown-preventDefault here: the file picker needs a real
+    // user click, and losing focus to it is expected anyway.
+    var imgBtn = document.createElement('button');
+    imgBtn.type = 'button';
+    imgBtn.className = 'format-btn format-btn-image';
+    imgBtn.innerHTML = ICON_IMAGE;
+    imgBtn.title = 'Add an image (or drag one onto the entry)';
+    imgBtn.setAttribute('aria-label', 'Add an image');
+    imgBtn.addEventListener('click', function () { fileInput.click(); });
+    wrap.appendChild(imgBtn);
     return wrap;
+  }
+
+  // ---------------------------------------------------------------------
+  // Images -- dropped, pasted, or picked files are downscaled to a JPEG
+  // (≤1000px, so a handful fit in localStorage and cloud sync) and
+  // stored once in state.images; the entry's text gets an "[image N]"
+  // line where it goes. Centered on the page by default.
+  // ---------------------------------------------------------------------
+  var IMAGE_MAX_PX = 1000;
+  function imageFilesFrom(fileList) {
+    return Array.prototype.filter.call(fileList || [], function (f) { return /^image\//.test(f.type); });
+  }
+  function hasDraggedFiles(e) {
+    return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1);
+  }
+  function loadImageFile(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var im = new Image();
+      im.onload = function () {
+        var s = Math.min(1, IMAGE_MAX_PX / Math.max(im.naturalWidth, im.naturalHeight));
+        var w = Math.max(1, Math.round(im.naturalWidth * s)), h = Math.max(1, Math.round(im.naturalHeight * s));
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        // JPEG has no transparency -- flatten onto white, like paper.
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(im, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve({ data: c.toDataURL('image/jpeg', 0.82), w: w, h: h });
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+      im.src = url;
+    });
+  }
+  function addImageToState(img) {
+    state.images = state.images || {};
+    var n = state.nextImageNum || 1;
+    while (state.images['img' + n]) n++;
+    state.images['img' + n] = img;
+    state.nextImageNum = n + 1;
+    return n;
+  }
+  // Puts the image line(s) on their own line(s) right after the line
+  // the cursor is on (replacing that line if it's empty); a textarea
+  // that was never clicked has its cursor at the end, so a plain drop
+  // lands at the bottom of the entry.
+  async function insertImagesIntoTextarea(textarea, files) {
+    if (!files.length) return;
+    var tokens = [];
+    for (var i = 0; i < files.length; i++) {
+      try { tokens.push('[image ' + addImageToState(await loadImageFile(files[i])) + ']'); } catch (e) {}
+    }
+    if (!tokens.length) return;
+    var val = textarea.value;
+    var pos = Math.min(textarea.selectionEnd, val.length);
+    var lineStart = val.lastIndexOf('\n', pos - 1) + 1;
+    var lineEnd = val.indexOf('\n', pos);
+    if (lineEnd === -1) lineEnd = val.length;
+    var block = tokens.join('\n');
+    var next;
+    if (val.slice(lineStart, lineEnd).trim() === '') next = val.slice(0, lineStart) + block + val.slice(lineEnd);
+    else next = val.slice(0, lineEnd) + '\n' + block + val.slice(lineEnd);
+    textarea.value = next;
+    var caret = next.indexOf(block, lineStart) + block.length;
+    textarea.selectionStart = textarea.selectionEnd = caret;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function referencedImageKeys() {
+    var keys = {};
+    (state.poems || []).concat(state.archivedPoems || []).forEach(function (p) {
+      (p.lines || []).forEach(function (l) { var k = imageKeyForLine(l, state); if (k) keys[k] = true; });
+    });
+    return keys;
+  }
+  // Drops images no entry (live or archived) points at any more. Only
+  // run on load, never mid-edit, so deleting an image line and undoing
+  // it right away can't lose the picture.
+  function pruneUnusedImages() {
+    if (!state.images) return;
+    var keep = referencedImageKeys();
+    Object.keys(state.images).forEach(function (k) { if (!keep[k]) delete state.images[k]; });
+  }
+  // A file dropped anywhere that isn't an entry shouldn't make the
+  // browser navigate away to the image.
+  window.addEventListener('dragover', function (e) { if (hasDraggedFiles(e)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if (hasDraggedFiles(e)) e.preventDefault(); });
+
+  // ---------------------------------------------------------------------
+  // "⋯" entry menu -- Duplicate / Archive, shared by every entry.
+  // ---------------------------------------------------------------------
+  var entryMenu = document.getElementById('entryMenu');
+  var entryMenuIndex = null;
+  var entryMenuBtn = null;
+  function closeEntryMenu() {
+    if (entryMenu.hidden) return;
+    entryMenu.hidden = true;
+    if (entryMenuBtn) entryMenuBtn.setAttribute('aria-expanded', 'false');
+    entryMenuBtn = null;
+    entryMenuIndex = null;
+  }
+  function openEntryMenu(btn, index) {
+    var reopening = entryMenuBtn === btn;
+    closeEntryMenu();
+    if (reopening) return;
+    entryMenuIndex = index;
+    entryMenuBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    entryMenu.hidden = false;
+    var r = btn.getBoundingClientRect();
+    var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
+    var left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw));
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    entryMenu.style.left = left + 'px';
+    entryMenu.style.top = top + 'px';
+  }
+  function makeDotsBtn(index) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dots-btn';
+    btn.textContent = '⋯';
+    btn.title = 'More';
+    btn.draggable = false;
+    btn.setAttribute('aria-label', 'Entry options');
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); openEntryMenu(btn, index); });
+    return btn;
+  }
+  entryMenu.addEventListener('click', function (e) {
+    var item = e.target.closest('button[data-action]');
+    if (!item) return;
+    var idx = entryMenuIndex;
+    closeEntryMenu();
+    if (item.dataset.action === 'archive') archivePoem(idx);
+    else duplicatePoem(idx);
+  });
+  document.addEventListener('click', function (e) { if (!entryMenu.contains(e.target)) closeEntryMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeEntryMenu(); });
+  window.addEventListener('scroll', closeEntryMenu, true);
+  window.addEventListener('resize', closeEntryMenu);
+
+  function duplicatePoem(index) {
+    var src = state.poems[index];
+    if (!src) return;
+    var copy = JSON.parse(JSON.stringify(src));
+    copy.id = makeId();
+    if (copy.title) copy.title += ' (copy)';
+    state.poems.splice(index + 1, 0, copy);
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+
+  // A title field that wraps like a textarea but behaves like a
+  // one-line input: Enter moves on instead of adding a newline, and a
+  // pasted newline becomes a space.
+  function wireSingleLine(ta, onEnter) {
+    ta.rows = 1;
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); if (onEnter) onEnter(); }
+    });
+    ta.addEventListener('input', function () {
+      if (/[\r\n]/.test(ta.value)) {
+        var pos = ta.selectionStart;
+        ta.value = ta.value.replace(/[\r\n]+/g, ' ');
+        ta.selectionStart = ta.selectionEnd = pos;
+      }
+      autoGrow(ta);
+    });
   }
 
   function makeGap(index) {
@@ -3210,10 +3752,11 @@
     });
   }
 
-  function makeBodyAlignControl(poem, textarea) {
+  function makeBodyAlignControl(poem, textarea, onChange) {
     return makeAlignControl('Body', function () { return poem.bodyAlign; }, function (v) {
       poem.bodyAlign = v;
       textarea.style.textAlign = v || state.bodyAlignment;
+      if (onChange) onChange();
     });
   }
 
@@ -3240,7 +3783,7 @@
 
     var titleRow = document.createElement('div');
     titleRow.className = 'poem-title-row';
-    var titleInput = document.createElement('input');
+    var titleInput = document.createElement('textarea');
     titleInput.className = 'poem-title';
     // The card itself is no longer draggable (see card.draggable above),
     // but this stays explicit so text selection here is never swallowed
@@ -3251,6 +3794,10 @@
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
+    wireSingleLine(titleInput, function () {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = 0;
+    });
     titleInput.addEventListener('input', function () {
       poem.title = titleInput.value;
       state.isExample = false;
@@ -3259,6 +3806,7 @@
       updateStats();
     });
     titleRow.appendChild(titleInput);
+    titleRow.appendChild(makeDotsBtn(index));
 
     var textarea = document.createElement('textarea');
     textarea.className = 'poem-text';
@@ -3272,11 +3820,84 @@
     textarea.addEventListener('input', function () {
       poem.lines = textarea.value.split('\n');
       state.isExample = false;
+      updateVerseClass();
+      updateImageChips();
       autoGrow(textarea);
       persist();
       updateMeta();
       updateStats();
     });
+    textarea.addEventListener('paste', function (e) {
+      var files = imageFilesFrom(e.clipboardData && e.clipboardData.files);
+      if (!files.length) return;
+      e.preventDefault();
+      insertImagesIntoTextarea(textarea, files);
+    });
+    var display = document.createElement('div');
+    display.className = 'poem-text-display';
+    display.hidden = true;
+    function useDisplay() {
+      return !TEXTAREA_HANGS && textarea.classList.contains('is-verse') && document.activeElement !== textarea;
+    }
+    function syncDisplay() {
+      var on = useDisplay();
+      if (on) {
+        display.textContent = textarea.value;
+        ['fontFamily', 'fontSize', 'lineHeight', 'textAlign'].forEach(function (k) { display.style[k] = textarea.style[k]; });
+      }
+      display.hidden = !on;
+      textarea.style.display = on ? 'none' : '';
+    }
+    // Clicking the stand-in puts the cursor at the character clicked.
+    display.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var offset = textarea.value.length;
+      try {
+        if (document.caretPositionFromPoint) {
+          var cp = document.caretPositionFromPoint(e.clientX, e.clientY);
+          if (cp && display.contains(cp.offsetNode)) offset = cp.offset;
+        } else if (document.caretRangeFromPoint) {
+          var cr = document.caretRangeFromPoint(e.clientX, e.clientY);
+          if (cr && display.contains(cr.startContainer)) offset = cr.startOffset;
+        }
+      } catch (err) {}
+      display.hidden = true;
+      textarea.style.display = '';
+      autoGrow(textarea);
+      textarea.focus();
+      textarea.setSelectionRange(offset, offset);
+    });
+    textarea.addEventListener('blur', function () { setTimeout(syncDisplay, 0); });
+    function updateVerseClass() {
+      textarea.classList.toggle('is-verse', isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
+      if (document.activeElement !== textarea) syncDisplay();
+    }
+    updateVerseClass();
+
+    var imagesStrip = document.createElement('div');
+    imagesStrip.className = 'poem-images';
+    var imagesSig = null;
+    function updateImageChips() {
+      var keys = [];
+      poem.lines.forEach(function (l) { var k = imageKeyForLine(l, state); if (k && keys.indexOf(k) === -1) keys.push(k); });
+      var sig = keys.join(',');
+      if (sig === imagesSig) return;
+      imagesSig = sig;
+      imagesStrip.innerHTML = '';
+      keys.forEach(function (k) {
+        var chip = document.createElement('div');
+        chip.className = 'poem-image-chip';
+        var img = document.createElement('img');
+        img.src = state.images[k].data;
+        img.alt = '';
+        var label = document.createElement('span');
+        label.textContent = '[image ' + k.slice(3) + ']';
+        chip.appendChild(img);
+        chip.appendChild(label);
+        imagesStrip.appendChild(chip);
+      });
+    }
+    updateImageChips();
 
     var metaRow = document.createElement('div');
     metaRow.className = 'poem-meta-row';
@@ -3286,10 +3907,10 @@
     meta.className = 'poem-meta';
     var warnEl = document.createElement('div');
     warnEl.className = 'poem-warn';
-    warnEl.textContent = '⚠ a line is too long for the page and will wrap';
+    warnEl.textContent = '⚠ a line is too long for the page — it’ll turn over onto an indented line';
     warnEl.hidden = true;
     function updateMeta(planOverride) {
-      var lineCount = poem.lines.filter(function (l) { return l.trim() !== ''; }).length;
+      var lineCount = poem.lines.filter(function (l) { return l.trim() !== '' && !imageKeyForLine(l, state); }).length;
       var layout = planOverride && planOverride.layouts[index] ? planOverride.layouts[index] : getLayoutFor(poem);
       var pages = layout ? layout.pages.length : 1;
       meta.textContent = lineCount + ' line' + (lineCount === 1 ? '' : 's') + ' · ' + pages + ' page' + (pages === 1 ? '' : 's');
@@ -3300,20 +3921,7 @@
     metaLeft.appendChild(warnEl);
     metaRow.appendChild(metaLeft);
     metaRow.appendChild(makeTitleAlignControl(poem, titleInput));
-    metaRow.appendChild(makeBodyAlignControl(poem, textarea));
-    // Archiving lives down here now, not as a "×" beside the title --
-    // that read as a close button and made a destructive action one
-    // careless click away.
-    var removeBtn = document.createElement('button');
-    removeBtn.className = 'btn btn-ghost btn-danger';
-    removeBtn.type = 'button';
-    removeBtn.title = 'Archive entry';
-    removeBtn.textContent = '🗑';
-    removeBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      archivePoem(index);
-    });
-    metaRow.appendChild(removeBtn);
+    metaRow.appendChild(makeBodyAlignControl(poem, textarea, updateVerseClass));
 
     // Only shown in phone writing mode (see .poem-card.is-writing).
     var writerBar = document.createElement('div');
@@ -3340,17 +3948,18 @@
     textarea.addEventListener('blur', function () { card.classList.remove('is-body-focus'); });
     var doneBtn = document.createElement('button');
     doneBtn.type = 'button';
-    doneBtn.className = 'btn btn-primary poem-writer-done';
+    doneBtn.className = 'poem-writer-done';
     doneBtn.textContent = 'Done';
     doneBtn.addEventListener('click', finishWriting);
-    writerBar.appendChild(makeFormatToolbar(textarea));
     writerBar.appendChild(writerTitle);
     writerBar.appendChild(doneBtn);
 
     body.appendChild(writerBar);
     body.appendChild(titleRow);
     body.appendChild(textarea);
+    body.appendChild(display);
     body.appendChild(makeFormatToolbar(textarea));
+    body.appendChild(imagesStrip);
     body.appendChild(metaRow);
     card.appendChild(handle);
     card.appendChild(body);
@@ -3367,7 +3976,10 @@
     if (writingPoemId === poem.id) {
       writingCard = card;
       card.classList.add('is-writing');
-      setTimeout(syncWriterViewport, 0);
+      setTimeout(function () {
+        if (writingCard === card) markWritingPath(card, true);
+        syncWriterViewport();
+      }, 0);
     }
 
     card.addEventListener('dragstart', function (e) {
@@ -3376,9 +3988,18 @@
       e.dataTransfer.effectAllowed = 'move';
     });
     card.addEventListener('dragend', function () { card.classList.remove('dragging'); dragFromIndex = null; });
-    card.addEventListener('dragover', function (e) { e.preventDefault(); });
+    card.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (hasDraggedFiles(e)) card.classList.add('drop-target');
+    });
+    card.addEventListener('dragleave', function (e) {
+      if (!card.contains(e.relatedTarget)) card.classList.remove('drop-target');
+    });
     card.addEventListener('drop', function (e) {
       e.preventDefault();
+      card.classList.remove('drop-target');
+      var files = imageFilesFrom(e.dataTransfer && e.dataTransfer.files);
+      if (files.length) { insertImagesIntoTextarea(textarea, files); return; }
       if (dragFromIndex === null || dragFromIndex === index) return;
       var moved = state.poems.splice(dragFromIndex, 1)[0];
       state.poems.splice(index, 0, moved);
@@ -3386,7 +4007,7 @@
       renderAll();
     });
 
-    setTimeout(function () { autoGrow(textarea); }, 0);
+    setTimeout(function () { autoGrow(titleInput); autoGrow(textarea); }, 0);
     return card;
   }
 
@@ -3420,19 +4041,9 @@
       }
     });
 
-    var removeBtn = document.createElement('button');
-    removeBtn.className = 'btn btn-ghost btn-danger';
-    removeBtn.type = 'button';
-    removeBtn.title = 'Archive entry';
-    removeBtn.textContent = '🗑';
-    removeBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      archivePoem(index);
-    });
-
     row.appendChild(handle);
     row.appendChild(titleBtn);
-    row.appendChild(removeBtn);
+    row.appendChild(makeDotsBtn(index));
 
     row.addEventListener('dragstart', function (e) {
       dragFromIndex = index;
@@ -3441,8 +4052,23 @@
     });
     row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
     row.addEventListener('dragover', function (e) { e.preventDefault(); });
-    row.addEventListener('drop', function (e) {
+    row.addEventListener('drop', async function (e) {
       e.preventDefault();
+      // An image dropped on a closed entry goes at the end of its text.
+      var files = imageFilesFrom(e.dataTransfer && e.dataTransfer.files);
+      if (files.length) {
+        var tmp = document.createElement('textarea');
+        tmp.value = poem.lines.join('\n');
+        tmp.selectionStart = tmp.selectionEnd = tmp.value.length;
+        tmp.addEventListener('input', function () {
+          poem.lines = tmp.value.split('\n');
+          state.isExample = false;
+          persist();
+          renderAll();
+        });
+        await insertImagesIntoTextarea(tmp, files);
+        return;
+      }
       if (dragFromIndex === null || dragFromIndex === index) return;
       var moved = state.poems.splice(dragFromIndex, 1)[0];
       state.poems.splice(index, 0, moved);
@@ -3472,7 +4098,7 @@
       expandedTitleRow.addEventListener('click', function (e) {
         if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) collapseBtn.click();
       });
-      var expandedTitleInput = expandedCard.querySelector('input.poem-title');
+      var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
       expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
       requestAnimationFrame(function () { fitTitleInput(expandedTitleInput); });
       return expandedCard;
@@ -3510,6 +4136,8 @@
     measureCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
     var textW = measureCtx.measureText(input.value || input.placeholder || '').width;
     input.style.width = Math.ceil(textW + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 14) + 'px';
+    // A long title is capped at the row (max-width) and wraps instead.
+    if (input.tagName === 'TEXTAREA') autoGrow(input);
   }
 
   var poemsViewMode = 'compact';
@@ -3529,8 +4157,15 @@
   });
 
   var zoomLabel = document.getElementById('zoomLabel');
+  // Phone writing mode sizes its text in CSS off this variable, so the
+  // zoom control applies there too instead of a fixed 18px.
+  function applyEditorZoomVar() {
+    document.documentElement.style.setProperty('--editor-zoom', String(editorZoom));
+  }
+  applyEditorZoomVar();
   function setEditorZoom(z) {
     editorZoom = Math.max(0.7, Math.min(2, Math.round(z * 20) / 20));
+    applyEditorZoomVar();
     zoomLabel.textContent = Math.round(editorZoom * 100) + '%';
     try { localStorage.setItem(EDITOR_ZOOM_KEY, String(editorZoom)); } catch (e) {}
     renderPoems();
@@ -3568,20 +4203,10 @@
       updateStats();
     });
 
-    var removeBtn = document.createElement('button');
-    removeBtn.className = 'btn btn-ghost btn-danger';
-    removeBtn.type = 'button';
-    removeBtn.title = 'Archive this section break';
-    removeBtn.textContent = '×';
-    removeBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      archivePoem(index);
-    });
-
     row.appendChild(handle);
     row.appendChild(label);
     row.appendChild(titleInput);
-    row.appendChild(removeBtn);
+    row.appendChild(makeDotsBtn(index));
 
     row.addEventListener('dragstart', function (e) {
       dragFromIndex = index;
@@ -3643,7 +4268,7 @@
   function updateArchiveButton() {
     var n = (state.archivedPoems || []).length;
     archiveToggleBtn.textContent = archivePanel.hidden
-      ? 'View archive' + (n ? ' (' + n + ')' : ' (empty)')
+      ? 'Archive' + (n ? ' (' + n + ')' : '')
       : 'Hide archive';
   }
 
@@ -3893,6 +4518,7 @@
 
     box.style.width = widthPx + 'px';
     box.style.height = Math.round(plan.PAGE_H * scale) + 'px';
+    box.parentNode.style.setProperty('--preview-h', (Math.round(plan.PAGE_H * scale) + 6) + 'px');
     box.style.boxSizing = 'border-box';
     box.style.fontFamily = displayStackFor(state.bodyFontChoice);
 
@@ -3926,7 +4552,13 @@
       }
       html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
       (layout.pages[pageIndex] || []).forEach(function (rl) {
-        html += '<div>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
+        if (rl.image) {
+          html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px; display:flex; align-items:center; justify-content:center;">' +
+            '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
+          return;
+        }
+        var indentStyle = rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
+        html += '<div' + indentStyle + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
       box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale);
@@ -3976,6 +4608,11 @@
   });
   window.addEventListener('resize', function () { if (!previewFull.hidden) renderPreview(); });
 
+  // No focus on click: focusing a half-visible button scrolls its
+  // container, which nudged the arrows a little on every click.
+  ['previewPrevBtn', 'previewNextBtn'].forEach(function (id) {
+    document.getElementById(id).addEventListener('mousedown', function (e) { e.preventDefault(); });
+  });
   document.getElementById('previewPrevBtn').addEventListener('click', function () {
     previewIndex = Math.max(0, previewIndex - 1);
     renderPreview();
@@ -4330,6 +4967,15 @@
   document.getElementById('cutLinesCheck').addEventListener('change', function (e) {
     state.showCutLines = e.target.checked; persist(); updateStats();
   });
+  wireSingleLine(document.getElementById('bookTitleInput'), function () { document.getElementById('authorInput').focus(); });
+  // Re-fit the book title whenever its width changes or it's revealed.
+  if (window.ResizeObserver) {
+    var lastTitleW = 0;
+    new ResizeObserver(function (entries) {
+      var w = entries[0].contentRect.width;
+      if (w !== lastTitleW) { lastTitleW = w; autoGrow(document.getElementById('bookTitleInput')); }
+    }).observe(document.getElementById('bookTitleInput'));
+  }
   document.getElementById('bookTitleInput').addEventListener('input', function (e) {
     state.bookTitle = e.target.value; persist();
   });
@@ -4339,6 +4985,7 @@
 
   function syncSidebarFromState() {
     document.getElementById('bookTitleInput').value = state.bookTitle || '';
+    autoGrow(document.getElementById('bookTitleInput'));
     document.getElementById('authorInput').value = state.author || '';
     trimSelect.value = state.trimKey;
     document.querySelectorAll('#bodyFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyFontChoice); });
@@ -4551,7 +5198,24 @@
     }).join('');
   }
 
-  function buildDocxDocumentXml(poems) {
+  // A centered inline picture, capped at the 6.5in text width and 8in
+  // tall. EMU = 914400 per inch.
+  function docxImageXml(img, relId, n) {
+    var w = Math.min(6.5, img.w / 150), h = w * img.h / img.w;
+    if (h > 8) { h = 8; w = h * img.w / img.h; }
+    var cx = Math.round(w * 914400), cy = Math.round(h * 914400);
+    return '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:docPr id="' + n + '" name="Picture ' + n + '"/>' +
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+      '<pic:nvPicPr><pic:cNvPr id="' + n + '" name="image' + n + '.jpeg"/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="' + relId + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  }
+
+  // imageRels collects { key, relId } for every image placed, so
+  // buildDocx can add the matching media files and relationships.
+  function buildDocxDocumentXml(poems, images, imageRels) {
     var body = '';
     poems.forEach(function (poem, i) {
       var titlePr = i > 0 ? '<w:pPr><w:pageBreakBefore/><w:jc w:val="center"/></w:pPr>' : '<w:pPr><w:jc w:val="center"/></w:pPr>';
@@ -4563,21 +5227,38 @@
       body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">' +
         escapeXml(poem.title || 'Untitled') + '</w:t></w:r></w:p>';
       body += '<w:p/>';
+      // Verse turns long lines over with a hanging indent, as in the PDF.
+      var linePr = isLineated(poem) ? '<w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' : '';
       poem.lines.forEach(function (line) {
-        body += line === '' ? '<w:p/>' : '<w:p>' + docxRunsXml(line) + '</w:p>';
+        var imgKey = imageKeyForLine(line, { images: images });
+        if (imgKey) {
+          var rel = imageRels.filter(function (r) { return r.key === imgKey; })[0];
+          if (!rel) { rel = { key: imgKey, relId: 'rIdImg' + (imageRels.length + 1) }; imageRels.push(rel); }
+          body += docxImageXml(images[imgKey], rel.relId, imageRels.indexOf(rel) + 1);
+          return;
+        }
+        body += line === '' ? '<w:p/>' : '<w:p>' + linePr + docxRunsXml(line) + '</w:p>';
       });
     });
     body += '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body + '</w:body></w:document>';
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+      ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' +
+      ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"' +
+      ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"' +
+      ' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>' + body + '</w:body></w:document>';
   }
 
   function buildDocx(exportState) {
     var encoder = new TextEncoder();
+    var images = exportState.images || {};
+    var imageRels = [];
+    var documentXml = buildDocxDocumentXml(exportState.poems, images, imageRels);
     var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
       '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
       '</Types>';
@@ -4588,21 +5269,24 @@
     var docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      imageRels.map(function (r, i) {
+        return '<Relationship Id="' + r.relId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image' + (i + 1) + '.jpeg"/>';
+      }).join('') +
       '</Relationships>';
     var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
       '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
       '</w:styles>';
-    var documentXml = buildDocxDocumentXml(exportState.poems);
-
     return makeZip([
       { name: '[Content_Types].xml', data: encoder.encode(contentTypes) },
       { name: '_rels/.rels', data: encoder.encode(rootRels) },
       { name: 'word/document.xml', data: encoder.encode(documentXml) },
       { name: 'word/_rels/document.xml.rels', data: encoder.encode(docRels) },
       { name: 'word/styles.xml', data: encoder.encode(styles) }
-    ]);
+    ].concat(imageRels.map(function (r, i) {
+      return { name: 'word/media/image' + (i + 1) + '.jpeg', data: dataUrlToBytes(images[r.key].data) };
+    })));
   }
 
   var DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -4711,6 +5395,7 @@
     await runExportForState(Object.assign({}, state, { poems: selected }), buildImposedBookletPdf, '-printable.pdf');
   });
 
+  pruneUnusedImages();
   renderAll();
   var storedCloudAuthToken = getStoredCloudAuthToken();
   if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
@@ -4721,12 +5406,17 @@
   syncMyBooksLabel();
   homeMQ.addEventListener('change', syncMyBooksLabel);
   waitForGoogleIdentity(25);
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(function () {
-      document.querySelectorAll('.poem-text').forEach(autoGrow);
-      document.querySelectorAll('.poem-compact-expanded input.poem-title').forEach(fitTitleInput);
+  // Wrapping titles and auto-height text boxes need re-measuring
+  // whenever the width or the loaded fonts change.
+  function regrowAll() {
+    document.querySelectorAll('.poem-compact-expanded textarea.poem-title').forEach(fitTitleInput);
+    document.querySelectorAll('.poem-text, textarea.poem-title, #bookTitleInput').forEach(function (ta) {
+      if (!ta.closest('.is-writing') || ta.classList.contains('poem-title')) autoGrow(ta);
     });
   }
+  var regrowTimer = null;
+  window.addEventListener('resize', function () { clearTimeout(regrowTimer); regrowTimer = setTimeout(regrowAll, 120); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(regrowAll);
 })();
 </script>
 </body>
