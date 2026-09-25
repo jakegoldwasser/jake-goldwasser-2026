@@ -21,7 +21,7 @@
 <meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400&family=Jost:ital,wght@0,400;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
@@ -301,23 +301,18 @@
      of shrinking and letting that row's own flex-wrap kick in. */
   .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
-  .side-rail { display: none; }
+  /* One Tools toggle (top right, directly above the tools column, the
+     way Pages' Format button and Docs' side-panel toggle work): it never
+     moves, and the column stays however you last left it. */
+  .tools-toggle { display: none; }
   @media (min-width: 861px) {
-    .workspace.tools-pinned { grid-template-columns: 1fr 30px 320px; column-gap: 12px; }
-    .workspace.tools-pinned .sidebar-fold-col { display: block; }
-    .workspace.rail-mode { grid-template-columns: 1fr 44px; }
-    .workspace.rail-mode .sidebar { display: none; }
-    .workspace.rail-mode .side-rail { display: flex; }
+    .tools-toggle { display: inline-flex; }
+    body.view-home .tools-toggle { display: none; }
+    .workspace.tools-hidden { grid-template-columns: 1fr; }
+    .workspace.tools-hidden .sidebar { display: none; }
   }
-  .side-rail { position: sticky; top: 24px; flex-direction: column; gap: 8px; }
-  .side-rail button { width: 44px; height: 72px; font-size: 20px; border-radius: 8px; box-shadow: 0 1px 2px var(--shadow); }
-  .sidebar-fold-btn, .side-rail button {
-    appearance: none; cursor: pointer; background: var(--surface); border: 1px solid var(--line-strong);
-    color: var(--ink-soft); font-size: 17px; line-height: 1; border-radius: 7px;
-  }
-  .sidebar-fold-btn { width: 30px; height: 72px; font-size: 20px; box-shadow: 0 1px 2px var(--shadow); }
-  .sidebar-fold-col { display: none; position: sticky; top: 24px; }
-  .sidebar-fold-btn:hover, .side-rail button:hover { color: var(--accent); border-color: var(--accent); }
+  .tools-toggle svg { flex: 0 0 auto; }
+  .tools-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
   /* iOS Safari auto-zooms the whole page when a focused text field's
      font-size is under 16px -- jarring on every tap, and it doesn't
@@ -325,7 +320,7 @@
      these fields) is intentional there, so only raise it for the
      narrow/touch widths where it actually causes the zoom. */
   @media (max-width: 700px) {
-    input[type="text"], input[type="search"], textarea.raw-paste, textarea.poem-text, .field input[type="text"] {
+    input[type="text"], input[type="search"], textarea.raw-paste, .poem-text, .field input[type="text"] {
       font-size: 16px;
     }
   }
@@ -384,47 +379,39 @@
   textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   textarea.poem-title:focus { border-bottom-color: var(--accent); }
 
-  textarea.poem-text {
+  .poem-text {
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
-    font-family: inherit; font-size: 14.5px; line-height: 1.15; padding: 10px 12px;
-    outline: none; resize: none; overflow: hidden; color: var(--ink); white-space: pre-wrap;
+    font-family: inherit; font-size: 14.5px; line-height: 1.15; padding: 10px 12px; min-height: 2.6em;
+    outline: none; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; cursor: text;
   }
-  textarea.poem-text:focus { border-color: var(--accent); }
+  .poem-text:focus { border-color: var(--accent); }
+  .poem-text b { font-weight: 700; }
   /* Desktop: pull the editor left under the number/grip column (26px +
      the card's 10px gap) so its left inset matches the right, and give
      the text a page-like half-inch margin inside the box. */
   @media (min-width: 701px) {
-    .poem-card textarea.poem-text, .poem-card .poem-text-display { margin-left: -36px; width: calc(100% + 36px); padding: 0.5in; }
+    .poem-card .poem-text { margin-left: -36px; width: calc(100% + 36px); padding: 0.5in; }
     .poem-card .format-toolbar { margin-left: -36px; }
   }
-  /* Stand-in for the textarea in browsers whose textareas can't do a
-     per-line hanging indent (Chrome) -- see TEXTAREA_HANGS. Same box
-     as the textarea, shown only while the entry isn't being typed in. */
-  .poem-text-display {
-    width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
-    font-family: inherit; font-size: 14.5px; line-height: 1.15; padding: 10px 12px;
-    color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; cursor: text; min-height: 2.5em;
-    text-indent: 1.5em hanging each-line;
-  }
-  .poem-text-display[hidden] { display: none; }
   /* Lineated verse: a line too long for the box wraps with its
      continuation indented (a hanging indent), the same way the printed
      page turns it over -- so a wrapped line never reads as a new line
-     of the poem. Prose entries don't get the class and wrap flush. */
-  html.textarea-hangs textarea.poem-text.is-verse { text-indent: 1.5em hanging each-line; }
+     of the poem. Each line is its own <div>, so this works in every
+     browser. Prose entries don't get the class and wrap flush. */
+  .poem-text.is-verse > div:not(.ed-image) { padding-left: 1.5em; text-indent: -1.5em; }
 
-  /* Images live in the text as their own "[image N]" line; the card
-     shows each one below the text so it's clear what that line is. */
-  .poem-images { display: flex; flex-wrap: wrap; gap: 8px; }
-  .poem-images:empty { display: none; }
-  .poem-image-chip {
-    position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
-    font-size: 10.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  /* An image sits in the text as its own centered, uneditable line
+     (saved as "[image N]"). The × shows on hover, or always on touch. */
+  .poem-text .ed-image { position: relative; display: flex; justify-content: center; padding: 6px 0; text-indent: 0; }
+  .poem-text .ed-image img { display: block; max-width: min(100%, 360px); max-height: 300px; border-radius: 3px; }
+  .ed-image-remove {
+    position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+    font-size: 16px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s ease;
   }
-  .poem-image-chip img {
-    display: block; max-width: 96px; max-height: 72px; border-radius: 4px; border: 1px solid var(--line);
-    background: #fff;
-  }
+  .ed-image:hover .ed-image-remove, .ed-image-remove:focus-visible { opacity: 1; }
+  @media (hover: none) { .ed-image-remove { opacity: 1; } }
+  .format-toolbar button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .poem-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
   .poem-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -508,12 +495,11 @@
     }
     .poem-writer-title.is-placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
     .poem-card.is-writing:not(.is-body-focus) .poem-writer-title { visibility: hidden; }
-    .poem-card.is-writing textarea.poem-text {
+    .poem-card.is-writing .poem-text {
       flex: 1 1 auto; min-height: 0; height: auto !important; overflow-y: auto; -webkit-overflow-scrolling: touch;
       border: none; border-radius: 0; background: transparent; padding: 10px 0 24px;
       font-size: calc(18px * var(--editor-zoom, 1)) !important;
     }
-    .poem-card.is-writing .poem-images { flex: 0 0 auto; padding: 4px 0; }
     .poem-card.is-writing .poem-meta-row,
     .poem-card.is-writing .poem-collapse-btn { display: none; }
   }
@@ -867,12 +853,15 @@
     .account-area, .account-status-row { align-items: flex-start; justify-content: flex-start; }
     .chapbooks-dropdown { left: 0; width: min(280px, calc(100vw - 24px)); }
     .panel { padding: 16px 14px; }
-    #poemsPanel { padding: 0; background: none; border: none; box-shadow: none; }
+    /* Same colour layering as the web app -- paper page, light panel,
+       darker entry bars -- but run edge to edge so the panel doesn't
+       bring back a second margin. */
+    #poemsPanel { margin: 0 -12px; padding: 12px 8px; border-left: none; border-right: none; border-radius: 0; }
     .poems-head { gap: 8px; margin-bottom: 10px; }
     .poems-head .btn-sm { padding: 5px 9px; font-size: 12px; }
     .poem-card { padding: 10px 12px 10px; gap: 0; }
     .poem-card .poem-handle { display: none; }
-    .poem-card textarea.poem-text, .poem-card .poem-text-display { border: none; background: transparent; padding: 4px 0; border-radius: 0; }
+    .poem-card .poem-text { border: none; background: transparent; padding: 4px 0; border-radius: 0; }
     .poem-compact-row { padding: 6px 6px 6px 4px; }
     .poem-gap-line { left: 0; }
     .sidebar { position: static; max-height: none; overflow: visible; }
@@ -934,6 +923,10 @@
           </div>
         </div>
         <button class="btn" id="newBookBtn" type="button" title="Start a new, blank book. This one stays in My Books.">New book</button>
+        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Formatting, Export and Preview">
+          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+          Tools
+        </button>
       </div>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
@@ -1035,14 +1028,7 @@
       </div>
     </div>
 
-    <!-- Its own slim column beside the tools, so it reads as folding the
-         whole column rather than any one panel (only while an entry is
-         open; see updateSideRail). -->
-    <div class="sidebar-fold-col">
-      <button class="sidebar-fold-btn" id="sidebarFoldBtn" type="button" title="Hide tools" aria-label="Hide tools">»</button>
-    </div>
-
-    <div class="sidebar">
+    <div class="sidebar" id="toolsSidebar">
       <div class="sidebar-scroll">
         <div class="panel collapsible-panel" id="formattingPanel">
           <!-- Closed by default -- the settings are occasional, not something
@@ -1198,11 +1184,6 @@
       </div>
     </div>
 
-    <!-- Stands in for the sidebar while an entry is open (desktop), so the
-         editor gets the width. See updateSideRail. -->
-    <nav class="side-rail" id="sideRail" aria-label="Book tools">
-      <button type="button" id="showToolsBtn" title="Show tools" aria-label="Show tools">«</button>
-    </nav>
   </div>
 
 </div>
@@ -1871,27 +1852,84 @@
   // and cloud sync stay untouched -- parseInlineRuns splits a line into
   // styled runs wherever it actually needs to be drawn or rendered.
   // ---------------------------------------------------------------------
-  function stripFormatMarkers(text) {
-    return String(text || '')
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/\+\+(.+?)\+\+/g, '$1')
-      .replace(/\*(.+?)\*/g, '$1');
+  // Markers work as toggles, like Markdown: "**" flips bold, "*" flips
+  // italic, "++" flips underline, so they nest ("***both***"). A marker
+  // with no partner later in the line, or standing alone between spaces
+  // ("5 * 3"), is just a literal character.
+  function parseInlineRuns(text) {
+    text = String(text || '');
+    var toks = [], buf = '', i = 0;
+    while (i < text.length) {
+      var two = text.substr(i, 2), m = null;
+      if (two === '**' || two === '++') m = two;
+      else if (text[i] === '*') m = '*';
+      if (m) {
+        var prev = i > 0 ? text[i - 1] : ' ';
+        var next = i + m.length < text.length ? text[i + m.length] : ' ';
+        if (/\s/.test(prev) && /\s/.test(next)) m = null;
+      }
+      if (m) {
+        if (buf) toks.push({ t: buf });
+        buf = '';
+        toks.push({ m: m });
+        i += m.length;
+      } else { buf += text[i]; i++; }
+    }
+    if (buf) toks.push({ t: buf });
+    ['**', '++', '*'].forEach(function (mk) {
+      var idx = [];
+      toks.forEach(function (tk, j) { if (tk.m === mk) idx.push(j); });
+      if (idx.length % 2) toks[idx[idx.length - 1]] = { t: mk };
+    });
+    var runs = [], st = { bold: false, italic: false, underline: false };
+    toks.forEach(function (tk) {
+      if (tk.m) {
+        var k = tk.m === '**' ? 'bold' : (tk.m === '++' ? 'underline' : 'italic');
+        st[k] = !st[k];
+        return;
+      }
+      var last = runs[runs.length - 1];
+      if (last && last.bold === st.bold && last.italic === st.italic && last.underline === st.underline) last.text += tk.t;
+      else runs.push({ text: tk.t, bold: st.bold, italic: st.italic, underline: st.underline });
+    });
+    if (!runs.length) runs.push({ text: '' });
+    return runs;
   }
 
-  function parseInlineRuns(text) {
-    var runs = [];
-    var re = /\*\*(.+?)\*\*|\+\+(.+?)\+\+|\*(.+?)\*/g;
-    var lastIndex = 0, m;
-    while ((m = re.exec(text))) {
-      if (m.index > lastIndex) runs.push({ text: text.slice(lastIndex, m.index) });
-      if (m[1] !== undefined) runs.push({ text: m[1], bold: true });
-      else if (m[2] !== undefined) runs.push({ text: m[2], underline: true });
-      else runs.push({ text: m[3], italic: true });
-      lastIndex = re.lastIndex;
-    }
-    if (lastIndex < text.length) runs.push({ text: text.slice(lastIndex) });
-    if (!runs.length) runs.push({ text: text });
-    return runs;
+  function stripFormatMarkers(text) {
+    return parseInlineRuns(text).map(function (r) { return r.text; }).join('');
+  }
+
+  // The inverse of parseInlineRuns: styled runs back to marker text.
+  // Spaces at a run's edges stay outside its markers ("*word* ", never
+  // "*word *"), which is what keeps the round trip stable.
+  function runsToMarkup(runs) {
+    var merged = [];
+    runs.forEach(function (r) {
+      if (!r.text) return;
+      var last = merged[merged.length - 1];
+      if (last && !!last.bold === !!r.bold && !!last.italic === !!r.italic && !!last.underline === !!r.underline) last.text += r.text;
+      else merged.push({ text: r.text, bold: !!r.bold, italic: !!r.italic, underline: !!r.underline });
+    });
+    return merged.map(function (r) {
+      if (!r.bold && !r.italic && !r.underline) return r.text;
+      var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(r.text);
+      if (!m[2]) return r.text;
+      var open = (r.bold ? '**' : '') + (r.underline ? '++' : '') + (r.italic ? '*' : '');
+      var close = (r.italic ? '*' : '') + (r.underline ? '++' : '') + (r.bold ? '**' : '');
+      return m[1] + open + m[2] + close + m[3];
+    }).join('');
+  }
+
+  // The runs covering plain-text characters [start, end).
+  function sliceRuns(runs, start, end) {
+    var out = [], pos = 0;
+    runs.forEach(function (r) {
+      var a = Math.max(start, pos), b = Math.min(end, pos + r.text.length);
+      if (b > a) out.push({ text: r.text.slice(a - pos, b - pos), bold: r.bold, italic: r.italic, underline: r.underline });
+      pos += r.text.length;
+    });
+    return out;
   }
 
   // Section vs. entry isn't tied to a fixed heading level (H1/H2 =
@@ -2149,31 +2187,30 @@
     return out;
   }
 
+  // Wraps one marker-formatted line. Measures and breaks the plain text,
+  // then re-marks each piece from the parsed runs, so bold that spans a
+  // turnover stays bold on both halves instead of leaving a stray "**".
+  function wrapFormatted(line, maxWidthPt, sizePt, fontFamily, hangPt) {
+    var runs = parseInlineRuns(line);
+    var plain = runs.map(function (r) { return r.text; }).join('');
+    var pieces = hangPt
+      ? wrapVerseLine(plain, maxWidthPt, sizePt, fontFamily, 400, hangPt)
+      : wrapLine(plain, maxWidthPt, sizePt, fontFamily, 400).map(function (t) { return { text: t, indent: 0 }; });
+    if (pieces.length === 1) return [{ text: line, indent: 0 }];
+    var cursor = 0;
+    return pieces.map(function (p) {
+      var start = plain.indexOf(p.text, cursor);
+      if (start < 0) start = cursor;
+      cursor = start + p.text.length;
+      return { text: runsToMarkup(sliceRuns(runs, start, cursor)), indent: p.indent };
+    });
+  }
+
   // Verse or prose? A lineated poem is mostly short lines broken by
   // hand; prose is mostly paragraph-length lines that are *meant* to
   // reflow. Only verse gets hanging-indented turnovers and the "line
   // too long" warning -- prose wrapping is just normal typesetting.
   var PROSE_LINE_CHARS = 140;
-  // Does this browser's <textarea> honor "text-indent: hanging
-  // each-line"? WebKit's does; Chrome's indents every line after the
-  // first instead (it ignores forced breaks inside a textarea). Probe:
-  // with the indent working, "bb bb" on its own line still fits and the
-  // height doesn't change; if broken, it gets squeezed and wraps.
-  var TEXTAREA_HANGS = (function () {
-    try {
-      if (!CSS.supports('text-indent', '1em hanging each-line')) return false;
-      var a = document.createElement('textarea');
-      a.style.cssText = 'position:absolute;left:-9999px;top:0;width:100px;height:10px;font:16px monospace;padding:0;border:0;white-space:pre-wrap;overflow:hidden';
-      a.value = 'a\nbb bb';
-      document.body.appendChild(a);
-      var h0 = a.scrollHeight;
-      a.style.textIndent = '80px hanging each-line';
-      var h1 = a.scrollHeight;
-      a.remove();
-      return h0 === h1;
-    } catch (e) { return false; }
-  })();
-  if (TEXTAREA_HANGS) document.documentElement.classList.add('textarea-hangs');
 
   function isLineated(poem) {
     var lines = (poem.lines || []).filter(function (l) { return l && l.trim() !== '' && !IMAGE_LINE_RE.test(l); });
@@ -2250,9 +2287,7 @@
         renderLines.push({ image: imgKey, w: w, h: h, rows: Math.min(firstCap, Math.ceil((h + lineHeight * 0.5) / lineHeight)) });
         return;
       }
-      var wrapped = hangPt
-        ? wrapVerseLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400, hangPt)
-        : wrapLine(line, contentWidthPt, sizePt, state.bodyFontChoice, 400).map(function (t) { return { text: t, indent: 0 }; });
+      var wrapped = wrapFormatted(line, contentWidthPt, sizePt, state.bodyFontChoice, hangPt);
       if (wrapped.length > 1 && verse) wasWrapped = true;
       wrapped.forEach(function (w) {
         renderLines.push({ blank: false, text: w.text, indent: w.indent });
@@ -3246,7 +3281,7 @@
     if (!writingCard || !vv) return;
     writingCard.style.top = vv.offsetTop + 'px';
     writingCard.style.height = vv.height + 'px';
-    var ta = writingCard.querySelector('textarea.poem-text');
+    var ta = writingCard.querySelector('.poem-text');
     if (ta && document.activeElement === ta) scrollCaretIntoView(ta);
   }
   // Tags the card's ancestors so the writing-mode CSS can hide every
@@ -3257,28 +3292,22 @@
     for (var el = card.parentElement; el && el !== document.documentElement; el = el.parentElement) el.classList.add('writing-path');
   }
   // The editor re-lays its text out bigger when it goes full screen, so
-  // the line the cursor is on can end up below the fold. Measures the
-  // caret's height in an offscreen copy of the textarea and scrolls it
+  // the line the cursor is on can end up below the fold -- scroll it
   // into the upper part of the editor.
-  function scrollCaretIntoView(ta) {
-    var cs = getComputedStyle(ta);
-    var m = document.createElement('div');
-    ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent',
-      'paddingTop', 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].forEach(function (k) { m.style[k] = cs[k]; });
-    m.style.position = 'absolute';
-    m.style.visibility = 'hidden';
-    m.style.left = '-9999px';
-    m.style.whiteSpace = 'pre-wrap';
-    m.style.overflowWrap = 'break-word';
-    m.style.boxSizing = 'border-box';
-    m.style.width = ta.offsetWidth + 'px';
-    m.textContent = ta.value.slice(0, ta.selectionStart) + '\u200b';
-    ta.parentNode.appendChild(m);
-    var caretY = m.offsetHeight;
-    m.parentNode.removeChild(m);
-    var lineH = parseFloat(cs.lineHeight) || 24;
-    if (caretY - lineH < ta.scrollTop || caretY > ta.scrollTop + ta.clientHeight - lineH) {
-      ta.scrollTop = Math.max(0, caretY - ta.clientHeight / 3);
+  function scrollCaretIntoView(ed) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) return;
+    var r = sel.getRangeAt(0).cloneRange();
+    r.collapse(true);
+    var rect = r.getBoundingClientRect();
+    if (!rect.top && !rect.bottom) {
+      var el = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+      if (el) rect = el.getBoundingClientRect();
+    }
+    var box = ed.getBoundingClientRect();
+    var lineH = parseFloat(getComputedStyle(ed).lineHeight) || 24;
+    if (rect.top < box.top + lineH || rect.bottom > box.bottom - lineH) {
+      ed.scrollTop += rect.top - box.top - ed.clientHeight / 3;
     }
   }
   function enterWriting(card, poemId) {
@@ -3295,7 +3324,7 @@
     var title = card.querySelector('textarea.poem-title');
     if (title) autoGrow(title);
     requestAnimationFrame(function () {
-      var ta = card.querySelector('textarea.poem-text');
+      var ta = card.querySelector('.poem-text');
       if (ta && document.activeElement === ta) scrollCaretIntoView(ta);
     });
     if (!(history.state && history.state.bookbugWriting)) {
@@ -3323,8 +3352,6 @@
       renderPoems();
       return;
     }
-    var ta = card.querySelector('textarea.poem-text');
-    if (ta) autoGrow(ta);
     card.scrollIntoView({ block: 'center' });
   }
   function finishWriting() {
@@ -3346,118 +3373,262 @@
     } catch (e) { return null; }
   }
 
-  // A textarea's Tab key normally jumps focus to the next field; poets
-  // want to indent instead, so intercept it and insert/remove spaces at
-  // the cursor (Shift+Tab outdents up to 4 spaces from the line start).
-  function wireTabIndent(textarea) {
-    textarea.addEventListener('keydown', function (e) {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        var start = textarea.selectionStart, end = textarea.selectionEnd;
-        var val = textarea.value;
-        if (!e.shiftKey) {
-          textarea.value = val.slice(0, start) + '    ' + val.slice(end);
-          textarea.selectionStart = textarea.selectionEnd = start + 4;
-        } else {
-          var lineStart = val.lastIndexOf('\n', start - 1) + 1;
-          var removeCount = 0;
-          while (removeCount < 4 && val[lineStart + removeCount] === ' ') removeCount++;
-          if (removeCount > 0) {
-            textarea.value = val.slice(0, lineStart) + val.slice(lineStart + removeCount);
-            textarea.selectionStart = textarea.selectionEnd = Math.max(lineStart, start - removeCount);
-          }
-        }
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        return;
-      }
-      // Backspace right after a Tab-inserted indent removes the whole
-      // indent back to the previous 4-space stop, not just one space --
-      // only within a line's leading whitespace, so ordinary spaces
-      // between words are untouched.
-      if (e.key === 'Backspace' && textarea.selectionStart === textarea.selectionEnd) {
-        var pos = textarea.selectionStart;
-        var text = textarea.value;
-        var ls = text.lastIndexOf('\n', pos - 1) + 1;
-        var leading = text.slice(ls, pos);
-        if (leading.length > 0 && /^ +$/.test(leading)) {
-          var toRemove = ((leading.length - 1) % 4) + 1;
-          e.preventDefault();
-          textarea.value = text.slice(0, pos - toRemove) + text.slice(pos);
-          textarea.selectionStart = textarea.selectionEnd = pos - toRemove;
-          textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }
+  // ---------------------------------------------------------------------
+  // Entry body editor -- a contenteditable, so **bold**, *italic* and
+  // ++underline++ show as real formatting while typing. The saved data
+  // doesn't change: poem.lines is still one marker-annotated string per
+  // line, rebuilt from the DOM on every edit (serializeEditor), so the
+  // exports, preview, autosave and cloud sync never see any HTML. Each
+  // line is its own <div>, which is also what lets a verse line's
+  // turnover get a hanging indent (CSS: .poem-text.is-verse > div).
+  // ---------------------------------------------------------------------
+  try { document.execCommand('defaultParagraphSeparator', false, 'div'); } catch (e) {}
+  try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+
+  var BLOCK_TAGS = { DIV: 1, P: 1, LI: 1, UL: 1, OL: 1, BLOCKQUOTE: 1, PRE: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1 };
+
+  function wrapIn(tag, node) { var el = document.createElement(tag); el.appendChild(node); return el; }
+  function makeEditorLine(line) {
+    var div = document.createElement('div');
+    var imgKey = imageKeyForLine(line, state);
+    if (imgKey) {
+      // An image is an uneditable block the caret steps over; its token
+      // rides along in data-token so serializing gets the line back.
+      div.className = 'ed-image';
+      div.contentEditable = 'false';
+      div.dataset.token = line.trim();
+      var img = document.createElement('img');
+      img.src = state.images[imgKey].data;
+      img.alt = '';
+      img.draggable = false;
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'ed-image-remove';
+      rm.textContent = '×';
+      rm.title = 'Remove image';
+      rm.setAttribute('aria-label', 'Remove image');
+      div.appendChild(img);
+      div.appendChild(rm);
+      return div;
+    }
+    parseInlineRuns(line).forEach(function (run) {
+      if (!run.text) return;
+      var node = document.createTextNode(run.text);
+      if (run.italic) node = wrapIn('i', node);
+      if (run.underline) node = wrapIn('u', node);
+      if (run.bold) node = wrapIn('b', node);
+      div.appendChild(node);
     });
+    if (!div.firstChild) div.appendChild(document.createElement('br'));
+    return div;
+  }
+  function renderEditor(ed, lines) {
+    ed.innerHTML = '';
+    (lines && lines.length ? lines : ['']).forEach(function (l) { ed.appendChild(makeEditorLine(l)); });
   }
 
-  // Wraps the textarea's current selection in the given marker pair
-  // (inserting an empty pair with the cursor in between when nothing's
-  // selected), then re-fires input so poem.lines and autosave pick it up.
-  // If the selection is already exactly wrapped in that marker pair (or
-  // the selection's outer edges are, letting you toggle off after
-  // selecting a bit wide), it unwraps instead of double-wrapping.
-  function wrapSelection(textarea, before, after) {
-    var start = textarea.selectionStart, end = textarea.selectionEnd;
-    var val = textarea.value;
-    var selected = val.slice(start, end);
-    var alreadyWrapped = selected.length >= before.length + after.length &&
-      selected.slice(0, before.length) === before &&
-      selected.slice(selected.length - after.length) === after;
-    var outerWrapped = !alreadyWrapped &&
-      val.slice(start - before.length, start) === before &&
-      val.slice(end, end + after.length) === after;
-    textarea.focus();
-    if (alreadyWrapped) {
-      var inner = selected.slice(before.length, selected.length - after.length);
-      textarea.value = val.slice(0, start) + inner + val.slice(end);
-      textarea.selectionStart = start;
-      textarea.selectionEnd = start + inner.length;
-    } else if (outerWrapped) {
-      textarea.value = val.slice(0, start - before.length) + selected + val.slice(end + after.length);
-      textarea.selectionStart = start - before.length;
-      textarea.selectionEnd = start - before.length + selected.length;
-    } else {
-      textarea.value = val.slice(0, start) + before + selected + after + val.slice(end);
-      if (selected) {
-        textarea.selectionStart = start + before.length;
-        textarea.selectionEnd = start + before.length + selected.length;
-      } else {
-        textarea.selectionStart = textarea.selectionEnd = start + before.length;
+  // A <br> that's the last thing in its line is only the placeholder
+  // browsers keep in an empty line, not a line break of its own.
+  function isTrailingBr(br, root) {
+    for (var n = br; n && n !== root; n = n.parentNode) {
+      for (var sib = n.nextSibling; sib; sib = sib.nextSibling) {
+        if (sib.nodeType === 1 || (sib.nodeType === 3 && sib.data !== '')) return false;
+      }
+      var parent = n.parentNode;
+      if (parent && parent !== root && parent.nodeType === 1 && BLOCK_TAGS[parent.tagName]) return true;
+    }
+    return true;
+  }
+  function formatOf(el, fmt) {
+    var f = { bold: !!fmt.bold, italic: !!fmt.italic, underline: !!fmt.underline };
+    var t = el.tagName;
+    if (t === 'B' || t === 'STRONG') f.bold = true;
+    if (t === 'I' || t === 'EM') f.italic = true;
+    if (t === 'U' || t === 'INS') f.underline = true;
+    var st = el.style;
+    if (st) {
+      if (st.fontWeight) f.bold = st.fontWeight === 'bold' || st.fontWeight === 'bolder' || parseInt(st.fontWeight, 10) >= 600;
+      if (st.fontStyle) f.italic = st.fontStyle === 'italic' || st.fontStyle === 'oblique';
+      var td = st.textDecorationLine || st.textDecoration;
+      if (td && td.indexOf('underline') !== -1) f.underline = true;
+    }
+    return f;
+  }
+  // DOM -> poem.lines. Copes with whatever structure the browser's own
+  // editing produced (nested divs, <br>s, styled spans), not only the
+  // one-div-per-line shape renderEditor starts from.
+  function serializeEditor(root) {
+    var lines = [], cur = null;
+    function flush() { lines.push(cur ? runsToMarkup(cur) : ''); cur = null; }
+    function addText(text, fmt) {
+      text = text.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+      if (!text) return;
+      text.split('\n').forEach(function (part, i) {
+        if (i > 0) { flush(); cur = []; }
+        if (!part) return;
+        cur = cur || [];
+        cur.push({ text: part, bold: fmt.bold, italic: fmt.italic, underline: fmt.underline });
+      });
+    }
+    function walk(node, fmt) {
+      for (var c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { addText(c.data, fmt); continue; }
+        if (c.nodeType !== 1) continue;
+        if (c.dataset && c.dataset.token) {
+          if (cur && cur.length) flush();
+          cur = null;
+          lines.push(c.dataset.token);
+          continue;
+        }
+        if (c.tagName === 'BR') {
+          if (isTrailingBr(c, root)) cur = cur || [];
+          else { flush(); cur = []; }
+          continue;
+        }
+        if (BLOCK_TAGS[c.tagName]) {
+          if (cur && cur.length) flush();
+          cur = [];
+          walk(c, formatOf(c, fmt));
+          if (cur !== null) flush();
+          continue;
+        }
+        walk(c, formatOf(c, fmt));
       }
     }
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    walk(root, {});
+    if (cur && cur.length) flush();
+    return lines.length ? lines : [''];
   }
 
+  // Where the selection sits, as (line, plain-text offset) pairs.
+  // Worked out on a clone with marker characters dropped in at the
+  // selection's ends, so the live editor (and its undo history) is
+  // never touched.
+  var CARET_START = '\uE000', CARET_END = '\uE001';
+  function nodePath(root, node) {
+    var path = [];
+    while (node && node !== root) {
+      if (!node.parentNode) return null;
+      path.unshift(Array.prototype.indexOf.call(node.parentNode.childNodes, node));
+      node = node.parentNode;
+    }
+    return node === root ? path : null;
+  }
+  function insertCaretMark(root, path, offset, ch) {
+    var n = root;
+    path.forEach(function (i) { n = n.childNodes[i]; });
+    var mark = document.createTextNode(ch);
+    if (n.nodeType === 3) { var after = n.splitText(offset); after.parentNode.insertBefore(mark, after); }
+    else n.insertBefore(mark, n.childNodes[offset] || null);
+  }
+  function editorCaretInfo(ed) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return null;
+    var r = sel.getRangeAt(0);
+    var sp = nodePath(ed, r.startContainer), ep = nodePath(ed, r.endContainer);
+    if (!sp || !ep) return null;
+    var clone = ed.cloneNode(true);
+    insertCaretMark(clone, ep, r.endOffset, CARET_END);
+    insertCaretMark(clone, sp, r.startOffset, CARET_START);
+    var info = null, endInfo = null;
+    serializeEditor(clone).forEach(function (l, i) {
+      var plain = stripFormatMarkers(l);
+      if (plain.indexOf(CARET_START) !== -1) info = { startLine: i, startOffset: plain.replace(CARET_END, '').indexOf(CARET_START) };
+      if (plain.indexOf(CARET_END) !== -1) endInfo = { endLine: i, endOffset: plain.replace(CARET_START, '').indexOf(CARET_END) };
+    });
+    if (!info) return null;
+    info.endLine = endInfo ? endInfo.endLine : info.startLine;
+    info.endOffset = endInfo ? endInfo.endOffset : info.startOffset;
+    return info;
+  }
+  function editorPoint(ed, lineIdx, offset) {
+    var block = ed.children[Math.max(0, Math.min(lineIdx, ed.children.length - 1))];
+    if (!block) return null;
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    var n, left = Math.max(0, offset || 0);
+    while ((n = walker.nextNode())) {
+      if (left <= n.data.length) return [n, left];
+      left -= n.data.length;
+    }
+    return [block, offset ? block.childNodes.length : 0];
+  }
+  function setEditorSelection(ed, sl, so, el, eo) {
+    var a = editorPoint(ed, sl, so), b = el == null ? a : editorPoint(ed, el, eo);
+    if (!a || !b) return;
+    var range = document.createRange();
+    range.setStart(a[0], a[1]);
+    range.setEnd(b[0], b[1]);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  // Model-level edits (indent, images) rewrite the lines and re-render,
+  // then put the selection back and fire input so everything saves.
+  function applyEditorLines(ed, lines, sel) {
+    renderEditor(ed, lines);
+    if (sel) {
+      ed.focus();
+      setEditorSelection(ed, sel[0], sel[1], sel[2], sel[3]);
+    }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   // Indents (or outdents) every line the selection touches by one
   // 4-space stop -- the same stop Tab/Shift+Tab use -- so it works on a
   // phone, which has no Tab key.
-  function indentLines(textarea, outdent) {
-    var val = textarea.value, start = textarea.selectionStart, end = textarea.selectionEnd;
-    var lineStart = val.lastIndexOf('\n', start - 1) + 1;
-    var lineEnd = val.indexOf('\n', Math.max(end - (end > start && val[end - 1] === '\n' ? 1 : 0), start));
-    if (lineEnd === -1) lineEnd = val.length;
-    var lines = val.slice(lineStart, lineEnd).split('\n');
-    var firstDelta = 0, totalDelta = 0;
-    lines = lines.map(function (l, i) {
+  function indentEditorLines(ed, outdent) {
+    var info = editorCaretInfo(ed);
+    if (!info) return;
+    var lines = serializeEditor(ed);
+    var d0 = 0, d1 = 0;
+    for (var i = info.startLine; i <= info.endLine && i < lines.length; i++) {
+      if (imageKeyForLine(lines[i], state)) continue;
       var d;
-      if (outdent) { d = -Math.min(4, (l.match(/^ */) || [''])[0].length); l = l.slice(-d); }
-      else { d = 4; l = '    ' + l; }
-      if (i === 0) firstDelta = d;
-      totalDelta += d;
-      return l;
-    });
-    textarea.focus();
-    textarea.value = val.slice(0, lineStart) + lines.join('\n') + val.slice(lineEnd);
-    textarea.selectionStart = Math.max(lineStart, start + firstDelta);
-    textarea.selectionEnd = Math.max(textarea.selectionStart, end + totalDelta);
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      if (outdent) { d = -Math.min(4, (lines[i].match(/^ */) || [''])[0].length); lines[i] = lines[i].slice(-d); }
+      else { d = 4; lines[i] = '    ' + lines[i]; }
+      if (i === info.startLine) d0 = d;
+      if (i === info.endLine) d1 = d;
+    }
+    applyEditorLines(ed, lines, [info.startLine, Math.max(0, info.startOffset + d0), info.endLine, Math.max(0, info.endOffset + d1)]);
   }
+  function formatEditor(ed, cmd) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.anchorNode)) return;
+    document.execCommand(cmd, false, null);
+  }
+  function placeCaretAtPoint(ed, x, y) {
+    var r = null;
+    try {
+      if (document.caretPositionFromPoint) {
+        var p = document.caretPositionFromPoint(x, y);
+        if (p) { r = document.createRange(); r.setStart(p.offsetNode, p.offset); }
+      } else if (document.caretRangeFromPoint) r = document.caretRangeFromPoint(x, y);
+    } catch (e) { r = null; }
+    if (r && ed.contains(r.startContainer)) {
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+  }
+  // The toolbar's B/I/U light up while the cursor sits in text styled
+  // that way, like any word processor.
+  document.addEventListener('selectionchange', function () {
+    var ed = document.activeElement;
+    if (!ed || !ed.classList || !ed.classList.contains('poem-text')) return;
+    var bar = ed.parentNode.querySelector('.format-toolbar');
+    if (!bar) return;
+    ['bold', 'italic', 'underline'].forEach(function (cmd) {
+      var b = bar.querySelector('.format-btn-' + cmd);
+      var on = false;
+      try { on = document.queryCommandState(cmd); } catch (e) {}
+      if (b) b.classList.toggle('is-on', on);
+    });
+  });
 
   var ICON_INDENT = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M1 4l3 3-3 3"/></svg>';
   var ICON_OUTDENT = '<svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M4 4L1 7l3 3"/></svg>';
   var ICON_IMAGE = '<svg width="17" height="14" viewBox="0 0 17 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="1" width="15" height="12" rx="2"/><circle cx="5.5" cy="5" r="1.4"/><path d="M1.5 11.5l4.5-4 3.5 3 2.5-2 3.5 3"/></svg>';
 
-  function makeFormatToolbar(textarea) {
+  function makeFormatToolbar(ed) {
     var wrap = document.createElement('div');
     wrap.className = 'format-toolbar';
     function addBtn(cls, html, title, onClick) {
@@ -3467,29 +3638,28 @@
       btn.innerHTML = html;
       btn.title = title;
       btn.setAttribute('aria-label', title);
-      // Keep focus (and the phone keyboard) in the textarea while
+      // Keep focus (and the phone keyboard) in the editor while
       // tapping these, instead of blurring it for a moment first.
       btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
       btn.addEventListener('click', onClick);
       wrap.appendChild(btn);
       return btn;
     }
-    [
-      ['B', '**', '**', 'bold', 'Bold'],
-      ['I', '*', '*', 'italic', 'Italic'],
-      ['U', '++', '++', 'underline', 'Underline']
-    ].forEach(function (spec) {
-      addBtn('format-btn-' + spec[3], spec[0], spec[4] + ' the selected text', function () { wrapSelection(textarea, spec[1], spec[2]); });
+    var mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+    [['B', 'bold', 'Bold'], ['I', 'italic', 'Italic'], ['U', 'underline', 'Underline']].forEach(function (spec) {
+      addBtn('format-btn-' + spec[1], spec[0], spec[2] + ' (' + mod + spec[0] + ')', function () { formatEditor(ed, spec[1]); });
     });
-    addBtn('format-btn-indent', ICON_OUTDENT, 'Outdent line', function () { indentLines(textarea, true); });
-    addBtn('format-btn-indent', ICON_INDENT, 'Indent line', function () { indentLines(textarea, false); });
+    addBtn('format-btn-indent', ICON_OUTDENT, 'Outdent line', function () { indentEditorLines(ed, true); });
+    addBtn('format-btn-indent', ICON_INDENT, 'Indent line', function () { indentEditorLines(ed, false); });
     var fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     fileInput.multiple = true;
     fileInput.hidden = true;
+    // The picker takes focus away, so remember where the cursor was.
+    var savedCaret = null;
     fileInput.addEventListener('change', function () {
-      insertImagesIntoTextarea(textarea, imageFilesFrom(fileInput.files));
+      insertImagesIntoEditor(ed, imageFilesFrom(fileInput.files), savedCaret);
       fileInput.value = '';
     });
     wrap.appendChild(fileInput);
@@ -3501,6 +3671,7 @@
     imgBtn.innerHTML = ICON_IMAGE;
     imgBtn.title = 'Add an image (or drag one onto the entry)';
     imgBtn.setAttribute('aria-label', 'Add an image');
+    imgBtn.addEventListener('pointerdown', function () { savedCaret = editorCaretInfo(ed); });
     imgBtn.addEventListener('click', function () { fileInput.click(); });
     wrap.appendChild(imgBtn);
     return wrap;
@@ -3548,30 +3719,33 @@
     state.nextImageNum = n + 1;
     return n;
   }
-  // Puts the image line(s) on their own line(s) right after the line
-  // the cursor is on (replacing that line if it's empty); a textarea
-  // that was never clicked has its cursor at the end, so a plain drop
-  // lands at the bottom of the entry.
-  async function insertImagesIntoTextarea(textarea, files) {
-    if (!files.length) return;
+  async function imageTokensFor(files) {
     var tokens = [];
     for (var i = 0; i < files.length; i++) {
       try { tokens.push('[image ' + addImageToState(await loadImageFile(files[i])) + ']'); } catch (e) {}
     }
-    if (!tokens.length) return;
-    var val = textarea.value;
-    var pos = Math.min(textarea.selectionEnd, val.length);
-    var lineStart = val.lastIndexOf('\n', pos - 1) + 1;
-    var lineEnd = val.indexOf('\n', pos);
-    if (lineEnd === -1) lineEnd = val.length;
-    var block = tokens.join('\n');
+    return tokens;
+  }
+  // Puts the image line(s) right after the line the cursor is on
+  // (replacing that line if it's empty), or at the end of the entry if
+  // the cursor isn't in it.
+  function spliceImageLines(lines, tokens, atLine) {
+    var at = atLine == null ? lines.length - 1 : atLine;
     var next;
-    if (val.slice(lineStart, lineEnd).trim() === '') next = val.slice(0, lineStart) + block + val.slice(lineEnd);
-    else next = val.slice(0, lineEnd) + '\n' + block + val.slice(lineEnd);
-    textarea.value = next;
-    var caret = next.indexOf(block, lineStart) + block.length;
-    textarea.selectionStart = textarea.selectionEnd = caret;
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    if (lines[at] !== undefined && stripFormatMarkers(lines[at]).trim() === '') { lines.splice.apply(lines, [at, 1].concat(tokens)); next = at + tokens.length; }
+    else { lines.splice.apply(lines, [at + 1, 0].concat(tokens)); next = at + 1 + tokens.length; }
+    // Always leave a text line after an image to keep typing on.
+    if (next >= lines.length) lines.push('');
+    return next;
+  }
+  async function insertImagesIntoEditor(ed, files, caret) {
+    if (!files.length) return;
+    var info = caret || editorCaretInfo(ed);
+    var tokens = await imageTokensFor(files);
+    if (!tokens.length) return;
+    var lines = serializeEditor(ed);
+    var next = spliceImageLines(lines, tokens, info ? info.startLine : null);
+    applyEditorLines(ed, lines, [next, 0]);
   }
   function referencedImageKeys() {
     var keys = {};
@@ -3752,10 +3926,10 @@
     });
   }
 
-  function makeBodyAlignControl(poem, textarea, onChange) {
+  function makeBodyAlignControl(poem, editor, onChange) {
     return makeAlignControl('Body', function () { return poem.bodyAlign; }, function (v) {
       poem.bodyAlign = v;
-      textarea.style.textAlign = v || state.bodyAlignment;
+      editor.style.textAlign = v || state.bodyAlignment;
       if (onChange) onChange();
     });
   }
@@ -3795,8 +3969,8 @@
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     wireSingleLine(titleInput, function () {
-      textarea.focus();
-      textarea.selectionStart = textarea.selectionEnd = 0;
+      editor.focus();
+      setEditorSelection(editor, 0, 0);
     });
     titleInput.addEventListener('input', function () {
       poem.title = titleInput.value;
@@ -3808,96 +3982,60 @@
     titleRow.appendChild(titleInput);
     titleRow.appendChild(makeDotsBtn(index));
 
-    var textarea = document.createElement('textarea');
-    textarea.className = 'poem-text';
-    textarea.draggable = false; // see titleInput.draggable above
-    textarea.value = poem.lines.join('\n');
-    textarea.style.textAlign = poem.bodyAlign || state.bodyAlignment;
-    textarea.style.fontFamily = displayStackFor(state.bodyFontChoice);
-    textarea.style.lineHeight = String(state.lineSpacing || 1.15);
-    if (initialPlan) textarea.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
-    wireTabIndent(textarea);
-    textarea.addEventListener('input', function () {
-      poem.lines = textarea.value.split('\n');
+    var editor = document.createElement('div');
+    editor.className = 'poem-text';
+    editor.contentEditable = 'true';
+    editor.spellcheck = true;
+    editor.setAttribute('role', 'textbox');
+    editor.setAttribute('aria-multiline', 'true');
+    editor.setAttribute('aria-label', 'Entry text');
+    renderEditor(editor, poem.lines);
+    editor.style.textAlign = poem.bodyAlign || state.bodyAlignment;
+    editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
+    editor.style.lineHeight = String(state.lineSpacing || 1.15);
+    if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
+    editor.addEventListener('input', function () {
+      poem.lines = serializeEditor(editor);
       state.isExample = false;
       updateVerseClass();
-      updateImageChips();
-      autoGrow(textarea);
       persist();
       updateMeta();
       updateStats();
     });
-    textarea.addEventListener('paste', function (e) {
-      var files = imageFilesFrom(e.clipboardData && e.clipboardData.files);
-      if (!files.length) return;
-      e.preventDefault();
-      insertImagesIntoTextarea(textarea, files);
-    });
-    var display = document.createElement('div');
-    display.className = 'poem-text-display';
-    display.hidden = true;
-    function useDisplay() {
-      return !TEXTAREA_HANGS && textarea.classList.contains('is-verse') && document.activeElement !== textarea;
-    }
-    function syncDisplay() {
-      var on = useDisplay();
-      if (on) {
-        display.textContent = textarea.value;
-        ['fontFamily', 'fontSize', 'lineHeight', 'textAlign'].forEach(function (k) { display.style[k] = textarea.style[k]; });
+    editor.addEventListener('keydown', function (e) {
+      // Tab indents instead of jumping to the next field; Shift+Tab
+      // outdents the line.
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.shiftKey) indentEditorLines(editor, true);
+        else document.execCommand('insertText', false, '    ');
       }
-      display.hidden = !on;
-      textarea.style.display = on ? 'none' : '';
-    }
-    // Clicking the stand-in puts the cursor at the character clicked.
-    display.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-      var offset = textarea.value.length;
-      try {
-        if (document.caretPositionFromPoint) {
-          var cp = document.caretPositionFromPoint(e.clientX, e.clientY);
-          if (cp && display.contains(cp.offsetNode)) offset = cp.offset;
-        } else if (document.caretRangeFromPoint) {
-          var cr = document.caretRangeFromPoint(e.clientX, e.clientY);
-          if (cr && display.contains(cr.startContainer)) offset = cr.startOffset;
-        }
-      } catch (err) {}
-      display.hidden = true;
-      textarea.style.display = '';
-      autoGrow(textarea);
-      textarea.focus();
-      textarea.setSelectionRange(offset, offset);
     });
-    textarea.addEventListener('blur', function () { setTimeout(syncDisplay, 0); });
+    // Pasted text comes in plain (no stray fonts or colors from other
+    // apps); a pasted image becomes an image line.
+    editor.addEventListener('paste', function (e) {
+      var cd = e.clipboardData;
+      if (!cd) return;
+      e.preventDefault();
+      var files = imageFilesFrom(cd.files);
+      if (files.length) { insertImagesIntoEditor(editor, files); return; }
+      var text = cd.getData('text/plain');
+      if (text) document.execCommand('insertText', false, text.replace(/\r\n?/g, '\n'));
+    });
+    editor.addEventListener('mousedown', function (e) {
+      if (e.target.closest('.ed-image-remove')) e.preventDefault();
+    });
+    editor.addEventListener('click', function (e) {
+      var rm = e.target.closest('.ed-image-remove');
+      if (!rm) return;
+      rm.closest('.ed-image').remove();
+      if (!editor.firstChild) renderEditor(editor, ['']);
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     function updateVerseClass() {
-      textarea.classList.toggle('is-verse', isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
-      if (document.activeElement !== textarea) syncDisplay();
+      editor.classList.toggle('is-verse', isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
     }
     updateVerseClass();
-
-    var imagesStrip = document.createElement('div');
-    imagesStrip.className = 'poem-images';
-    var imagesSig = null;
-    function updateImageChips() {
-      var keys = [];
-      poem.lines.forEach(function (l) { var k = imageKeyForLine(l, state); if (k && keys.indexOf(k) === -1) keys.push(k); });
-      var sig = keys.join(',');
-      if (sig === imagesSig) return;
-      imagesSig = sig;
-      imagesStrip.innerHTML = '';
-      keys.forEach(function (k) {
-        var chip = document.createElement('div');
-        chip.className = 'poem-image-chip';
-        var img = document.createElement('img');
-        img.src = state.images[k].data;
-        img.alt = '';
-        var label = document.createElement('span');
-        label.textContent = '[image ' + k.slice(3) + ']';
-        chip.appendChild(img);
-        chip.appendChild(label);
-        imagesStrip.appendChild(chip);
-      });
-    }
-    updateImageChips();
 
     var metaRow = document.createElement('div');
     metaRow.className = 'poem-meta-row';
@@ -3921,7 +4059,7 @@
     metaLeft.appendChild(warnEl);
     metaRow.appendChild(metaLeft);
     metaRow.appendChild(makeTitleAlignControl(poem, titleInput));
-    metaRow.appendChild(makeBodyAlignControl(poem, textarea, updateVerseClass));
+    metaRow.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
 
     // Only shown in phone writing mode (see .poem-card.is-writing).
     var writerBar = document.createElement('div');
@@ -3936,7 +4074,7 @@
       writerTitle.classList.toggle('is-placeholder', !poem.title);
     }
     updateWriterTitle();
-    // Without this, pressing it blurs the textarea first, which hides this
+    // Without this, pressing it blurs the editor first, which hides this
     // very button mid-tap (see .is-body-focus) and the click never lands.
     writerTitle.addEventListener('pointerdown', function (e) { e.preventDefault(); });
     writerTitle.addEventListener('click', function () {
@@ -3944,8 +4082,8 @@
       titleInput.focus();
     });
     titleInput.addEventListener('input', updateWriterTitle);
-    textarea.addEventListener('focus', function () { card.classList.add('is-body-focus'); });
-    textarea.addEventListener('blur', function () { card.classList.remove('is-body-focus'); });
+    editor.addEventListener('focus', function () { card.classList.add('is-body-focus'); });
+    editor.addEventListener('blur', function () { card.classList.remove('is-body-focus'); });
     var doneBtn = document.createElement('button');
     doneBtn.type = 'button';
     doneBtn.className = 'poem-writer-done';
@@ -3956,16 +4094,14 @@
 
     body.appendChild(writerBar);
     body.appendChild(titleRow);
-    body.appendChild(textarea);
-    body.appendChild(display);
-    body.appendChild(makeFormatToolbar(textarea));
-    body.appendChild(imagesStrip);
+    body.appendChild(editor);
+    body.appendChild(makeFormatToolbar(editor));
     body.appendChild(metaRow);
     card.appendChild(handle);
     card.appendChild(body);
 
     card.addEventListener('focusin', function (e) {
-      if ((e.target === titleInput || e.target === textarea) && writerMQ.matches) enterWriting(card, poem.id);
+      if ((e.target === titleInput || e.target === editor) && writerMQ.matches) enterWriting(card, poem.id);
     });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && card.classList.contains('is-writing')) finishWriting();
@@ -3999,7 +4135,11 @@
       e.preventDefault();
       card.classList.remove('drop-target');
       var files = imageFilesFrom(e.dataTransfer && e.dataTransfer.files);
-      if (files.length) { insertImagesIntoTextarea(textarea, files); return; }
+      if (files.length) {
+        placeCaretAtPoint(editor, e.clientX, e.clientY);
+        insertImagesIntoEditor(editor, files);
+        return;
+      }
       if (dragFromIndex === null || dragFromIndex === index) return;
       var moved = state.poems.splice(dragFromIndex, 1)[0];
       state.poems.splice(index, 0, moved);
@@ -4007,7 +4147,7 @@
       renderAll();
     });
 
-    setTimeout(function () { autoGrow(titleInput); autoGrow(textarea); }, 0);
+    setTimeout(function () { autoGrow(titleInput); }, 0);
     return card;
   }
 
@@ -4036,8 +4176,8 @@
       // On a phone, skip the cramped inline card and go straight into
       // the full-screen writer (focusing it is what opens that).
       if (expandedCompactIds[poem.id] && writerMQ.matches) {
-        var ta = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-text');
-        if (ta) ta.focus();
+        var ed = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] .poem-text');
+        if (ed) ed.focus();
       }
     });
 
@@ -4057,16 +4197,12 @@
       // An image dropped on a closed entry goes at the end of its text.
       var files = imageFilesFrom(e.dataTransfer && e.dataTransfer.files);
       if (files.length) {
-        var tmp = document.createElement('textarea');
-        tmp.value = poem.lines.join('\n');
-        tmp.selectionStart = tmp.selectionEnd = tmp.value.length;
-        tmp.addEventListener('input', function () {
-          poem.lines = tmp.value.split('\n');
-          state.isExample = false;
-          persist();
-          renderAll();
-        });
-        await insertImagesIntoTextarea(tmp, files);
+        var tokens = await imageTokensFor(files);
+        if (!tokens.length) return;
+        spliceImageLines(poem.lines, tokens, null);
+        state.isExample = false;
+        persist();
+        renderAll();
         return;
       }
       if (dragFromIndex === null || dragFromIndex === index) return;
@@ -4106,26 +4242,22 @@
     return row;
   }
 
-  // While any entry is open, the sidebar folds into a slim « tab
-  // (desktop only -- see .rail-mode) to give the editor the width. That
-  // brings the sidebar back until its » button or the next entry is
-  // opened; with no entry open, the sidebar just shows.
-  var sidebarPinnedOpen = false;
-  var entryWasOpen = false;
-  function updateSideRail() {
-    var open = !!poemList.querySelector('.poem-card');
-    if (open && !entryWasOpen) sidebarPinnedOpen = false;
-    entryWasOpen = open;
-    document.querySelector('.workspace').classList.toggle('rail-mode', open && !sidebarPinnedOpen);
-    document.querySelector('.workspace').classList.toggle('tools-pinned', open && sidebarPinnedOpen);
+  // Tools column (desktop): shown or hidden only by the Tools toggle,
+  // and remembered -- no automatic folding, so nothing jumps around
+  // when an entry opens or closes.
+  var TOOLS_HIDDEN_KEY = 'poetryBooklet.toolsHidden.v1';
+  var toolsHidden = false;
+  try { toolsHidden = localStorage.getItem(TOOLS_HIDDEN_KEY) === '1'; } catch (e) {}
+  var toolsToggleBtn = document.getElementById('toolsToggleBtn');
+  function applyToolsHidden() {
+    document.querySelector('.workspace').classList.toggle('tools-hidden', toolsHidden);
+    toolsToggleBtn.setAttribute('aria-pressed', toolsHidden ? 'false' : 'true');
   }
-  document.getElementById('showToolsBtn').addEventListener('click', function () {
-    sidebarPinnedOpen = true;
-    updateSideRail();
-  });
-  document.getElementById('sidebarFoldBtn').addEventListener('click', function () {
-    sidebarPinnedOpen = false;
-    updateSideRail();
+  applyToolsHidden();
+  toolsToggleBtn.addEventListener('click', function () {
+    toolsHidden = !toolsHidden;
+    try { localStorage.setItem(TOOLS_HIDDEN_KEY, toolsHidden ? '1' : '0'); } catch (e) {}
+    applyToolsHidden();
   });
 
   // Sizes a title input to its own text (or placeholder), so the space
@@ -4249,7 +4381,6 @@
     var entryCount = countEntries(state.poems);
     poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
     updateArchiveButton();
-    updateSideRail();
     // The entry being written in may not have been re-rendered as a full
     // card (e.g. collapsed in compact view) -- don't leave the page locked.
     if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
@@ -5410,7 +5541,7 @@
   // whenever the width or the loaded fonts change.
   function regrowAll() {
     document.querySelectorAll('.poem-compact-expanded textarea.poem-title').forEach(fitTitleInput);
-    document.querySelectorAll('.poem-text, textarea.poem-title, #bookTitleInput').forEach(function (ta) {
+    document.querySelectorAll('textarea.poem-title, #bookTitleInput').forEach(function (ta) {
       if (!ta.closest('.is-writing') || ta.classList.contains('poem-title')) autoGrow(ta);
     });
   }
