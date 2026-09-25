@@ -604,8 +604,19 @@
   }
   .section-row.dragging { opacity: 0.4; }
   .section-row { cursor: grab; }
-  .drop-before { box-shadow: 0 -5px 0 -1px var(--accent); }
-  .drop-after { box-shadow: 0 5px 0 -1px var(--accent); }
+  /* Where a dragged row will land: one straight line in the gap between
+     rows, drawn over everything so no row's border or shadow hides it. */
+  #poemList { position: relative; }
+  .drop-line {
+    position: absolute; left: -6px; right: -6px; height: 3px; margin-top: -1.5px; border-radius: 2px;
+    background: var(--accent); z-index: 20; pointer-events: none;
+  }
+  .drop-line::before, .drop-line::after {
+    content: ''; position: absolute; top: -3.5px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+  }
+  .drop-line::before { left: -4px; }
+  .drop-line::after { right: -4px; }
+  .drop-line[hidden] { display: none; }
   /* Sections | Titles | Entries -- the highlighted one is the view you're in. */
   .view-seg button { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
   .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
@@ -4187,17 +4198,38 @@
   // dragged item will land above or below the row under the pointer,
   // and it lands exactly there (it used to overshoot by one when
   // dragged downward).
+  var dropLine = document.createElement('div');
+  dropLine.className = 'drop-line';
+  dropLine.hidden = true;
   function clearDropMarks() {
     document.querySelectorAll('.drop-before, .drop-after').forEach(function (x) { x.classList.remove('drop-before', 'drop-after'); });
+    dropLine.hidden = true;
   }
-  function reorderDragOver(e, el) {
+  var REORDER_ROWS = '.poem-card, .poem-compact-row, .section-row';
+  // Midway between this row and its neighbour on that side (or just past
+  // the row's edge when it's first/last), in the list's coordinates.
+  function showDropLine(el, after) {
+    var rows = Array.prototype.slice.call(poemList.querySelectorAll(REORDER_ROWS));
+    var i = rows.indexOf(el), r = el.getBoundingClientRect();
+    var neighbour = rows[after ? i + 1 : i - 1];
+    var edge = after ? r.bottom : r.top;
+    var y = neighbour ? (edge + (after ? neighbour.getBoundingClientRect().top : neighbour.getBoundingClientRect().bottom)) / 2
+      : edge + (after ? 4 : -4);
+    if (dropLine.parentNode !== poemList) poemList.appendChild(dropLine);
+    dropLine.style.top = (y - poemList.getBoundingClientRect().top) + 'px';
+    dropLine.hidden = false;
+  }
+  var lastDropTarget = null;
+  function reorderDragOver(e, el, index) {
     if (dragFromIndex === null) return;
+    lastDropTarget = { el: el, index: index };
     e.preventDefault();
     var r = el.getBoundingClientRect();
     var after = e.clientY > r.top + r.height / 2;
     if (el.classList.contains(after ? 'drop-after' : 'drop-before')) return;
     clearDropMarks();
     el.classList.add(after ? 'drop-after' : 'drop-before');
+    showDropLine(el, after);
   }
   function reorderDrop(el, index) {
     var after = el.classList.contains('drop-after');
@@ -4217,6 +4249,16 @@
     renderAll();
   }
   document.addEventListener('dragend', clearDropMarks);
+  // The line sits in the gap between rows, so a drop right on it (over
+  // the gap, not a row) lands where the line shows.
+  poemList.addEventListener('dragover', function (e) {
+    if (dragFromIndex !== null && !dropLine.hidden) e.preventDefault();
+  });
+  poemList.addEventListener('drop', function (e) {
+    if (dragFromIndex === null || dropLine.hidden || !lastDropTarget) return;
+    e.preventDefault();
+    reorderDrop(lastDropTarget.el, lastDropTarget.index);
+  });
   // Set right before renderAll() when a new section was just inserted,
   // so its title input can auto-focus once the list re-renders -- the
   // insert point (a gap button) isn't the input itself, so this can't
@@ -4485,7 +4527,7 @@
     card.addEventListener('dragend', function () { card.classList.remove('dragging'); dragFromIndex = null; });
     card.addEventListener('dragover', function (e) {
       if (hasDraggedFiles(e)) { e.preventDefault(); card.classList.add('drop-target'); return; }
-      reorderDragOver(e, card);
+      reorderDragOver(e, card, index);
     });
     card.addEventListener('dragleave', function (e) {
       if (!card.contains(e.relatedTarget)) card.classList.remove('drop-target');
@@ -4548,7 +4590,7 @@
     row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
     row.addEventListener('dragover', function (e) {
       if (hasDraggedFiles(e)) { e.preventDefault(); return; }
-      reorderDragOver(e, row);
+      reorderDragOver(e, row, index);
     });
     row.addEventListener('drop', async function (e) {
       e.preventDefault();
@@ -4732,7 +4774,7 @@
       e.dataTransfer.effectAllowed = 'move';
     });
     row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragFromIndex = null; });
-    row.addEventListener('dragover', function (e) { reorderDragOver(e, row); });
+    row.addEventListener('dragover', function (e) { reorderDragOver(e, row, index); });
     row.addEventListener('drop', function (e) {
       e.preventDefault();
       reorderDrop(row, index);
