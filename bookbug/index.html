@@ -608,11 +608,6 @@
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
   .section-block-row.drop-target { box-shadow: 0 0 0 3px var(--accent); }
-  .section-block-title {
-    flex: 1; min-width: 0; font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: 16.5px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .section-block-title.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   .section-block-count { flex: 0 0 auto; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
   .section-move-btn {
     flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line-strong);
@@ -4735,13 +4730,28 @@
       row.className = 'section-row section-block-row';
       row.draggable = true;
       row.innerHTML = '<div class="poem-handle"><div class="poem-grip">⋮⋮</div></div>' +
-        '<div class="section-row-label">Section</div><div class="section-block-title"></div>' +
+        '<div class="section-row-label">Section</div>' +
         '<div class="section-block-count"></div>' +
         '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move section up">↑</button>' +
         '<button class="section-move-btn" type="button" data-dir="1" aria-label="Move section down">↓</button>';
-      var title = row.querySelector('.section-block-title');
-      title.textContent = section.title || 'Untitled section';
-      if (!section.title) title.classList.add('is-placeholder');
+      // Renaming works here too, same as the heading's row in the other
+      // views -- edits save as you type, without re-rendering the list.
+      var title = document.createElement('input');
+      title.className = 'section-title';
+      title.draggable = false;
+      title.placeholder = 'Untitled section';
+      title.value = section.title || '';
+      title.setAttribute('aria-label', 'Section title');
+      title.addEventListener('input', function () {
+        section.title = title.value;
+        state.isExample = false;
+        persist();
+        updateStats();
+      });
+      // Selecting text in the field shouldn't start dragging the row.
+      title.addEventListener('pointerdown', function () { row.draggable = false; });
+      title.addEventListener('blur', function () { row.draggable = true; });
+      row.insertBefore(title, row.querySelector('.section-block-count'));
       row.querySelector('.section-block-count').textContent = n + (n === 1 ? ' entry' : ' entries');
       row.querySelectorAll('.section-move-btn').forEach(function (btn) {
         var to = k + Number(btn.dataset.dir);
