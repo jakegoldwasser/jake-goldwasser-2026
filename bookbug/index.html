@@ -577,6 +577,28 @@
     background: var(--accent-soft); padding: 6px 10px; margin-bottom: 4px;
   }
   .section-row.dragging { opacity: 0.4; }
+  #sectionsViewToggle[hidden], #poemsViewToggle[hidden] { display: none; }
+  #sectionsViewToggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  /* "Sections only": each row stands for a heading plus all its entries. */
+  .section-block-row { cursor: grab; }
+  .section-block-row.drop-target { box-shadow: 0 0 0 3px var(--accent); }
+  .section-block-title {
+    flex: 1; min-width: 0; font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: 16.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .section-block-title.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
+  .section-block-count { flex: 0 0 auto; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+  .section-move-btn {
+    flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--ink); cursor: pointer; font-size: 14px; line-height: 1;
+  }
+  .section-move-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .section-move-btn:disabled { opacity: 0.35; cursor: default; }
+  .section-lead-row {
+    border: 1px dashed var(--line-strong); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+  .sections-only-hint { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; }
   .section-row .poem-handle { flex: 0 0 auto; flex-direction: row; padding-top: 0; cursor: grab; }
   .section-row-label {
     font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink);
@@ -1037,6 +1059,7 @@
           </div>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
+            <button class="btn btn-sm" id="sectionsViewToggle" type="button" aria-pressed="false" title="Show only section headings, to reorder whole sections" hidden>Sections only</button>
             <button class="btn btn-sm" id="poemsViewToggle" type="button">Reveal All Entries</button>
           </div>
         </div>
@@ -2102,6 +2125,52 @@
     return items;
   }
 
+  // Google Docs' markdown export writes each image as "![][image1]" in
+  // the text plus a "[image1]: <data:image/png;base64,...>" definition at
+  // the bottom. Left alone, both came through as walls of code. Turn each
+  // one into an "[image N]" line (its own line, where it sat in the doc)
+  // backed by a downscaled copy in state.images; images that can't be
+  // loaded (e.g. remote URLs) are dropped rather than shown as text.
+  var IMPORT_IMAGE_MARK = '\u0001IMG';
+  async function parseDocWithImages(raw) {
+    raw = String(raw || '').replace(/\r\n?/g, '\n');
+    var defs = {};
+    raw = raw.replace(/^[ \t]*\[([^\]\n]+)\]:[ \t]*<?(data:image\/[^>\s]+|https?:\/\/[^>\s]+)>?[^\n]*$/gm, function (m, id, src) {
+      defs[id.toLowerCase()] = src;
+      return '';
+    });
+    var sources = [];
+    function mark(src) {
+      sources.push(src || null);
+      return IMPORT_IMAGE_MARK + (sources.length - 1) + '\u0001';
+    }
+    raw = raw
+      .replace(/!\[[^\]\n]*\]\[([^\]\n]*)\]/g, function (m, id) { return mark(defs[id.toLowerCase()]); })
+      .replace(/!\[[^\]\n]*\]\(<?([^)>\s]+)>?(?:\s+"[^"]*")?\)/g, function (m, src) { return mark(src); });
+    if (!sources.length) return parseDocText(raw);
+    var tokens = [];
+    for (var i = 0; i < sources.length; i++) {
+      var token = '';
+      if (sources[i] && /^data:image\//.test(sources[i])) {
+        try { token = '[image ' + addImageToState(await loadImageUrl(sources[i])) + ']'; } catch (e) {}
+      }
+      tokens.push(token);
+    }
+    // An image line has to stand alone, so break it off any text sharing
+    // its line -- then swap in its token. One that couldn't load is
+    // removed along with the line breaks on one side, so it doesn't leave
+    // an extra blank line (which would read as a stanza or entry break).
+    var markRe = IMPORT_IMAGE_MARK + '(\\d+)\u0001';
+    raw = raw.replace(new RegExp('([^\\n])[ \\t]*(' + markRe + ')', 'g'), '$1\n$2')
+      .replace(new RegExp('(' + markRe + ')[ \\t]*([^\\n])', 'g'), '$1\n$3');
+    raw = raw.replace(new RegExp('(\\n*)' + markRe + '(\\n*)', 'g'), function (m, pre, k, post) {
+      var token = tokens[+k];
+      if (token) return pre + token + post;
+      return pre.length >= post.length ? pre : post;
+    });
+    return parseDocText(raw);
+  }
+
   function parseDocText(raw) {
     raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     // A soft line break within one Google Docs paragraph (Shift+Enter)
@@ -3154,7 +3223,7 @@
     try {
       var res = await mcp.callTool('Google Drive', 'read_file_content', { fileId: fileId });
       var text = (res.payload && res.payload.fileContent) || '';
-      addImportedPoems(parseDocText(text), title);
+      addImportedPoems(await parseDocWithImages(text), title);
     } catch (err) {
       setDriveStatus(describeMcpError(err) || 'Couldn’t read that document.', true);
     }
@@ -3320,7 +3389,7 @@
       });
       if (!res.ok) throw new Error('http_' + res.status);
       var text = await res.text();
-      addImportedPoems(parseDocText(text), title);
+      addImportedPoems(await parseDocWithImages(text), title);
     } catch (err) {
       setDriveStatus('Couldn’t read that document.', true);
     }
@@ -3336,7 +3405,7 @@
   document.getElementById('parsePasteBtn').addEventListener('click', async function () {
     var text = pasteBox.value;
     if (!text.trim()) { pasteStatus.textContent = 'Paste some text first.'; return; }
-    var poems = parseDocText(text);
+    var poems = await parseDocWithImages(text);
     var entryCount = countEntries(poems);
     if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
     var sectionCount = poems.length - entryCount;
@@ -3790,8 +3859,11 @@
     return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1);
   }
   function loadImageFile(file) {
+    var url = URL.createObjectURL(file);
+    return loadImageUrl(url).finally(function () { URL.revokeObjectURL(url); });
+  }
+  function loadImageUrl(url) {
     return new Promise(function (resolve, reject) {
-      var url = URL.createObjectURL(file);
       var im = new Image();
       im.onload = function () {
         var s = Math.min(1, IMAGE_MAX_PX / Math.max(im.naturalWidth, im.naturalHeight));
@@ -3803,10 +3875,9 @@
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, w, h);
         ctx.drawImage(im, 0, 0, w, h);
-        URL.revokeObjectURL(url);
         resolve({ data: c.toDataURL('image/jpeg', 0.82), w: w, h: h });
       };
-      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+      im.onerror = function () { reject(new Error('unreadable image')); };
       im.src = url;
     });
   }
@@ -4493,8 +4564,116 @@
     return row;
   }
 
+  // ---------------------------------------------------------------------
+  // "Sections only": the list collapses to one row per section, and a
+  // section means its heading plus every entry after it up to the next
+  // heading -- so moving a row here moves the whole section. (In the
+  // normal views, dragging a heading still moves just the heading.)
+  // Entries before the first heading belong to no section and stay put.
+  // ---------------------------------------------------------------------
+  var sectionsOnly = false;
+  var sectionsViewToggle = document.getElementById('sectionsViewToggle');
+  var dragBlockFrom = null;
+  sectionsViewToggle.addEventListener('click', function () {
+    sectionsOnly = !sectionsOnly;
+    renderPoems();
+  });
+
+  function splitSectionBlocks() {
+    var lead = [], blocks = [];
+    state.poems.forEach(function (item) {
+      if (isSection(item)) blocks.push([item]);
+      else if (blocks.length) blocks[blocks.length - 1].push(item);
+      else lead.push(item);
+    });
+    return { lead: lead, blocks: blocks };
+  }
+
+  function moveSectionBlock(from, to) {
+    var parts = splitSectionBlocks();
+    if (from === to || to < 0 || to >= parts.blocks.length) return;
+    var moved = parts.blocks.splice(from, 1)[0];
+    parts.blocks.splice(to, 0, moved);
+    state.poems = parts.lead.concat.apply(parts.lead, parts.blocks);
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+
+  function renderSectionsOnly() {
+    var parts = splitSectionBlocks();
+    var hint = document.createElement('p');
+    hint.className = 'sections-only-hint';
+    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries.';
+    poemList.appendChild(hint);
+    if (parts.lead.length) {
+      var leadRow = document.createElement('div');
+      leadRow.className = 'section-lead-row';
+      var n = countEntries(parts.lead);
+      leadRow.textContent = 'Before the first section · ' + n + (n === 1 ? ' entry' : ' entries');
+      poemList.appendChild(leadRow);
+    }
+    parts.blocks.forEach(function (block, k) {
+      var section = block[0];
+      var n = countEntries(block);
+      var row = document.createElement('div');
+      row.className = 'section-row section-block-row';
+      row.draggable = true;
+      row.innerHTML = '<div class="poem-handle"><div class="poem-grip">⋮⋮</div></div>' +
+        '<div class="section-row-label">Section</div><div class="section-block-title"></div>' +
+        '<div class="section-block-count"></div>' +
+        '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move section up">↑</button>' +
+        '<button class="section-move-btn" type="button" data-dir="1" aria-label="Move section down">↓</button>';
+      var title = row.querySelector('.section-block-title');
+      title.textContent = section.title || 'Untitled section';
+      if (!section.title) title.classList.add('is-placeholder');
+      row.querySelector('.section-block-count').textContent = n + (n === 1 ? ' entry' : ' entries');
+      row.querySelectorAll('.section-move-btn').forEach(function (btn) {
+        var to = k + Number(btn.dataset.dir);
+        btn.disabled = to < 0 || to >= parts.blocks.length;
+        btn.addEventListener('click', function () { moveSectionBlock(k, to); });
+      });
+      row.addEventListener('dragstart', function (e) {
+        dragBlockFrom = k;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragBlockFrom = null; });
+      row.addEventListener('dragover', function (e) {
+        if (dragBlockFrom === null) return;
+        e.preventDefault();
+        if (dragBlockFrom !== k) row.classList.add('drop-target');
+      });
+      row.addEventListener('dragleave', function (e) {
+        if (!row.contains(e.relatedTarget)) row.classList.remove('drop-target');
+      });
+      row.addEventListener('drop', function (e) {
+        e.preventDefault();
+        row.classList.remove('drop-target');
+        if (dragBlockFrom === null) return;
+        var from = dragBlockFrom;
+        dragBlockFrom = null;
+        moveSectionBlock(from, k);
+      });
+      poemList.appendChild(row);
+    });
+  }
+
   function renderPoems() {
     poemList.innerHTML = '';
+    var hasSections = state.poems.some(isSection);
+    if (!hasSections) sectionsOnly = false;
+    sectionsViewToggle.hidden = !hasSections;
+    sectionsViewToggle.setAttribute('aria-pressed', sectionsOnly ? 'true' : 'false');
+    poemsViewToggle.hidden = sectionsOnly;
+    if (sectionsOnly) {
+      renderSectionsOnly();
+      var total = countEntries(state.poems);
+      poemsCount.textContent = total + (total === 1 ? ' entry' : ' entries');
+      updateArchiveButton();
+      if (writingPoemId) exitWriting();
+      return;
+    }
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
     var entryNum = 0;
