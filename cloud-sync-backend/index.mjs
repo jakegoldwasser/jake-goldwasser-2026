@@ -1,19 +1,17 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// This is the AWS Lambda behind the "sign in with Google to save to the
-// cloud" feature, shared by every book-building tool on the site
-// (currently Chapbook Builder and Dummy Builder). It lives at a Function
-// URL (see CLOUD_API_URL in each tool's own <script>) and is deployed by
-// pasting this file into the Lambda console's Code editor and clicking
-// Deploy -- there's no build step, just this one file.
+// This is the AWS Lambda behind BookBug's "sign in with Google to save to
+// the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
+// bookbug/index.html) -- see README.md for deploying; there's no build
+// step, just this one file.
 //
 // Storage is one DynamoDB item per Google user (keyed by their stable
-// Google "sub" id), holding a single JSON blob. Because more than one
-// tool now shares this same backend, that blob is namespaced per app:
-//   { chapbookbuilder: { chapbooks, trash }, dummybuilder: { dummies } }
-// Each tool only ever reads/writes its own top-level key, so one tool's
-// save can never clobber another tool's data for the same signed-in user.
+// Google "sub" id), holding a single JSON blob namespaced per app:
+//   { chapbookbuilder: { chapbooks, trash, lastOpened } }
+// (BookBug's key predates its rename.) A tool only ever reads/writes its
+// own top-level key, so a future tool sharing this backend can't clobber
+// BookBug's data for the same signed-in user.
 //
 // Older records (saved before this namespacing existed) have the
 // Chapbook Builder shape directly at the top level -- {chapbooks, trash}
@@ -88,7 +86,7 @@ function verifySession(token) {
 }
 
 function migrateLegacyState(state) {
-  if (state && typeof state === 'object' && !state.chapbookbuilder && !state.dummybuilder &&
+  if (state && typeof state === 'object' && !state.chapbookbuilder &&
       (state.chapbooks !== undefined || state.trash !== undefined)) {
     return { chapbookbuilder: { chapbooks: state.chapbooks || [], trash: state.trash || [] } };
   }

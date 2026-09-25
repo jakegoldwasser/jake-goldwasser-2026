@@ -1,8 +1,8 @@
 # Cloud sync backend
 
-Source for the AWS Lambda function behind "sign in with Google to save to
-the cloud" in Chapbook Builder and Dummy Builder. Its Function URL is the
-`CLOUD_API_URL` constant in each tool's `index.html`.
+Source for the AWS Lambda function (`chapbook-builder-api`, us-east-1)
+behind BookBug's "sign in with Google to save to the cloud". Its Function
+URL is the `CLOUD_API_URL` constant in `bookbug/index.html`.
 
 ## Deploying a change
 
@@ -33,5 +33,6 @@ Set under **Configuration → Environment variables**:
 One DynamoDB table (`ChapbookBuilderUsers`, despite the name — it now
 holds every tool's data), one item per signed-in Google user, keyed by
 their Google account id. Each item stores a single JSON blob, namespaced
-per app (`{ chapbookbuilder: {...}, dummybuilder: {...} }`) so multiple
-tools can share one user identity without overwriting each other's data.
+per app (`{ chapbookbuilder: {...} }` -- BookBug's key predates its
+rename) so another tool could share the same sign-in without overwriting
+BookBug's data.
