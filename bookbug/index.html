@@ -13,7 +13,7 @@
     document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1');
   }
 </script>
-<title>BookBug — Jake Goldwasser</title>
+<title>Bookbug — Jake Goldwasser</title>
 <link rel="icon" type="image/png" sizes="96x96" href="../favicon-96.png">
 <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
 <link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
@@ -175,6 +175,12 @@
   }
 
   .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
+  .book-title-row { display: flex; align-items: flex-end; gap: 6px; max-width: 680px; }
+  /* Sized to its text (fitTitleInput) so the ⋯ sits right after the
+     title; a long title caps at the row and wraps. */
+  .book-title-row #bookTitleInput { flex: 0 1 auto; min-width: 4em; max-width: 100%; }
+  .book-title-row .dots-btn { margin-bottom: 8px; }
+  .book-title-row .dots-btn[hidden] { display: none; }
 
   .signin-gate {
     position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
@@ -452,6 +458,14 @@
   .ed-image-place button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
   .ed-image-place button:hover:not([aria-pressed="true"]), .ed-image-add:hover { color: var(--accent); }
   .ed-image-add { border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); }
+  .cover-image-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cover-image-control img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
+  .cover-pane[hidden] { display: none; }
+  .back-text-input {
+    width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line-strong); border-radius: 7px;
+    padding: 8px 10px; font-size: 13.5px; line-height: 1.5; background: var(--surface-2); color: var(--ink); outline: none;
+  }
+  @media (max-width: 700px) { .back-text-input { font-size: 16px; } }
   .format-toolbar button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .poem-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
@@ -647,8 +661,14 @@
     font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink);
     flex: 0 0 auto;
   }
+  /* Sized to its own text (see fitTitleInput), so only the words
+     themselves are a text field -- the rest of the bar is the drag
+     handle. */
+  .section-row { cursor: grab; }
+  .section-row:active { cursor: grabbing; }
+  .section-row .section-block-count, .section-row .section-move-btn.is-first { margin-left: auto; }
   input.section-title {
-    flex: 1; min-width: 0; border: none; border-bottom: 1px solid transparent; background: transparent;
+    flex: 0 1 auto; min-width: 3em; max-width: 100%; cursor: text; border: none; border-bottom: 1px solid transparent; background: transparent;
     font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: 16.5px; padding: 3px 2px; outline: none; color: var(--ink);
   }
   input.section-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
@@ -660,9 +680,12 @@
      export never requires scrolling past the (possibly very long) entries
      editor on the left; it's always just a local scroll within the
      sidebar itself. */
+  /* No inner scroll box (it clipped the next panel into an empty sliver
+     at the bottom edge): the column scrolls with the page, and a JS-set
+     negative `top` (see fitStickySidebar) makes a column taller than the
+     window stick by its bottom edge instead of its top. */
   .sidebar {
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
-    max-height: calc(100vh - 48px); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
   }
   .sidebar-scroll {
     display: flex; flex-direction: column; gap: 16px;
@@ -754,7 +777,7 @@
   }
   .text-target-toggle button {
     flex: 1; appearance: none; border: none; background: transparent; border-radius: 7px; cursor: pointer;
-    padding: 8px 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    padding: 8px 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
   }
   .text-target-toggle button:hover { color: var(--ink); }
   .text-target-toggle button.active {
@@ -871,11 +894,6 @@
   .home-archived-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
   .home-archived .chapbooks-empty { padding: 0; }
   .entry-menu button.is-danger { color: var(--danger); }
-  .home-trash {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
-    width: 100%; max-width: 480px; align-self: flex-end;
-  }
-  .home-trash[hidden] { display: none; }
 
   .chapbooks-menu { position: relative; }
   .chapbooks-dropdown {
@@ -1034,10 +1052,8 @@
       <h2 class="home-title">My Books</h2>
       <div class="home-head-actions">
         <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
-        <button class="btn btn-sm" id="homeTrashBtn" type="button">Trash</button>
       </div>
     </div>
-    <div class="home-trash" id="homeTrash" hidden></div>
     <div class="home-grid" id="homeGrid"></div>
     <div class="home-archived" id="homeArchived" hidden>
       <h3 class="home-archived-title">Archived</h3>
@@ -1046,7 +1062,10 @@
   </div>
 
   <div class="chapbook-header">
-    <textarea id="bookTitleInput" rows="1" placeholder="Book title"></textarea>
+    <div class="book-title-row">
+      <textarea id="bookTitleInput" rows="1" placeholder="Book title"></textarea>
+      <button class="dots-btn" id="currentBookMenuBtn" type="button" title="Book options" aria-label="Book options" aria-haspopup="menu" aria-expanded="false">⋯</button>
+    </div>
     <input type="text" id="authorInput" placeholder="Author name">
   </div>
 
@@ -1103,7 +1122,7 @@
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
             <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
-              <button type="button" data-view="sections" title="Just the section headings, to rename or reorder whole sections">Sections</button>
+              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections">Sections</button>
               <button type="button" data-view="titles" title="One row per entry; click a title to open it">Titles</button>
               <button type="button" data-view="entries" title="Every entry open in full">Entries</button>
             </div>
@@ -1143,12 +1162,32 @@
           </div>
 
           <div class="subhead">Text</div>
-          <!-- Entry titles and body text each get their own panel of the
-               same controls; this switch shows one at a time. -->
+          <!-- Section titles, entry titles and entries each get their own
+               pane of controls; this switch shows one at a time. -->
           <div class="text-target-toggle" id="textTargetToggle" role="tablist">
+            <button type="button" role="tab" data-target="section">Section title</button>
             <button type="button" role="tab" data-target="title">Entry title</button>
-            <button type="button" role="tab" data-target="body">Body text</button>
+            <button type="button" role="tab" data-target="body">Entry</button>
           </div>
+          <div class="text-target-pane" data-pane="section">
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg seg-fonts" id="sectionFontSeg" data-font-seg></div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="sectionAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <div class="seg seg-3" id="sectionSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="sectionOwnPageCheck" checked>
+            <label for="sectionOwnPageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Start each section on its own page</label>
+          </div>
+          </div>
+
           <div class="text-target-pane" data-pane="title">
           <div class="field">
             <label>Typeface</label>
@@ -1224,10 +1263,6 @@
 
           <div class="subhead">Layout</div>
           <div class="checkline">
-            <input type="checkbox" id="titlePageCheck" checked>
-            <label for="titlePageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include title page</label>
-          </div>
-          <div class="checkline">
             <input type="checkbox" id="tocCheck" checked>
             <label for="tocCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include table of contents</label>
           </div>
@@ -1245,6 +1280,82 @@
           <div class="checkline">
             <input type="checkbox" id="cutLinesCheck" checked>
             <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines (print-ready export)</label>
+          </div>
+          </div>
+        </div>
+
+        <div class="panel collapsible-panel" id="coversPanel">
+          <button type="button" class="panel-toggle" id="coversToggle" aria-expanded="false" aria-controls="coversBody">
+            <span class="panel-title">Covers</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="coversBody" hidden>
+          <div class="text-target-toggle" id="coverTargetToggle" role="tablist">
+            <button type="button" role="tab" data-target="front">Front cover</button>
+            <button type="button" role="tab" data-target="back">Back cover</button>
+          </div>
+          <div class="cover-pane" data-pane="front">
+          <div class="checkline">
+            <input type="checkbox" id="titlePageCheck" checked>
+            <label for="titlePageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include front cover</label>
+          </div>
+          <div class="field">
+            <label>Book title typeface</label>
+            <div class="seg seg-fonts" id="coverFontSeg" data-font-seg></div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="coverAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
+          </div>
+          <div class="field">
+            <label>Book title size</label>
+            <div class="seg seg-3" id="coverSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="coverAuthorCheck" checked>
+            <label for="coverAuthorCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show author name</label>
+          </div>
+          <div class="field">
+            <label>Image</label>
+            <div class="cover-image-control" data-cover="front"></div>
+          </div>
+          <div class="field" data-image-size-for="front">
+            <label>Image size</label>
+            <div class="seg seg-3" id="coverImageSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
+          </div>
+          <div class="cover-pane" data-pane="back" hidden>
+          <div class="field">
+            <label for="backTextInput">Back cover text</label>
+            <textarea id="backTextInput" class="back-text-input" rows="4" placeholder="A blurb, a dedication, a note about the book…"></textarea>
+          </div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg seg-fonts" id="backFontSeg" data-font-seg></div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="backAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
+          </div>
+          <div class="field">
+            <label>Text size</label>
+            <div class="seg seg-3" id="backSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="backAuthorCheck" checked>
+            <label for="backAuthorCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show author name</label>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="backYearCheck" checked>
+            <label for="backYearCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show © year</label>
+          </div>
+          <div class="field">
+            <label>Image</label>
+            <div class="cover-image-control" data-cover="back"></div>
+          </div>
+          <div class="field" data-image-size-for="back">
+            <label>Image size</label>
+            <div class="seg seg-3" id="backImageSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
           </div>
           </div>
         </div>
@@ -1291,7 +1402,7 @@
 <div class="entry-menu" id="bookMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
-  <button type="button" role="menuitem" data-action="trash" class="is-danger">Move to trash</button>
+  <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete permanently…</button>
 </div>
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
@@ -1490,6 +1601,26 @@
 
   // Archived books stay in the library (and sync like any other), just
   // off the main shelf.
+  // A book is either in My Books, archived (hidden, restorable, kept
+  // until you say otherwise), or permanently deleted -- one holding
+  // place, not two. `trash` now only holds deletion tombstones ({ id,
+  // deletedAt }, no content) so a book deleted here isn't synced back in
+  // from another device's cached copy. Books sitting in the old 7-day
+  // trash are moved into the archive instead of being purged.
+  function migrateTrashToArchive() {
+    var moved = false;
+    trash = trash.filter(function (t) {
+      if (!t || !t.data) return true;
+      delete t.deletedAt;
+      t.archived = true;
+      t.archiveChangedAt = t.updatedAt = Date.now();
+      if (!library.some(function (c) { return c.id === t.id; })) library.push(t);
+      moved = true;
+      return false;
+    });
+    if (moved) { persistLibrary(); persistTrash(); }
+    return moved;
+  }
   function activeBooks() { return library.filter(function (c) { return !c.archived; }); }
   function archivedBooks() { return library.filter(function (c) { return c.archived; }); }
 
@@ -1518,7 +1649,7 @@
   function ensureCurrentInLibrary() {
     if (state.chapbookId || !hasContent(state)) return;
     state.chapbookId = makeChapbookId();
-    library.push({ id: state.chapbookId, title: state.bookTitle || 'Untitled Collection', updatedAt: Date.now(), data: null });
+    library.push({ id: state.chapbookId, title: state.bookTitle || 'Untitled book', updatedAt: Date.now(), data: null });
     markOpened(state.chapbookId);
   }
 
@@ -1526,7 +1657,7 @@
     if (!state.chapbookId) return;
     var entry = library.filter(function (c) { return c.id === state.chapbookId; })[0];
     if (!entry) return;
-    entry.title = state.bookTitle || 'Untitled Collection';
+    entry.title = state.bookTitle || 'Untitled book';
     entry.updatedAt = Date.now();
     entry.data = JSON.parse(JSON.stringify(state));
     persistLibrary();
@@ -1693,9 +1824,18 @@
     catch (e) { return {}; }
   }
 
+  // Local-first: someone this browser remembers signing in, with their
+  // books already cached here, gets those books on screen immediately --
+  // the cloud copy merges in behind them a moment later (and a lapsed
+  // sign-in just shows the amber badge + Sign in button). The full-page
+  // gate and loading screen are only for a first visit on a device.
+  function hasCachedBooksForReturningUser() {
+    return !!getLastGoogleUser() && library.length > 0;
+  }
   function updateSignInGate() {
-    document.getElementById('signInGate').hidden = !!cloudAuthToken || signedInThisLoad;
-    document.getElementById('loadingScreen').hidden = !(cloudAuthToken && !initialLoadDone);
+    var localFirst = hasCachedBooksForReturningUser();
+    document.getElementById('signInGate').hidden = !!cloudAuthToken || signedInThisLoad || localFirst;
+    document.getElementById('loadingScreen').hidden = !(cloudAuthToken && !initialLoadDone && !localFirst);
   }
 
   // Drops every locally cached book -- on sign-out, and when a different
@@ -1767,8 +1907,13 @@
     updateSignInGate();
   }
 
+  // What the open book looked like when the page loaded -- if it's
+  // unchanged when the cloud copy arrives, it's safe to swap in the
+  // cloud's (possibly newer, e.g. edited on a phone) version of it.
+  var bookAtLoad = null;
   async function pullLibraryFromCloud() {
     if (!cloudAuthToken) return;
+    if (!signedInThisLoad) setAccountStatus('Syncing…');
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
@@ -1781,7 +1926,7 @@
       }
       signedInThisLoad = true;
       // The cloud blob is namespaced per app (see CLOUD_API_URL's
-      // Lambda); BookBug's data lives under state.chapbookbuilder, the
+      // Lambda); Bookbug's data lives under state.chapbookbuilder, the
       // key from before it was renamed.
       var ours = (data.state && data.state.chapbookbuilder) || {};
       // Fold whatever is cached here (edits made while a sign-in had
@@ -1791,6 +1936,7 @@
       var merged = mergeLibraries(library, trash, ours.chapbooks || [], ours.trash || []);
       library = merged.library;
       trash = merged.trash;
+      var migrated = migrateTrashToArchive();
       persistLibrary();
       persistTrash();
       var cloudOpened = ours.lastOpened || null;
@@ -1798,10 +1944,15 @@
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
         try { localStorage.setItem(LAST_OPENED_KEY, JSON.stringify(cloudOpened)); } catch (e) {}
       }
-      openLastOpenedBook();
+      // Local-first: only re-open from the merged library if nothing's been
+      // touched since load; otherwise keep the book in front of the poet
+      // (their newer edits win the merge anyway) and just refresh lists.
+      var untouched = bookAtLoad === null || JSON.stringify(state) === bookAtLoad;
+      if (untouched) openLastOpenedBook();
+      else { renderChapbooksList(); if (isHomeShown()) renderHome(); }
       initialLoadDone = true;
       updateSignInGate();
-      if (merged.changed) await syncLibraryToCloud();
+      if (merged.changed || migrated) await syncLibraryToCloud();
       else setAccountStatus('Signed in', 'synced');
     } catch (e) {
       finishInitialLoad();
@@ -2547,6 +2698,149 @@
     return tocPageCount > 0 && (coverCount + 1) % 2 === 0;
   }
 
+  // ---------------------------------------------------------------------
+  // Section title pages and covers. Each style helper fills in defaults,
+  // so books saved before these settings existed look as they always
+  // did. Each layout function returns positioned items in PDF points
+  // ({ text, font, weight, italic, size, x, y (baseline), rgb, key } or
+  // { image, x, y (bottom), w, h }); the PDF writer and the preview both
+  // draw from the same list, so the two can't drift apart.
+  // ---------------------------------------------------------------------
+  var SECTION_TITLE_SIZES = { small: 18, medium: 24, large: 30 };
+  var COVER_TITLE_SIZES = { small: 22, medium: 27, large: 34 };
+  var BACK_TEXT_SIZES = { small: 10, medium: 11.5, large: 13 };
+  var COVER_IMAGE_FRACTIONS = { small: 0.45, medium: 0.7, large: 1 };
+
+  function sectionStyle(s) {
+    return {
+      font: s.sectionFontChoice || s.titleFontChoice,
+      align: s.sectionAlignment || 'center',
+      sizePt: SECTION_TITLE_SIZES[s.sectionSizeMode] || SECTION_TITLE_SIZES.medium,
+      ownPage: s.sectionOwnPage !== false
+    };
+  }
+  function frontCoverStyle(s) {
+    return {
+      font: s.coverFontChoice || s.titleFontChoice,
+      align: s.coverAlignment || 'center',
+      sizePt: COVER_TITLE_SIZES[s.coverSizeMode] || COVER_TITLE_SIZES.medium,
+      showAuthor: s.coverShowAuthor !== false,
+      image: s.coverImage || null,
+      imageSize: s.coverImageSize || 'medium'
+    };
+  }
+  function backCoverStyle(s) {
+    return {
+      text: s.backText || '',
+      font: s.backFontChoice || s.bodyFontChoice,
+      align: s.backAlignment || 'center',
+      sizePt: BACK_TEXT_SIZES[s.backSizeMode] || BACK_TEXT_SIZES.medium,
+      showAuthor: s.backShowAuthor !== false,
+      showYear: s.backShowYear !== false,
+      image: s.backImage || null,
+      imageSize: s.backImageSize || 'medium'
+    };
+  }
+
+  function coverImageBox(s, key, sizeMode, maxW, maxH) {
+    var im = key && s.images && s.images[key];
+    if (!im) return null;
+    var w = maxW * (COVER_IMAGE_FRACTIONS[sizeMode] || COVER_IMAGE_FRACTIONS.medium);
+    var h = w * im.h / im.w;
+    if (h > maxH) { h = maxH; w = h * im.w / im.h; }
+    return { image: key, w: w, h: h };
+  }
+
+  // Front cover: image (if any) above the book title and author, the
+  // whole group centered on the page.
+  function layoutFrontCover(s, plan) {
+    var st = frontCoverStyle(s);
+    var left = plan.marginSide, right = plan.PAGE_W - plan.marginSide;
+    var items = [];
+    var title = (s.bookTitle || 'Untitled book').trim();
+    var author = st.showAuthor ? (s.author || '').trim() : '';
+    var lines = wrapLine(title, plan.contentWidth, st.sizePt, st.font, 600).slice(0, 4);
+    var lineH = st.sizePt * 1.25, authorSize = 13, gap = 24;
+    var img = coverImageBox(s, st.image, st.imageSize, plan.contentWidth, plan.PAGE_H * 0.45);
+    var blockH = (img ? img.h + gap : 0) + lines.length * lineH + (author ? 12 + authorSize * 1.25 : 0);
+    var cursor = plan.PAGE_H / 2 + blockH / 2;
+    if (img) {
+      items.push({ image: img.image, x: resolveX(st.align, img.w, left, right), y: cursor - img.h, w: img.w, h: img.h });
+      cursor -= img.h + gap;
+    }
+    lines.forEach(function (line) {
+      var w = measure(line, st.sizePt, st.font, 600);
+      items.push({ text: line, font: st.font, weight: 700, size: st.sizePt, x: resolveX(st.align, w, left, right), y: cursor - st.sizePt * 0.9, rgb: INK_RGB, key: 'coverBold' });
+      cursor -= lineH;
+    });
+    if (author) {
+      cursor -= 12;
+      var aw = measure(author, authorSize, s.bodyFontChoice, 400, true);
+      items.push({ text: author, font: s.bodyFontChoice, italic: true, size: authorSize, x: resolveX(st.align, aw, left, right), y: cursor - authorSize * 0.9, rgb: MUTED_RGB, key: 'bodyItal' });
+    }
+    return items;
+  }
+
+  // Back cover: image and/or text in the open space, author and © year
+  // small at the foot.
+  function layoutBackCover(s, plan) {
+    var st = backCoverStyle(s);
+    var left = plan.marginSide, right = plan.PAGE_W - plan.marginSide;
+    var items = [];
+    var foot = [];
+    var author = (s.author || '').trim();
+    if (st.showAuthor && author) foot.push(author);
+    if (st.showYear) foot.push('© ' + new Date().getFullYear());
+    var footSize = 9.5, footLineH = footSize * 1.5;
+    foot.forEach(function (line, i) {
+      var w = measure(line, footSize, st.font, 400);
+      items.push({ text: line, font: st.font, size: footSize, x: resolveX(st.align, w, left, right), y: 44 + (foot.length - 1 - i) * footLineH, rgb: MUTED_RGB, key: 'backReg' });
+    });
+    var regionTop = plan.PAGE_H - plan.marginTop;
+    var regionBottom = Math.max(plan.marginBottom, 44 + foot.length * footLineH + 24);
+    var lineH = st.sizePt * 1.45, gap = 20;
+    var textLines = [];
+    st.text.split('\n').forEach(function (para) {
+      if (!para.trim()) { textLines.push(''); return; }
+      wrapLine(para, plan.contentWidth, st.sizePt, st.font, 400).forEach(function (l) { textLines.push(l); });
+    });
+    while (textLines.length && !textLines[0]) textLines.shift();
+    while (textLines.length && !textLines[textLines.length - 1]) textLines.pop();
+    var room = regionTop - regionBottom;
+    var img = coverImageBox(s, st.image, st.imageSize, plan.contentWidth, room * (textLines.length ? 0.55 : 1));
+    var imgPart = img ? img.h + (textLines.length ? gap : 0) : 0;
+    textLines = textLines.slice(0, Math.max(0, Math.floor((room - imgPart) / lineH)));
+    var blockH = imgPart + textLines.length * lineH;
+    var cursor = (regionTop + regionBottom) / 2 + blockH / 2;
+    if (img) {
+      items.push({ image: img.image, x: resolveX(st.align, img.w, left, right), y: cursor - img.h, w: img.w, h: img.h });
+      cursor -= imgPart;
+    }
+    textLines.forEach(function (line) {
+      if (line) {
+        var w = measure(line, st.sizePt, st.font, 400);
+        items.push({ text: line, font: st.font, size: st.sizePt, x: resolveX(st.align, w, left, right), y: cursor - st.sizePt * 0.9, rgb: INK_RGB, key: 'backReg' });
+      }
+      cursor -= lineH;
+    });
+    return items;
+  }
+
+  // A section's own page: its title, a little above the middle, like a
+  // part-title page in a printed book. No page number, by convention.
+  function layoutSectionPage(s, plan, layout) {
+    var st = sectionStyle(s);
+    var left = plan.marginSide, right = plan.PAGE_W - plan.marginSide;
+    var lineH = st.sizePt * 1.25;
+    var cursor = plan.PAGE_H * 0.62 + layout.titleLines.length * lineH / 2;
+    return layout.titleLines.map(function (line) {
+      var w = measure(line, st.sizePt, st.font, 600);
+      var item = { text: line, font: st.font, weight: 700, size: st.sizePt, x: resolveX(st.align, w, left, right), y: cursor - st.sizePt * 0.9, rgb: INK_RGB, key: 'sectionBold' };
+      cursor -= lineH;
+      return item;
+    });
+  }
+
   function planBooklet(state) {
     var trim = getTrim(state.trimKey);
     var PAGE_W = trim.w * 72, PAGE_H = trim.h * 72;
@@ -2555,12 +2849,20 @@
     var contentHeight = PAGE_H - marginTop - marginBottom;
 
     var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state);
-    // A section marker consumes no pages of its own (pages: []) -- it's
-    // a pure TOC/editor concept, not a printed divider page -- so every
-    // page-walking loop below that reads layouts[i].pages naturally
-    // skips it with no isSection check needed.
+    // A section gets its own title page by default (pages: [[]], one
+    // empty page the section title is drawn on). With that turned off
+    // it's a TOC/editor-only marker (pages: []) that every page-walking
+    // loop below naturally skips.
+    var secStyle = sectionStyle(state);
     var layouts = state.poems.map(function (poem) {
-      if (isSection(poem)) return { isSection: true, pages: [], titleLines: [], titleH: 0, sizePt: globalSize, lineHeight: 0, titleSizePt: 0, wasWrapped: false };
+      if (isSection(poem)) {
+        var secTitle = (poem.title || '').trim() || 'Untitled section';
+        return {
+          isSection: true, pages: secStyle.ownPage ? [[]] : [],
+          titleLines: secStyle.ownPage ? wrapLine(secTitle, contentWidth, secStyle.sizePt, secStyle.font, 600).slice(0, 3) : [],
+          titleH: 0, sizePt: globalSize, lineHeight: 0, titleSizePt: secStyle.sizePt, wasWrapped: false
+        };
+      }
       return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
@@ -2668,6 +2970,9 @@
     }
     return {
       titleKeys: { bold: resolve(state.titleFontChoice, 'bold') },
+      sectionKeys: { bold: resolve(sectionStyle(state).font, 'bold') },
+      coverKeys: { bold: resolve(frontCoverStyle(state).font, 'bold') },
+      backKeys: { reg: resolve(backCoverStyle(state).font, 'regular') },
       bodyKeys: { reg: resolve(state.bodyFontChoice, 'regular'), bold: resolve(state.bodyFontChoice, 'bold'), ital: resolve(state.bodyFontChoice, 'italic') },
       fonts: ordered
     };
@@ -2738,6 +3043,17 @@
     });
   }
 
+  function drawLayoutItems(bytes, items, keyMap, imagesUsed) {
+    items.forEach(function (it) {
+      if (it.image) {
+        pushAscii(bytes, 'q\n' + it.w.toFixed(2) + ' 0 0 ' + it.h.toFixed(2) + ' ' + it.x.toFixed(2) + ' ' + it.y.toFixed(2) + ' cm\n/' + it.image + ' Do\nQ\n');
+        if (imagesUsed.indexOf(it.image) === -1) imagesUsed.push(it.image);
+        return;
+      }
+      drawText(bytes, keyMap[it.key], it.size, it.x, it.y, it.text, it.rgb);
+    });
+  }
+
   var INK_RGB = [0.180, 0.125, 0.075];
   var MUTED_RGB = [0.420, 0.353, 0.259];
 
@@ -2801,26 +3117,13 @@
       }
     }
 
-    // ---- Title page ----
+    var itemKeys = { coverBold: fontPlan.coverKeys.bold, bodyItal: bodyKeys.ital, backReg: fontPlan.backKeys.reg, sectionBold: fontPlan.sectionKeys.bold };
+
+    // ---- Front cover ----
     if (state.includeTitlePage) {
-      var bytes = [];
-      var bookTitle = (state.bookTitle || 'Untitled Collection').trim();
-      var author = (state.author || '').trim();
-      var titleSize = 27;
-      var titleLines = wrapLine(bookTitle, plan.contentWidth, titleSize, state.titleFontChoice, 600).slice(0, 4);
-      var titleLineH = titleSize * 1.3;
-      var blockH = titleLines.length * titleLineH + (author ? 40 : 0);
-      var startY = plan.PAGE_H / 2 + blockH / 2;
-      titleLines.forEach(function (line, i) {
-        var w = measure(line, titleSize, state.titleFontChoice, 600);
-        drawText(bytes, titleKeys.bold, titleSize, plan.PAGE_W / 2 - w / 2, startY - i * titleLineH, line, INK_RGB);
-      });
-      if (author) {
-        var y = startY - titleLines.length * titleLineH - 14;
-        var aw = measure(author, 13, state.bodyFontChoice, 400);
-        drawText(bytes, bodyKeys.ital, 13, plan.PAGE_W / 2 - aw / 2, y, author, MUTED_RGB);
-      }
-      contents.push(bytes);
+      var coverBytes = [];
+      drawLayoutItems(coverBytes, layoutFrontCover(state, plan), itemKeys, imagesUsed);
+      contents.push(coverBytes);
     }
 
     // ---- Blank spacer so the table of contents lands on a recto ----
@@ -2884,6 +3187,14 @@
     // ---- Poem pages ----
     state.poems.forEach(function (poem, pi) {
       var layout = plan.layouts[pi];
+      if (layout.isSection) {
+        if (layout.pages.length) {
+          var secBytes = [];
+          drawLayoutItems(secBytes, layoutSectionPage(state, plan, layout), itemKeys, imagesUsed);
+          contents.push(secBytes);
+        }
+        return;
+      }
       var effAlign = poem.titleAlign || state.titleAlignment;
       var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       layout.pages.forEach(function (pageLines, pageIdx) {
@@ -2922,20 +3233,9 @@
       });
     });
 
-    // ---- Back cover -- always present: author, (c), and the year, in a
-    // small font near the bottom ----
+    // ---- Back cover -- always present ----
     var backBytes = [];
-    var backAuthor = (state.author || '').trim();
-    var year = new Date().getFullYear();
-    var backLines = [];
-    if (backAuthor) backLines.push(backAuthor);
-    backLines.push('© ' + year);
-    var backSize = 9.5, backLineH = backSize * 1.5;
-    backLines.forEach(function (line, i) {
-      var w = measure(line, backSize, state.bodyFontChoice, 400);
-      var by = 44 + (backLines.length - 1 - i) * backLineH;
-      drawText(backBytes, bodyKeys.reg, backSize, plan.PAGE_W / 2 - w / 2, by, line, MUTED_RGB);
-    });
+    drawLayoutItems(backBytes, layoutBackCover(state, plan), itemKeys, imagesUsed);
     contents.push(backBytes);
 
     return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents, imagesUsed: imagesUsed };
@@ -3060,7 +3360,7 @@
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
     w.pushPart('<< /Title ');
-    w.pushPart(pdfLiteralStringBytes(toAsciiSafe(state.bookTitle || 'Untitled Collection')));
+    w.pushPart(pdfLiteralStringBytes(toAsciiSafe(state.bookTitle || 'Untitled book')));
     w.pushPart(' /Producer (Book Builder) >>\n');
     w.endObj();
 
@@ -3173,7 +3473,7 @@
     var infoNum = w.allocObj();
     w.beginObj(infoNum);
     w.pushPart('<< /Title ');
-    w.pushPart(pdfLiteralStringBytes(toAsciiSafe((state.bookTitle || 'Untitled Collection') + ' - Printable Booklet')));
+    w.pushPart(pdfLiteralStringBytes(toAsciiSafe((state.bookTitle || 'Untitled book') + ' - Printable Booklet')));
     w.pushPart(' /Producer (Book Builder) >>\n');
     w.endObj();
 
@@ -3392,7 +3692,7 @@
     return (email || '').trim();
   }
 
-  // Imports may only come from the Google account BookBug is signed in
+  // Imports may only come from the Google account Bookbug is signed in
   // with -- Google's popup lets you pick any account you're logged into,
   // so ask Drive whose token this is before opening the picker.
   async function driveTokenEmail(token) {
@@ -4033,6 +4333,8 @@
   }
   function referencedImageKeys() {
     var keys = {};
+    if (state.coverImage) keys[state.coverImage] = true;
+    if (state.backImage) keys[state.backImage] = true;
     (state.poems || []).concat(state.archivedPoems || []).forEach(function (p) {
       (p.lines || []).forEach(function (l) { var k = imageKeyForLine(l, state); if (k) keys[k] = true; });
     });
@@ -4173,7 +4475,7 @@
     gap.innerHTML = '<div class="poem-gap-line"></div>' +
       '<div class="poem-gap-actions">' +
       '<button class="poem-gap-btn" type="button" title="Add entry here">+</button>' +
-      '<button class="poem-gap-btn poem-gap-btn-section" type="button" title="Add named section break here">§+</button>' +
+      '<button class="poem-gap-btn poem-gap-btn-section" type="button" title="Add a section here">§+</button>' +
       '</div>';
     gap.querySelectorAll('.poem-gap-btn')[0].addEventListener('click', function () {
       state.poems.splice(index, 0, { id: makeId(), title: '', lines: [''] });
@@ -4638,6 +4940,17 @@
     return row;
   }
 
+  // A sticky column taller than the window would hide its own bottom;
+  // offsetting `top` by the overflow makes it scroll with the page until
+  // its last panel is in view, then stay put.
+  var sidebarEl = document.getElementById('toolsSidebar');
+  function fitStickySidebar() {
+    sidebarEl.style.top = Math.min(24, window.innerHeight - sidebarEl.offsetHeight - 24) + 'px';
+  }
+  window.addEventListener('resize', fitStickySidebar);
+  if (window.ResizeObserver) new ResizeObserver(fitStickySidebar).observe(sidebarEl);
+  fitStickySidebar();
+
   // Tools column (desktop): shown or hidden only by the Tools toggle,
   // and remembered -- no automatic folding, so nothing jumps around
   // when an entry opens or closes.
@@ -4686,7 +4999,7 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
       if (b.dataset.view === 'sections') {
         b.disabled = !hasSections;
-        b.title = hasSections ? 'Just the section headings, to rename or reorder whole sections' : 'Add a section to use this view';
+        b.title = hasSections ? 'Just the section titles, to rename or reorder whole sections' : 'Add a section to use this view';
       }
     });
   }
@@ -4741,23 +5054,29 @@
     titleInput.draggable = false;
     titleInput.placeholder = 'Untitled section';
     titleInput.value = section.title;
+    titleInput.setAttribute('aria-label', 'Section title');
     titleInput.addEventListener('input', function () {
       section.title = titleInput.value;
+      fitTitleInput(titleInput);
       state.isExample = false;
       persist();
       updateStats();
     });
+    // Selecting text in the title shouldn't start dragging the row.
+    titleInput.addEventListener('pointerdown', function () { row.draggable = false; });
+    titleInput.addEventListener('blur', function () { row.draggable = true; });
+    requestAnimationFrame(function () { fitTitleInput(titleInput); });
 
     row.appendChild(handle);
     row.appendChild(label);
     row.appendChild(titleInput);
     // One step at a time: up pulls the entry above into this section,
     // down hands this section's first entry to the one before it.
-    [['-1', '↑', 'Move this heading up one place (the entry above joins this section)'],
-     ['1', '↓', 'Move this heading down one place (its first entry joins the section before)']].forEach(function (d) {
+    [['-1', '↑', 'Move this section title up one place (the entry above joins this section)'],
+     ['1', '↓', 'Move this section title down one place (its first entry joins the section before)']].forEach(function (d) {
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'section-move-btn';
+      btn.className = 'section-move-btn' + (d[0] === '-1' ? ' is-first' : '');
       btn.textContent = d[1];
       btn.title = d[2];
       btn.setAttribute('aria-label', d[2]);
@@ -4827,7 +5146,7 @@
     state.poems.forEach(function (p, i) { if (!isSection(p)) entryNumAt[i] = ++num; });
     var hint = document.createElement('p');
     hint.className = 'sections-only-hint';
-    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries. ▸ shows what’s in it.';
+    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries. Click a section title to rename it; ▸ shows what’s in it.';
     poemList.appendChild(hint);
     if (parts.lead.length) {
       var leadRow = document.createElement('div');
@@ -4860,10 +5179,12 @@
       title.setAttribute('aria-label', 'Section title');
       title.addEventListener('input', function () {
         section.title = title.value;
+        fitTitleInput(title);
         state.isExample = false;
         persist();
         updateStats();
       });
+      requestAnimationFrame(function () { fitTitleInput(title); });
       // Selecting text in the field shouldn't start dragging the row.
       title.addEventListener('pointerdown', function () { row.draggable = false; });
       title.addEventListener('blur', function () { row.draggable = true; });
@@ -4986,7 +5307,7 @@
     var target = state.poems[index];
     if (!target) return;
     var label = isSection(target)
-      ? 'the “' + (target.title || 'Untitled') + '” section break'
+      ? 'the “' + (target.title || 'Untitled section') + '” section'
       : '“' + (target.title || 'Untitled') + '”';
     var ok = await confirmDialog('Are you sure you want to send ' + label + ' to the archive?');
     if (!ok) return;
@@ -5100,10 +5421,10 @@
     }
     var plan = planBooklet(state);
     state.poems.forEach(function (poem, i) {
-      // Sections legitimately contribute zero pages here (see planBooklet)
-      // -- unlike a real poem, whose layout always has at least one page
-      // even when empty, so the `|| 1` fallback below only ever matters
-      // for a missing layout entry, never a section's intentional 0.
+      // A section contributes its own title page, or none when that's
+      // turned off (see planBooklet) -- unlike an entry, whose layout
+      // always has at least one page even when empty, so the `|| 1`
+      // fallback below only matters for a missing layout.
       var pageCount = plan.layouts[i] ? plan.layouts[i].pages.length : 1;
       for (var p = 0; p < pageCount; p++) items.push({ type: 'poem', index: i, pageIndex: p });
     });
@@ -5165,33 +5486,24 @@
     box.innerHTML += pageNumberOverlayHtml(tocStartPage, scale);
   }
 
-  function renderCoverPreview(box, plan, scale) {
+  // Draws a layout item list (see layoutFrontCover) at preview scale.
+  // Text is placed by its PDF baseline: with line-height 1, a line's
+  // baseline sits about 0.8em below its top.
+  function renderItemsPreview(box, items, plan, scale) {
     box.style.padding = '0';
-    var titleStack = displayStackFor(state.titleFontChoice);
-    var bodyStack = displayStackFor(state.bodyFontChoice);
-    var bookTitle = (state.bookTitle || 'Untitled Collection').trim();
-    var author = (state.author || '').trim();
-    var html = '<div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; ' +
-      'justify-content:center; text-align:center; gap:' + (12 * scale).toFixed(1) + 'px; padding:0 ' + (16 * scale).toFixed(1) + 'px; box-sizing:border-box;">';
-    html += '<div style="font-family:' + titleStack + '; font-weight:700; font-size:' + (27 * scale).toFixed(1) + 'px; line-height:1.3;">' + escapeHtml(bookTitle) + '</div>';
-    if (author) {
-      html += '<div style="font-family:' + bodyStack + '; font-style:italic; font-size:' + (13 * scale).toFixed(1) + 'px; color:#6B5A42;">' + escapeHtml(author) + '</div>';
-    }
-    html += '</div>';
-    box.innerHTML = html;
-  }
-
-  function renderBackCoverPreview(box, plan, scale) {
-    box.style.padding = '0';
-    var bodyStack = displayStackFor(state.bodyFontChoice);
-    var author = (state.author || '').trim();
-    var year = new Date().getFullYear();
-    var lines = [];
-    if (author) lines.push(escapeHtml(author));
-    lines.push('© ' + year);
-    var html = '<div style="position:absolute; left:0; right:0; bottom:' + (30 * scale).toFixed(1) + 'px; text-align:center; ' +
-      'font-family:' + bodyStack + '; font-size:' + (9.5 * scale).toFixed(1) + 'px; line-height:1.5; color:#6B5A42;">' +
-      lines.join('<br>') + '</div>';
+    var html = '';
+    items.forEach(function (it) {
+      if (it.image) {
+        html += '<img alt="" src="' + state.images[it.image].data + '" style="position:absolute; display:block; left:' + (it.x * scale).toFixed(2) +
+          'px; top:' + ((plan.PAGE_H - it.y - it.h) * scale).toFixed(2) + 'px; width:' + (it.w * scale).toFixed(2) + 'px; height:' + (it.h * scale).toFixed(2) + 'px;">';
+        return;
+      }
+      var rgb = it.rgb.map(function (c) { return Math.round(c * 255); }).join(',');
+      html += '<div style="position:absolute; white-space:pre; line-height:1; left:' + (it.x * scale).toFixed(2) +
+        'px; top:' + ((plan.PAGE_H - it.y - it.size * 0.8) * scale).toFixed(2) + 'px; font-family:' + displayStackFor(it.font) +
+        '; font-size:' + (it.size * scale).toFixed(2) + 'px; font-weight:' + (it.weight || 400) + ';' +
+        (it.italic ? ' font-style:italic;' : '') + ' color:rgb(' + rgb + ');">' + escapeHtml(it.text) + '</div>';
+    });
     box.innerHTML = html;
   }
 
@@ -5224,16 +5536,20 @@
     box.style.fontFamily = displayStackFor(state.bodyFontChoice);
 
     if (item.type === 'cover') {
-      renderCoverPreview(box, plan, scale);
+      renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
       caption.textContent = 'Front cover';
     } else if (item.type === 'toc') {
       renderTocPreview(box, plan, scale, item.tocPageIndex);
       var tocTotal = plan.tocPageCount || 1;
       caption.textContent = 'Table of contents' + (tocTotal > 1 ? ' (' + (item.tocPageIndex + 1) + ' of ' + tocTotal + ')' : '');
     } else if (item.type === 'back') {
-      renderBackCoverPreview(box, plan, scale);
+      renderItemsPreview(box, layoutBackCover(state, plan), plan, scale);
       box.innerHTML += pageNumberOverlayHtml(plan.totalPages, scale);
       caption.textContent = 'Back cover';
+    } else if (plan.layouts[item.index] && plan.layouts[item.index].isSection) {
+      renderItemsPreview(box, layoutSectionPage(state, plan, plan.layouts[item.index]), plan, scale);
+      var secTitle = (state.poems[item.index].title || '').trim() || 'Untitled section';
+      caption.textContent = 'Section: ' + secTitle;
     } else {
       var poem = state.poems[item.index];
       var layout = plan.layouts[item.index];
@@ -5269,7 +5585,8 @@
       box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale);
 
       var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
-      caption.textContent = 'Poem ' + (item.index + 1) + ' of ' + state.poems.length + pageNote + ' · ' + layout.sizePt + 'pt';
+      var entryNo = countEntries(state.poems.slice(0, item.index + 1));
+      caption.textContent = 'Entry ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
     }
 
   }
@@ -5345,13 +5662,12 @@
   document.getElementById('newBookBtn').addEventListener('click', startNewBook);
 
   // ---------------------------------------------------------------------
-  // UI: "My Chapbooks" library menu, plus a 7-day trash bin for deletes
+  // UI: "My Books" library menu (phones) -- books and the archive
   // ---------------------------------------------------------------------
   var chapbooksMenuBtn = document.getElementById('chapbooksMenuBtn');
   var chapbooksDropdown = document.getElementById('chapbooksDropdown');
   var chapbooksPane = document.getElementById('chapbooksPane');
   var chapbooksViewMode = 'library';
-  var TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
   function closeChapbooksDropdown() { chapbooksDropdown.hidden = true; }
   function toggleChapbooksDropdown() {
@@ -5365,17 +5681,11 @@
     else toggleChapbooksDropdown();
   });
   document.addEventListener('click', function (e) {
-    // composedPath, not contains(): the Archived/Trash links re-render the
+    // composedPath, not contains(): the Archived link re-renders the
     // pane, so by now the clicked element is detached from the dropdown.
     if (!chapbooksDropdown.hidden && e.composedPath().indexOf(chapbooksDropdown) === -1 && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
   });
 
-  function purgeOldTrash() {
-    var cutoff = Date.now() - TRASH_RETENTION_MS;
-    var before = trash.length;
-    trash = trash.filter(function (t) { return t.deletedAt > cutoff; });
-    if (trash.length !== before) persistTrash();
-  }
 
   function makeDivider() {
     var d = document.createElement('div');
@@ -5383,30 +5693,6 @@
     return d;
   }
 
-  // Trashed books, each with restore / delete-forever -- shared by the My
-  // Books dropdown and the home view.
-  function appendTrashRows(container) {
-    if (!trash.length) {
-      var empty = document.createElement('div');
-      empty.className = 'chapbooks-empty';
-      empty.textContent = 'Trash is empty.';
-      container.appendChild(empty);
-      return;
-    }
-    trash.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }).forEach(function (entry) {
-      var daysLeft = Math.max(1, Math.ceil((TRASH_RETENTION_MS - (Date.now() - entry.deletedAt)) / 86400000));
-      var row = document.createElement('div');
-      row.className = 'chapbook-row';
-      row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
-        '<button class="chapbook-restore" type="button" title="Restore">↺</button>' +
-        '<button class="chapbook-del" type="button" title="Delete forever">×</button>';
-      row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
-      row.querySelector('.chapbook-meta').textContent = 'purges in ' + daysLeft + 'd';
-      row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); restoreChapbook(entry.id); });
-      row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); purgeChapbookForever(entry.id); });
-      container.appendChild(row);
-    });
-  }
 
   // ---------------------------------------------------------------------
   // Home view: a grid of every book (desktop's landing screen). The
@@ -5414,7 +5700,6 @@
   // ---------------------------------------------------------------------
   var homeMQ = window.matchMedia('(min-width: 701px)');
   var homeView = document.getElementById('homeView');
-  var homeTrashOpen = false;
   var homeArchivedOpen = false;
   function isHomeShown() { return document.body.classList.contains('view-home'); }
   function showHome() {
@@ -5440,7 +5725,7 @@
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
       '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Book options" aria-haspopup="menu" aria-expanded="false">⋯</button>';
-    var title = entry.title || 'Untitled Collection';
+    var title = entry.title || 'Untitled book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     coverTitle.style.fontFamily = displayStackFor(data.titleFontChoice);
@@ -5479,12 +5764,6 @@
     archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
       archivedGrid.appendChild(makeHomeCard(entry));
     });
-
-    document.getElementById('homeTrashBtn').textContent = 'Trash' + (trash.length ? ' (' + trash.length + ')' : '');
-    var trashBox = document.getElementById('homeTrash');
-    trashBox.hidden = !homeTrashOpen;
-    trashBox.innerHTML = '';
-    if (homeTrashOpen) appendTrashRows(trashBox);
   }
   document.getElementById('homeArchivedBtn').addEventListener('click', function () {
     homeArchivedOpen = !homeArchivedOpen;
@@ -5492,7 +5771,9 @@
     if (homeArchivedOpen) document.getElementById('homeArchived').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
-  // "⋯" book menu on the home grid -- Duplicate / Archive / Move to trash.
+  // "⋯" book menu -- on the home grid and beside the open book's title:
+  // Duplicate, Archive / Unarchive, and (archived books only) Delete
+  // permanently.
   var bookMenu = document.getElementById('bookMenu');
   var bookMenuEntry = null;
   var bookMenuBtn = null;
@@ -5503,14 +5784,17 @@
     bookMenuBtn = null;
     bookMenuEntry = null;
   }
+  var bookMenuFromEditor = false;
   function openBookMenu(btn, entry) {
     var reopening = bookMenuBtn === btn;
+    bookMenuFromEditor = btn.id === 'currentBookMenuBtn';
     closeBookMenu();
     if (reopening) return;
     bookMenuEntry = entry;
     bookMenuBtn = btn;
     btn.setAttribute('aria-expanded', 'true');
     bookMenu.querySelector('[data-action="archive"]').textContent = entry.archived ? 'Unarchive' : 'Archive';
+    bookMenu.querySelector('[data-action="delete"]').hidden = !entry.archived;
     bookMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = bookMenu.offsetWidth, mh = bookMenu.offsetHeight;
@@ -5525,26 +5809,36 @@
     if (!item || !bookMenuEntry) return;
     var entry = bookMenuEntry;
     closeBookMenu();
-    if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id);
+    if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id, bookMenuFromEditor);
     else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
-    else deleteChapbook(entry.id);
+    else deleteChapbookForever(entry.id);
   });
   document.addEventListener('click', function (e) { if (!bookMenu.contains(e.target)) closeBookMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBookMenu(); });
   window.addEventListener('scroll', closeBookMenu, true);
   window.addEventListener('resize', closeBookMenu);
 
-  document.getElementById('homeTrashBtn').addEventListener('click', function () {
-    homeTrashOpen = !homeTrashOpen;
-    renderHome();
+  // The open book's own ⋯ (beside its title). Only once it's in My
+  // Books -- an untouched new book has nothing to duplicate or archive.
+  var currentBookMenuBtn = document.getElementById('currentBookMenuBtn');
+  function currentLibraryEntry() {
+    return state.chapbookId ? library.filter(function (c) { return c.id === state.chapbookId; })[0] : null;
+  }
+  function updateCurrentBookMenuBtn() { currentBookMenuBtn.hidden = !currentLibraryEntry(); }
+  currentBookMenuBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+  currentBookMenuBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    flushPendingSave();
+    var entry = currentLibraryEntry();
+    if (entry) openBookMenu(currentBookMenuBtn, entry);
   });
   document.querySelector('.masthead h1.appname').addEventListener('click', function () {
     if (homeMQ.matches) showHome();
   });
 
   function renderChapbooksList() {
-    purgeOldTrash();
     if (isHomeShown()) renderHome();
+    updateCurrentBookMenuBtn();
     chapbooksPane.innerHTML = '';
 
     if (chapbooksViewMode === 'archived') {
@@ -5566,28 +5860,18 @@
         var row = document.createElement('div');
         row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
         row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
-          '<button class="chapbook-restore" type="button" title="Unarchive">↺</button>';
-        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+          '<button class="chapbook-restore" type="button" title="Unarchive">↺</button>' +
+          '<button class="chapbook-del" type="button" title="Delete permanently">×</button>';
+        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
         row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
         row.addEventListener('click', function () { loadChapbook(entry.id); });
         row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); setChapbookArchived(entry.id, false); });
+        row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); deleteChapbookForever(entry.id); });
         chapbooksPane.appendChild(row);
       });
       return;
     }
 
-    if (chapbooksViewMode === 'trash') {
-      var backBtn = document.createElement('button');
-      backBtn.className = 'chapbooks-new';
-      backBtn.type = 'button';
-      backBtn.textContent = '← Back to My Books';
-      backBtn.addEventListener('click', function () { chapbooksViewMode = 'library'; renderChapbooksList(); });
-      chapbooksPane.appendChild(backBtn);
-      chapbooksPane.appendChild(makeDivider());
-
-      appendTrashRows(chapbooksPane);
-      return;
-    }
 
     var newBtn = document.createElement('button');
     newBtn.className = 'chapbooks-new';
@@ -5606,13 +5890,13 @@
       activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
         var row = document.createElement('div');
         row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
-        row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-del" type="button" title="Move to trash">×</button>';
-        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+        row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-restore" type="button" title="Archive">⤓</button>';
+        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
         row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
         row.addEventListener('click', function () { loadChapbook(entry.id); });
-        row.querySelector('.chapbook-del').addEventListener('click', function (e) {
+        row.querySelector('.chapbook-restore').addEventListener('click', function (e) {
           e.stopPropagation();
-          deleteChapbook(entry.id);
+          setChapbookArchived(entry.id, true);
         });
         chapbooksPane.appendChild(row);
       });
@@ -5620,20 +5904,12 @@
 
     chapbooksPane.appendChild(makeDivider());
     var archivedCount = archivedBooks().length;
-    if (archivedCount) {
-      var archivedLink = document.createElement('button');
-      archivedLink.className = 'chapbooks-trash-link';
-      archivedLink.type = 'button';
-      archivedLink.textContent = 'Archived (' + archivedCount + ')';
-      archivedLink.addEventListener('click', function () { chapbooksViewMode = 'archived'; renderChapbooksList(); });
-      chapbooksPane.appendChild(archivedLink);
-    }
-    var trashLink = document.createElement('button');
-    trashLink.className = 'chapbooks-trash-link';
-    trashLink.type = 'button';
-    trashLink.textContent = 'Trash' + (trash.length ? ' (' + trash.length + ')' : '');
-    trashLink.addEventListener('click', function () { chapbooksViewMode = 'trash'; renderChapbooksList(); });
-    chapbooksPane.appendChild(trashLink);
+    var archivedLink = document.createElement('button');
+    archivedLink.className = 'chapbooks-trash-link';
+    archivedLink.type = 'button';
+    archivedLink.textContent = 'Archived' + (archivedCount ? ' (' + archivedCount + ')' : '');
+    archivedLink.addEventListener('click', function () { chapbooksViewMode = 'archived'; renderChapbooksList(); });
+    chapbooksPane.appendChild(archivedLink);
   }
 
   function loadChapbook(id) {
@@ -5650,51 +5926,22 @@
     showEditor();
   }
 
-  async function deleteChapbook(id) {
-    var entry = library.filter(function (c) { return c.id === id; })[0];
-    if (!entry) return;
-    var ok = await confirmDialog('Move “' + (entry.title || 'Untitled Collection') + '” to the trash? It’ll be kept for 7 days before being permanently deleted.');
-    if (!ok) return;
-    library = library.filter(function (c) { return c.id !== id; });
-    entry.deletedAt = Date.now();
-    trash.push(entry);
-    persistLibrary();
-    persistTrash();
-    // Keeping the trashed book open would just re-add it on the next edit.
-    if (state.chapbookId === id) { clearTimeout(saveTimer); saveTimer = null; openLastOpenedBook(); }
-    renderChapbooksList();
-    if (cloudAuthToken) await syncLibraryToCloud();
-  }
-
-  async function restoreChapbook(id) {
-    var entry = trash.filter(function (t) { return t.id === id; })[0];
-    if (!entry) return;
-    trash = trash.filter(function (t) { return t.id !== id; });
-    delete entry.deletedAt;
-    delete entry.archived;
-    // Newer than the trashed copy, so a merge with another device's
-    // library keeps it restored.
-    entry.updatedAt = Date.now();
-    library.push(entry);
-    persistLibrary();
-    persistTrash();
-    renderChapbooksList();
-    if (cloudAuthToken) await syncLibraryToCloud();
-  }
-
-  async function duplicateChapbook(id) {
+  async function duplicateChapbook(id, openCopy) {
     flushPendingSave();
     var src = library.filter(function (c) { return c.id === id; })[0];
     if (!src) return;
     var data = src.data || (src.id === state.chapbookId ? state : null);
     if (!data) return;
-    var title = 'Copy of ' + (src.title || 'Untitled Collection');
+    var title = 'Copy of ' + (src.title || 'Untitled book');
     var copy = { id: makeChapbookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(data)) };
     copy.data.chapbookId = copy.id;
     copy.data.bookTitle = title;
     library.push(copy);
     persistLibrary();
-    renderChapbooksList();
+    // From the open book's own menu, go straight to the copy (like "Make
+    // a copy" in Docs); from the grid, it just appears there.
+    if (openCopy) loadChapbook(copy.id);
+    else renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
   }
 
@@ -5705,17 +5952,33 @@
     else delete entry.archived;
     entry.archiveChangedAt = Date.now();
     persistLibrary();
+    // Archiving the book you're in closes it: back to the grid on
+    // desktop, or on to your most recent other book on a phone.
+    if (archived && state.chapbookId === id) leaveCurrentBook();
     renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
   }
 
-  async function purgeChapbookForever(id) {
-    var entry = trash.filter(function (t) { return t.id === id; })[0];
+  function leaveCurrentBook() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (homeMQ.matches) { showHome(); return; }
+    var next = activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
+    if (next) loadChapbook(next.id);
+    else startNewBook();
+  }
+
+  async function deleteChapbookForever(id) {
+    var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
-    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled Collection') + '”? This can’t be undone.');
+    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled book') + '”? This can’t be undone.');
     if (!ok) return;
+    library = library.filter(function (c) { return c.id !== id; });
     trash = trash.filter(function (t) { return t.id !== id; });
+    trash.push({ id: id, deletedAt: Date.now() });
+    persistLibrary();
     persistTrash();
+    if (state.chapbookId === id) leaveCurrentBook();
     renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
   }
@@ -5750,6 +6013,7 @@
       body.hidden = !body.hidden;
       toggle.closest('.collapsible-panel').classList.toggle('is-open', !body.hidden);
       toggle.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+      fitStickySidebar();
     });
   });
 
@@ -5769,8 +6033,36 @@
     b.addEventListener('click', function () { showTextTarget(b.dataset.target); });
   });
   var savedTextTarget = 'body';
-  try { savedTextTarget = localStorage.getItem(TEXT_TARGET_KEY) === 'title' ? 'title' : 'body'; } catch (e) {}
+  try {
+    var storedTarget = localStorage.getItem(TEXT_TARGET_KEY);
+    if (storedTarget === 'title' || storedTarget === 'section') savedTextTarget = storedTarget;
+  } catch (e) {}
   showTextTarget(savedTextTarget);
+
+  // Front / Back cover switch in the Covers panel.
+  var COVER_TARGET_KEY = 'poetryBooklet.coverTarget.v1';
+  function showCoverTarget(target) {
+    document.querySelectorAll('#coverTargetToggle button').forEach(function (b) {
+      var on = b.dataset.target === target;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.cover-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== target; });
+    try { localStorage.setItem(COVER_TARGET_KEY, target); } catch (e) {}
+  }
+  document.querySelectorAll('#coverTargetToggle button').forEach(function (b) {
+    b.addEventListener('click', function () { showCoverTarget(b.dataset.target); });
+  });
+  var savedCoverTarget = 'front';
+  try { if (localStorage.getItem(COVER_TARGET_KEY) === 'back') savedCoverTarget = 'back'; } catch (e) {}
+  showCoverTarget(savedCoverTarget);
+
+  // The section-title, cover and back-cover typeface pickers are copies
+  // of the entry-title one, so the font list lives in one place.
+  document.querySelectorAll('[data-font-seg]').forEach(function (seg) {
+    seg.innerHTML = document.getElementById('titleFontSeg').innerHTML;
+    seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+  });
 
   function wireSeg(id, onChange) {
     var seg = document.getElementById(id);
@@ -5790,6 +6082,82 @@
   wireSeg('lineSpacingSeg', function (val) { state.lineSpacing = parseFloat(val); persist(); renderAll(); });
   wireSeg('titleSizeModeSeg', function (val) { state.titleSizeMode = val; persist(); renderAll(); });
   wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
+  function wireSetting(segId, key) {
+    wireSeg(segId, function (val) { state[key] = val; state.isExample = false; persist(); renderAll(); });
+  }
+  wireSetting('sectionFontSeg', 'sectionFontChoice');
+  wireSetting('sectionAlignSeg', 'sectionAlignment');
+  wireSetting('sectionSizeSeg', 'sectionSizeMode');
+  wireSetting('coverFontSeg', 'coverFontChoice');
+  wireSetting('coverAlignSeg', 'coverAlignment');
+  wireSetting('coverSizeSeg', 'coverSizeMode');
+  wireSetting('coverImageSizeSeg', 'coverImageSize');
+  wireSetting('backFontSeg', 'backFontChoice');
+  wireSetting('backAlignSeg', 'backAlignment');
+  wireSetting('backSizeSeg', 'backSizeMode');
+  wireSetting('backImageSizeSeg', 'backImageSize');
+  [['sectionOwnPageCheck', 'sectionOwnPage'], ['coverAuthorCheck', 'coverShowAuthor'],
+   ['backAuthorCheck', 'backShowAuthor'], ['backYearCheck', 'backShowYear']].forEach(function (pair) {
+    document.getElementById(pair[0]).addEventListener('change', function (e) {
+      state[pair[1]] = e.target.checked; persist(); renderAll();
+    });
+  });
+  document.getElementById('backTextInput').addEventListener('input', function (e) {
+    state.backText = e.target.value; persist(); updateStats();
+  });
+
+  // Cover images: a thumbnail with Replace / Remove, or an Add button.
+  // Stored like entry images (state.images), referenced by key.
+  function renderCoverImageControls() {
+    document.querySelectorAll('.cover-image-control').forEach(function (box) {
+      var which = box.dataset.cover;
+      var key = which === 'front' ? state.coverImage : state.backImage;
+      var img = key && state.images && state.images[key];
+      box.innerHTML = '';
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.hidden = true;
+      input.addEventListener('change', async function () {
+        var files = imageFilesFrom(input.files);
+        if (!files.length) return;
+        try {
+          var newKey = 'img' + addImageToState(await loadImageFile(files[0]));
+          if (which === 'front') state.coverImage = newKey; else state.backImage = newKey;
+          state.isExample = false;
+          persist();
+          renderAll();
+        } catch (e) {}
+      });
+      box.appendChild(input);
+      if (img) {
+        var thumb = document.createElement('img');
+        thumb.src = img.data;
+        thumb.alt = '';
+        box.appendChild(thumb);
+      }
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'btn btn-sm';
+      add.textContent = img ? 'Replace' : 'Add image';
+      add.addEventListener('click', function () { input.click(); });
+      box.appendChild(add);
+      if (img) {
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'btn btn-sm btn-ghost';
+        rm.textContent = 'Remove';
+        rm.addEventListener('click', function () {
+          if (which === 'front') state.coverImage = null; else state.backImage = null;
+          persist();
+          renderAll();
+        });
+        box.appendChild(rm);
+      }
+      var sizeField = document.querySelector('[data-image-size-for="' + which + '"]');
+      if (sizeField) sizeField.hidden = !img;
+    });
+  }
 
   document.getElementById('titlePageCheck').addEventListener('change', function (e) {
     state.includeTitlePage = e.target.checked; persist(); updateStats();
@@ -5811,11 +6179,11 @@
     var lastTitleW = 0;
     new ResizeObserver(function (entries) {
       var w = entries[0].contentRect.width;
-      if (w !== lastTitleW) { lastTitleW = w; autoGrow(document.getElementById('bookTitleInput')); }
+      if (w !== lastTitleW) { lastTitleW = w; fitTitleInput(document.getElementById('bookTitleInput')); }
     }).observe(document.getElementById('bookTitleInput'));
   }
   document.getElementById('bookTitleInput').addEventListener('input', function (e) {
-    state.bookTitle = e.target.value; persist();
+    state.bookTitle = e.target.value; fitTitleInput(e.target); persist();
   });
   document.getElementById('authorInput').addEventListener('input', function (e) {
     state.author = e.target.value; persist();
@@ -5823,7 +6191,7 @@
 
   function syncSidebarFromState() {
     document.getElementById('bookTitleInput').value = state.bookTitle || '';
-    autoGrow(document.getElementById('bookTitleInput'));
+    fitTitleInput(document.getElementById('bookTitleInput'));
     document.getElementById('authorInput').value = state.author || '';
     trimSelect.value = state.trimKey;
     document.querySelectorAll('#bodyFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyFontChoice); });
@@ -5835,6 +6203,28 @@
     document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
     document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
+    var sec = sectionStyle(state), front = frontCoverStyle(state), back = backCoverStyle(state);
+    function markSeg(id, val) {
+      document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === val); });
+    }
+    markSeg('sectionFontSeg', sec.font);
+    markSeg('sectionAlignSeg', sec.align);
+    markSeg('sectionSizeSeg', state.sectionSizeMode || 'medium');
+    document.getElementById('sectionOwnPageCheck').checked = sec.ownPage;
+    markSeg('coverFontSeg', front.font);
+    markSeg('coverAlignSeg', front.align);
+    markSeg('coverSizeSeg', state.coverSizeMode || 'medium');
+    markSeg('coverImageSizeSeg', front.imageSize);
+    document.getElementById('coverAuthorCheck').checked = front.showAuthor;
+    markSeg('backFontSeg', back.font);
+    markSeg('backAlignSeg', back.align);
+    markSeg('backSizeSeg', state.backSizeMode || 'medium');
+    markSeg('backImageSizeSeg', back.imageSize);
+    document.getElementById('backAuthorCheck').checked = back.showAuthor;
+    document.getElementById('backYearCheck').checked = back.showYear;
+    var backText = document.getElementById('backTextInput');
+    if (document.activeElement !== backText) backText.value = back.text;
+    renderCoverImageControls();
     document.getElementById('tocCheck').checked = !!state.includeToc;
     document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
     document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
@@ -6235,8 +6625,10 @@
 
   pruneUnusedImages();
   renderAll();
+  migrateTrashToArchive();
   var storedCloudAuthToken = getStoredCloudAuthToken();
   if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
+  bookAtLoad = JSON.stringify(state);
   updateSignInGate();
   if (homeMQ.matches) showHome();
   // The ▾ only belongs where My Books is still a dropdown (phones).

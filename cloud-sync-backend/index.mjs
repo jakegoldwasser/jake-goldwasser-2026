@@ -1,7 +1,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// This is the AWS Lambda behind BookBug's "sign in with Google to save to
+// This is the AWS Lambda behind Bookbug's "sign in with Google to save to
 // the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
 // bookbug/index.html) -- see README.md for deploying; there's no build
 // step, just this one file.
@@ -9,9 +9,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // Storage is one DynamoDB item per Google user (keyed by their stable
 // Google "sub" id), holding a single JSON blob namespaced per app:
 //   { chapbookbuilder: { chapbooks, trash, lastOpened } }
-// (BookBug's key predates its rename.) A tool only ever reads/writes its
+// (Bookbug's key predates its rename.) A tool only ever reads/writes its
 // own top-level key, so a future tool sharing this backend can't clobber
-// BookBug's data for the same signed-in user.
+// Bookbug's data for the same signed-in user.
 //
 // Older records (saved before this namespacing existed) have the
 // Chapbook Builder shape directly at the top level -- {chapbooks, trash}
