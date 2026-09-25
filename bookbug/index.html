@@ -776,14 +776,22 @@
   .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
   .home-card-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .home-card-meta { font-size: 11.5px; color: var(--ink-faint); margin-top: -3px; }
-  .home-card-del {
-    position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%;
+  .home-card-more {
+    position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%;
     border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); cursor: pointer;
-    font-size: 15px; line-height: 1; opacity: 0; transition: opacity .12s ease;
+    font-size: 16px; line-height: 1; letter-spacing: 1px; padding: 0 0 4px; opacity: 0; transition: opacity .12s ease;
   }
-  .home-card:hover .home-card-del, .home-card:focus-within .home-card-del { opacity: 1; }
-  .home-card-del:hover { color: var(--danger); border-color: var(--danger); }
-  @media (hover: none) { .home-card-del { opacity: 1; } }
+  .home-card:hover .home-card-more, .home-card:focus-within .home-card-more,
+  .home-card-more[aria-expanded="true"] { opacity: 1; }
+  .home-card-more:hover, .home-card-more[aria-expanded="true"] { color: var(--ink); border-color: var(--ink-soft); }
+  @media (hover: none) { .home-card-more { opacity: 1; } }
+  .home-card.is-archived .home-cover { opacity: 0.7; }
+  .home-head-actions { display: flex; gap: 8px; }
+  .home-archived { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+  .home-archived[hidden] { display: none; }
+  .home-archived-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
+  .home-archived .chapbooks-empty { padding: 0; }
+  .entry-menu button.is-danger { color: var(--danger); }
   .home-trash {
     background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px;
     width: 100%; max-width: 480px; align-self: flex-end;
@@ -944,11 +952,18 @@
        to; phones open straight into the last book instead. -->
   <div class="home-view" id="homeView" hidden>
     <div class="home-head">
-      <h2 class="home-title">Your books</h2>
-      <button class="btn btn-sm" id="homeTrashBtn" type="button">Trash</button>
+      <h2 class="home-title">My Books</h2>
+      <div class="home-head-actions">
+        <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
+        <button class="btn btn-sm" id="homeTrashBtn" type="button">Trash</button>
+      </div>
     </div>
     <div class="home-trash" id="homeTrash" hidden></div>
     <div class="home-grid" id="homeGrid"></div>
+    <div class="home-archived" id="homeArchived" hidden>
+      <h3 class="home-archived-title">Archived</h3>
+      <div class="home-grid" id="homeArchivedGrid"></div>
+    </div>
   </div>
 
   <div class="chapbook-header">
@@ -1190,6 +1205,12 @@
 
 </div>
 
+<div class="entry-menu" id="bookMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+  <button type="button" role="menuitem" data-action="archive">Archive</button>
+  <button type="button" role="menuitem" data-action="trash" class="is-danger">Move to trash</button>
+</div>
+
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
@@ -1383,6 +1404,11 @@
   var trash = [];
   try { library = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch (e) { library = []; }
   try { trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]'); } catch (e) { trash = []; }
+
+  // Archived books stay in the library (and sync like any other), just
+  // off the main shelf.
+  function activeBooks() { return library.filter(function (c) { return !c.archived; }); }
+  function archivedBooks() { return library.filter(function (c) { return c.archived; }); }
 
   function makeChapbookId() { return 'cb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -1684,7 +1710,9 @@
   function mergeLibraries(localLib, localTrash, cloudLib, cloudTrash) {
     var winners = {};
     var order = [];
-    function stamp(e) { return e.deletedAt || e.updatedAt || 0; }
+    // archiveChangedAt makes an archive/unarchive win the merge without
+    // bumping updatedAt, which the home grid shows as "Edited".
+    function stamp(e) { return Math.max(e.deletedAt || 0, e.updatedAt || 0, e.archiveChangedAt || 0); }
     function consider(entry, inTrash, fromLocal) {
       if (!entry || !entry.id) return;
       var cur = winners[entry.id];
@@ -1711,7 +1739,7 @@
   function openLastOpenedBook() {
     var last = getLastOpened();
     var entry = (last && library.filter(function (c) { return c.id === last.id; })[0]) ||
-      library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
+      activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
     if (entry && entry.data) {
       state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
       state.chapbookId = entry.id;
@@ -4793,7 +4821,9 @@
     else toggleChapbooksDropdown();
   });
   document.addEventListener('click', function (e) {
-    if (!chapbooksDropdown.hidden && !chapbooksDropdown.contains(e.target) && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
+    // composedPath, not contains(): the Archived/Trash links re-render the
+    // pane, so by now the clicked element is detached from the dropdown.
+    if (!chapbooksDropdown.hidden && e.composedPath().indexOf(chapbooksDropdown) === -1 && e.target !== chapbooksMenuBtn) closeChapbooksDropdown();
   });
 
   function purgeOldTrash() {
@@ -4841,6 +4871,7 @@
   var homeMQ = window.matchMedia('(min-width: 701px)');
   var homeView = document.getElementById('homeView');
   var homeTrashOpen = false;
+  var homeArchivedOpen = false;
   function isHomeShown() { return document.body.classList.contains('view-home'); }
   function showHome() {
     flushPendingSave();
@@ -4856,7 +4887,33 @@
     homeView.hidden = true;
     window.scrollTo(0, 0);
   }
+  function makeHomeCard(entry) {
+    var data = entry.data || {};
+    var card = document.createElement('div');
+    card.className = 'home-card' + (entry.archived ? ' is-archived' : '');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
+      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<button class="home-card-more" type="button" title="More" aria-label="Book options" aria-haspopup="menu" aria-expanded="false">⋯</button>';
+    var title = entry.title || 'Untitled Collection';
+    var coverTitle = card.querySelector('.home-cover-title');
+    coverTitle.textContent = title;
+    coverTitle.style.fontFamily = displayStackFor(data.titleFontChoice);
+    card.querySelector('.home-cover-author').textContent = data.author || '';
+    card.querySelector('.home-card-title').textContent = title;
+    var n = countEntries(data.poems || []);
+    card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' entry' : ' entries');
+    card.addEventListener('click', function () { loadChapbook(entry.id); });
+    card.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); loadChapbook(entry.id); }
+    });
+    var moreBtn = card.querySelector('.home-card-more');
+    moreBtn.addEventListener('click', function (e) { e.stopPropagation(); openBookMenu(moreBtn, entry); });
+    return card;
+  }
   function renderHome() {
+    closeBookMenu();
     var grid = document.getElementById('homeGrid');
     grid.innerHTML = '';
     var newCard = document.createElement('button');
@@ -4865,36 +4922,74 @@
     newCard.innerHTML = '<div class="home-cover"><span class="home-new-plus">+</span></div><div class="home-card-title">New book</div>';
     newCard.addEventListener('click', startNewBook);
     grid.appendChild(newCard);
-    library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-      var data = entry.data || {};
-      var card = document.createElement('div');
-      card.className = 'home-card';
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
-        '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
-        '<button class="home-card-del" type="button" title="Move to trash" aria-label="Move to trash">×</button>';
-      var title = entry.title || 'Untitled Collection';
-      var coverTitle = card.querySelector('.home-cover-title');
-      coverTitle.textContent = title;
-      coverTitle.style.fontFamily = displayStackFor(data.titleFontChoice);
-      card.querySelector('.home-cover-author').textContent = data.author || '';
-      card.querySelector('.home-card-title').textContent = title;
-      var n = countEntries(data.poems || []);
-      card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' entry' : ' entries');
-      card.addEventListener('click', function () { loadChapbook(entry.id); });
-      card.addEventListener('keydown', function (e) {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); loadChapbook(entry.id); }
-      });
-      card.querySelector('.home-card-del').addEventListener('click', function (e) { e.stopPropagation(); deleteChapbook(entry.id); });
-      grid.appendChild(card);
+    activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      grid.appendChild(makeHomeCard(entry));
     });
+
+    var archived = archivedBooks();
+    document.getElementById('homeArchivedBtn').textContent = 'Archived' + (archived.length ? ' (' + archived.length + ')' : '');
+    document.getElementById('homeArchived').hidden = !homeArchivedOpen;
+    var archivedGrid = document.getElementById('homeArchivedGrid');
+    archivedGrid.innerHTML = '';
+    if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">No archived books.</div>';
+    archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      archivedGrid.appendChild(makeHomeCard(entry));
+    });
+
     document.getElementById('homeTrashBtn').textContent = 'Trash' + (trash.length ? ' (' + trash.length + ')' : '');
     var trashBox = document.getElementById('homeTrash');
     trashBox.hidden = !homeTrashOpen;
     trashBox.innerHTML = '';
     if (homeTrashOpen) appendTrashRows(trashBox);
   }
+  document.getElementById('homeArchivedBtn').addEventListener('click', function () {
+    homeArchivedOpen = !homeArchivedOpen;
+    renderHome();
+    if (homeArchivedOpen) document.getElementById('homeArchived').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // "⋯" book menu on the home grid -- Duplicate / Archive / Move to trash.
+  var bookMenu = document.getElementById('bookMenu');
+  var bookMenuEntry = null;
+  var bookMenuBtn = null;
+  function closeBookMenu() {
+    if (!bookMenu || bookMenu.hidden) return;
+    bookMenu.hidden = true;
+    if (bookMenuBtn) bookMenuBtn.setAttribute('aria-expanded', 'false');
+    bookMenuBtn = null;
+    bookMenuEntry = null;
+  }
+  function openBookMenu(btn, entry) {
+    var reopening = bookMenuBtn === btn;
+    closeBookMenu();
+    if (reopening) return;
+    bookMenuEntry = entry;
+    bookMenuBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    bookMenu.querySelector('[data-action="archive"]').textContent = entry.archived ? 'Unarchive' : 'Archive';
+    bookMenu.hidden = false;
+    var r = btn.getBoundingClientRect();
+    var mw = bookMenu.offsetWidth, mh = bookMenu.offsetHeight;
+    var left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw));
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    bookMenu.style.left = left + 'px';
+    bookMenu.style.top = top + 'px';
+  }
+  bookMenu.addEventListener('click', function (e) {
+    var item = e.target.closest('button[data-action]');
+    if (!item || !bookMenuEntry) return;
+    var entry = bookMenuEntry;
+    closeBookMenu();
+    if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id);
+    else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
+    else deleteChapbook(entry.id);
+  });
+  document.addEventListener('click', function (e) { if (!bookMenu.contains(e.target)) closeBookMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBookMenu(); });
+  window.addEventListener('scroll', closeBookMenu, true);
+  window.addEventListener('resize', closeBookMenu);
+
   document.getElementById('homeTrashBtn').addEventListener('click', function () {
     homeTrashOpen = !homeTrashOpen;
     renderHome();
@@ -4907,6 +5002,35 @@
     purgeOldTrash();
     if (isHomeShown()) renderHome();
     chapbooksPane.innerHTML = '';
+
+    if (chapbooksViewMode === 'archived') {
+      var archBackBtn = document.createElement('button');
+      archBackBtn.className = 'chapbooks-new';
+      archBackBtn.type = 'button';
+      archBackBtn.textContent = '← Back to My Books';
+      archBackBtn.addEventListener('click', function () { chapbooksViewMode = 'library'; renderChapbooksList(); });
+      chapbooksPane.appendChild(archBackBtn);
+      chapbooksPane.appendChild(makeDivider());
+      var archived = archivedBooks();
+      if (!archived.length) {
+        var noArch = document.createElement('div');
+        noArch.className = 'chapbooks-empty';
+        noArch.textContent = 'No archived books.';
+        chapbooksPane.appendChild(noArch);
+      }
+      archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+        var row = document.createElement('div');
+        row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
+        row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
+          '<button class="chapbook-restore" type="button" title="Unarchive">↺</button>';
+        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled Collection';
+        row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+        row.addEventListener('click', function () { loadChapbook(entry.id); });
+        row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); setChapbookArchived(entry.id, false); });
+        chapbooksPane.appendChild(row);
+      });
+      return;
+    }
 
     if (chapbooksViewMode === 'trash') {
       var backBtn = document.createElement('button');
@@ -4929,13 +5053,13 @@
     chapbooksPane.appendChild(newBtn);
     chapbooksPane.appendChild(makeDivider());
 
-    if (!library.length) {
+    if (!activeBooks().length) {
       var emptyLib = document.createElement('div');
       emptyLib.className = 'chapbooks-empty';
       emptyLib.textContent = 'No books yet — this one is saved here as soon as you add something to it.';
       chapbooksPane.appendChild(emptyLib);
     } else {
-      library.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
         var row = document.createElement('div');
         row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
         row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-del" type="button" title="Move to trash">×</button>';
@@ -4951,6 +5075,15 @@
     }
 
     chapbooksPane.appendChild(makeDivider());
+    var archivedCount = archivedBooks().length;
+    if (archivedCount) {
+      var archivedLink = document.createElement('button');
+      archivedLink.className = 'chapbooks-trash-link';
+      archivedLink.type = 'button';
+      archivedLink.textContent = 'Archived (' + archivedCount + ')';
+      archivedLink.addEventListener('click', function () { chapbooksViewMode = 'archived'; renderChapbooksList(); });
+      chapbooksPane.appendChild(archivedLink);
+    }
     var trashLink = document.createElement('button');
     trashLink.className = 'chapbooks-trash-link';
     trashLink.type = 'button';
@@ -4994,12 +5127,40 @@
     if (!entry) return;
     trash = trash.filter(function (t) { return t.id !== id; });
     delete entry.deletedAt;
+    delete entry.archived;
     // Newer than the trashed copy, so a merge with another device's
     // library keeps it restored.
     entry.updatedAt = Date.now();
     library.push(entry);
     persistLibrary();
     persistTrash();
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+
+  async function duplicateChapbook(id) {
+    flushPendingSave();
+    var src = library.filter(function (c) { return c.id === id; })[0];
+    if (!src) return;
+    var data = src.data || (src.id === state.chapbookId ? state : null);
+    if (!data) return;
+    var title = 'Copy of ' + (src.title || 'Untitled Collection');
+    var copy = { id: makeChapbookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(data)) };
+    copy.data.chapbookId = copy.id;
+    copy.data.bookTitle = title;
+    library.push(copy);
+    persistLibrary();
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+
+  async function setChapbookArchived(id, archived) {
+    var entry = library.filter(function (c) { return c.id === id; })[0];
+    if (!entry) return;
+    if (archived) entry.archived = true;
+    else delete entry.archived;
+    entry.archiveChangedAt = Date.now();
+    persistLibrary();
     renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
   }
