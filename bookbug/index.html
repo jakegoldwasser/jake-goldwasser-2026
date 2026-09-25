@@ -3867,6 +3867,36 @@
   window.addEventListener('drop', function (e) { if (hasDraggedFiles(e)) e.preventDefault(); });
 
   // ---------------------------------------------------------------------
+  // Line spacing works like Word / Google Docs: 1.0 is the font's own
+  // natural line height (ascent + descent), not 1em. Baskerville-style
+  // faces run ~1.25em, so a raw CSS 1.15 set their lines tighter than
+  // single spacing, with descenders touching the next line's ascenders.
+  var naturalLineRatios = {};
+  function naturalLineRatio(fontFamily) {
+    if (naturalLineRatios[fontFamily]) return naturalLineRatios[fontFamily];
+    var probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:100px;line-height:normal;';
+    probe.style.fontFamily = fontFamily;
+    probe.textContent = 'Hgjp';
+    document.body.appendChild(probe);
+    var ratio = probe.getBoundingClientRect().height / 100;
+    probe.remove();
+    if (!(ratio >= 0.9 && ratio <= 2)) ratio = 1.2;
+    // Only remember it once web fonts have loaded -- before that this
+    // measured the fallback font.
+    if (!document.fonts || document.fonts.status === 'loaded') naturalLineRatios[fontFamily] = ratio;
+    return ratio;
+  }
+  function editorLineHeight(fontFamily) {
+    return ((state.lineSpacing || 1.15) * naturalLineRatio(fontFamily)).toFixed(3);
+  }
+  if (document.fonts) {
+    document.fonts.addEventListener('loadingdone', function () {
+      naturalLineRatios = {};
+      document.querySelectorAll('.poem-text').forEach(function (ed) { ed.style.lineHeight = editorLineHeight(ed.style.fontFamily); });
+    });
+  }
+
   // "⋯" entry menu -- Duplicate / Archive, shared by every entry.
   // ---------------------------------------------------------------------
   var entryMenu = document.getElementById('entryMenu');
@@ -4091,7 +4121,7 @@
     renderEditor(editor, poem.lines);
     editor.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
-    editor.style.lineHeight = String(state.lineSpacing || 1.15);
+    editor.style.lineHeight = editorLineHeight(editor.style.fontFamily);
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
