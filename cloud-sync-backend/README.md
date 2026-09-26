@@ -36,3 +36,12 @@ their Google account id. Each item stores a single JSON blob, namespaced
 per app (`{ chapbookbuilder: {...} }` -- Bookbug's key predates its
 rename) so another tool could share the same sign-in without overwriting
 Bookbug's data.
+
+## Import from a link
+
+`GET ?fetch=<url>` (signed-in users only) returns `{ url, contentType, googleDoc, text }`
+for a public web page, a text/markdown file, or a Google Doc shared as "anyone with the
+link" (fetched through its markdown export). Bookbug turns that into entries in the
+browser. Guarded against reaching private networks: http(s) on standard ports only,
+every redirect hop's host must resolve to public addresses, at most 4 redirects, text
+types only, 3 MB, 8 seconds. It uses GET so the Function URL's CORS (GET, PUT) needs no change.

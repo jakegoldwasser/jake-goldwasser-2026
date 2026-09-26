@@ -1148,12 +1148,13 @@
     <div class="intake-head">
       <div>
         <div class="panel-title">Bring in your entries</div>
-        <div class="panel-sub">Import straight from Google Drive, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
+        <div class="panel-sub">Import from Google Drive or a link, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
       </div>
       <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Minimize</button>
     </div>
     <div class="tabs">
       <button class="tab active" data-tab="drive">Import from Google Drive</button>
+      <button class="tab" data-tab="link">From a link</button>
       <button class="tab" data-tab="paste">Paste text</button>
     </div>
 
@@ -1164,6 +1165,17 @@
       </div>
       <div id="driveStatus" class="status-line"></div>
       <div class="doc-list" id="driveList"></div>
+    </div>
+
+    <div class="tabpane" data-pane="link" id="linkPane">
+      <div class="hint-box">
+        Paste a link to a web page or a Google Doc with your entries. Bookbug works out the titles, sections, stanzas, bold, italics and indents — you can fix anything afterward. A Google Doc shared as “Anyone with the link” comes straight in; otherwise you’ll pick it in Google’s own picker.
+      </div>
+      <form class="search-row" id="linkForm">
+        <input type="url" id="linkInput" placeholder="https://…" autocomplete="off" required>
+        <button class="btn btn-primary" id="linkImportBtn" type="submit">Import</button>
+      </form>
+      <div id="linkStatus" class="status-line"></div>
     </div>
 
     <div class="tabpane" data-pane="paste" id="pastePane">
@@ -3962,9 +3974,10 @@
   // through Google's own Picker UI, then read it with the Docs API
   // directly from the browser. No backend involved.
   // ---------------------------------------------------------------------
-  function addImportedPoems(poems, title) {
+  function addImportedPoems(poems, title, setStatus) {
+    setStatus = setStatus || setDriveStatus;
     var entryCount = countEntries(poems);
-    if (!entryCount) { setDriveStatus('Couldn’t find any entries in that document.', true); return; }
+    if (!entryCount) { setStatus('Couldn’t find any entries in that document.', true); return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
@@ -3976,7 +3989,7 @@
     if (!state.bookTitle) state.bookTitle = title;
     var msg = (wasExample ? 'Imported ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
     if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
-    setDriveStatus(msg + ' from “' + title + '”.');
+    setStatus(msg + ' from “' + title + '”.');
     persist();
     renderAll();
   }
@@ -4055,7 +4068,7 @@
     });
   }
 
-  async function openDrivePicker() {
+  async function openDrivePicker(fileId) {
     if (!window.google || !google.accounts || !google.accounts.oauth2 || !window.gapi) {
       var pane = document.getElementById('drivePane');
       if (pane) pane.innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
@@ -4076,6 +4089,7 @@
       var ok = await loadDrivePicker();
       if (!ok) { setDriveStatus('Couldn’t load the Google Drive picker.', true); return; }
       var view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/vnd.google-apps.document');
+      if (typeof fileId === 'string') view.setFileIds(fileId);
       var picker = new google.picker.PickerBuilder()
         .addView(view)
         .setOAuthToken(token)
@@ -4120,6 +4134,243 @@
   }
 
   loadRecentDocs();
+
+  // ---------------------------------------------------------------------
+  // UI: import from a link
+  // ---------------------------------------------------------------------
+  // The page is fetched by the cloud backend (browsers can't read other
+  // sites' pages) and turned into the same "### Title" / blank-line text
+  // every other import produces, so parseDocWithImages works out titles
+  // and sections exactly as it does for a Google Doc.
+  function setLinkStatus(msg, isError) {
+    var el = document.getElementById('linkStatus');
+    el.textContent = msg || '';
+    el.classList.toggle('error', !!isError);
+  }
+  var LINK_ERRORS = {
+    bad_url: 'That doesn’t look like a web link — it should start with https://',
+    blocked_host: 'That address isn’t on the public web.',
+    unsupported_type: 'That link isn’t a web page or a text document. (PDFs and Word files aren’t supported yet — paste the text instead.)',
+    too_large: 'That page is too big to import.',
+    http_403: 'That site doesn’t allow importing. Copy the text and use Paste text instead.',
+    http_404: 'Nothing was found at that link.'
+  };
+  function googleDocIdFromLink(url) {
+    var m = /docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]{20,})/.exec(url);
+    return m ? m[1] : null;
+  }
+
+  // Leading indentation, in spaces, as half-inch tabs (about four spaces
+  // each), after removing whatever indent every line of the entry shares.
+  function indentToTabs(lines) {
+    var min = Infinity;
+    lines.forEach(function (l) { if (l.trim()) min = Math.min(min, (/^ */.exec(l) || [''])[0].length); });
+    if (!isFinite(min)) min = 0;
+    return lines.map(function (l) {
+      if (!l.trim()) return '';
+      var extra = (/^ */.exec(l) || [''])[0].length - min;
+      return (extra > 0 ? new Array(Math.max(1, Math.round(extra / 4)) + 1).join('\t') : '') + l.trim();
+    });
+  }
+
+  // Plain text (a .txt file, Project Gutenberg...): a lone short line in
+  // capitals or a Roman numeral, standing apart, is a title; one that
+  // follows a big gap and carries a numeral ("I. LIFE.") is a section.
+  function plainTextToDoc(text) {
+    text = String(text).replace(/\r\n?/g, '\n');
+    var start = text.search(/\*\*\* ?START OF (THE|THIS) PROJECT GUTENBERG[^\n]*\n/i);
+    if (start >= 0) text = text.slice(text.indexOf('\n', start) + 1);
+    var end = text.search(/\*\*\* ?END OF (THE|THIS) PROJECT GUTENBERG/i);
+    if (end >= 0) text = text.slice(0, end);
+    if (/^#{1,6} /m.test(text)) return text;
+    var paras = [], gap = 3;
+    text.split('\n').forEach(function (line) {
+      if (!line.trim()) { gap++; return; }
+      if (gap || !paras.length) paras.push({ gap: gap, lines: [] });
+      paras[paras.length - 1].lines.push(line);
+      gap = 0;
+    });
+    var ROMAN = /^(?=[IVXLC])[IVXLC]+\.?$/;
+    function isCaps(t) { return /^[A-Z0-9"'“‘(]/.test(t) && /[A-Z].*[A-Z]/.test(t) && t === t.toUpperCase() && t.length <= 60; }
+    var out = [];
+    for (var i = 0; i < paras.length; i++) {
+      var p = paras[i], one = p.lines.length === 1 ? p.lines[0].trim() : null;
+      var next = paras[i + 1];
+      if (one && /^(?=[IVXLC])[IVXLC]+\.\s+\S/.test(one) && isCaps(one) && p.gap >= 3) {
+        out.push('## ' + one.replace(/^[IVXLC]+\.\s+/, '').replace(/\.$/, ''));
+      } else if (one && ROMAN.test(one)) {
+        var nextOne = next && next.lines.length === 1 ? next.lines[0].trim() : null;
+        if (nextOne && isCaps(nextOne) && !ROMAN.test(nextOne)) { out.push('### ' + nextOne.replace(/\.$/, '')); i++; }
+        else out.push('### ' + one.replace(/\.$/, ''));
+      } else if (one && isCaps(one) && next && next.lines.length > 1) {
+        out.push('### ' + one.replace(/\.$/, ''));
+      } else {
+        out.push(indentToTabs(p.lines).join('\n'));
+      }
+    }
+    return out.join('\n\n');
+  }
+
+  // A web page: drop the page's chrome, find the block that actually
+  // holds the writing (the element densest with paragraphs, the way
+  // reader modes do), and write it out with headings as titles, <p> as
+  // stanzas, <br> as lines, bold/italic/underline as markers and indents
+  // as tabs. A single poem with no heading of its own takes the nearest
+  // heading above it (usually the page's <h1>) as its title.
+  function htmlToDocText(html) {
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, noscript, template, svg, iframe, form, nav, header, footer, aside, button, select, ' +
+      '[aria-hidden="true"], [role="navigation"], [role="banner"], [role="contentinfo"], [role="dialog"], .modal').forEach(function (el) { el.remove(); });
+    var scores = new Map();
+    function credit(el, n) { if (el && el !== doc.documentElement) scores.set(el, (scores.get(el) || 0) + n); }
+    doc.body.querySelectorAll('p, pre, br').forEach(function (el) {
+      var host = el.tagName === 'BR' ? el.parentElement : el;
+      var len = el.tagName === 'BR' ? 40 : (el.textContent || '').trim().length;
+      var linkText = Array.prototype.reduce.call(host.querySelectorAll ? host.querySelectorAll('a') : [], function (n, a) { return n + a.textContent.length; }, 0);
+      if (linkText > len * 0.5) return;
+      credit(host.parentElement, len);
+      credit(host.parentElement && host.parentElement.parentElement, len / 2);
+    });
+    var root = doc.body, best = 0;
+    scores.forEach(function (v, el) { if (v > best) { best = v; root = el; } });
+    // A wrapper holding the headings too reads better than its text-only child.
+    while (root.parentElement && root.parentElement !== doc.body && !root.querySelector('h1,h2,h3,h4,h5,h6') &&
+           root.parentElement.querySelector('h1,h2,h3,h4,h5,h6') && (root.parentElement.textContent.length < root.textContent.length * 1.6)) {
+      root = root.parentElement;
+    }
+
+    function tabsFor(el) {
+      var st = el.getAttribute && el.getAttribute('style') || '';
+      var m = /(?:margin-left|padding-left|text-indent)\s*:\s*([\d.]+)(px|pt|em|rem)/i.exec(st);
+      if (!m) return '';
+      var pt = parseFloat(m[1]) * ({ px: 0.75, pt: 1, em: 12, rem: 12 })[m[2].toLowerCase()];
+      return pt >= 9 ? new Array(Math.max(1, Math.round(pt / 36)) + 1).join('\t') : '';
+    }
+    function inline(node) {
+      var out = '';
+      node.childNodes.forEach(function (c) {
+        if (c.nodeType === 3) { out += c.data.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' '); return; }
+        if (c.nodeType !== 1) return;
+        var t = c.tagName;
+        if (t === 'BR') { out += '\n'; return; }
+        var inner = tabsFor(c) + inline(c);
+        if (!inner.trim()) { out += inner; return; }
+        if (t === 'B' || t === 'STRONG') out += '**' + inner + '**';
+        else if (t === 'I' || t === 'EM') out += '*' + inner + '*';
+        else if (t === 'U') out += '++' + inner + '++';
+        else if (/^(P|DIV|LI|BLOCKQUOTE|H[1-6])$/.test(t)) out += '\n' + inner + '\n';
+        else out += inner;
+      });
+      return out;
+    }
+    function lineText(el) {
+      var lead = tabsFor(el);
+      return inline(el).replace(/\u00a0/g, ' ').split('\n').map(function (l) {
+        var ws = (/^[ \t]*/.exec(l) || [''])[0];
+        var spaces = ws.replace(/\t/g, '').length, tabCount = ws.length - spaces;
+        var n = tabCount + (spaces >= 2 ? Math.max(1, Math.round(spaces / 4)) : 0);
+        return lead + new Array(n + 1).join('\t') + l.trim();
+      }).join('\n').replace(/^\n+|\n+$/g, '');
+    }
+
+    // Some pages (Google Docs published to the web, many blogs) put each
+    // line in its own <p>, with empty ones between stanzas.
+    var ps = root.querySelectorAll('p');
+    var emptyPs = Array.prototype.filter.call(ps, function (p) { return !p.textContent.replace(/ /g, ' ').trim(); }).length;
+    var linePerP = ps.length >= 6 && emptyPs >= ps.length * 0.1;
+
+    var blocks = [], run = [];
+    function flush() { if (run.length) { blocks.push(run.join('\n')); run = []; } }
+    var hasHeadings = !!root.querySelector('h1,h2,h3,h4,h5,h6');
+    function walk(el) {
+      el.childNodes.forEach(function (c) {
+        if (c.nodeType === 3) { if (c.data.trim()) run.push(c.data.trim()); return; }
+        if (c.nodeType !== 1) return;
+        var t = c.tagName;
+        if (/^H[1-6]$/.test(t)) { flush(); blocks.push(new Array(+t[1] + 1).join('#') + ' ' + c.textContent.replace(/\s+/g, ' ').trim()); return; }
+        if (t === 'HR') { flush(); blocks.push('---'); return; }
+        if (t === 'PRE') { flush(); blocks.push(indentToTabs(c.textContent.replace(/\r\n?/g, '\n').split('\n')).join('\n')); return; }
+        if (t === 'P' || t === 'LI') {
+          var text = lineText(c);
+          if (!text.trim()) { flush(); return; }
+          // A short paragraph that's all bold, with no headings anywhere,
+          // is standing in for a title.
+          var boldOnly = /^\*\*[^*\n]{1,80}\*\*$/.test(text.trim());
+          if (!hasHeadings && boldOnly) { flush(); blocks.push('### ' + text.trim().slice(2, -2)); return; }
+          if (linePerP) run.push(text);
+          else { flush(); blocks.push(text); }
+          return;
+        }
+        if (/^(DIV|SECTION|ARTICLE|MAIN|BLOCKQUOTE|SPAN|FIGURE|TABLE|TBODY|TR|TD|UL|OL|CENTER|FONT)$/.test(t)) {
+          if (!c.querySelector('p,div,h1,h2,h3,h4,h5,h6,pre,li,hr,section,article,blockquote') && c.textContent.trim()) {
+            var t2 = lineText(c);
+            if (linePerP || t === 'SPAN' || t === 'FONT') run.push(t2); else { flush(); blocks.push(t2); }
+            return;
+          }
+          walk(c);
+        }
+      });
+    }
+    walk(root);
+    flush();
+
+    var text = blocks.join('\n\n');
+    // A line or two before the first title (a date, a byline) isn't an entry.
+    var firstHead = text.search(/^#{1,6} /m);
+    if (firstHead > 0 && text.slice(0, firstHead).split('\n').filter(function (l) { return l.trim(); }).length <= 2) text = text.slice(firstHead);
+    if (!/^#{1,6} /m.test(text)) {
+      // No title inside the writing: borrow the nearest heading before it.
+      var all = Array.prototype.slice.call(doc.body.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+      var before = all.filter(function (h) { return h.compareDocumentPosition(root) & Node.DOCUMENT_POSITION_FOLLOWING; }).pop() || all[0];
+      if (before) text = '### ' + before.textContent.replace(/\s+/g, ' ').trim() + '\n\n' + text;
+    }
+    var title = (doc.querySelector('meta[property="og:title"]') || {}).content || (doc.title || '');
+    return { text: text, title: title.split(/\s[|–—-]\s/)[0].trim() };
+  }
+
+  async function importLinkPayload(payload, url) {
+    var title = '', text = payload.text || '';
+    if (/html/.test(payload.contentType)) {
+      var h = htmlToDocText(text);
+      text = h.text; title = h.title;
+    } else if (!payload.googleDoc && !/markdown/.test(payload.contentType)) {
+      var gutenbergTitle = /^Title:[ \t]*(.+)$/m.exec(text.slice(0, 5000));
+      if (gutenbergTitle) title = gutenbergTitle[1].trim();
+      text = plainTextToDoc(text);
+    }
+    if (!title) {
+      var firstHeading = /^#{1,6} +(.+)$/m.exec(text);
+      title = payload.googleDoc && firstHeading ? firstHeading[1].replace(/[*_\\]/g, '').trim() : '';
+    }
+    if (!title) { try { title = new URL(payload.url || url).hostname.replace(/^www\./, ''); } catch (e) { title = 'the link'; } }
+    addImportedPoems(await parseDocWithImages(text), title, setLinkStatus);
+  }
+  if (location.hostname === 'localhost') window.__bookbugImportLinkPayload = importLinkPayload;
+
+  document.getElementById('linkForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var url = document.getElementById('linkInput').value.trim();
+    if (!url) return;
+    if (!cloudAuthToken) { setLinkStatus('Sign in with Google first — the page is fetched through your Bookbug account.', true); return; }
+    var btn = document.getElementById('linkImportBtn');
+    btn.disabled = true;
+    setLinkStatus('Fetching…');
+    try {
+      var res = await fetch(CLOUD_API_URL + '?fetch=' + encodeURIComponent(url), { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
+      var data = await res.json().catch(function () { return {}; });
+      // A backend without link fetching answers with the saved library instead.
+      if (res.ok && typeof data.text !== 'string') setLinkStatus('Importing from links isn’t switched on yet.', true);
+      else if (res.ok) { setLinkStatus('Working out the entries…'); await importLinkPayload(data, url); }
+      else if (googleDocIdFromLink(url) && /^(google_private|http_40[134])$/.test(data.error || '')) {
+        setLinkStatus('That doc isn’t shared publicly — pick it in Google’s picker to bring it in.');
+        openDrivePicker(googleDocIdFromLink(url));
+      } else setLinkStatus(LINK_ERRORS[data.error] || 'Couldn’t import from that link.', true);
+    } catch (err) {
+      setLinkStatus('Couldn’t reach that link.', true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // ---------------------------------------------------------------------
   // UI: paste tab

@@ -1,5 +1,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 // This is the AWS Lambda behind Bookbug's "sign in with Google to save to
 // the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
@@ -105,6 +107,84 @@ async function getStoredState(userId) {
   };
 }
 
+// ---- Import from a link ----
+// GET ?fetch=<url> returns that page's text so Bookbug can import entries
+// from it (browsers can't read other sites' pages themselves). Signed-in
+// users only, and guarded so it can't be used to reach anything private:
+// http(s) only, standard ports, every hop's host must resolve to public
+// addresses, at most 4 redirects, text types only, 3 MB, 8 seconds.
+const FETCH_MAX_BYTES = 3 * 1024 * 1024;
+const FETCH_TYPES = /^(text\/html|application\/xhtml\+xml|text\/plain|text\/markdown|text\/x-markdown)\b/i;
+
+function isPrivateAddress(addr) {
+  if (isIP(addr) === 4) {
+    const [a, b] = addr.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  }
+  const v6 = addr.toLowerCase();
+  if (v6.startsWith('::ffff:')) return isPrivateAddress(v6.slice(7));
+  return v6 === '::' || v6 === '::1' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe8') ||
+    v6.startsWith('fe9') || v6.startsWith('fea') || v6.startsWith('feb');
+}
+
+async function assertPublicUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch (e) { throw new Error('bad_url'); }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('bad_url');
+  if (u.username || u.password) throw new Error('bad_url');
+  if (u.port && u.port !== '80' && u.port !== '443') throw new Error('bad_url');
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) throw new Error('blocked_host');
+  return u;
+}
+
+// A Google Docs editing link becomes its public markdown export, which
+// works for any doc shared as "anyone with the link" (private docs
+// redirect to a sign-in page, which reads as not-shared).
+function googleDocExportUrl(u) {
+  const m = u.hostname === 'docs.google.com' && /^\/document\/d\/([a-zA-Z0-9_-]{20,})/.exec(u.pathname);
+  return m ? 'https://docs.google.com/document/d/' + m[1] + '/export?format=md' : null;
+}
+
+async function fetchPage(raw) {
+  let url = await assertPublicUrl(raw);
+  const exportUrl = googleDocExportUrl(url);
+  if (exportUrl) url = new URL(exportUrl);
+  for (let hop = 0; hop <= 4; hop++) {
+    const res = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'Bookbug/1.0 (+https://jake-goldwasser.com/bookbug/)', Accept: 'text/html,text/markdown,text/plain;q=0.9' }
+    });
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      const next = new URL(res.headers.get('location'), url);
+      if (exportUrl && next.hostname === 'accounts.google.com') throw new Error('google_private');
+      url = await assertPublicUrl(next.href);
+      continue;
+    }
+    if (!res.ok) throw new Error('http_' + res.status);
+    const type = res.headers.get('content-type') || '';
+    if (!FETCH_TYPES.test(type)) throw new Error('unsupported_type');
+    const reader = res.body.getReader();
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > FETCH_MAX_BYTES) { reader.cancel(); throw new Error('too_large'); }
+      chunks.push(value);
+    }
+    const charset = (/charset=([\w-]+)/i.exec(type) || [])[1] || 'utf-8';
+    let text;
+    try { text = new TextDecoder(charset).decode(Buffer.concat(chunks)); } catch (e) { text = Buffer.concat(chunks).toString('utf8'); }
+    return { url: url.href, contentType: type.split(';')[0].trim(), googleDoc: !!exportUrl, text };
+  }
+  throw new Error('too_many_redirects');
+}
+
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
 
@@ -118,6 +198,16 @@ export const handler = async (event) => {
   if (!info) return respond(401, { error: 'Invalid or expired token' });
 
   const userId = info.sub;
+
+  if (method === 'GET' && event.queryStringParameters?.fetch) {
+    try {
+      return respond(200, await fetchPage(event.queryStringParameters.fetch));
+    } catch (e) {
+      const code = String(e.message || '');
+      const known = /^(bad_url|blocked_host|google_private|unsupported_type|too_large|too_many_redirects|http_\d+)$/.test(code);
+      return respond(422, { error: known ? code : 'fetch_failed' });
+    }
+  }
 
   if (method === 'GET') {
     const { state, updatedAt } = await getStoredState(userId);
