@@ -705,11 +705,6 @@
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
   .matter-title .matter-note { color: var(--danger); }
-  /* A fixed-height row, so the page and its arrows don't move when the
-     Title | Body switch hides on a section page. Only in Formatting. */
-  .stage-view-slot { display: flex; justify-content: center; height: 31px; }
-  body:not(.stage-format) .stage-view-slot { display: none; }
-  .stage-view-slot .view-seg[hidden] { display: flex; visibility: hidden; }
   .view-seg[hidden] { display: none; }
   .matter-stage .preview-stage { padding: 0; }
   .matter-stage .preview-nav { width: 100%; max-width: 440px; align-self: center; margin-top: -8px; }
@@ -808,13 +803,22 @@
     background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px var(--shadow), 0 0 0 1px var(--line-strong);
   }
   .text-target-pane[hidden] { display: none; }
-  .format-mode {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-    margin: 0 0 14px; padding: 9px 12px; border-radius: 7px;
-    background: var(--accent); color: var(--accent-ink);
+  .format-target { margin: 0 0 16px; height: 46px; }
+  .format-target-seg, .format-target-name {
+    display: flex; height: 100%; border: 2px solid var(--accent); border-radius: 8px; overflow: hidden;
   }
-  .format-mode-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
-  .format-mode-name { font-size: 14px; font-weight: 700; }
+  .format-target-seg[hidden], .format-target-name[hidden] { display: none; }
+  .format-target-seg button {
+    flex: 1 1 0; appearance: none; border: none; margin: 0; background: var(--surface); color: var(--accent);
+    font-family: "Zilla Slab", ui-serif, serif; font-size: 19px; font-weight: 700; cursor: pointer;
+  }
+  .format-target-seg button + button { border-left: 2px solid var(--accent); }
+  .format-target-seg button.active { background: var(--accent); color: var(--accent-ink); }
+  .format-target-seg button:not(.active):hover { background: var(--accent-soft); }
+  .format-target-name {
+    align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink);
+    font-family: "Zilla Slab", ui-serif, serif; font-size: 19px; font-weight: 700;
+  }
   .export-check { margin: 0 0 4px; }
 
   /* Panels that start closed as a single header bar (Formatting, Export). */
@@ -1152,14 +1156,6 @@
           <button type="button" class="btn btn-sm" id="matterBackBtn">← Back to entries</button>
           <span class="matter-title" id="matterTitle"></span>
         </div>
-        <!-- In Formatting, on an entry page: which part of the entry the
-             controls change. A section page needs no switch. -->
-        <div class="stage-view-slot" id="stageViewSlot">
-          <div class="seg view-seg" id="stageTextSeg" role="group" aria-label="Format the entry's" hidden>
-            <button type="button" data-key="titles">Title</button>
-            <button type="button" data-key="entries">Body</button>
-          </div>
-        </div>
         <div class="stage-preview-slot" id="stagePreviewSlot"></div>
       </div>
       <div class="panel" id="poemsPanel">
@@ -1224,11 +1220,15 @@
             <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="panel-body" id="formattingBody" hidden>
-          <!-- Which controls show follows the editor's Section / Title /
-               Entry View switch; this banner says which view that is. -->
-          <div class="format-mode" id="formatMode" aria-live="polite">
-            <span class="format-mode-label">Formatting</span>
-            <span class="format-mode-name" id="formatModeName">Entry View</span>
+          <!-- What the controls below change: an entry's Title or Body (a
+               big switch), or a section title. Both fill the same fixed
+               height, so the controls under them never jump. -->
+          <div class="format-target">
+            <div class="format-target-seg" id="formatTargetSeg" role="group" aria-label="Format the entry's">
+              <button type="button" data-key="titles">Title</button>
+              <button type="button" data-key="entries">Body</button>
+            </div>
+            <div class="format-target-name" id="formatTargetSection" hidden>Section title</div>
           </div>
           <div class="text-target-pane" data-pane="section">
           <div class="field">
@@ -6466,7 +6466,14 @@
   function syncFormattingToView(view) {
     var f = FORMAT_PANES[view] || FORMAT_PANES.entries;
     document.querySelectorAll('.text-target-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== f.pane; });
-    document.getElementById('formatModeName').textContent = f.name;
+    var onSection = f.pane === 'section';
+    document.getElementById('formatTargetSeg').hidden = onSection;
+    document.getElementById('formatTargetSection').hidden = !onSection;
+    document.querySelectorAll('#formatTargetSeg button').forEach(function (b) {
+      var on = b.dataset.key === view;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   }
 
   // Front / Back cover switch in the Covers panel.
@@ -6508,9 +6515,8 @@
   function stagePageWidth() {
     var plan = planBooklet(state);
     var room = document.getElementById('matterStage').clientWidth - 40;
-    // Leave room for the header, the view switch (Formatting), the page
-    // arrows and the stage's padding.
-    var chrome = stageMode === 'format' ? 200 : 160;
+    // Leave room for the header, the page arrows and the stage's padding.
+    var chrome = 160;
     return Math.round(Math.max(200, Math.min(room, (window.innerHeight - chrome) * plan.PAGE_W / plan.PAGE_H)));
   }
   function updateStageTitle(item) {
@@ -6529,29 +6535,17 @@
   }
   // In the large Formatting view the page decides the controls: a
   // section page shows the section title's, an entry page its title's or
-  // body's (the Title | Body switch, remembering the last choice).
+  // body's (the panel's Title | Body switch, remembering the last choice).
   var lastTextKey = 'entries';
   function syncStageTextSeg(item) {
-    var seg = document.getElementById('stageTextSeg');
-    var onEntry = stageMode === 'format' && item && item.type === 'poem' && !isSection(state.poems[item.index]);
-    var onSection = stageMode === 'format' && item && item.type === 'poem' && isSection(state.poems[item.index]);
-    seg.hidden = !onEntry;
-    if (onSection && formatKey !== 'sections') showFormattingFor('sections');
-    if (onEntry) {
-      if (formatKey === 'sections' || !formatKey) showFormattingFor(lastTextKey);
-      seg.querySelectorAll('button').forEach(function (b) {
-        var on = b.dataset.key === formatKey;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
-    }
+    if (stageMode !== 'format' || !item || item.type !== 'poem') return;
+    if (isSection(state.poems[item.index])) { if (formatKey !== 'sections') showFormattingFor('sections'); }
+    else if (formatKey === 'sections' || !formatKey) showFormattingFor(lastTextKey);
   }
-  document.getElementById('stageTextSeg').addEventListener('click', function (e) {
+  document.getElementById('formatTargetSeg').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-key]');
     if (!b) return;
-    lastTextKey = b.dataset.key;
     showFormattingFor(b.dataset.key);
-    syncStageTextSeg(buildPreviewItems(state)[previewIndex]);
   });
 
   // The page that best shows what Formatting is changing.
@@ -6573,7 +6567,6 @@
     scrollYAtToggle = null;
     stageMode = mode;
     document.body.classList.toggle('matter-open', !!mode);
-    document.body.classList.toggle('stage-format', mode === 'format');
     document.getElementById('matterStage').hidden = !mode;
     var previewBlock = document.getElementById('previewBlock');
     var previewHome = document.getElementById('previewPanel');
