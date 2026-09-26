@@ -603,16 +603,14 @@
   button.poem-title-compact-toggle.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   button.poem-title-compact-toggle:hover { color: var(--accent); }
   .poem-compact-expanded { margin: 0 0 4px; }
-  /* Title View: numbers hang in a gutter left of the bubbles; section
-     bars and opened entries line up with the bubbles; entries inside a
-     section indent under it. */
+  /* Title View: section bars sit at the left edge, as in Entry View;
+     entries sit one gutter in (that indent is the outline), with their
+     numbers centered in the gutter. */
   #poemList.titles-view > .poem-compact-row,
-  #poemList.titles-view > .section-row,
-  #poemList.titles-view > .poem-card { margin-left: 30px; }
-  #poemList.titles-view > .in-section { margin-left: 62px; }
+  #poemList.titles-view > .poem-card { margin-left: 32px; }
   .poem-compact-row { position: relative; }
   .poem-compact-row .poem-num {
-    position: absolute; left: -32px; top: 50%; transform: translateY(-50%); width: 26px; justify-content: flex-end;
+    position: absolute; left: -32px; top: 50%; transform: translateY(-50%); width: 32px; justify-content: center;
   }
   .poem-compact-row .poem-handle { flex: 0 0 auto; }
   /* An opened entry's title field only spans its text (see fitTitleInput),
@@ -673,7 +671,7 @@
     cursor: pointer; font-size: 13px; line-height: 1; padding: 0; border-radius: 4px;
   }
   .section-expand-btn:hover { background: var(--surface); }
-  .section-block-entries { margin: 2px 0 10px 48px; display: flex; flex-direction: column; gap: 4px; }
+  .section-block-entries { margin: 2px 0 10px 32px; display: flex; flex-direction: column; gap: 4px; }
   .section-block-empty { font-size: 12.5px; color: var(--ink-faint); padding: 4px 8px; }
   .section-lead-row {
     border: 1px dashed var(--line-strong); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px;
@@ -5129,6 +5127,32 @@
     dropLine.style.top = (y - poemList.getBoundingClientRect().top) + 'px';
     dropLine.hidden = false;
   }
+  // While dragging, the entry numbers show the order you'd get by
+  // dropping at the line: every row renumbers live, the dragged one too.
+  // Cancelling puts them back; dropping re-renders the list anyway.
+  function showNumbersFor(order) {
+    var num = 0, numById = {};
+    order.forEach(function (p) { if (!isSection(p)) numById[p.id] = ++num; });
+    poemList.querySelectorAll('[data-poem-id]').forEach(function (row) {
+      var n = row.querySelector(':scope > .poem-handle .poem-num');
+      if (!n || !(row.dataset.poemId in numById)) return;
+      if (n.dataset.orig === undefined) n.dataset.orig = n.textContent;
+      n.textContent = numById[row.dataset.poemId];
+    });
+  }
+  function restoreNumbers() {
+    poemList.querySelectorAll('.poem-num[data-orig]').forEach(function (n) {
+      n.textContent = n.dataset.orig;
+      delete n.dataset.orig;
+    });
+  }
+  function orderWithMove(from, to) {
+    var order = state.poems.slice();
+    var moved = order.splice(from, 1)[0];
+    order.splice(to, 0, moved);
+    return order;
+  }
+
   var lastDropTarget = null;
   function reorderDragOver(e, el, index) {
     if (dragFromIndex === null) return;
@@ -5140,6 +5164,9 @@
     clearDropMarks();
     el.classList.add(after ? 'drop-after' : 'drop-before');
     showDropLine(el, after);
+    var to = index + (after ? 1 : 0);
+    if (to > dragFromIndex) to--;
+    showNumbersFor(orderWithMove(dragFromIndex, to));
   }
   function reorderDrop(el, index) {
     var after = el.classList.contains('drop-after');
@@ -5158,7 +5185,7 @@
     persist();
     renderAll();
   }
-  document.addEventListener('dragend', clearDropMarks);
+  document.addEventListener('dragend', function () { clearDropMarks(); restoreNumbers(); });
   // The line sits in the gap between rows, so a drop right on it (over
   // the gap, not a row) lands where the line shows.
   poemList.addEventListener('dragover', function (e) {
@@ -5358,7 +5385,7 @@
     meta.className = 'poem-meta';
     var warnEl = document.createElement('div');
     warnEl.className = 'poem-warn';
-    warnEl.textContent = '⚠ a line is too long for the page — it’ll turn over onto an indented line';
+    warnEl.textContent = '⚠ at least one line will wrap';
     warnEl.hidden = true;
     function updateMeta(planOverride) {
       var lineCount = poem.lines.filter(function (l) { return l.trim() !== '' && !imageKeyForLine(l, state); }).length;
@@ -5802,6 +5829,11 @@
     if (dropLine.parentNode !== poemList) poemList.appendChild(dropLine);
     dropLine.style.top = (y - poemList.getBoundingClientRect().top) + 'px';
     dropLine.hidden = false;
+    var parts = splitSectionBlocks(), to = k + (after ? 1 : 0);
+    if (to > dragBlockFrom) to--;
+    var blocks = parts.blocks.slice(), moved = blocks.splice(dragBlockFrom, 1)[0];
+    blocks.splice(to, 0, moved);
+    showNumbersFor(parts.lead.concat.apply(parts.lead, blocks));
   }
   function blockDrop() {
     var drop = lastBlockDrop, from = dragBlockFrom;
@@ -5950,17 +5982,13 @@
     }
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
-    var entryNum = 0, inSection = false;
+    var entryNum = 0;
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) {
-        inSection = true;
         poemList.appendChild(makeSectionRow(poem, i));
       } else {
         entryNum++;
         var row = poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan, entryNum) : makeCard(poem, i, plan, entryNum);
-        // Title View shows the book's outline: entries sit indented under
-        // their section (ones before the first section aren't in one).
-        if (poemsViewMode === 'compact' && inSection) row.classList.add('in-section');
         poemList.appendChild(row);
       }
       poemList.appendChild(makeGap(i + 1));
@@ -6477,6 +6505,22 @@
   });
   document.getElementById('previewPage').addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && stageEdit) { ev.stopPropagation(); endStageEdit(); }
+  }, true);
+  // One click outside the entry you're editing deselects it (its outline
+  // and formatting controls go away), even on a spot that doesn't take
+  // focus and so wouldn't move the cursor out on its own.
+  var INTERACTIVE = 'input, textarea, select, button, a, label, [contenteditable="true"], [tabindex], .font-picker, .entry-menu';
+  document.addEventListener('mousedown', function (ev) {
+    var a = document.activeElement;
+    var card = a && a.closest && a.closest('#poemList .poem-card');
+    if (!card || card.contains(ev.target)) return;
+    // On blank space, Chrome's own mousedown handling puts focus right
+    // back into the editor (its caret is still there), so skip it -- blank
+    // space has nothing else to do on a press. Real controls keep theirs.
+    if (!ev.target.closest(INTERACTIVE)) ev.preventDefault();
+    a.blur();
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount && card.contains(sel.anchorNode)) sel.removeAllRanges();
   }, true);
   // Any press outside the page ends editing, even on a spot that doesn't
   // take focus (blank space, the page arrows): the outline goes away and
