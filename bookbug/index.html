@@ -632,8 +632,8 @@
   .drop-line::before { left: -4px; }
   .drop-line::after { right: -4px; }
   .drop-line[hidden] { display: none; }
-  /* Sections | Titles | Entries -- the highlighted one is the view you're in. */
-  .view-seg button { flex: 0 0 auto; padding: 6px 12px; font-size: 12px; }
+  /* Section / Title / Entry View -- the highlighted one is the view you're in. */
+  .view-seg button { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
   .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
@@ -785,6 +785,14 @@
     background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px var(--shadow), 0 0 0 1px var(--line-strong);
   }
   .text-target-pane[hidden] { display: none; }
+  .format-mode {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    margin: 0 0 14px; padding: 9px 12px; border-radius: 7px;
+    background: var(--accent); color: var(--accent-ink);
+  }
+  .format-mode-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+  .format-mode-name { font-size: 14px; font-weight: 700; }
+  .export-check { margin: 0 0 4px; }
 
   /* Panels that start closed as a single header bar (Formatting, Export). */
   .collapsible-panel:not(.is-open) { padding-top: 14px; padding-bottom: 14px; }
@@ -1123,9 +1131,9 @@
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
             <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
-              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections">Sections</button>
-              <button type="button" data-view="titles" title="One row per entry; click a title to open it">Titles</button>
-              <button type="button" data-view="entries" title="Every entry open in full">Entries</button>
+              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections">Section View</button>
+              <button type="button" data-view="titles" title="One row per entry; click a title to open it">Title View</button>
+              <button type="button" data-view="entries" title="Every entry open in full">Entry View</button>
             </div>
           </div>
         </div>
@@ -1157,18 +1165,11 @@
             <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="panel-body" id="formattingBody" hidden>
-          <div class="field">
-            <label for="trimSelect">Trim size</label>
-            <select id="trimSelect"></select>
-          </div>
-
-          <div class="subhead">Text</div>
-          <!-- Section titles, entry titles and entries each get their own
-               pane of controls; this switch shows one at a time. -->
-          <div class="text-target-toggle" id="textTargetToggle" role="tablist">
-            <button type="button" role="tab" data-target="section">Section title</button>
-            <button type="button" role="tab" data-target="title">Entry title</button>
-            <button type="button" role="tab" data-target="body">Entry</button>
+          <!-- Which controls show follows the editor's Section / Title /
+               Entry View switch; this banner says which view that is. -->
+          <div class="format-mode" id="formatMode" aria-live="polite">
+            <span class="format-mode-label">Formatting</span>
+            <span class="format-mode-name" id="formatModeName">Entry View</span>
           </div>
           <div class="text-target-pane" data-pane="section">
           <div class="field">
@@ -1260,13 +1261,6 @@
               <button data-val="2">2.0</button>
             </div>
           </div>
-          </div>
-
-          <div class="subhead">Layout</div>
-          <div class="checkline">
-            <input type="checkbox" id="tocCheck" checked>
-            <label for="tocCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include table of contents</label>
-          </div>
           <div class="checkline">
             <input type="checkbox" id="pageNumbersCheck" checked>
             <label for="pageNumbersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show page numbers</label>
@@ -1278,20 +1272,25 @@
               <button data-val="corners">Outer corners</button>
             </div>
           </div>
-          <div class="checkline">
-            <input type="checkbox" id="cutLinesCheck" checked>
-            <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines (print-ready export)</label>
           </div>
+
+          <div class="subhead">Whole book</div>
+          <div class="field">
+            <label for="trimSelect">Trim size</label>
+            <select id="trimSelect"></select>
+          </div>
+
           </div>
         </div>
 
         <div class="panel collapsible-panel" id="coversPanel">
           <button type="button" class="panel-toggle" id="coversToggle" aria-expanded="false" aria-controls="coversBody">
-            <span class="panel-title">Covers</span><span class="panel-chevron" aria-hidden="true">▾</span>
+            <span class="panel-title">Front- and Backmatter</span><span class="panel-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="panel-body" id="coversBody" hidden>
           <div class="text-target-toggle" id="coverTargetToggle" role="tablist">
             <button type="button" role="tab" data-target="front">Front cover</button>
+            <button type="button" role="tab" data-target="toc">Contents</button>
             <button type="button" role="tab" data-target="back">Back cover</button>
           </div>
           <div class="cover-pane" data-pane="front">
@@ -1356,6 +1355,34 @@
             <label>Alignment</label>
             <div class="seg seg-3" id="coverImageAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
           </div>
+          </div>
+          </div>
+          <div class="cover-pane" data-pane="toc" hidden>
+          <div class="checkline">
+            <input type="checkbox" id="tocCheck" checked>
+            <label for="tocCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include table of contents</label>
+          </div>
+          <div class="subhead">Heading</div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg seg-fonts" id="tocHeadFontSeg" data-font-seg></div>
+          </div>
+          <div class="field">
+            <label>Alignment</label>
+            <div class="seg seg-3" id="tocHeadAlignSeg"><button data-val="left" class="active">Left</button><button data-val="center">Center</button><button data-val="right">Right</button></div>
+          </div>
+          <div class="subhead">Listings</div>
+          <div class="field">
+            <label>Typeface</label>
+            <div class="seg seg-fonts" id="tocFontSeg" data-font-seg></div>
+          </div>
+          <div class="field">
+            <label>Size</label>
+            <div class="seg seg-3" id="tocSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="tocLeadersCheck" checked>
+            <label for="tocLeadersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Dot leaders to page numbers</label>
           </div>
           </div>
           <div class="cover-pane" data-pane="back" hidden>
@@ -1431,6 +1458,10 @@
           <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
             <button class="btn btn-primary" id="exportBtn" style="width:100%; justify-content:center;">Export PDF</button>
             <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export print-ready booklet</button>
+            <div class="checkline export-check">
+              <input type="checkbox" id="cutLinesCheck" checked>
+              <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+            </div>
             <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
             <button class="btn" id="exportSelectBtn" style="width:100%; justify-content:center;">Export select entries…</button>
             <div class="export-status" id="exportStatus"></div>
@@ -2774,6 +2805,19 @@
       ownPage: s.sectionOwnPage !== false
     };
   }
+  var TOC_SIZES = { small: { pt: 11, lineH: 19 }, medium: { pt: 12.5, lineH: 22 }, large: { pt: 14, lineH: 25 } };
+  function tocStyle(s) {
+    var size = TOC_SIZES[s.tocSizeMode] || TOC_SIZES.medium;
+    return {
+      headFont: s.tocHeadFontChoice || s.titleFontChoice,
+      headAlign: s.tocHeadAlignment || 'left',
+      headSizePt: 20,
+      font: s.tocFontChoice || s.bodyFontChoice,
+      sizePt: size.pt,
+      lineH: size.lineH,
+      leaders: s.tocDotLeaders !== false
+    };
+  }
   function frontCoverStyle(s) {
     return {
       font: s.coverFontChoice || s.titleFontChoice,
@@ -2982,7 +3026,8 @@
       return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
-    var tocFontSize = 12.5, tocLineHeight = 22, tocTitleH = 44;
+    var tocSt = tocStyle(state);
+    var tocFontSize = tocSt.sizePt, tocLineHeight = tocSt.lineH, tocTitleH = 44;
     var linesPerTocPage1 = Math.max(1, Math.floor((contentHeight - tocTitleH) / tocLineHeight));
     // A TOC continuation page has no heading eating into its top, so it
     // gets even top/bottom margins (marginTop on both edges) rather than
@@ -3089,6 +3134,7 @@
       sectionKeys: { bold: resolve(sectionStyle(state).font, 'bold') },
       coverKeys: { bold: resolve(frontCoverStyle(state).font, 'bold') },
       authorKeys: { reg: resolve(frontCoverStyle(state).authorFont, 'regular') },
+      tocKeys: { head: resolve(tocStyle(state).headFont, 'bold'), reg: resolve(tocStyle(state).font, 'regular'), bold: resolve(tocStyle(state).font, 'bold') },
       backKeys: { reg: resolve(backCoverStyle(state).font, 'regular') },
       bodyKeys: { reg: resolve(state.bodyFontChoice, 'regular'), bold: resolve(state.bodyFontChoice, 'bold'), ital: resolve(state.bodyFontChoice, 'italic') },
       fonts: ordered
@@ -3249,12 +3295,14 @@
     // ---- Table of contents ----
     if (plan.tocPageCount > 0) {
       var idx = 0;
+      var ts = tocStyle(state), tocKeys = fontPlan.tocKeys;
       for (var tp = 0; tp < plan.tocPageCount; tp++) {
         var tbytes = [];
         var y = contentTop;
         if (tp === 0) {
-          var headSize = 20;
-          drawText(tbytes, titleKeys.bold, headSize, contentLeft, y - headSize, 'Contents', INK_RGB);
+          var headSize = ts.headSizePt;
+          var headW = measure('Contents', headSize, ts.headFont, 600);
+          drawText(tbytes, tocKeys.head, headSize, resolveX(ts.headAlign, headW, contentLeft, contentRight), y - headSize, 'Contents', INK_RGB);
           y -= plan.tocTitleH;
         }
         var capacity = tp === 0 ? plan.linesPerTocPage1 : plan.linesPerTocPageN;
@@ -3266,36 +3314,36 @@
           var poem = state.poems[idx];
           var startPage = plan.layouts[idx].startPage;
           var numStr = String(startPage);
-          var numW = measure(numStr, plan.tocFontSize, state.bodyFontChoice, 400);
+          var numW = measure(numStr, plan.tocFontSize, ts.font, 400);
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
           if (isSection(poem)) {
             var sLabel = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled section';
-            var sDisplay = ellipsize(sLabel, plan.contentWidth - numW - 16, plan.tocFontSize, state.bodyFontChoice, 700);
-            drawText(tbytes, bodyKeys.bold, plan.tocFontSize, contentLeft, lineY, sDisplay, INK_RGB);
-            drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+            var sDisplay = ellipsize(sLabel, plan.contentWidth - numW - 16, plan.tocFontSize, ts.font, 700);
+            drawText(tbytes, tocKeys.bold, plan.tocFontSize, contentLeft, lineY, sDisplay, INK_RGB);
+            drawText(tbytes, tocKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
             continue;
           }
           var titleMaxW = plan.contentWidth - numW - 16 - entryIndent;
           var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
-          var display = ellipsize(label, titleMaxW, plan.tocFontSize, state.bodyFontChoice, 400);
-          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentLeft + entryIndent, lineY, display, INK_RGB);
-          var titleW = measure(display, plan.tocFontSize, state.bodyFontChoice, 400);
+          var display = ellipsize(label, titleMaxW, plan.tocFontSize, ts.font, 400);
+          drawText(tbytes, tocKeys.reg, plan.tocFontSize, contentLeft + entryIndent, lineY, display, INK_RGB);
+          var titleW = measure(display, plan.tocFontSize, ts.font, 400);
           var dotX0 = contentLeft + entryIndent + titleW + 6;
           var dotX1 = contentRight - numW - 8;
-          if (dotX1 > dotX0) {
+          if (ts.leaders && dotX1 > dotX0) {
             // Measure the actual repeated string as it grows, rather than
             // estimating a per-repeat width and multiplying -- with real
             // embedded-font metrics that estimate no longer matches a
             // repeated ". " string's true width closely enough, letting
             // the leader run past dotX1 and into the page number.
             var dots = '', nextDots = '.  ';
-            while (measure(nextDots, plan.tocFontSize, state.bodyFontChoice, 400) <= (dotX1 - dotX0)) {
+            while (measure(nextDots, plan.tocFontSize, ts.font, 400) <= (dotX1 - dotX0)) {
               dots = nextDots;
               nextDots += '.  ';
             }
-            if (dots) drawText(tbytes, bodyKeys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
+            if (dots) drawText(tbytes, tocKeys.reg, plan.tocFontSize, dotX0, lineY, dots, { 0: MUTED_RGB[0], 1: MUTED_RGB[1], 2: MUTED_RGB[2] });
           }
-          drawText(tbytes, bodyKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+          drawText(tbytes, tocKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
         }
         contents.push(tbytes);
       }
@@ -5129,6 +5177,7 @@
   }
   function updateEntriesViewSeg(hasSections) {
     var view = currentEntriesView();
+    syncFormattingToView(view);
     entriesViewSeg.querySelectorAll('button').forEach(function (b) {
       var on = b.dataset.view === view;
       b.classList.toggle('active', on);
@@ -5147,9 +5196,6 @@
     // "Titles only" means titles only -- don't reopen whatever entry was
     // open before "Reveal All".
     if (b.dataset.view === 'titles') expandedCompactIds = {};
-    // The Formatting panel's Text switch follows along, so the controls
-    // on show are the ones for what the list is now showing.
-    showTextTarget({ sections: 'section', titles: 'title', entries: 'body' }[b.dataset.view]);
     renderPoems();
   });
 
@@ -5610,20 +5656,23 @@
     } else {
       box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginTop * scale) + 'px';
     }
-    var titleStack = displayStackFor(state.titleFontChoice);
-    var bodyStack = displayStackFor(state.bodyFontChoice);
+    var ts = tocStyle(state);
     var html = isFirst
-      ? '<div style="font-weight:700; font-family:' + titleStack + '; font-size:' + (18 * scale).toFixed(1) + 'px; margin-bottom:' + (14 * scale).toFixed(1) + 'px;">Contents</div>'
+      ? '<div style="font-weight:700; font-family:' + displayStackFor(ts.headFont) + '; font-size:' + (ts.headSizePt * scale).toFixed(1) + 'px; line-height:1; text-align:' + ts.headAlign +
+        '; height:' + (plan.tocTitleH * scale).toFixed(1) + 'px;">Contents</div>'
       : '';
-    html += '<div style="font-family:' + bodyStack + '; font-size:' + (10 * scale).toFixed(1) + 'px; line-height:2;">';
+    html += '<div style="font-family:' + displayStackFor(ts.font) + '; font-size:' + (ts.sizePt * scale).toFixed(1) + 'px; line-height:' + (ts.lineH * scale).toFixed(1) + 'px;">';
     var hasSections = state.poems.some(isSection);
     for (var i = start; i < end; i++) {
       var item = state.poems[i];
       var isSec = isSection(item);
-      var indent = (!isSec && hasSections) ? (10 * scale).toFixed(1) + 'px' : '0';
+      var indent = (!isSec && hasSections) ? (14 * scale).toFixed(1) + 'px' : '0';
       var weight = isSec ? '700' : '400';
-      html += '<div style="display:flex; justify-content:space-between; gap:6px; padding-left:' + indent + '; font-weight:' + weight + ';"><span>' +
-        escapeHtml(item.title || (isSec ? 'Untitled section' : 'Untitled')) + '</span><span>' + plan.layouts[i].startPage + '</span></div>';
+      var leader = (ts.leaders && !isSec)
+        ? '<span style="flex:1; min-width:0; overflow:hidden; white-space:nowrap; color:rgb(' + MUTED_RGB.map(function (c) { return Math.round(c * 255); }).join(',') + ');">' + '.  '.repeat(80) + '</span>'
+        : '<span style="flex:1;"></span>';
+      html += '<div style="display:flex; gap:' + (6 * scale).toFixed(1) + 'px; padding-left:' + indent + '; font-weight:' + weight + ';"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">' +
+        escapeHtml(item.title || (isSec ? 'Untitled section' : 'Untitled')) + '</span>' + leader + '<span>' + plan.layouts[i].startPage + '</span></div>';
     }
     html += '</div>';
     box.innerHTML = html;
@@ -6171,42 +6220,19 @@
     });
   });
 
-  // Which half of the Formatting panel's Text section is showing --
-  // a per-browser convenience, so it's only remembered locally.
-  var TEXT_TARGET_KEY = 'poetryBooklet.textTarget.v1';
-  function showTextTarget(target) {
-    document.querySelectorAll('#textTargetToggle button').forEach(function (b) {
-      var on = b.dataset.target === target;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    document.querySelectorAll('.text-target-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== target; });
-    try { localStorage.setItem(TEXT_TARGET_KEY, target); } catch (e) {}
+  // The Formatting panel shows the controls for whatever the editor's
+  // view switch is on -- section titles, entry titles or entries -- and
+  // names that view at the top, so it's clear what a change will affect.
+  var FORMAT_PANES = {
+    sections: { pane: 'section', name: 'Section View' },
+    titles: { pane: 'title', name: 'Title View' },
+    entries: { pane: 'body', name: 'Entry View' }
+  };
+  function syncFormattingToView(view) {
+    var f = FORMAT_PANES[view] || FORMAT_PANES.entries;
+    document.querySelectorAll('.text-target-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== f.pane; });
+    document.getElementById('formatModeName').textContent = f.name;
   }
-  document.querySelectorAll('#textTargetToggle button').forEach(function (b) {
-    b.addEventListener('click', function () { showTextTarget(b.dataset.target); });
-  });
-  // Clicking into something in the list shows its formatting controls:
-  // an entry's text, an entry title (the field or its Titles-view row),
-  // or a section title.
-  function textTargetFor(el) {
-    if (el.closest('.poem-text')) return 'body';
-    if (el.closest('.poem-title, .poem-title-compact-toggle')) return 'title';
-    if (el.closest('input.section-title')) return 'section';
-    return null;
-  }
-  ['focusin', 'click'].forEach(function (type) {
-    poemList.addEventListener(type, function (e) {
-      var target = textTargetFor(e.target);
-      if (target) showTextTarget(target);
-    });
-  });
-  var savedTextTarget = 'body';
-  try {
-    var storedTarget = localStorage.getItem(TEXT_TARGET_KEY);
-    if (storedTarget === 'title' || storedTarget === 'section') savedTextTarget = storedTarget;
-  } catch (e) {}
-  showTextTarget(savedTextTarget);
 
   // Front / Back cover switch in the Covers panel.
   var COVER_TARGET_KEY = 'poetryBooklet.coverTarget.v1';
@@ -6223,7 +6249,10 @@
     b.addEventListener('click', function () { showCoverTarget(b.dataset.target); });
   });
   var savedCoverTarget = 'front';
-  try { if (localStorage.getItem(COVER_TARGET_KEY) === 'back') savedCoverTarget = 'back'; } catch (e) {}
+  try {
+    var storedCover = localStorage.getItem(COVER_TARGET_KEY);
+    if (storedCover === 'back' || storedCover === 'toc') savedCoverTarget = storedCover;
+  } catch (e) {}
   showCoverTarget(savedCoverTarget);
 
   // The section-title, cover and back-cover typeface pickers are copies
@@ -6269,6 +6298,10 @@
   wireSetting('coverImageOrderSeg', 'coverImageOrder');
   wireSetting('coverImageAlignSeg', 'coverImageAlign');
   wireSetting('backTextPosSeg', 'backTextPos');
+  wireSetting('tocHeadFontSeg', 'tocHeadFontChoice');
+  wireSetting('tocHeadAlignSeg', 'tocHeadAlignment');
+  wireSetting('tocFontSeg', 'tocFontChoice');
+  wireSetting('tocSizeSeg', 'tocSizeMode');
   wireSetting('backImagePosSeg', 'backImagePos');
   wireSetting('backImageOrderSeg', 'backImageOrder');
   wireSetting('backImageAlignSeg', 'backImageAlign');
@@ -6277,7 +6310,8 @@
   wireSetting('backSizeSeg', 'backSizeMode');
   wireSetting('backImageSizeSeg', 'backImageSize');
   [['sectionOwnPageCheck', 'sectionOwnPage'], ['coverAuthorCheck', 'coverShowAuthor'],
-   ['backAuthorCheck', 'backShowAuthor'], ['backYearCheck', 'backShowYear']].forEach(function (pair) {
+   ['backAuthorCheck', 'backShowAuthor'], ['backYearCheck', 'backShowYear'],
+   ['tocLeadersCheck', 'tocDotLeaders']].forEach(function (pair) {
     document.getElementById(pair[0]).addEventListener('change', function (e) {
       state[pair[1]] = e.target.checked; persist(); renderAll();
     });
@@ -6408,6 +6442,12 @@
     markSeg('backSizeSeg', state.backSizeMode || 'medium');
     markSeg('backImageSizeSeg', back.imageSize);
     markSeg('backTextPosSeg', back.textPos);
+    var toc = tocStyle(state);
+    markSeg('tocHeadFontSeg', toc.headFont);
+    markSeg('tocHeadAlignSeg', toc.headAlign);
+    markSeg('tocFontSeg', toc.font);
+    markSeg('tocSizeSeg', state.tocSizeMode || 'medium');
+    document.getElementById('tocLeadersCheck').checked = toc.leaders;
     markSeg('backImagePosSeg', back.imagePos);
     markSeg('backImageOrderSeg', back.imageOrder);
     markSeg('backImageAlignSeg', back.imageAlign);
