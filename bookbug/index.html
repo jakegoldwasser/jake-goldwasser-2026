@@ -703,7 +703,8 @@
   body.matter-open #previewPanel { display: none; }
   .stage-preview-slot #previewBlock { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .stage-preview-slot .preview-stage { align-self: stretch; }
-  .matter-stage { display: flex; flex-direction: column; gap: 20px; padding: 16px 20px 28px; }
+  .matter-stage { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 10px; }
+  .matter-back { font-size: 15px; font-weight: 700; padding: 10px 18px; }
   .matter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .matter-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 16px; color: var(--ink); text-align: right; }
   .matter-stage[hidden] { display: none; }
@@ -1198,7 +1199,7 @@
            instead of the entries, with a clear way back. -->
       <div class="panel matter-stage" id="matterStage" hidden>
         <div class="matter-head">
-          <button type="button" class="btn btn-sm" id="matterBackBtn">← Back to entries</button>
+          <button type="button" class="btn matter-back" id="matterBackBtn">← Back to entries</button>
           <span class="matter-title" id="matterTitle"></span>
         </div>
         <div class="stage-preview-slot" id="stagePreviewSlot"></div>
@@ -6924,9 +6925,11 @@
   function matterIsOpen() { return stageMode === 'matter'; }
   function stagePageWidth() {
     var plan = planBooklet(state);
-    var room = document.getElementById('matterStage').clientWidth - 40;
-    // Leave room for the header, the page arrows and the stage's padding.
-    var chrome = 160;
+    var room = document.getElementById('matterStage').clientWidth - 32;
+    // Everything in the stage but the page itself (header, arrows,
+    // padding), measured, plus a little room above and below it.
+    var stageEl = document.getElementById('matterStage'), pageEl = document.getElementById('previewPage');
+    var chrome = stageEl.offsetHeight && pageEl.offsetHeight ? stageEl.offsetHeight - pageEl.offsetHeight + 16 : 150;
     return Math.round(Math.max(200, Math.min(room, (window.innerHeight - chrome) * plan.PAGE_W / plan.PAGE_H)));
   }
   function updateStageTitle(item) {
@@ -7003,7 +7006,7 @@
     // On opening, line the stage up with the top of the window so the
     // whole page is in view (the tools column is sticky and stays put).
     var top = document.getElementById('matterStage').getBoundingClientRect().top;
-    if (!wasOpen && Math.abs(top - 16) > 1) window.scrollBy({ top: top - 16, behavior: 'instant' });
+    if (!wasOpen && Math.abs(top - 8) > 1) window.scrollBy({ top: top - 8, behavior: 'instant' });
   }
   window.addEventListener('resize', function () { if (stageMode) renderPreview(); });
   if (wideLayout.addEventListener) wideLayout.addEventListener('change', updateMatterStage);
