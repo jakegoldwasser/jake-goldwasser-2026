@@ -488,10 +488,10 @@
   .poem-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
   .poem-meta-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-  /* Entry View: formatting controls (the toolbar and the Title / Body
-     alignment) appear only on the entry you're editing. */
-  #poemList:not(.titles-view) > .poem-card:not(:focus-within) .format-toolbar,
-  #poemList:not(.titles-view) > .poem-card:not(:focus-within) .title-align { display: none; }
+  /* Formatting controls (the toolbar and the Title / Body alignment)
+     appear only on the entry you're editing, in every view. */
+  #poemList .poem-card:not(:focus-within) .format-toolbar,
+  #poemList .poem-card:not(:focus-within) .title-align { display: none; }
   .poem-meta { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
   /* The per-entry "⋯" menu (Duplicate / Archive). One shared popover,
@@ -612,8 +612,10 @@
   /* Title View: section bars sit at the left edge, as in Entry View;
      entries sit one gutter in (that indent is the outline), with their
      numbers centered in the gutter. */
-  #poemList.titles-view > .poem-compact-row,
-  #poemList.titles-view > .poem-card { margin-left: 32px; }
+  #poemList.titles-view > .poem-compact-row { margin-left: 32px; }
+  /* An entry opened from Title View or Section View opens out to the full
+     width, exactly like Entry View's cards. */
+  .section-block-entries > .poem-card { margin-left: -32px; }
   .poem-compact-row { position: relative; }
   .poem-compact-row .poem-num {
     position: absolute; left: -32px; top: 50%; transform: translateY(-50%); width: 32px; justify-content: center;
@@ -672,11 +674,6 @@
   }
   .section-move-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .section-move-btn:disabled { opacity: 0.35; cursor: default; }
-  .section-expand-btn {
-    flex: 0 0 auto; width: 22px; height: 22px; border: none; background: none; color: var(--ink);
-    cursor: pointer; font-size: 13px; line-height: 1; padding: 0; border-radius: 4px;
-  }
-  .section-expand-btn:hover { background: var(--surface); }
   .section-block-entries { margin: 2px 0 10px 32px; display: flex; flex-direction: column; gap: 4px; }
   .section-block-empty { font-size: 12.5px; color: var(--ink-faint); padding: 4px 8px; }
   .section-lead-row {
@@ -5672,6 +5669,14 @@
     if (!b || b.disabled) return;
     // Entry View again toggles back to Title View.
     if (b.dataset.view === 'entries' && currentEntriesView() === 'entries') b = entriesViewSeg.querySelector('[data-view="titles"]');
+    else if (b.dataset.view === 'sections' && currentEntriesView() === 'sections') {
+      // Section View again folds everything back to just the sections.
+      if (writingCard) exitWriting();
+      expandedSectionIds = {};
+      expandedCompactIds = {};
+      renderPoems();
+      return;
+    }
     else if (b.dataset.view === currentEntriesView()) {
       // Title View again folds every opened entry back to its title.
       if (b.dataset.view === 'titles' && Object.keys(expandedCompactIds).length) {
@@ -5687,6 +5692,8 @@
     // "Titles only" means titles only -- don't reopen whatever entry was
     // open before "Reveal All".
     if (b.dataset.view === 'titles') expandedCompactIds = {};
+    // Section View always starts as just the sections.
+    if (b.dataset.view === 'sections') { expandedSectionIds = {}; expandedCompactIds = {}; }
     renderPoems();
     if (sectionsOnly) previewShow(function (it) { return it.type === 'poem' && isSection(state.poems[it.index]); });
     else previewShow(function (it) { return it.type === 'poem' && !isSection(state.poems[it.index]); });
@@ -5890,8 +5897,6 @@
       row.draggable = true;
       var open = !!expandedSectionIds[section.id];
       row.innerHTML = '<div class="poem-handle"><div class="poem-grip">⋮⋮</div></div>' +
-        '<button class="section-expand-btn" type="button" aria-expanded="' + open + '"' +
-        ' title="' + (open ? 'Hide' : 'Show') + ' this section’s entries">' + (open ? '▾' : '▸') + '</button>' +
         '<div class="section-row-label">Section</div>' +
         '<div class="section-block-count"></div>' +
         '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move section up">↑</button>' +
