@@ -6890,9 +6890,12 @@
     else startNewBook();
   }
 
+  // Only an archived book can be deleted for good: archive first, then
+  // delete from the archive. The menus only offer it there; this holds
+  // even if something else ever calls it.
   async function deleteChapbookForever(id) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
-    if (!entry) return;
+    if (!entry || !entry.archived) return;
     var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled book') + '”? This can’t be undone.');
     if (!ok) return;
     library = library.filter(function (c) { return c.id !== id; });
