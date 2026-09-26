@@ -333,14 +333,20 @@
      of shrinking and letting that row's own flex-wrap kick in. */
   .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
-  /* One Tools toggle (top right, directly above the tools column, the
-     way Pages' Format button and Docs' side-panel toggle work): it never
-     moves, and the column stays however you last left it. */
-  .tools-toggle { display: none; }
+  /* One Show / Hide Tools toggle, directly above the tools column (the
+     way Pages' Format button and Docs' side-panel toggle work): its right
+     edge and top never move, shown or hidden, and the column stays
+     however you last left it. */
+  .tools-bar { display: none; }
   @media (min-width: 861px) {
-    .tools-toggle { display: inline-flex; }
-    body.view-home .tools-toggle { display: none; }
+    .workspace { grid-template-rows: auto 1fr; }
+    .tools-bar { display: flex; justify-content: flex-end; grid-column: 2; grid-row: 1; }
+    #entriesColumn { grid-column: 1; grid-row: 1 / span 2; }
+    .sidebar { grid-column: 2; grid-row: 2; }
+    .tools-toggle { display: inline-flex; justify-content: center; gap: 7px; min-width: 128px; }
     .workspace.tools-hidden { grid-template-columns: 1fr; }
+    .workspace.tools-hidden .tools-bar { grid-column: 1; }
+    .workspace.tools-hidden #entriesColumn { grid-row: 2; }
     .workspace.tools-hidden .sidebar { display: none; }
   }
   .tools-toggle svg { flex: 0 0 auto; }
@@ -1112,16 +1118,11 @@
     <div class="top-actions">
       <div class="top-actions-main">
         <div class="chapbooks-menu">
-          <button class="btn" id="chapbooksMenuBtn" type="button">My Books ▾</button>
+          <button class="btn" id="chapbooksMenuBtn" type="button">Home</button>
           <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
             <div id="chapbooksPane"></div>
           </div>
         </div>
-        <button class="btn" id="newBookBtn" type="button" title="Start a new, blank book. This one stays in My Books.">New book</button>
-        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
-          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-          Tools
-        </button>
       </div>
       <div class="account-area">
         <div id="googleSignInBtn"></div>
@@ -1209,6 +1210,14 @@
   </div>
 
   <div class="workspace">
+    <!-- Directly above the tools column; it stays in the same spot whether
+         the column is showing or not. -->
+    <div class="tools-bar">
+      <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
+        <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+        <span id="toolsToggleLabel">Hide Tools</span>
+      </button>
+    </div>
     <div id="entriesColumn">
       <!-- While Formatting or Front and Back Matter is open (wide screens),
            the entries column shows the most relevant page large and live
@@ -5610,6 +5619,7 @@
   function applyToolsHidden() {
     document.querySelector('.workspace').classList.toggle('tools-hidden', toolsHidden);
     toolsToggleBtn.setAttribute('aria-pressed', toolsHidden ? 'false' : 'true');
+    document.getElementById('toolsToggleLabel').textContent = toolsHidden ? 'Show Tools' : 'Hide Tools';
   }
   applyToolsHidden();
   toolsToggleBtn.addEventListener('click', function () {
@@ -6579,7 +6589,6 @@
     persist();
     renderAll();
   });
-  document.getElementById('newBookBtn').addEventListener('click', startNewBook);
 
   // ---------------------------------------------------------------------
   // UI: "My Books" library menu (phones) -- books and the archive
@@ -7896,8 +7905,8 @@
   bookAtLoad = JSON.stringify(state);
   updateSignInGate();
   if (homeMQ.matches) showHome();
-  // The ▾ only belongs where My Books is still a dropdown (phones).
-  function syncMyBooksLabel() { chapbooksMenuBtn.textContent = homeMQ.matches ? 'My Books' : 'My Books ▾'; }
+  // The ▾ only belongs where Home is still a dropdown of books (phones).
+  function syncMyBooksLabel() { chapbooksMenuBtn.textContent = homeMQ.matches ? 'Home' : 'Home ▾'; }
   syncMyBooksLabel();
   homeMQ.addEventListener('change', syncMyBooksLabel);
   waitForGoogleIdentity(25);
