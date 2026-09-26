@@ -404,12 +404,11 @@
     /* min-width: 0 overrides a flex item's default content-based minimum
        -- without it, this field's own intrinsic minimum width could
        force the whole card (and page) wider than a narrow viewport. */
-    flex: 1; min-width: 0; border: none; border-bottom: 1px solid var(--line-strong); background: transparent;
+    flex: 1; min-width: 0; border: none; background: transparent;
     font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 17px; padding: 3px 2px 7px; outline: none;
     color: var(--ink); resize: none; overflow: hidden; line-height: 1.2; display: block;
   }
   textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
-  textarea.poem-title:focus { border-bottom-color: var(--accent); }
 
   .poem-text {
     width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
@@ -566,7 +565,6 @@
       font-size: calc(18px * var(--editor-zoom, 1)) !important;
     }
     .poem-card.is-writing .poem-meta-row,
-    .poem-card.is-writing .poem-collapse-btn { display: none; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -598,12 +596,10 @@
   button.poem-title-compact-toggle.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   button.poem-title-compact-toggle:hover { color: var(--accent); }
   .poem-compact-expanded { margin: 0 0 4px; }
-  .poem-collapse-btn { flex: 0 0 auto; font-size: 16px; line-height: 1; padding: 6px 10px; }
   /* An opened entry's title field only spans its text (see fitTitleInput),
      so the rest of the row is empty space that closes the entry when
-     clicked. The underline moves to the row to keep it full width. */
-  .poem-compact-expanded .poem-title-row { border-bottom: 1px solid var(--line-strong); cursor: pointer; }
-  .poem-compact-expanded .poem-title-row:focus-within { border-bottom-color: var(--accent); }
+     clicked. */
+  .poem-compact-expanded .poem-title-row { cursor: pointer; }
   .poem-compact-expanded textarea.poem-title { flex: 0 1 auto; max-width: 100%; border-bottom: none; cursor: text; }
   .poem-compact-expanded .dots-btn { margin-left: auto; }
 
@@ -5508,25 +5504,17 @@
 
     // An opened entry replaces its title row rather than appearing
     // beneath it -- otherwise the number and title show twice, once in
-    // the row and again in the card. The card gets its own collapse
-    // button in place of the row's click-to-close.
+    // the row and again in the card. Clicking the empty part of its title
+    // row closes it again (so does Title View).
     if (expandedCompactIds[poem.id]) {
       var expandedCard = makeCard(poem, index, plan, entryNum);
       expandedCard.classList.add('poem-compact-expanded');
-      var collapseBtn = document.createElement('button');
-      collapseBtn.type = 'button';
-      collapseBtn.className = 'btn btn-ghost poem-collapse-btn';
-      collapseBtn.title = 'Collapse to title';
-      collapseBtn.setAttribute('aria-label', 'Collapse to title');
-      collapseBtn.textContent = '▴';
-      collapseBtn.addEventListener('click', function () {
-        delete expandedCompactIds[poem.id];
-        renderPoems();
-      });
       var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
-      expandedTitleRow.appendChild(collapseBtn);
       expandedTitleRow.addEventListener('click', function (e) {
-        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) collapseBtn.click();
+        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) {
+          delete expandedCompactIds[poem.id];
+          renderPoems();
+        }
       });
       var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
       expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
