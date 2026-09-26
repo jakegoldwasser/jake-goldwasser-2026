@@ -696,18 +696,19 @@
   .preview-panel { flex: 0 0 auto; }
   .preview-stage { display: flex; justify-content: center; padding: 4px 0 2px; }
   body.matter-open #entriesColumn > :not(#matterStage) { display: none !important; }
-  /* The stage is the preview while it's up; a second, small copy in the
-     tools column would just repeat it. */
   body.matter-open #previewPanel { display: none; }
+  .stage-preview-slot #previewBlock { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .stage-preview-slot .preview-stage { align-self: stretch; }
   .matter-stage { display: flex; flex-direction: column; gap: 20px; padding: 16px 20px 28px; }
   .matter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .matter-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 16px; color: var(--ink); text-align: right; }
-  .matter-pages { display: flex; flex-direction: column; align-items: center; gap: 28px; }
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
-  .matter-figure { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0; }
-  .matter-caption { font-size: 13px; color: var(--ink-soft); text-align: center; }
-  .matter-caption .matter-note { color: var(--danger); }
+  .matter-title .matter-note { color: var(--danger); }
+  .stage-view-slot { display: flex; justify-content: center; }
+  .stage-view-slot:empty { display: none; }
+  .matter-stage .preview-stage { padding: 0; }
+  .matter-stage .preview-nav { width: 100%; max-width: 440px; align-self: center; margin-top: -8px; }
   .preview-page {
     background: #FBF9F5; color: #241A1F; border: 1px solid var(--line); box-shadow: 0 2px 10px var(--shadow);
     overflow: hidden; position: relative; flex: 0 0 auto;
@@ -1059,7 +1060,7 @@
           </div>
         </div>
         <button class="btn" id="newBookBtn" type="button" title="Start a new, blank book. This one stays in My Books.">New book</button>
-        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Formatting, Export and Preview">
+        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
           <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
           Tools
         </button>
@@ -1139,14 +1140,18 @@
 
   <div class="workspace">
     <div id="entriesColumn">
-      <!-- While Front and Back Matter is open, the entries column shows the
-           selected tab's pages large, instead of the entries. -->
+      <!-- While Formatting or Front and Back Matter is open (wide screens),
+           the entries column shows the most relevant page large and live
+           instead of the entries, with a clear way back. -->
       <div class="panel matter-stage" id="matterStage" hidden>
         <div class="matter-head">
           <button type="button" class="btn btn-sm" id="matterBackBtn">← Back to entries</button>
           <span class="matter-title" id="matterTitle"></span>
         </div>
-        <div class="matter-pages" id="matterPages" aria-live="polite"></div>
+        <!-- In Formatting, the editor's Section / Title / Entry View switch
+             moves up here, so the view can change without going back. -->
+        <div class="stage-view-slot" id="stageViewSlot"></div>
+        <div class="stage-preview-slot" id="stagePreviewSlot"></div>
       </div>
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
@@ -1186,15 +1191,20 @@
     </div>
 
     <div class="sidebar" id="toolsSidebar">
+      <!-- The one set of preview elements lives here, and moves into the
+           large view (#matterStage) while that's open, so there's never a
+           second copy of the same page on screen. -->
       <div class="panel preview-panel" id="previewPanel">
         <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
-        <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
-        <div class="preview-nav">
-          <button type="button" id="previewFirstBtn" aria-label="Preview first page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
-          <button type="button" id="previewPrevBtn" aria-label="Preview previous entry">‹</button>
-          <span id="previewCaption"></span>
-          <button type="button" id="previewNextBtn" aria-label="Preview next entry">›</button>
-          <button type="button" id="previewLastBtn" aria-label="Preview last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
+        <div id="previewBlock">
+          <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
+          <div class="preview-nav">
+            <button type="button" id="previewFirstBtn" aria-label="Preview first page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
+            <button type="button" id="previewPrevBtn" aria-label="Preview previous entry">‹</button>
+            <span id="previewCaption"></span>
+            <button type="button" id="previewNextBtn" aria-label="Preview next entry">›</button>
+            <button type="button" id="previewLastBtn" aria-label="Preview last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
+          </div>
         </div>
       </div>
       <div class="sidebar-scroll">
@@ -5694,7 +5704,6 @@
   // visible immediately, without exporting.
   // ---------------------------------------------------------------------
   var previewIndex = 0;
-  var PREVIEW_WIDTH_PX = 210;
 
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -5856,12 +5865,13 @@
     });
   });
 
+  var SIDEBAR_PREVIEW_WIDTH_PX = 210;
   function renderPreview() {
-    if (document.body.classList.contains('matter-open')) renderMatterStage();
     var items = buildPreviewItems(state);
     previewIndex = Math.max(0, Math.min(previewIndex, items.length - 1));
     var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
-    renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), PREVIEW_WIDTH_PX, items[previewIndex]);
+    renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), stageMode ? stagePageWidth() : SIDEBAR_PREVIEW_WIDTH_PX, items[previewIndex]);
+    if (stageMode) updateStageTitle(items[previewIndex]);
     document.getElementById('previewFirstBtn').disabled = atStart;
     document.getElementById('previewPrevBtn').disabled = atStart;
     document.getElementById('previewNextBtn').disabled = atEnd;
@@ -6406,9 +6416,9 @@
       var drift = toggle.getBoundingClientRect().top - headerTop;
       if (Math.abs(drift) > 1) window.scrollBy({ top: drift, behavior: 'instant' });
       if (!body.hidden) revealPanel(toggle.closest('.collapsible-panel'));
-      if (toggle.id === 'coversToggle') {
+      if (toggle.id === 'coversToggle' || toggle.id === 'formattingToggle') {
+        if (!body.hidden) lastStagePanel = toggle.id === 'coversToggle' ? 'matter' : 'format';
         updateMatterStage();
-        if (matterIsOpen()) previewShowMatter(matterTarget);
       }
     });
   });
@@ -6465,86 +6475,102 @@
   document.querySelectorAll('#coverTargetToggle button').forEach(function (b) {
     b.addEventListener('click', function () { showCoverTarget(b.dataset.target); });
   });
-  // Front and Back Matter open (and the tools column showing) means the
-  // entries column trades the entries for a large, live preview of the
-  // selected tab: the front cover, every contents page, or the back
-  // cover. Sized to fit the window, so a whole page is always in view.
+  // The stage: with Formatting or Front and Back Matter open (and the
+  // tools column beside the entries), the entries column trades the
+  // entries for the most relevant page, large and live, sized to fit
+  // the window -- so every choice shows as you make it -- plus a clear
+  // "Back to entries" (or Esc). Narrow screens stack the tools below the
+  // entries, so there the header's Preview button does this job.
   var matterTarget = 'front';
-  function matterIsOpen() {
-    var body = document.getElementById('coversBody');
-    return !body.hidden && !document.body.classList.contains('view-home') &&
-      !document.querySelector('.workspace').classList.contains('tools-hidden');
+  var stageMode = null;          // 'format' | 'matter' | null
+  var lastStagePanel = 'format'; // whichever of the two opened last wins
+  var wideLayout = window.matchMedia('(min-width: 861px)');
+  function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
+  function computeStageMode() {
+    if (!wideLayout.matches || document.body.classList.contains('view-home') ||
+        document.querySelector('.workspace').classList.contains('tools-hidden')) return null;
+    var f = panelOpen('formattingBody'), m = panelOpen('coversBody');
+    if (f && m) return lastStagePanel;
+    return m ? 'matter' : f ? 'format' : null;
   }
-  function renderMatterStage() {
-    var stage = document.getElementById('matterStage');
+  function matterIsOpen() { return stageMode === 'matter'; }
+  function stagePageWidth() {
     var plan = planBooklet(state);
-    var items, note = '';
-    if (matterTarget === 'toc') {
-      items = [];
-      for (var t = 0; t < Math.max(1, plan.tocPageCount); t++) items.push({ type: 'toc', tocPageIndex: t });
-      if (!state.includeToc) note = 'Not included in the book';
-      else if (!plan.tocPageCount) note = 'Nothing to list with these settings';
-    } else {
-      items = [{ type: matterTarget === 'back' ? 'back' : 'cover' }];
-      if (matterTarget !== 'back' && !state.includeTitlePage) note = 'Not included in the book';
-    }
-    var room = document.getElementById('entriesColumn').clientWidth - 40;
-    // Header + page + caption + the stage's padding fit the window height.
-    var widthPx = Math.max(200, Math.min(room, (window.innerHeight - 180) * plan.PAGE_W / plan.PAGE_H));
-    document.getElementById('matterTitle').textContent = 'Front and Back Matter · ' +
-      ({ front: 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
-    stage = document.getElementById('matterPages');
-    stage.innerHTML = '';
-    items.forEach(function (item) {
-      var fig = document.createElement('figure');
-      fig.className = 'matter-figure';
-      var holder = document.createElement('div');
-      var page = document.createElement('div');
-      page.className = 'preview-page';
-      holder.appendChild(page);
-      var caption = document.createElement('figcaption');
-      caption.className = 'matter-caption';
-      fig.append(holder, caption);
-      stage.appendChild(fig);
-      renderPreviewPage(page, caption, Math.round(widthPx), item);
-      if (note) {
-        var n = document.createElement('span');
-        n.className = 'matter-note';
-        n.textContent = ' · ' + note;
-        caption.appendChild(n);
-      }
-    });
+    var room = document.getElementById('matterStage').clientWidth - 40;
+    // Leave room for the header, the view switch (Formatting), the page
+    // arrows and the stage's padding.
+    var chrome = stageMode === 'format' ? 200 : 160;
+    return Math.round(Math.max(200, Math.min(room, (window.innerHeight - chrome) * plan.PAGE_W / plan.PAGE_H)));
   }
-  // Where the entries were scrolled when Front and Back Matter opened,
-  // taken at the click, before the panel's own scroll adjustment.
-  var entriesScrollY = 0, scrollYAtToggle = null;
+  function updateStageTitle(item) {
+    var title = document.getElementById('matterTitle');
+    if (stageMode === 'format') { title.textContent = 'Formatting'; return; }
+    title.textContent = 'Front and Back Matter · ' + ({ front: 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
+    var note = '';
+    if (item && item.type === 'cover' && !state.includeTitlePage) note = 'not included in the book';
+    if (item && item.type === 'toc' && !state.includeToc) note = 'not included in the book';
+    if (note) {
+      var n = document.createElement('span');
+      n.className = 'matter-note';
+      n.textContent = ' (' + note + ')';
+      title.appendChild(n);
+    }
+  }
+  // The page that best shows what Formatting is changing.
+  function previewShowFormat() {
+    var key = formatKey || currentEntriesView();
+    if (key === 'sections') previewShow(function (it) { return it.type === 'poem' && isSection(state.poems[it.index]); });
+    else previewShow(function (it) { return it.type === 'poem' && !isSection(state.poems[it.index]); });
+  }
+  var viewSegHome = entriesViewSeg.parentNode;
+  // Where the entries were scrolled when the stage opened, taken at the
+  // click, before the panel's own scroll adjustment.
+  var entriesScrollY = 0, scrollYAtToggle = null, editorPreviewIndex = 0;
   function updateMatterStage() {
-    var open = matterIsOpen();
-    var wasOpen = document.body.classList.contains('matter-open');
-    if (open && !wasOpen) entriesScrollY = scrollYAtToggle != null ? scrollYAtToggle : window.scrollY;
+    var mode = computeStageMode();
+    var wasOpen = !!stageMode;
+    if (mode && !wasOpen) {
+      entriesScrollY = scrollYAtToggle != null ? scrollYAtToggle : window.scrollY;
+      editorPreviewIndex = previewIndex;
+    }
     scrollYAtToggle = null;
-    document.body.classList.toggle('matter-open', open);
-    document.getElementById('matterStage').hidden = !open;
+    stageMode = mode;
+    document.body.classList.toggle('matter-open', !!mode);
+    document.getElementById('matterStage').hidden = !mode;
+    var slot = document.getElementById('stageViewSlot');
+    if (mode === 'format') { if (entriesViewSeg.parentNode !== slot) slot.appendChild(entriesViewSeg); }
+    else if (entriesViewSeg.parentNode !== viewSegHome) viewSegHome.appendChild(entriesViewSeg);
+    var previewBlock = document.getElementById('previewBlock');
+    var previewHome = document.getElementById('previewPanel');
+    var previewSlot = document.getElementById('stagePreviewSlot');
+    if (mode) { if (previewBlock.parentNode !== previewSlot) previewSlot.appendChild(previewBlock); }
+    else if (previewBlock.parentNode !== previewHome) previewHome.appendChild(previewBlock);
     // Back to the entries right where you left them.
-    if (!open) {
-      if (wasOpen) window.scrollTo({ top: entriesScrollY, behavior: 'instant' });
+    if (!mode) {
+      // ...and the sidebar preview back on the page you were on there.
+      if (wasOpen) { previewIndex = editorPreviewIndex; renderPreview(); window.scrollTo({ top: entriesScrollY, behavior: 'instant' }); }
       return;
     }
-    renderMatterStage();
+    if (mode === 'matter') previewShowMatter(matterTarget); else previewShowFormat();
+    renderPreview();
     // On opening, line the stage up with the top of the window so the
     // whole page is in view (the tools column is sticky and stays put).
     var top = document.getElementById('matterStage').getBoundingClientRect().top;
     if (!wasOpen && Math.abs(top - 16) > 1) window.scrollBy({ top: top - 16, behavior: 'instant' });
   }
-  window.addEventListener('resize', function () { if (document.body.classList.contains('matter-open')) renderMatterStage(); });
+  window.addEventListener('resize', function () { if (stageMode) renderPreview(); });
+  if (wideLayout.addEventListener) wideLayout.addEventListener('change', updateMatterStage);
   // The way back: the stage's own button, or Esc (unless the full-screen
   // preview is up -- Esc closes that first).
-  function closeMatter() {
-    if (!document.getElementById('coversBody').hidden) document.getElementById('coversToggle').click();
+  function closeStage() {
+    ['formattingToggle', 'coversToggle'].forEach(function (id) {
+      var t = document.getElementById(id);
+      if (t.getAttribute('aria-expanded') === 'true') t.click();
+    });
   }
-  document.getElementById('matterBackBtn').addEventListener('click', closeMatter);
+  document.getElementById('matterBackBtn').addEventListener('click', closeStage);
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && document.body.classList.contains('matter-open') && document.getElementById('previewFull').hidden) closeMatter();
+    if (e.key === 'Escape' && stageMode && document.getElementById('previewFull').hidden) closeStage();
   });
 
   var savedCoverTarget = 'front';
