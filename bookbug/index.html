@@ -268,6 +268,7 @@
 
   .intake-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
   .intake-head .btn { flex: 0 0 auto; }
+  #entriesColumn > #intakePanel, #entriesColumn > .intake-collapsed-bar { margin-top: 16px; }
   .intake-collapsed-bar {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 14px 20px;
@@ -1109,7 +1110,7 @@
   </div>
 
   <div class="workspace">
-    <div>
+    <div id="entriesColumn">
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -6275,13 +6276,17 @@
   function applyIntakeCollapsedView() {
     // Getting entries in is the first thing a new book needs, so the
     // intake panel leads the page -- until a source has been added or an
-    // entry exists, after which it drops below the editor, out of the way.
+    // entry exists, after which it moves into the entries column, just
+    // under the entries. There it fills the space beside the (often
+    // taller) tools column instead of leaving an empty gap above a
+    // full-width panel.
     var workspace = document.querySelector('.workspace');
+    var entriesColumn = document.getElementById('entriesColumn');
     var intakePanel = document.getElementById('intakePanel');
     var intakeBar = document.getElementById('intakeCollapsedBar');
     var belowEditor = !!state.sourceAdded || countEntries(state.poems) > 0;
-    if (belowEditor !== (intakePanel.previousElementSibling === workspace)) {
-      if (belowEditor) workspace.after(intakePanel, intakeBar);
+    if (belowEditor !== (intakePanel.parentElement === entriesColumn)) {
+      if (belowEditor) entriesColumn.append(intakePanel, intakeBar);
       else workspace.before(intakePanel, intakeBar);
     }
     var collapsed = !!state.intakeCollapsed;
