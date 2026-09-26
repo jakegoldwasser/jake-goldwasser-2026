@@ -721,9 +721,13 @@
   .stage-preview-slot #previewBlock { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .stage-preview-slot .preview-stage { align-self: stretch; }
   .matter-stage { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 10px; }
-  .matter-back { font-size: 15px; font-weight: 700; padding: 10px 18px; }
-  .matter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .matter-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 16px; color: var(--ink); text-align: right; }
+  .matter-back { font-size: 15px; font-weight: 700; padding: 11px 18px; width: 100%; justify-content: center; text-align: center; }
+  body:not(.matter-open) #matterBackBtn { display: none; }
+  /* While the large view is up, only the panel driving it shows. */
+  body.stage-format #coversPanel, body.stage-format #exportPanel,
+  body.stage-matter #formattingPanel, body.stage-matter #exportPanel { display: none; }
+  .matter-head { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .matter-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 16px; color: var(--ink); text-align: center; }
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
   .matter-title .matter-note { color: var(--danger); }
@@ -1222,7 +1226,6 @@
            instead of the entries, with a clear way back. -->
       <div class="panel matter-stage" id="matterStage" hidden>
         <div class="matter-head">
-          <button type="button" class="btn matter-back" id="matterBackBtn">← Back to entries</button>
           <span class="matter-title" id="matterTitle"></span>
         </div>
         <div class="stage-preview-slot" id="stagePreviewSlot"></div>
@@ -1607,6 +1610,9 @@
           </div>
         </div>
 
+        <!-- Shown only while the large view is up, right under the panel
+             that opened it (the other panels step aside then). -->
+        <button type="button" class="btn matter-back" id="matterBackBtn">← Back to entries</button>
         <div class="panel collapsible-panel" id="exportPanel">
           <button type="button" class="panel-toggle" id="exportToggle" aria-expanded="false" aria-controls="exportBody">
             <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
@@ -7144,6 +7150,8 @@
     scrollYAtToggle = null;
     stageMode = mode;
     document.body.classList.toggle('matter-open', !!mode);
+    document.body.classList.toggle('stage-format', mode === 'format');
+    document.body.classList.toggle('stage-matter', mode === 'matter');
     document.getElementById('matterStage').hidden = !mode;
     var previewBlock = document.getElementById('previewBlock');
     var previewHome = document.getElementById('previewPanel');
