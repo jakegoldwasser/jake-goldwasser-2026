@@ -643,7 +643,6 @@
   .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
-  .section-block-row.drop-target { box-shadow: 0 0 0 3px var(--accent); }
   .section-block-count { flex: 0 0 auto; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
   .section-move-btn {
     flex: 0 0 auto; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line-strong);
@@ -5765,7 +5764,48 @@
     renderAll();
   }
 
+  // Section View drag-to-reorder works like Title View's: the same line
+  // shows where a dragged section (with all its entries) will land --
+  // above or below the section under the pointer, a section's revealed
+  // entry titles counting as part of it -- and it lands exactly there.
+  var blockUnits = [], lastBlockDrop = null;
+  function blockDragOver(e, k) {
+    if (dragBlockFrom === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var u = blockUnits[k];
+    var top = u.row.getBoundingClientRect().top, bottom = u.end.getBoundingClientRect().bottom;
+    var after = e.clientY > (top + bottom) / 2;
+    lastBlockDrop = { k: k, after: after };
+    var prev = blockUnits[k - 1], next = blockUnits[k + 1];
+    var y = after
+      ? (next ? (bottom + next.row.getBoundingClientRect().top) / 2 : bottom + 4)
+      : (prev ? (top + prev.end.getBoundingClientRect().bottom) / 2 : top - 4);
+    if (dropLine.parentNode !== poemList) poemList.appendChild(dropLine);
+    dropLine.style.top = (y - poemList.getBoundingClientRect().top) + 'px';
+    dropLine.hidden = false;
+  }
+  function blockDrop() {
+    var drop = lastBlockDrop, from = dragBlockFrom;
+    clearDropMarks();
+    lastBlockDrop = null;
+    dragBlockFrom = null;
+    if (!drop || from === null) return;
+    var to = drop.k + (drop.after ? 1 : 0);
+    if (to > from) to--;
+    moveSectionBlock(from, to);
+  }
+  poemList.addEventListener('dragover', function (e) {
+    if (dragBlockFrom !== null && !dropLine.hidden) e.preventDefault();
+  });
+  poemList.addEventListener('drop', function (e) {
+    if (dragBlockFrom === null) return;
+    e.preventDefault();
+    blockDrop();
+  });
+
   function renderSectionsOnly() {
+    blockUnits = [];
     var parts = splitSectionBlocks();
     var plan = planBooklet(state);
     var entryNumAt = {}, num = 0;
@@ -5837,24 +5877,16 @@
         row.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
       });
-      row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragBlockFrom = null; });
-      row.addEventListener('dragover', function (e) {
-        if (dragBlockFrom === null) return;
-        e.preventDefault();
-        if (dragBlockFrom !== k) row.classList.add('drop-target');
-      });
-      row.addEventListener('dragleave', function (e) {
-        if (!row.contains(e.relatedTarget)) row.classList.remove('drop-target');
-      });
+      row.addEventListener('dragend', function () { row.classList.remove('dragging'); dragBlockFrom = null; lastBlockDrop = null; });
+      row.addEventListener('dragover', function (e) { blockDragOver(e, k); });
       row.addEventListener('drop', function (e) {
-        e.preventDefault();
-        row.classList.remove('drop-target');
         if (dragBlockFrom === null) return;
-        var from = dragBlockFrom;
-        dragBlockFrom = null;
-        moveSectionBlock(from, k);
+        e.preventDefault();
+        e.stopPropagation();
+        blockDrop();
       });
       poemList.appendChild(row);
+      blockUnits[k] = { row: row, end: row };
       // Revealed entries behave as in the Titles view: click a title to
       // open that entry in full, drag to reorder.
       if (open) {
@@ -5872,6 +5904,14 @@
           wrap.appendChild(none);
         }
         poemList.appendChild(wrap);
+        blockUnits[k].end = wrap;
+        wrap.addEventListener('dragover', function (e) { blockDragOver(e, k); });
+        wrap.addEventListener('drop', function (e) {
+          if (dragBlockFrom === null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          blockDrop();
+        });
       }
     });
   }
