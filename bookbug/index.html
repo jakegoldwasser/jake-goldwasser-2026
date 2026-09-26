@@ -705,6 +705,13 @@
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
   .matter-title .matter-note { color: var(--danger); }
+  .matter-title .stage-hint { color: var(--ink-faint); font-family: inherit; font-weight: 400; font-size: 13px; }
+  #previewPage.is-editing { display: flex; flex-direction: column; outline: 2px solid var(--accent); outline-offset: 3px; }
+  .stage-edit-title {
+    display: block; width: 100%; flex: 0 0 auto; border: none; background: transparent; color: inherit; padding: 0;
+    font-weight: 700; resize: none; overflow: hidden; outline: none;
+  }
+  .stage-edit-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; outline: none; }
   .view-seg[hidden] { display: none; }
   .matter-stage .preview-stage { padding: 0; }
   .matter-stage .preview-nav { width: 100%; max-width: 440px; align-self: center; margin-top: -8px; }
@@ -5879,8 +5886,17 @@
     var items = buildPreviewItems(state);
     previewIndex = Math.max(0, Math.min(previewIndex, items.length - 1));
     var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
+    if (stageEdit) {
+      var cur = items[previewIndex];
+      if (stageMode && cur && cur.type === 'poem' && cur.index === stageEdit.index) return;
+      stageEdit = null;
+      document.getElementById('previewPage').classList.remove('is-editing');
+      setTimeout(renderPoems, 0);
+    }
     renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), stageMode ? stagePageWidth() : SIDEBAR_PREVIEW_WIDTH_PX, items[previewIndex]);
     if (stageMode) updateStageTitle(items[previewIndex]);
+    var editable = stageMode === 'format' && items[previewIndex] && items[previewIndex].type === 'poem';
+    document.getElementById('previewPage').style.cursor = stageMode ? (editable ? 'text' : 'default') : '';
     syncStageTextSeg(items[previewIndex]);
     document.getElementById('previewFirstBtn').disabled = atStart;
     document.getElementById('previewPrevBtn').disabled = atStart;
@@ -5937,7 +5953,7 @@
       var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
       var html = '';
       if (isFirstPoemPage && layout.titleLines.length) {
-        html += '<div style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
+        html += '<div data-page-title style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
           '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
           layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
       }
@@ -6009,7 +6025,94 @@
     previewIndex = toEnd ? buildPreviewItems(state).length - 1 : 0;
     renderPreview();
   }
-  document.getElementById('previewPage').addEventListener('click', openFullPreview);
+  // Sidebar preview: click for full screen. Large Formatting view: click
+  // an entry (or section) page to edit it right there, instead.
+  document.getElementById('previewPage').addEventListener('click', function (e) {
+    if (!stageMode) { openFullPreview(); return; }
+    if (stageEdit) return;
+    var item = buildPreviewItems(state)[previewIndex];
+    if (item && item.type === 'poem') startStageEdit(item, e);
+  });
+
+  // ---- Editing on the page (large Formatting view) ----
+  // The rendered page swaps for an editable one in the same typeface,
+  // size, alignment and margins; clicking away (or Esc, or turning the
+  // page) saves and shows the typeset page again.
+  var stageEdit = null;
+  function startStageEdit(item, e) {
+    var box = document.getElementById('previewPage');
+    var plan = planBooklet(state);
+    var scale = parseFloat(box.style.width) / plan.PAGE_W;
+    var poem = state.poems[item.index];
+    var layout = plan.layouts[item.index];
+    var clickedTitle = !!(e.target.closest && e.target.closest('[data-page-title]'));
+    stageEdit = { index: item.index };
+    box.classList.add('is-editing');
+    box.innerHTML = '';
+    if (layout.isSection) {
+      var st = sectionStyle(state);
+      var sec = document.createElement('input');
+      sec.type = 'text';
+      sec.className = 'stage-edit-title';
+      sec.value = poem.title || '';
+      sec.placeholder = 'Untitled section';
+      sec.setAttribute('aria-label', 'Section title');
+      sec.style.cssText = 'margin-top:' + ((plan.PAGE_H * 0.38 - plan.marginTop) * scale - st.sizePt * scale).toFixed(1) + 'px; font-family:' +
+        displayStackFor(st.font) + '; font-size:' + (st.sizePt * scale).toFixed(2) + 'px; text-align:' + st.align + ';';
+      sec.addEventListener('input', function () { poem.title = sec.value; state.isExample = false; persist(); });
+      box.appendChild(sec);
+      sec.focus();
+      return;
+    }
+    var title = document.createElement('textarea');
+    title.rows = 1;
+    title.className = 'stage-edit-title';
+    title.value = poem.title || '';
+    title.placeholder = 'Untitled';
+    title.setAttribute('aria-label', 'Entry title');
+    title.style.cssText = 'font-family:' + displayStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
+      'px; line-height:1.28; text-align:' + (poem.titleAlign || state.titleAlignment) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
+    title.addEventListener('input', function () { poem.title = title.value.replace(/\n/g, ' '); state.isExample = false; persist(); autoGrow(title); });
+    title.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); body.focus(); } });
+    var body = document.createElement('div');
+    body.className = 'stage-edit-body';
+    body.contentEditable = 'true';
+    body.spellcheck = true;
+    body.setAttribute('role', 'textbox');
+    body.setAttribute('aria-multiline', 'true');
+    body.setAttribute('aria-label', 'Entry text');
+    body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
+      'px; line-height:1.55; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + Math.round(TAB_STOP_PT * scale) + 'px;';
+    renderEditor(body, poem.lines);
+    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; persist(); });
+    body.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Tab') { ev.preventDefault(); indentEditorLines(body, ev.shiftKey); }
+    });
+    body.addEventListener('paste', function (ev) {
+      var text = ev.clipboardData && ev.clipboardData.getData('text/plain');
+      if (!text) return;
+      ev.preventDefault();
+      document.execCommand('insertText', false, text.replace(/\r\n?/g, '\n'));
+    });
+    box.append(title, body);
+    autoGrow(title);
+    if (clickedTitle) { title.focus(); title.setSelectionRange(title.value.length, title.value.length); }
+    else { body.focus(); placeCaretAtPoint(body, e.clientX, e.clientY); }
+  }
+  function endStageEdit() {
+    if (!stageEdit) return;
+    stageEdit = null;
+    document.getElementById('previewPage').classList.remove('is-editing');
+    renderAll();
+  }
+  document.getElementById('previewPage').addEventListener('focusout', function () {
+    setTimeout(function () {
+      if (stageEdit && !document.getElementById('previewPage').contains(document.activeElement)) endStageEdit();
+    }, 0);
+  });
+  document.getElementById('previewPage').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && stageEdit) { ev.stopPropagation(); endStageEdit(); }
+  }, true);
   document.getElementById('previewFullClose').addEventListener('click', closeFullPreview);
   document.getElementById('previewFullPrev').addEventListener('click', function () { stepPreview(-1); });
   document.getElementById('previewFullNext').addEventListener('click', function () { stepPreview(1); });
@@ -6521,7 +6624,16 @@
   }
   function updateStageTitle(item) {
     var title = document.getElementById('matterTitle');
-    if (stageMode === 'format') { title.textContent = 'Formatting'; return; }
+    if (stageMode === 'format') {
+      title.textContent = 'Formatting';
+      if (item && item.type === 'poem') {
+        var hint = document.createElement('span');
+        hint.className = 'stage-hint';
+        hint.textContent = ' · Click the page to edit';
+        title.appendChild(hint);
+      }
+      return;
+    }
     title.textContent = 'Front and Back Matter · ' + ({ front: 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
     var note = '';
     if (item && item.type === 'cover' && !state.includeTitlePage) note = 'not included in the book';
