@@ -394,7 +394,17 @@
 
   .poem-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
   .poem-title-row { display: flex; align-items: center; gap: 8px; }
-  .format-toolbar { display: flex; gap: 4px; }
+  .format-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .format-aligns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-left: auto; }
+  .format-aligns .title-align, .format-aligns .title-align-seg button { flex-shrink: 0; }
+  .title-align-seg button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; white-space: nowrap; }
+  /* The count sits inside the editor pane, bottom right: laid out just
+     after the pane, then pulled up into its bottom margin. */
+  .poem-meta-row.poem-meta-corner {
+    flex-direction: row; justify-content: flex-end; align-items: baseline; gap: 10px; align-self: flex-end;
+    margin: -34px 14px 10px 0; position: relative; z-index: 1; pointer-events: none;
+  }
+  @media (max-width: 700px) { .poem-meta-row.poem-meta-corner { margin: 0; align-self: flex-start; } }
   .format-toolbar button {
     appearance: none; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink-soft);
     width: 26px; height: 24px; border-radius: 5px; cursor: pointer; font-size: 12.5px; line-height: 1;
@@ -576,6 +586,7 @@
       font-size: calc(18px * var(--editor-zoom, 1)) !important;
     }
     .poem-card.is-writing .poem-meta-row,
+    .poem-card.is-writing .format-aligns { display: none; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -4843,7 +4854,7 @@
   document.addEventListener('selectionchange', function () {
     var ed = document.activeElement;
     if (!ed || !ed.classList || !ed.classList.contains('poem-text')) return;
-    var bar = ed.parentNode.querySelector('.format-toolbar');
+    var bar = ed.closest('.poem-body') && ed.closest('.poem-body').querySelector('.format-toolbar');
     if (!bar) return;
     ['bold', 'italic', 'underline'].forEach(function (cmd) {
       var b = bar.querySelector('.format-btn-' + cmd);
@@ -5255,11 +5266,19 @@
     labelEl.textContent = label;
     var seg = document.createElement('div');
     seg.className = 'title-align-seg';
-    [['', 'Auto'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']].forEach(function (pair) {
+    // Left / Center / Right as the standard alignment icons (the row is
+    // tight); Auto, meaning "use the book's setting", stays a word.
+    var ICON = function (d) { return '<svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="' + d + '"/></svg>'; };
+    [['', 'Auto', 'Auto'],
+     ['left', ICON('M1 1.5h12M1 6h7M1 10.5h10'), 'Align left'],
+     ['center', ICON('M1 1.5h12M3.5 6h7M2 10.5h10'), 'Center'],
+     ['right', ICON('M1 1.5h12M6 6h7M3 10.5h10'), 'Align right']].forEach(function (pair) {
       var val = pair[0];
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = pair[1];
+      btn.innerHTML = pair[1];
+      btn.title = pair[2];
+      btn.setAttribute('aria-label', label + ': ' + pair[2]);
       btn.dataset.val = val;
       if ((getVal() || '') === val) btn.classList.add('active');
       btn.addEventListener('click', function () {
@@ -5436,11 +5455,11 @@
       warnEl.hidden = !(layout && layout.wasWrapped);
     }
     updateMeta(initialPlan);
-    metaLeft.appendChild(meta);
-    metaLeft.appendChild(warnEl);
-    metaRow.appendChild(metaLeft);
-    metaRow.appendChild(makeTitleAlignControl(poem, titleInput));
-    metaRow.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
+    // The count (and the wrap warning) sit in the editor pane's bottom
+    // right corner; Title / Body alignment joins the formatting row.
+    metaRow.classList.add('poem-meta-corner');
+    metaRow.appendChild(warnEl);
+    metaRow.appendChild(meta);
 
     // Only shown in phone writing mode (see .poem-card.is-writing).
     var writerBar = document.createElement('div');
@@ -5476,8 +5495,14 @@
     body.appendChild(writerBar);
     body.appendChild(titleRow);
     body.appendChild(editor);
-    body.appendChild(makeFormatToolbar(editor));
     body.appendChild(metaRow);
+    var formatRow = makeFormatToolbar(editor);
+    var aligns = document.createElement('div');
+    aligns.className = 'format-aligns';
+    aligns.appendChild(makeTitleAlignControl(poem, titleInput));
+    aligns.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
+    formatRow.appendChild(aligns);
+    body.appendChild(formatRow);
     card.appendChild(handle);
     card.appendChild(body);
 
