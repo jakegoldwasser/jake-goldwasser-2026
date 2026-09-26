@@ -716,27 +716,30 @@
   /* Fixed grid: the arrows stay put no matter how long the caption
      between them is ("Front cover" vs "Poem 12 of 40, page 2 of 3"). */
   .preview-full-nav {
-    display: grid; grid-template-columns: 44px min(260px, calc(100vw - 140px)) 44px; align-items: center; gap: 14px;
+    display: grid; grid-template-columns: 38px 38px min(260px, calc(100vw - 220px)) 38px 38px; align-items: center; gap: 10px;
     color: #F2E7CB; font-size: 13px;
   }
   .preview-full-nav span { min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
   .preview-full-nav button { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
   .preview-full-nav button {
+    display: flex; align-items: center; justify-content: center; padding: 0;
     width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35);
     background: rgba(255, 255, 255, 0.12); color: #fff; font-size: 20px; line-height: 1; cursor: pointer;
   }
   .preview-full-nav button:disabled { opacity: 0.3; cursor: default; }
   .preview-full-nav button:not(:disabled):hover { background: rgba(255, 255, 255, 0.24); }
+  #previewFullPage .toc-row { cursor: pointer; }
+  #previewFullPage .toc-row:hover > span:first-child { text-decoration: underline; text-underline-offset: 2px; }
   .preview-empty { font-size: 12.5px; color: var(--ink-faint); text-align: center; padding: 34px 10px; }
   /* The arrows must never move while clicking through the book: a
-     fixed three-column grid (fixed-size arrow cells, the caption
+     fixed five-column grid (fixed-size first/prev/next/last cells, the caption
      truncating in the middle), a fixed-height stage, a stable scrollbar
      gutter on the sidebar, no focus-scroll on click, and no iOS
      double-tap zoom -- any one of those alone could nudge them. */
   .preview-stage { height: var(--preview-h, auto); align-items: flex-start; }
-  .preview-nav { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; height: 36px; margin-top: 8px; }
+  .preview-nav { display: grid; grid-template-columns: 32px 36px minmax(0, 1fr) 36px 32px; align-items: center; height: 36px; margin-top: 8px; }
   .preview-nav button {
-    width: 44px; height: 36px; display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 36px; display: flex; align-items: center; justify-content: center;
     background: none; border: none; color: var(--ink-soft); cursor: pointer; font-size: 20px; padding: 0; line-height: 1;
     touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   }
@@ -998,9 +1001,11 @@
   <div class="preview-full-stage">
     <div class="preview-page" id="previewFullPage"></div>
     <div class="preview-full-nav">
+      <button type="button" id="previewFullFirst" aria-label="First page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
       <button type="button" id="previewFullPrev" aria-label="Previous page">‹</button>
       <span id="previewFullCaption"></span>
       <button type="button" id="previewFullNext" aria-label="Next page">›</button>
+      <button type="button" id="previewFullLast" aria-label="Last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
     </div>
   </div>
 </div>
@@ -1475,9 +1480,11 @@
         <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
         <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
         <div class="preview-nav">
+          <button type="button" id="previewFirstBtn" aria-label="Preview first page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
           <button type="button" id="previewPrevBtn" aria-label="Preview previous entry">‹</button>
           <span id="previewCaption"></span>
           <button type="button" id="previewNextBtn" aria-label="Preview next entry">›</button>
+          <button type="button" id="previewLastBtn" aria-label="Preview last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
         </div>
       </div>
     </div>
@@ -2553,6 +2560,10 @@
     return measureCtx.measureText(text).width;
   }
 
+  // One indent (Tab, or the toolbar's Indent button) is a half inch --
+  // the default tab stop in Google Docs and Word.
+  var TAB_STOP_PT = 36;
+
   function wrapLine(text, maxWidthPt, sizePt, fontFamily, weight) {
     text = text || '';
     if (text === '') return [''];
@@ -2719,10 +2730,14 @@
         renderLines.push({ image: imgKey, place: imagePlaceForLine(line), w: w, h: h, rows: Math.min(firstCap, Math.ceil((h + lineHeight * 0.5) / lineHeight)) });
         return;
       }
-      var wrapped = wrapFormatted(line, contentWidthPt, sizePt, state.bodyFontChoice, hangPt);
+      // Leading tabs are indents, each one a half-inch stop like Docs
+      // and Word, whatever the typeface or size.
+      var tabs = (line.match(/^\t+/) || [''])[0].length;
+      var tabPt = Math.min(tabs * TAB_STOP_PT, contentWidthPt * 0.6);
+      var wrapped = wrapFormatted(line.slice(tabs).replace(/\t/g, ' '), contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt);
       if (wrapped.length > 1 && verse) wasWrapped = true;
       wrapped.forEach(function (w) {
-        renderLines.push({ blank: false, text: w.text, indent: w.indent });
+        renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt });
       });
     });
 
@@ -4321,8 +4336,8 @@
     ed.dispatchEvent(new Event('input', { bubbles: true }));
   }
   // Indents (or outdents) every line the selection touches by one
-  // 4-space stop -- the same stop Tab/Shift+Tab use -- so it works on a
-  // phone, which has no Tab key.
+  // half-inch tab stop -- the same as Tab/Shift+Tab -- so it works on a
+  // phone, which has no Tab key. Outdent also clears old space indents.
   function indentEditorLines(ed, outdent) {
     var info = editorCaretInfo(ed);
     if (!info) return;
@@ -4331,8 +4346,11 @@
     for (var i = info.startLine; i <= info.endLine && i < lines.length; i++) {
       if (imageKeyForLine(lines[i], state)) continue;
       var d;
-      if (outdent) { d = -Math.min(4, (lines[i].match(/^ */) || [''])[0].length); lines[i] = lines[i].slice(-d); }
-      else { d = 4; lines[i] = '    ' + lines[i]; }
+      if (outdent) {
+        d = lines[i].charAt(0) === '\t' ? -1 : -Math.min(4, (lines[i].match(/^ */) || [''])[0].length);
+        lines[i] = lines[i].slice(-d);
+      }
+      else { d = 1; lines[i] = '\t' + lines[i]; }
       if (i === info.startLine) d0 = d;
       if (i === info.endLine) d1 = d;
     }
@@ -4842,6 +4860,7 @@
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight(editor.style.fontFamily);
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
+    editor.style.tabSize = Math.round(TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
       state.isExample = false;
@@ -4851,12 +4870,11 @@
       updateStats();
     });
     editor.addEventListener('keydown', function (e) {
-      // Tab indents instead of jumping to the next field; Shift+Tab
-      // outdents the line.
+      // Tab indents the line (or every selected line) instead of jumping
+      // to the next field; Shift+Tab outdents.
       if (e.key === 'Tab') {
         e.preventDefault();
-        if (e.shiftKey) indentEditorLines(editor, true);
-        else document.execCommand('insertText', false, '    ');
+        indentEditorLines(editor, e.shiftKey);
       }
     });
     // Pasted text comes in plain (no stray fonts or colors from other
@@ -5672,7 +5690,7 @@
       var leader = (ts.leaders && !isSec)
         ? '<span style="flex:1; min-width:0; overflow:hidden; white-space:nowrap; color:rgb(' + MUTED_RGB.map(function (c) { return Math.round(c * 255); }).join(',') + ');">' + '.  '.repeat(80) + '</span>'
         : '<span style="flex:1;"></span>';
-      html += '<div style="display:flex; gap:' + (6 * scale).toFixed(1) + 'px; padding-left:' + indent + '; font-weight:' + weight + ';"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">' +
+      html += '<div class="toc-row" data-poem-index="' + i + '" style="display:flex; gap:' + (6 * scale).toFixed(1) + 'px; padding-left:' + indent + '; font-weight:' + weight + ';"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">' +
         escapeHtml(item.title || (isSec ? 'Untitled section' : 'Untitled')) + '</span>' + leader + '<span>' + plan.layouts[i].startPage + '</span></div>';
     }
     html += '</div>';
@@ -5707,13 +5725,17 @@
     previewIndex = Math.max(0, Math.min(previewIndex, items.length - 1));
     var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
     renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), PREVIEW_WIDTH_PX, items[previewIndex]);
+    document.getElementById('previewFirstBtn').disabled = atStart;
     document.getElementById('previewPrevBtn').disabled = atStart;
     document.getElementById('previewNextBtn').disabled = atEnd;
+    document.getElementById('previewLastBtn').disabled = atEnd;
     var full = document.getElementById('previewFull');
     if (full && !full.hidden) {
       renderPreviewPage(document.getElementById('previewFullPage'), document.getElementById('previewFullCaption'), fullPreviewWidth(), items[previewIndex]);
+      document.getElementById('previewFullFirst').disabled = atStart;
       document.getElementById('previewFullPrev').disabled = atStart;
       document.getElementById('previewFullNext').disabled = atEnd;
+      document.getElementById('previewFullLast').disabled = atEnd;
     }
   }
 
@@ -5810,10 +5832,32 @@
     previewIndex = Math.max(0, Math.min(items.length - 1, previewIndex + delta));
     renderPreview();
   }
+  // In the full-screen preview the contents work like a real book's:
+  // click a listing to turn to its first page. A section without its own
+  // page goes to the first page after it.
+  document.getElementById('previewFullPage').addEventListener('click', function (e) {
+    var row = e.target.closest('.toc-row');
+    if (!row) return;
+    var target = parseInt(row.dataset.poemIndex, 10);
+    var items = buildPreviewItems(state);
+    for (var k = 0; k < items.length; k++) {
+      if (items[k].type === 'back' || (items[k].type === 'poem' && items[k].index >= target)) {
+        previewIndex = k;
+        renderPreview();
+        return;
+      }
+    }
+  });
+  function jumpPreview(toEnd) {
+    previewIndex = toEnd ? buildPreviewItems(state).length - 1 : 0;
+    renderPreview();
+  }
   document.getElementById('previewPage').addEventListener('click', openFullPreview);
   document.getElementById('previewFullClose').addEventListener('click', closeFullPreview);
   document.getElementById('previewFullPrev').addEventListener('click', function () { stepPreview(-1); });
   document.getElementById('previewFullNext').addEventListener('click', function () { stepPreview(1); });
+  document.getElementById('previewFullFirst').addEventListener('click', function () { jumpPreview(false); });
+  document.getElementById('previewFullLast').addEventListener('click', function () { jumpPreview(true); });
   previewFull.addEventListener('click', function (e) {
     if (e.target === previewFull || e.target.classList.contains('preview-full-stage')) closeFullPreview();
   });
@@ -5822,14 +5866,18 @@
     if (e.key === 'Escape') closeFullPreview();
     else if (e.key === 'ArrowLeft') stepPreview(-1);
     else if (e.key === 'ArrowRight') stepPreview(1);
+    else if (e.key === 'Home') { e.preventDefault(); jumpPreview(false); }
+    else if (e.key === 'End') { e.preventDefault(); jumpPreview(true); }
   });
   window.addEventListener('resize', function () { if (!previewFull.hidden) renderPreview(); });
 
   // No focus on click: focusing a half-visible button scrolls its
   // container, which nudged the arrows a little on every click.
-  ['previewPrevBtn', 'previewNextBtn'].forEach(function (id) {
+  ['previewFirstBtn', 'previewPrevBtn', 'previewNextBtn', 'previewLastBtn'].forEach(function (id) {
     document.getElementById(id).addEventListener('mousedown', function (e) { e.preventDefault(); });
   });
+  document.getElementById('previewFirstBtn').addEventListener('click', function () { jumpPreview(false); });
+  document.getElementById('previewLastBtn').addEventListener('click', function () { jumpPreview(true); });
   document.getElementById('previewPrevBtn').addEventListener('click', function () {
     previewIndex = Math.max(0, previewIndex - 1);
     renderPreview();
@@ -6688,7 +6736,7 @@
     return parseInlineRuns(text).map(function (run) {
       if (!run.text) return '';
       var rPr = (run.bold ? '<w:b/>' : '') + (run.italic ? '<w:i/>' : '') + (run.underline ? '<w:u w:val="single"/>' : '');
-      return '<w:r>' + (rPr ? '<w:rPr>' + rPr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escapeXml(run.text) + '</w:t></w:r>';
+      return '<w:r>' + (rPr ? '<w:rPr>' + rPr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escapeXml(run.text).split('\t').join('</w:t><w:tab/><w:t xml:space="preserve">') + '</w:t></w:r>';
     }).join('');
   }
 
