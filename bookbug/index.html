@@ -462,6 +462,7 @@
   .cover-image-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cover-image-control img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
   .cover-pane[hidden] { display: none; }
+  .toc-heading-input { width: 100%; }
   .back-text-input {
     width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line-strong); border-radius: 7px;
     padding: 8px 10px; font-size: 13.5px; line-height: 1.5; background: var(--surface-2); color: var(--ink); outline: none;
@@ -751,7 +752,7 @@
   }
 
   .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
-  .field[hidden] { display: none; }
+  .field[hidden], .checkline[hidden] { display: none; }
   .field:last-child { margin-bottom: 0; }
   .field label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); }
   .field input[type="text"] { font-size: 13.5px; }
@@ -1370,6 +1371,10 @@
           </div>
           <div class="subhead">Heading</div>
           <div class="field">
+            <label for="tocHeadingInput">Text</label>
+            <input type="text" id="tocHeadingInput" class="toc-heading-input" placeholder="No heading">
+          </div>
+          <div class="field">
             <label>Typeface</label>
             <div class="seg seg-fonts" id="tocHeadFontSeg" data-font-seg></div>
           </div>
@@ -1378,6 +1383,15 @@
             <div class="seg seg-3" id="tocHeadAlignSeg"><button data-val="left" class="active">Left</button><button data-val="center">Center</button><button data-val="right">Right</button></div>
           </div>
           <div class="subhead">Listings</div>
+          <!-- Section-only options hide in a book without sections. -->
+          <div class="field" data-toc-sections>
+            <label for="tocShowSelect">Show</label>
+            <select id="tocShowSelect">
+              <option value="all">Sections and entries</option>
+              <option value="sections">Sections only</option>
+              <option value="entries">Entries only</option>
+            </select>
+          </div>
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-fonts" id="tocFontSeg" data-font-seg></div>
@@ -1387,8 +1401,28 @@
             <div class="seg seg-3" id="tocSizeSeg"><button data-val="small">Small</button><button data-val="medium" class="active">Medium</button><button data-val="large">Large</button></div>
           </div>
           <div class="checkline">
+            <input type="checkbox" id="tocPageNumbersCheck" checked>
+            <label for="tocPageNumbersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Page numbers</label>
+          </div>
+          <div class="checkline" id="tocLeadersLine">
             <input type="checkbox" id="tocLeadersCheck" checked>
             <label for="tocLeadersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Dot leaders to page numbers</label>
+          </div>
+          <div class="field" id="tocListAlignField" hidden>
+            <label>Alignment</label>
+            <div class="seg seg-3" id="tocListAlignSeg"><button data-val="left" class="active">Left</button><button data-val="center">Center</button><button data-val="right">Right</button></div>
+          </div>
+          <div class="checkline" data-toc-sections>
+            <input type="checkbox" id="tocIndentCheck" checked>
+            <label for="tocIndentCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Indent entries under their section</label>
+          </div>
+          <div class="checkline" data-toc-sections>
+            <input type="checkbox" id="tocSectionBoldCheck" checked>
+            <label for="tocSectionBoldCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Section titles in bold</label>
+          </div>
+          <div class="checkline" data-toc-sections>
+            <input type="checkbox" id="tocSectionSpaceCheck">
+            <label for="tocSectionSpaceCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Space before each section</label>
           </div>
           </div>
           <div class="cover-pane" data-pane="back" hidden>
@@ -2831,7 +2865,37 @@
       font: s.tocFontChoice || s.bodyFontChoice,
       sizePt: size.pt,
       lineH: size.lineH,
-      leaders: s.tocDotLeaders !== false
+      leaders: s.tocDotLeaders !== false,
+      heading: s.tocHeading == null ? 'Contents' : s.tocHeading.trim(),
+      show: s.tocShow || 'all',
+      pageNumbers: s.tocPageNumbers !== false,
+      listAlign: s.tocListAlign || 'left',
+      indentEntries: s.tocIndentEntries !== false,
+      sectionBold: s.tocSectionBold !== false,
+      sectionSpace: s.tocSectionSpace === true
+    };
+  }
+  // The contents' lines, in order: { index, isSec } for a listing, or
+  // { blank: true } for the space before a section. Page count, preview
+  // and PDF all walk this one list. Section options only apply once the
+  // book has a section.
+  function tocRows(s) {
+    var ts = tocStyle(s);
+    var hasSections = s.poems.some(isSection);
+    var show = hasSections ? ts.show : 'all';
+    var rows = [];
+    s.poems.forEach(function (p, i) {
+      var sec = isSection(p);
+      if ((show === 'sections' && !sec) || (show === 'entries' && sec)) return;
+      if (sec && ts.sectionSpace && rows.length) rows.push({ blank: true });
+      rows.push({ index: i, isSec: sec });
+    });
+    return {
+      rows: rows,
+      entryIndent: hasSections && show === 'all' && ts.indentEntries ? 14 : 0,
+      // Leaders read as "entry ... page"; section lines in a mixed list
+      // stand on their own without them.
+      leadersFor: function (row) { return ts.leaders && (!row.isSec || show !== 'all' || !hasSections); }
     };
   }
   function frontCoverStyle(s) {
@@ -3043,7 +3107,8 @@
     });
 
     var tocSt = tocStyle(state);
-    var tocFontSize = tocSt.sizePt, tocLineHeight = tocSt.lineH, tocTitleH = 44;
+    var toc = tocRows(state);
+    var tocFontSize = tocSt.sizePt, tocLineHeight = tocSt.lineH, tocTitleH = tocSt.heading ? 44 : 0;
     var linesPerTocPage1 = Math.max(1, Math.floor((contentHeight - tocTitleH) / tocLineHeight));
     // A TOC continuation page has no heading eating into its top, so it
     // gets even top/bottom margins (marginTop on both edges) rather than
@@ -3052,8 +3117,8 @@
     var tocContentHeightN = PAGE_H - marginTop * 2;
     var linesPerTocPageN = Math.max(1, Math.floor(tocContentHeightN / tocLineHeight));
     var tocPageCount = 0;
-    if (state.includeToc && state.poems.length) {
-      var remaining = state.poems.length - linesPerTocPage1;
+    if (state.includeToc && toc.rows.length) {
+      var remaining = toc.rows.length - linesPerTocPage1;
       tocPageCount = 1;
       while (remaining > 0) { tocPageCount++; remaining -= linesPerTocPageN; }
     }
@@ -3071,7 +3136,7 @@
     return {
       trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
       contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
-      tocPageCount: tocPageCount, tocSpacer: tocSpacer, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
+      tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
       linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
       totalPages: totalPages
     };
@@ -3311,42 +3376,40 @@
     // ---- Table of contents ----
     if (plan.tocPageCount > 0) {
       var idx = 0;
-      var ts = tocStyle(state), tocKeys = fontPlan.tocKeys;
+      var ts = tocStyle(state), tocKeys = fontPlan.tocKeys, rows = plan.toc.rows;
       for (var tp = 0; tp < plan.tocPageCount; tp++) {
         var tbytes = [];
         var y = contentTop;
-        if (tp === 0) {
+        if (tp === 0 && ts.heading) {
           var headSize = ts.headSizePt;
-          var headW = measure('Contents', headSize, ts.headFont, 600);
-          drawText(tbytes, tocKeys.head, headSize, resolveX(ts.headAlign, headW, contentLeft, contentRight), y - headSize, 'Contents', INK_RGB);
+          var headW = measure(ts.heading, headSize, ts.headFont, 600);
+          drawText(tbytes, tocKeys.head, headSize, resolveX(ts.headAlign, headW, contentLeft, contentRight), y - headSize, ts.heading, INK_RGB);
           y -= plan.tocTitleH;
         }
         var capacity = tp === 0 ? plan.linesPerTocPage1 : plan.linesPerTocPageN;
-        // Once any section break exists, entries indent slightly under
-        // their section so the TOC reads as a hierarchy; with no
-        // sections at all the TOC looks exactly as it always has.
-        var entryIndent = hasSections ? 14 : 0;
-        for (var c = 0; c < capacity && idx < plan.layouts.length; c++, idx++) {
-          var poem = state.poems[idx];
-          var startPage = plan.layouts[idx].startPage;
-          var numStr = String(startPage);
-          var numW = measure(numStr, plan.tocFontSize, ts.font, 400);
+        for (var c = 0; c < capacity && idx < rows.length; c++, idx++) {
+          var row = rows[idx];
+          if (row.blank) continue;
+          var poem = state.poems[row.index];
+          var bold = row.isSec && ts.sectionBold;
+          var key = bold ? tocKeys.bold : tocKeys.reg, wt = bold ? 700 : 400;
+          var indent = row.isSec ? 0 : plan.toc.entryIndent;
+          var label = poem.title && poem.title.trim() ? poem.title.trim() : (row.isSec ? 'Untitled section' : 'Untitled');
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
-          if (isSection(poem)) {
-            var sLabel = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled section';
-            var sDisplay = ellipsize(sLabel, plan.contentWidth - numW - 16, plan.tocFontSize, ts.font, 700);
-            drawText(tbytes, tocKeys.bold, plan.tocFontSize, contentLeft, lineY, sDisplay, INK_RGB);
-            drawText(tbytes, tocKeys.reg, plan.tocFontSize, contentRight - numW, lineY, numStr, INK_RGB);
+          if (!ts.pageNumbers) {
+            var plainText = ellipsize(label, plan.contentWidth - indent, plan.tocFontSize, ts.font, wt);
+            var plainW = measure(plainText, plan.tocFontSize, ts.font, wt);
+            drawText(tbytes, key, plan.tocFontSize, resolveX(ts.listAlign, plainW, contentLeft + indent, contentRight), lineY, plainText, INK_RGB);
             continue;
           }
-          var titleMaxW = plan.contentWidth - numW - 16 - entryIndent;
-          var label = poem.title && poem.title.trim() ? poem.title.trim() : 'Untitled';
-          var display = ellipsize(label, titleMaxW, plan.tocFontSize, ts.font, 400);
-          drawText(tbytes, tocKeys.reg, plan.tocFontSize, contentLeft + entryIndent, lineY, display, INK_RGB);
-          var titleW = measure(display, plan.tocFontSize, ts.font, 400);
-          var dotX0 = contentLeft + entryIndent + titleW + 6;
+          var numStr = String(plan.layouts[row.index].startPage);
+          var numW = measure(numStr, plan.tocFontSize, ts.font, 400);
+          var display = ellipsize(label, plan.contentWidth - numW - 16 - indent, plan.tocFontSize, ts.font, wt);
+          drawText(tbytes, key, plan.tocFontSize, contentLeft + indent, lineY, display, INK_RGB);
+          var titleW = measure(display, plan.tocFontSize, ts.font, wt);
+          var dotX0 = contentLeft + indent + titleW + 6;
           var dotX1 = contentRight - numW - 8;
-          if (ts.leaders && dotX1 > dotX0) {
+          if (plan.toc.leadersFor(row) && dotX1 > dotX0) {
             // Measure the actual repeated string as it grows, rather than
             // estimating a per-repeat width and multiplying -- with real
             // embedded-font metrics that estimate no longer matches a
@@ -5625,10 +5688,8 @@
   function buildPreviewItems(state) {
     var items = [];
     if (state.includeTitlePage) items.push({ type: 'cover' });
-    if (state.includeToc && state.poems.length) {
-      var tocCount = planBooklet(state).tocPageCount || 1;
-      for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
-    }
+    var tocCount = planBooklet(state).tocPageCount;
+    for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
     var plan = planBooklet(state);
     state.poems.forEach(function (poem, i) {
       // A section contributes its own title page, or none when that's
@@ -5664,7 +5725,8 @@
   // every entry onto one overlong preview page.
   function renderTocPreview(box, plan, scale, tocPageIndex) {
     tocPageIndex = tocPageIndex || 0;
-    var n = state.poems.length;
+    var rows = plan.toc.rows;
+    var n = rows.length;
     var firstCount = Math.min(plan.linesPerTocPage1, n);
     var isFirst = tocPageIndex === 0;
     var start = isFirst ? 0 : firstCount + (tocPageIndex - 1) * plan.linesPerTocPageN;
@@ -5676,22 +5738,31 @@
       box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginTop * scale) + 'px';
     }
     var ts = tocStyle(state);
-    var html = isFirst
+    var html = isFirst && ts.heading
       ? '<div style="font-weight:700; font-family:' + displayStackFor(ts.headFont) + '; font-size:' + (ts.headSizePt * scale).toFixed(1) + 'px; line-height:1; text-align:' + ts.headAlign +
-        '; height:' + (plan.tocTitleH * scale).toFixed(1) + 'px;">Contents</div>'
+        '; height:' + (plan.tocTitleH * scale).toFixed(1) + 'px;">' + escapeHtml(ts.heading) + '</div>'
       : '';
-    html += '<div style="font-family:' + displayStackFor(ts.font) + '; font-size:' + (ts.sizePt * scale).toFixed(1) + 'px; line-height:' + (ts.lineH * scale).toFixed(1) + 'px;">';
-    var hasSections = state.poems.some(isSection);
+    var rowH = (ts.lineH * scale).toFixed(1) + 'px';
+    html += '<div style="font-family:' + displayStackFor(ts.font) + '; font-size:' + (ts.sizePt * scale).toFixed(1) + 'px; line-height:' + rowH + ';">';
+    var muted = MUTED_RGB.map(function (c) { return Math.round(c * 255); }).join(',');
     for (var i = start; i < end; i++) {
-      var item = state.poems[i];
-      var isSec = isSection(item);
-      var indent = (!isSec && hasSections) ? (14 * scale).toFixed(1) + 'px' : '0';
-      var weight = isSec ? '700' : '400';
-      var leader = (ts.leaders && !isSec)
-        ? '<span style="flex:1; min-width:0; overflow:hidden; white-space:nowrap; color:rgb(' + MUTED_RGB.map(function (c) { return Math.round(c * 255); }).join(',') + ');">' + '.  '.repeat(80) + '</span>'
+      var row = rows[i];
+      if (row.blank) { html += '<div style="height:' + rowH + ';"></div>'; continue; }
+      var item = state.poems[row.index];
+      var indent = row.isSec ? '0' : (plan.toc.entryIndent * scale).toFixed(1) + 'px';
+      var weight = row.isSec && ts.sectionBold ? '700' : '400';
+      var label = escapeHtml(item.title || (row.isSec ? 'Untitled section' : 'Untitled'));
+      var open = '<div class="toc-row" data-poem-index="' + row.index + '" style="';
+      if (!ts.pageNumbers) {
+        html += open + 'padding-left:' + indent + '; font-weight:' + weight + '; text-align:' + ts.listAlign +
+          '; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span>' + label + '</span></div>';
+        continue;
+      }
+      var leader = plan.toc.leadersFor(row)
+        ? '<span style="flex:1; min-width:0; overflow:hidden; white-space:nowrap; font-weight:400; color:rgb(' + muted + ');">' + '.  '.repeat(80) + '</span>'
         : '<span style="flex:1;"></span>';
-      html += '<div class="toc-row" data-poem-index="' + i + '" style="display:flex; gap:' + (6 * scale).toFixed(1) + 'px; padding-left:' + indent + '; font-weight:' + weight + ';"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">' +
-        escapeHtml(item.title || (isSec ? 'Untitled section' : 'Untitled')) + '</span>' + leader + '<span>' + plan.layouts[i].startPage + '</span></div>';
+      html += open + 'display:flex; gap:' + (6 * scale).toFixed(1) + 'px; padding-left:' + indent + '; font-weight:' + weight + ';"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;">' +
+        label + '</span>' + leader + '<span style="font-weight:400;">' + plan.layouts[row.index].startPage + '</span></div>';
     }
     html += '</div>';
     box.innerHTML = html;
@@ -6379,6 +6450,13 @@
   wireSetting('tocHeadAlignSeg', 'tocHeadAlignment');
   wireSetting('tocFontSeg', 'tocFontChoice');
   wireSetting('tocSizeSeg', 'tocSizeMode');
+  wireSetting('tocListAlignSeg', 'tocListAlign');
+  document.getElementById('tocShowSelect').addEventListener('change', function (e) {
+    state.tocShow = e.target.value; state.isExample = false; persist(); renderAll();
+  });
+  document.getElementById('tocHeadingInput').addEventListener('input', function (e) {
+    state.tocHeading = e.target.value; persist(); updateStats();
+  });
   wireSetting('backImagePosSeg', 'backImagePos');
   wireSetting('backImageOrderSeg', 'backImageOrder');
   wireSetting('backImageAlignSeg', 'backImageAlign');
@@ -6388,7 +6466,8 @@
   wireSetting('backImageSizeSeg', 'backImageSize');
   [['sectionOwnPageCheck', 'sectionOwnPage'], ['coverAuthorCheck', 'coverShowAuthor'],
    ['backAuthorCheck', 'backShowAuthor'], ['backYearCheck', 'backShowYear'],
-   ['tocLeadersCheck', 'tocDotLeaders']].forEach(function (pair) {
+   ['tocLeadersCheck', 'tocDotLeaders'], ['tocPageNumbersCheck', 'tocPageNumbers'], ['tocIndentCheck', 'tocIndentEntries'],
+   ['tocSectionBoldCheck', 'tocSectionBold'], ['tocSectionSpaceCheck', 'tocSectionSpace']].forEach(function (pair) {
     document.getElementById(pair[0]).addEventListener('change', function (e) {
       state[pair[1]] = e.target.checked; persist(); renderAll();
     });
@@ -6527,6 +6606,18 @@
     markSeg('tocFontSeg', toc.font);
     markSeg('tocSizeSeg', state.tocSizeMode || 'medium');
     document.getElementById('tocLeadersCheck').checked = toc.leaders;
+    document.getElementById('tocPageNumbersCheck').checked = toc.pageNumbers;
+    document.getElementById('tocLeadersLine').hidden = !toc.pageNumbers;
+    document.getElementById('tocListAlignField').hidden = toc.pageNumbers;
+    markSeg('tocListAlignSeg', toc.listAlign);
+    document.getElementById('tocShowSelect').value = toc.show;
+    document.getElementById('tocIndentCheck').checked = toc.indentEntries;
+    document.getElementById('tocSectionBoldCheck').checked = toc.sectionBold;
+    document.getElementById('tocSectionSpaceCheck').checked = toc.sectionSpace;
+    var bookHasSections = state.poems.some(isSection);
+    document.querySelectorAll('[data-toc-sections]').forEach(function (el) { el.hidden = !bookHasSections; });
+    var tocHeadingInput = document.getElementById('tocHeadingInput');
+    if (document.activeElement !== tocHeadingInput) tocHeadingInput.value = state.tocHeading == null ? 'Contents' : state.tocHeading;
     markSeg('backImagePosSeg', back.imagePos);
     markSeg('backImageOrderSeg', back.imageOrder);
     markSeg('backImageAlignSeg', back.imageAlign);
