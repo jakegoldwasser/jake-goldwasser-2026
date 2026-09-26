@@ -705,8 +705,12 @@
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
   .matter-title .matter-note { color: var(--danger); }
-  .stage-view-slot { display: flex; justify-content: center; }
-  .stage-view-slot:empty { display: none; }
+  /* A fixed-height row, so the page and its arrows don't move when the
+     Title | Body switch hides on a section page. Only in Formatting. */
+  .stage-view-slot { display: flex; justify-content: center; height: 31px; }
+  body:not(.stage-format) .stage-view-slot { display: none; }
+  .stage-view-slot .view-seg[hidden] { display: flex; visibility: hidden; }
+  .view-seg[hidden] { display: none; }
   .matter-stage .preview-stage { padding: 0; }
   .matter-stage .preview-nav { width: 100%; max-width: 440px; align-self: center; margin-top: -8px; }
   .preview-page {
@@ -1148,9 +1152,14 @@
           <button type="button" class="btn btn-sm" id="matterBackBtn">← Back to entries</button>
           <span class="matter-title" id="matterTitle"></span>
         </div>
-        <!-- In Formatting, the editor's Section / Title / Entry View switch
-             moves up here, so the view can change without going back. -->
-        <div class="stage-view-slot" id="stageViewSlot"></div>
+        <!-- In Formatting, on an entry page: which part of the entry the
+             controls change. A section page needs no switch. -->
+        <div class="stage-view-slot" id="stageViewSlot">
+          <div class="seg view-seg" id="stageTextSeg" role="group" aria-label="Format the entry's" hidden>
+            <button type="button" data-key="titles">Title</button>
+            <button type="button" data-key="entries">Body</button>
+          </div>
+        </div>
         <div class="stage-preview-slot" id="stagePreviewSlot"></div>
       </div>
       <div class="panel" id="poemsPanel">
@@ -5872,6 +5881,7 @@
     var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
     renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), stageMode ? stagePageWidth() : SIDEBAR_PREVIEW_WIDTH_PX, items[previewIndex]);
     if (stageMode) updateStageTitle(items[previewIndex]);
+    syncStageTextSeg(items[previewIndex]);
     document.getElementById('previewFirstBtn').disabled = atStart;
     document.getElementById('previewPrevBtn').disabled = atStart;
     document.getElementById('previewNextBtn').disabled = atEnd;
@@ -6427,9 +6437,9 @@
   // view switch is on -- section titles, entry titles or entries -- and
   // names that view at the top, so it's clear what a change will affect.
   var FORMAT_PANES = {
-    sections: { pane: 'section', name: 'Section View' },
-    titles: { pane: 'title', name: 'Title View' },
-    entries: { pane: 'body', name: 'Entry View' }
+    sections: { pane: 'section', name: 'Section title' },
+    titles: { pane: 'title', name: 'Title' },
+    entries: { pane: 'body', name: 'Body' }
   };
   // formatKey is which controls Formatting shows: set by the view switch,
   // and by clicking into something in the list -- an entry's text (or
@@ -6438,6 +6448,7 @@
   var formatKey = null;
   function showFormattingFor(key) {
     formatKey = key;
+    if (key !== 'sections') lastTextKey = key;
     syncFormattingToView(key);
   }
   function formatKeyFor(el) {
@@ -6516,13 +6527,39 @@
       title.appendChild(n);
     }
   }
+  // In the large Formatting view the page decides the controls: a
+  // section page shows the section title's, an entry page its title's or
+  // body's (the Title | Body switch, remembering the last choice).
+  var lastTextKey = 'entries';
+  function syncStageTextSeg(item) {
+    var seg = document.getElementById('stageTextSeg');
+    var onEntry = stageMode === 'format' && item && item.type === 'poem' && !isSection(state.poems[item.index]);
+    var onSection = stageMode === 'format' && item && item.type === 'poem' && isSection(state.poems[item.index]);
+    seg.hidden = !onEntry;
+    if (onSection && formatKey !== 'sections') showFormattingFor('sections');
+    if (onEntry) {
+      if (formatKey === 'sections' || !formatKey) showFormattingFor(lastTextKey);
+      seg.querySelectorAll('button').forEach(function (b) {
+        var on = b.dataset.key === formatKey;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+  }
+  document.getElementById('stageTextSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-key]');
+    if (!b) return;
+    lastTextKey = b.dataset.key;
+    showFormattingFor(b.dataset.key);
+    syncStageTextSeg(buildPreviewItems(state)[previewIndex]);
+  });
+
   // The page that best shows what Formatting is changing.
   function previewShowFormat() {
     var key = formatKey || currentEntriesView();
     if (key === 'sections') previewShow(function (it) { return it.type === 'poem' && isSection(state.poems[it.index]); });
     else previewShow(function (it) { return it.type === 'poem' && !isSection(state.poems[it.index]); });
   }
-  var viewSegHome = entriesViewSeg.parentNode;
   // Where the entries were scrolled when the stage opened, taken at the
   // click, before the panel's own scroll adjustment.
   var entriesScrollY = 0, scrollYAtToggle = null, editorPreviewIndex = 0;
@@ -6536,10 +6573,8 @@
     scrollYAtToggle = null;
     stageMode = mode;
     document.body.classList.toggle('matter-open', !!mode);
+    document.body.classList.toggle('stage-format', mode === 'format');
     document.getElementById('matterStage').hidden = !mode;
-    var slot = document.getElementById('stageViewSlot');
-    if (mode === 'format') { if (entriesViewSeg.parentNode !== slot) slot.appendChild(entriesViewSeg); }
-    else if (entriesViewSeg.parentNode !== viewSegHome) viewSegHome.appendChild(entriesViewSeg);
     var previewBlock = document.getElementById('previewBlock');
     var previewHome = document.getElementById('previewPanel');
     var previewSlot = document.getElementById('stagePreviewSlot');
