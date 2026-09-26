@@ -145,19 +145,19 @@
     content: ''; width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
     background: var(--ink-faint);
   }
-  /* Which account: an instant tooltip on hover/focus (or tap, on touch),
-     since a native title tooltip is slow and never shows on phones. */
-  .status-badge[data-tip] { position: relative; cursor: default; }
-  .status-badge[data-tip]::after {
-    content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
-    white-space: nowrap; padding: 5px 9px; border-radius: 6px;
-    background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 500;
-    box-shadow: 0 4px 12px var(--shadow); opacity: 0; transform: translateY(-2px);
-    pointer-events: none; transition: opacity .12s ease, transform .12s ease;
+  /* Click the badge for which account, and Sign out. */
+  .account-status-row { position: relative; }
+  .status-badge[data-account] { cursor: pointer; }
+  .status-badge[data-account]:hover, .status-badge[data-account][aria-expanded="true"] { filter: brightness(0.96); }
+  .account-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 200px;
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+    background: var(--surface); border: 1.5px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--line-strong);
   }
-  .status-badge[data-tip]:hover::after, .status-badge[data-tip]:focus-visible::after,
-  .status-badge[data-tip].show-tip::after { opacity: 1; transform: none; }
-  @media (max-width: 700px) { .status-badge[data-tip]::after { right: auto; left: 0; } }
+  .account-menu[hidden] { display: none; }
+  .account-menu-email { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+  .account-menu .btn { align-self: flex-start; }
+  @media (max-width: 700px) { .account-menu { right: auto; left: 0; } }
   .status-badge.is-synced { color: var(--swatch-green); border-color: var(--swatch-green); background: color-mix(in srgb, var(--swatch-green) 12%, var(--surface-2)); }
   .status-badge.is-synced::before { background: var(--swatch-green); }
   .status-badge.error,
@@ -333,20 +333,18 @@
      of shrinking and letting that row's own flex-wrap kick in. */
   .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
-  /* One Show / Hide Tools toggle, directly above the tools column (the
-     way Pages' Format button and Docs' side-panel toggle work): its right
-     edge and top never move, shown or hidden, and the column stays
-     however you last left it. */
+  /* One Show / Hide Tools toggle, in its own row above both columns (the
+     way Pages' Format button and Docs' side-panel toggle work), so the
+     editor and the Preview panel start level. It never moves, shown or
+     hidden, and the column stays however you last left it. */
   .tools-bar { display: none; }
   @media (min-width: 861px) {
-    .workspace { grid-template-rows: auto 1fr; }
-    .tools-bar { display: flex; justify-content: flex-end; grid-column: 2; grid-row: 1; }
-    #entriesColumn { grid-column: 1; grid-row: 1 / span 2; }
+    .workspace { grid-template-rows: auto 1fr; row-gap: 12px; }
+    .tools-bar { display: flex; justify-content: flex-end; grid-column: 1 / -1; grid-row: 1; }
+    #entriesColumn { grid-column: 1; grid-row: 2; }
     .sidebar { grid-column: 2; grid-row: 2; }
     .tools-toggle { display: inline-flex; justify-content: center; gap: 7px; min-width: 128px; }
     .workspace.tools-hidden { grid-template-columns: 1fr; }
-    .workspace.tools-hidden .tools-bar { grid-column: 1; }
-    .workspace.tools-hidden #entriesColumn { grid-row: 2; }
     .workspace.tools-hidden .sidebar { display: none; }
   }
   .tools-toggle svg { flex: 0 0 auto; }
@@ -1125,7 +1123,10 @@
         <div id="googleSignInBtn"></div>
         <div class="account-status-row">
           <span class="status-line" id="accountStatus" style="margin:0;"></span>
-          <button class="btn-link" id="signOutBtn" type="button" hidden>Sign out</button>
+          <div class="account-menu" id="accountMenu" role="menu" hidden>
+            <div class="account-menu-email" id="accountMenuEmail"></div>
+            <button class="btn btn-sm" id="signOutBtn" type="button" role="menuitem">Sign out</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2028,19 +2029,23 @@
     if (!el) return;
     if (kind === true) kind = 'error';
     el.textContent = msg || '';
-    // The badge just says "Signed in"; which account is a hover away.
+    // The badge just says "Signed in"; click it for which account and
+    // Sign out.
     var email = googleUserEmail && googleUserEmail !== 'your account' ? googleUserEmail : getLastGoogleUser();
+    closeAccountMenu();
     if (msg && email) {
-      var tip = (kind === 'needs-reauth' ? 'Last signed in as ' : 'Signed in as ') + email;
-      el.dataset.tip = tip;
+      var who = (kind === 'needs-reauth' ? 'Last signed in as ' : 'Signed in as ') + email;
+      el.dataset.account = '';
       el.tabIndex = 0;
-      el.setAttribute('aria-label', msg + '. ' + tip);
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-haspopup', 'menu');
+      el.setAttribute('aria-expanded', 'false');
+      el.setAttribute('aria-label', msg + '. ' + who + '. Account menu');
+      document.getElementById('accountMenuEmail').textContent = who;
     } else {
-      delete el.dataset.tip;
-      el.removeAttribute('tabindex');
-      el.removeAttribute('aria-label');
+      delete el.dataset.account;
+      ['tabindex', 'role', 'aria-haspopup', 'aria-expanded', 'aria-label'].forEach(function (a) { el.removeAttribute(a); });
     }
-    el.classList.remove('show-tip');
     el.hidden = !msg;
     el.classList.toggle('status-badge', !!msg);
     el.classList.toggle('error', kind === 'error');
@@ -2048,16 +2053,29 @@
     el.classList.toggle('needs-reauth', kind === 'needs-reauth');
   }
 
-  // Touch screens have no hover, so a tap toggles the account tooltip.
+  function closeAccountMenu() {
+    var menu = document.getElementById('accountMenu');
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    document.getElementById('accountStatus').setAttribute('aria-expanded', 'false');
+  }
   (function () {
     var el = document.getElementById('accountStatus');
-    if (!el) return;
-    el.addEventListener('click', function (e) {
-      if (!el.dataset.tip) return;
+    var menu = document.getElementById('accountMenu');
+    function toggle(e) {
+      if (!('account' in el.dataset)) return;
       e.stopPropagation();
-      el.classList.toggle('show-tip');
+      if (!menu.hidden) { closeAccountMenu(); return; }
+      menu.hidden = false;
+      el.setAttribute('aria-expanded', 'true');
+    }
+    el.addEventListener('click', toggle);
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); }
     });
-    document.addEventListener('click', function () { el.classList.remove('show-tip'); });
+    menu.addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', closeAccountMenu);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAccountMenu(); });
   })();
 
   function decodeJwtPayload(token) {
@@ -2138,7 +2156,7 @@
     setAccountStatus('');
     try { if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch (e) {}
   }
-  document.getElementById('signOutBtn').addEventListener('click', signOut);
+  document.getElementById('signOutBtn').addEventListener('click', function () { closeAccountMenu(); signOut(); });
 
   // If the first read fails, show what's cached rather than a loading
   // screen that never ends (the error badge says it isn't synced).
