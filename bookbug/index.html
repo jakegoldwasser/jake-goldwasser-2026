@@ -6412,6 +6412,14 @@
   document.getElementById('previewPage').addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape' && stageEdit) { ev.stopPropagation(); endStageEdit(); }
   }, true);
+  // Any press outside the page ends editing, even on a spot that doesn't
+  // take focus (blank space, the page arrows): the outline goes away and
+  // the page is typeset again until it's clicked back into.
+  document.addEventListener('pointerdown', function (ev) {
+    if (!stageEdit || document.getElementById('previewPage').contains(ev.target)) return;
+    if (document.activeElement && document.getElementById('previewPage').contains(document.activeElement)) document.activeElement.blur();
+    endStageEdit();
+  }, true);
   document.getElementById('previewFullClose').addEventListener('click', closeFullPreview);
   document.getElementById('previewFullPrev').addEventListener('click', function () { stepPreview(-1); });
   document.getElementById('previewFullNext').addEventListener('click', function () { stepPreview(1); });
