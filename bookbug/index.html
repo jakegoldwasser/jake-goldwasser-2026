@@ -5165,7 +5165,7 @@
     state.poems.forEach(function (p, i) { if (!isSection(p)) entryNumAt[i] = ++num; });
     var hint = document.createElement('p');
     hint.className = 'sections-only-hint';
-    hint.textContent = 'Drag a section, or use its arrows, to move it along with all of its entries. Click a section title to rename it; ▸ shows what’s in it.';
+    hint.textContent = 'Click a section to see its entries; drag it, or use its arrows, to move it with all of them. Click the title text to rename it.';
     poemList.appendChild(hint);
     if (parts.lead.length) {
       var leadRow = document.createElement('div');
@@ -5209,7 +5209,11 @@
       title.addEventListener('blur', function () { row.draggable = true; });
       row.insertBefore(title, row.querySelector('.section-block-count'));
       row.querySelector('.section-block-count').textContent = n + (n === 1 ? ' entry' : ' entries');
-      row.querySelector('.section-expand-btn').addEventListener('click', function () {
+      // Clicking anywhere on the bar (not its title text or its
+      // buttons) shows or hides the section's entry titles, same as ▸.
+      // A drag never fires click, so dragging the bar still just moves it.
+      row.addEventListener('click', function (e) {
+        if (e.target.closest('input, .section-move-btn, .dots-btn')) return;
         if (open) delete expandedSectionIds[section.id];
         else expandedSectionIds[section.id] = true;
         renderPoems();
