@@ -696,7 +696,13 @@
   .preview-panel { flex: 0 0 auto; }
   .preview-stage { display: flex; justify-content: center; padding: 4px 0 2px; }
   body.matter-open #entriesColumn > :not(#matterStage) { display: none !important; }
-  .matter-stage { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 28px 20px; }
+  /* The stage is the preview while it's up; a second, small copy in the
+     tools column would just repeat it. */
+  body.matter-open #previewPanel { display: none; }
+  .matter-stage { display: flex; flex-direction: column; gap: 20px; padding: 16px 20px 28px; }
+  .matter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .matter-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 16px; color: var(--ink); text-align: right; }
+  .matter-pages { display: flex; flex-direction: column; align-items: center; gap: 28px; }
   .matter-stage[hidden] { display: none; }
   .matter-stage .preview-page { box-shadow: none; border: 1px solid var(--line-strong); }
   .matter-figure { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0; }
@@ -1135,7 +1141,13 @@
     <div id="entriesColumn">
       <!-- While Front and Back Matter is open, the entries column shows the
            selected tab's pages large, instead of the entries. -->
-      <div class="panel matter-stage" id="matterStage" hidden aria-live="polite"></div>
+      <div class="panel matter-stage" id="matterStage" hidden>
+        <div class="matter-head">
+          <button type="button" class="btn btn-sm" id="matterBackBtn">← Back to entries</button>
+          <span class="matter-title" id="matterTitle"></span>
+        </div>
+        <div class="matter-pages" id="matterPages" aria-live="polite"></div>
+      </div>
       <div class="panel" id="poemsPanel">
         <div class="poems-head">
           <div style="display:flex; align-items:center; gap:10px;">
@@ -6379,6 +6391,7 @@
 
   document.querySelectorAll('.panel-toggle').forEach(function (toggle) {
     toggle.addEventListener('click', function () {
+      scrollYAtToggle = window.scrollY;
       var body = document.getElementById(toggle.getAttribute('aria-controls'));
       var headerTop = toggle.getBoundingClientRect().top;
       body.hidden = !body.hidden;
@@ -6476,8 +6489,11 @@
       if (matterTarget !== 'back' && !state.includeTitlePage) note = 'Not included in the book';
     }
     var room = document.getElementById('entriesColumn').clientWidth - 40;
-    // Page + caption + the stage's padding fit the window height.
-    var widthPx = Math.max(200, Math.min(room, (window.innerHeight - 130) * plan.PAGE_W / plan.PAGE_H));
+    // Header + page + caption + the stage's padding fit the window height.
+    var widthPx = Math.max(200, Math.min(room, (window.innerHeight - 180) * plan.PAGE_W / plan.PAGE_H));
+    document.getElementById('matterTitle').textContent = 'Front and Back Matter · ' +
+      ({ front: 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
+    stage = document.getElementById('matterPages');
     stage.innerHTML = '';
     items.forEach(function (item) {
       var fig = document.createElement('figure');
@@ -6499,12 +6515,21 @@
       }
     });
   }
+  // Where the entries were scrolled when Front and Back Matter opened,
+  // taken at the click, before the panel's own scroll adjustment.
+  var entriesScrollY = 0, scrollYAtToggle = null;
   function updateMatterStage() {
     var open = matterIsOpen();
     var wasOpen = document.body.classList.contains('matter-open');
+    if (open && !wasOpen) entriesScrollY = scrollYAtToggle != null ? scrollYAtToggle : window.scrollY;
+    scrollYAtToggle = null;
     document.body.classList.toggle('matter-open', open);
     document.getElementById('matterStage').hidden = !open;
-    if (!open) return;
+    // Back to the entries right where you left them.
+    if (!open) {
+      if (wasOpen) window.scrollTo({ top: entriesScrollY, behavior: 'instant' });
+      return;
+    }
     renderMatterStage();
     // On opening, line the stage up with the top of the window so the
     // whole page is in view (the tools column is sticky and stays put).
@@ -6512,6 +6537,15 @@
     if (!wasOpen && Math.abs(top - 16) > 1) window.scrollBy({ top: top - 16, behavior: 'instant' });
   }
   window.addEventListener('resize', function () { if (document.body.classList.contains('matter-open')) renderMatterStage(); });
+  // The way back: the stage's own button, or Esc (unless the full-screen
+  // preview is up -- Esc closes that first).
+  function closeMatter() {
+    if (!document.getElementById('coversBody').hidden) document.getElementById('coversToggle').click();
+  }
+  document.getElementById('matterBackBtn').addEventListener('click', closeMatter);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.body.classList.contains('matter-open') && document.getElementById('previewFull').hidden) closeMatter();
+  });
 
   var savedCoverTarget = 'front';
   try {
