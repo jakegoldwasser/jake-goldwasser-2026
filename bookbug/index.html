@@ -6070,6 +6070,21 @@
   document.querySelectorAll('#textTargetToggle button').forEach(function (b) {
     b.addEventListener('click', function () { showTextTarget(b.dataset.target); });
   });
+  // Clicking into something in the list shows its formatting controls:
+  // an entry's text, an entry title (the field or its Titles-view row),
+  // or a section title.
+  function textTargetFor(el) {
+    if (el.closest('.poem-text')) return 'body';
+    if (el.closest('.poem-title, .poem-title-compact-toggle')) return 'title';
+    if (el.closest('input.section-title')) return 'section';
+    return null;
+  }
+  ['focusin', 'click'].forEach(function (type) {
+    poemList.addEventListener(type, function (e) {
+      var target = textTargetFor(e.target);
+      if (target) showTextTarget(target);
+    });
+  });
   var savedTextTarget = 'body';
   try {
     var storedTarget = localStorage.getItem(TEXT_TARGET_KEY);
