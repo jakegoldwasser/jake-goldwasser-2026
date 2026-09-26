@@ -421,9 +421,17 @@
   /* Desktop: pull the editor left under the number/grip column (26px +
      the card's 10px gap) so its left inset matches the right, and give
      the text a page-like half-inch margin inside the box. */
+  /* The title sits in the same page-like pane as the text, above it,
+     with no rule between: one sheet, like the printed page. */
   @media (min-width: 701px) {
-    .poem-card .poem-text { margin-left: -36px; width: calc(100% + 36px); padding: 0.5in; }
-    .poem-card .format-toolbar { margin-left: -36px; }
+    .poem-card .poem-title-row {
+      background: var(--surface); border: 1px solid var(--line); border-bottom: none;
+      border-radius: 6px 6px 0 0; padding: 0.5in 0.5in 0; align-items: flex-start;
+    }
+    .poem-card textarea.poem-title { border-bottom: none; padding: 0; }
+    .poem-card .poem-text { border-top: none; border-radius: 0 0 6px 6px; padding: 14px 0.5in 0.5in; margin-top: -8px; }
+    .poem-card:has(textarea.poem-title:focus, .poem-text:focus) .poem-title-row,
+    .poem-card:has(textarea.poem-title:focus, .poem-text:focus) .poem-text { border-color: var(--accent); }
   }
   /* Lineated verse: a line too long for the box wraps with its
      continuation indented (a hanging indent), the same way the printed
@@ -4944,7 +4952,9 @@
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
-    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.layouts[index].titleSizePt * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
+    // In the editor the title reads as the top of the text, just larger;
+    // true printed proportions show in the preview.
+    if (initialPlan) titleInput.style.fontSize = Math.round(initialPlan.globalSize * 1.2 * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     wireSingleLine(titleInput, function () {
       editor.focus();
       setEditorSelection(editor, 0, 0);
@@ -5325,7 +5335,16 @@
   }
   entriesViewSeg.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-view]');
-    if (!b || b.disabled || b.dataset.view === currentEntriesView()) return;
+    if (!b || b.disabled) return;
+    if (b.dataset.view === currentEntriesView()) {
+      // Title View again folds every opened entry back to its title.
+      if (b.dataset.view === 'titles' && Object.keys(expandedCompactIds).length) {
+        if (writingCard) exitWriting();
+        expandedCompactIds = {};
+        renderPoems();
+      }
+      return;
+    }
     sectionsOnly = b.dataset.view === 'sections';
     formatKey = b.dataset.view;
     if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' ? 'compact' : 'full';
