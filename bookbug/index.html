@@ -501,6 +501,19 @@
   #poemList .poem-card:not(:focus-within) .format-toolbar,
   #poemList .poem-card:not(:focus-within) .title-align { display: none; }
   .poem-meta { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  body.pref-no-counts .poem-meta, body.pref-no-numbers .poem-num, body.pref-no-wrap-warning .poem-warn { display: none !important; }
+  .prefs-area { position: relative; display: flex; justify-content: flex-end; }
+  .prefs-panel {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 70; width: 290px;
+    display: flex; flex-direction: column; gap: 2px; padding: 12px 14px;
+    background: var(--surface); border: 1.5px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--line-strong);
+  }
+  .prefs-panel[hidden] { display: none; }
+  .prefs-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+  .prefs-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+  .prefs-row input { margin-top: 2px; accent-color: var(--accent); }
+  .prefs-row small { display: block; font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+  @media (max-width: 700px) { .prefs-area { justify-content: flex-start; } .prefs-panel { right: auto; left: 0; } }
 
   /* The per-entry "⋯" menu (Duplicate / Archive). One shared popover,
      positioned in JS beside whichever button opened it. */
@@ -1132,6 +1145,19 @@
           <div class="chapbooks-dropdown" id="chapbooksDropdown" hidden>
             <div id="chapbooksPane"></div>
           </div>
+        </div>
+      </div>
+      <!-- Preferences: how Bookbug looks and behaves while you work, on
+           this device, for every book (not part of any book). -->
+      <div class="prefs-area">
+        <button class="btn btn-sm" id="prefsBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="prefsPanel">Preferences</button>
+        <div class="prefs-panel" id="prefsPanel" role="dialog" aria-label="Preferences" hidden>
+          <div class="prefs-title">Preferences</div>
+          <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
+          <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show entry numbers</span></label>
+          <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
+          <label class="prefs-row"><input type="checkbox" data-pref="spellcheck"><span>Check spelling</span></label>
+          <label class="prefs-row"><input type="checkbox" data-pref="smartPunctuation"><span>Smart punctuation<small>Curly “quotes” and ’apostrophes’; -- becomes —</small></span></label>
         </div>
       </div>
       <div class="account-area">
@@ -1781,6 +1807,21 @@
   // Phones get their own key and a 90% default: the desktop-sized text
   // read a notch too large on a phone screen.
   var IS_PHONE = window.matchMedia('(max-width: 700px)').matches;
+
+  // ---------------------------------------------------------------------
+  // Preferences (this device, every book): shown in the Preferences
+  // panel under Home. Kept in localStorage, a per-person convenience.
+  // ---------------------------------------------------------------------
+  var PREFS_KEY = 'bookbug.prefs.v1';
+  var PREF_DEFAULTS = { showCounts: true, showNumbers: true, showWrapWarning: true, spellcheck: true, smartPunctuation: false };
+  var prefs = Object.assign({}, PREF_DEFAULTS);
+  try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch (e) {}
+  function applyPrefClasses() {
+    document.body.classList.toggle('pref-no-counts', !prefs.showCounts);
+    document.body.classList.toggle('pref-no-numbers', !prefs.showNumbers);
+    document.body.classList.toggle('pref-no-wrap-warning', !prefs.showWrapWarning);
+  }
+  applyPrefClasses();
   var EDITOR_ZOOM_KEY = IS_PHONE ? 'poetryBooklet.editorZoom.phone.v1' : 'poetryBooklet.editorZoom.v1';
   // The zoom control's own 0.7-2 / 100%-labeled range was rendering too
   // small at "100%" -- this constant shifts the whole scale up so what
@@ -5364,7 +5405,7 @@
     var editor = document.createElement('div');
     editor.className = 'poem-text';
     editor.contentEditable = 'true';
-    editor.spellcheck = true;
+    editor.spellcheck = prefs.spellcheck;
     editor.setAttribute('role', 'textbox');
     editor.setAttribute('aria-multiline', 'true');
     editor.setAttribute('aria-label', 'Entry text');
@@ -6545,7 +6586,7 @@
     var body = document.createElement('div');
     body.className = 'stage-edit-body';
     body.contentEditable = 'true';
-    body.spellcheck = true;
+    body.spellcheck = prefs.spellcheck;
     body.setAttribute('role', 'textbox');
     body.setAttribute('aria-multiline', 'true');
     body.setAttribute('aria-label', 'Entry text');
@@ -7616,6 +7657,66 @@
     state.intakeCollapsed = false;
     persist();
     applyIntakeCollapsedView();
+  });
+
+  (function () {
+    var btn = document.getElementById('prefsBtn'), panel = document.getElementById('prefsPanel');
+    panel.querySelectorAll('[data-pref]').forEach(function (box) {
+      box.checked = !!prefs[box.dataset.pref];
+      box.addEventListener('change', function () {
+        prefs[box.dataset.pref] = box.checked;
+        try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+        applyPrefClasses();
+        if (box.dataset.pref === 'spellcheck') {
+          document.querySelectorAll('.poem-text, .stage-edit-body').forEach(function (ed) { ed.spellcheck = prefs.spellcheck; });
+        }
+      });
+    });
+    function close() { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!panel.hidden) { close(); return; }
+      panel.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+    });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { close(); btn.focus(); } });
+  })();
+
+  // Smart punctuation (a preference): as you type, straight quotes turn
+  // curly -- opening after a space, dash or bracket, closing (and
+  // apostrophes) otherwise -- and a second hyphen makes an em dash. In
+  // every place you write: entries, titles, section titles, the page.
+  var SMART_TARGETS = '.poem-text, textarea.poem-title, input.section-title, .stage-edit-body, .stage-edit-title, #bookTitleInput';
+  document.addEventListener('beforeinput', function (e) {
+    if (!prefs.smartPunctuation || e.inputType !== 'insertText' || !e.data || e.data.length !== 1) return;
+    if (!e.target.closest || !e.target.closest(SMART_TARGETS)) return;
+    var ch = e.data;
+    if (ch !== '"' && ch !== "'" && ch !== '-') return;
+    var before = '';
+    var t = e.target;
+    if (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT') {
+      before = t.value.charAt((t.selectionStart || 0) - 1);
+    } else {
+      var sel = window.getSelection();
+      if (sel.rangeCount && sel.isCollapsed) {
+        var r = sel.getRangeAt(0).cloneRange();
+        r.setStart(t, 0);
+        var text = r.toString();
+        before = text.charAt(text.length - 1);
+      }
+    }
+    if (ch === '-') {
+      if (before !== '-') return;
+      e.preventDefault();
+      document.execCommand('delete');
+      document.execCommand('insertText', false, '\u2014');
+      return;
+    }
+    var opening = !before || /[\s(\[{\u2014\u2013-]/.test(before);
+    e.preventDefault();
+    document.execCommand('insertText', false, ch === '"' ? (opening ? '\u201c' : '\u201d') : (opening ? '\u2018' : '\u2019'));
   });
 
   function renderAll() {
