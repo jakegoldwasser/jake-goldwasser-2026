@@ -767,6 +767,7 @@
   .seg-3 button { padding: 8px 3px; font-size: 11.5px; }
   .seg-4 button { padding: 8px 2px; font-size: 10.5px; }
   .seg-fonts { flex-wrap: wrap; }
+  .font-select { font-size: 16px; }
 
   /* Switches the Formatting panel between the entry-title and body-text
      controls. Styled as a soft track with a raised active side, unlike
@@ -6261,9 +6262,37 @@
     seg.innerHTML = document.getElementById('titleFontSeg').innerHTML;
     seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
   });
+  // Each typeface picker is then swapped for a dropdown (same id), each
+  // option -- and the closed dropdown -- shown in its own typeface.
+  document.querySelectorAll('.seg-fonts').forEach(function (seg) {
+    var select = document.createElement('select');
+    select.id = seg.id;
+    select.className = 'font-select';
+    var label = seg.closest('.field') && seg.closest('.field').querySelector('label');
+    select.setAttribute('aria-label', label ? label.textContent : 'Typeface');
+    seg.querySelectorAll('button').forEach(function (b) {
+      var opt = document.createElement('option');
+      opt.value = b.dataset.val;
+      opt.textContent = b.textContent;
+      opt.style.fontFamily = b.style.fontFamily;
+      select.appendChild(opt);
+    });
+    var active = seg.querySelector('button.active');
+    if (active) select.value = active.dataset.val;
+    select.style.fontFamily = select.options[select.selectedIndex].style.fontFamily;
+    seg.replaceWith(select);
+  });
+  function setFontSelect(select, val) {
+    select.value = val;
+    if (select.selectedIndex >= 0) select.style.fontFamily = select.options[select.selectedIndex].style.fontFamily;
+  }
 
   function wireSeg(id, onChange) {
     var seg = document.getElementById(id);
+    if (seg.tagName === 'SELECT') {
+      seg.addEventListener('change', function () { setFontSelect(seg, seg.value); onChange(seg.value); });
+      return;
+    }
     seg.querySelectorAll('button').forEach(function (btn) {
       btn.addEventListener('click', function () {
         seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
@@ -6408,8 +6437,8 @@
     fitTitleInput(document.getElementById('bookTitleInput'));
     document.getElementById('authorInput').value = state.author || '';
     trimSelect.value = state.trimKey;
-    document.querySelectorAll('#bodyFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyFontChoice); });
-    document.querySelectorAll('#titleFontSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleFontChoice); });
+    markSeg('bodyFontSeg', state.bodyFontChoice);
+    markSeg('titleFontSeg', state.titleFontChoice);
     document.querySelectorAll('#bodyAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyAlignment); });
     document.querySelectorAll('#titleAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleAlignment); });
     document.querySelectorAll('#bodySizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodySizeMode); });
@@ -6419,6 +6448,8 @@
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
     var sec = sectionStyle(state), front = frontCoverStyle(state), back = backCoverStyle(state);
     function markSeg(id, val) {
+      var el = document.getElementById(id);
+      if (el.tagName === 'SELECT') { setFontSelect(el, val); return; }
       document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === val); });
     }
     markSeg('sectionFontSeg', sec.font);
