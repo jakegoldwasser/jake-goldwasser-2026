@@ -596,6 +596,7 @@
   button.poem-title-compact-toggle.is-placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   button.poem-title-compact-toggle:hover { color: var(--accent); }
   .poem-compact-expanded { margin: 0 0 4px; }
+  #poemList > .in-section { margin-left: 32px; }
   /* An opened entry's title field only spans its text (see fitTitleInput),
      so the rest of the row is empty space that closes the entry when
      clicked. */
@@ -5890,13 +5891,18 @@
     }
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
-    var entryNum = 0;
+    var entryNum = 0, inSection = false;
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) {
+        inSection = true;
         poemList.appendChild(makeSectionRow(poem, i));
       } else {
         entryNum++;
-        poemList.appendChild(poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan, entryNum) : makeCard(poem, i, plan, entryNum));
+        var row = poemsViewMode === 'compact' ? makeCompactRow(poem, i, plan, entryNum) : makeCard(poem, i, plan, entryNum);
+        // Title View shows the book's outline: entries sit indented under
+        // their section (ones before the first section aren't in one).
+        if (poemsViewMode === 'compact' && inSection) row.classList.add('in-section');
+        poemList.appendChild(row);
       }
       poemList.appendChild(makeGap(i + 1));
     });
