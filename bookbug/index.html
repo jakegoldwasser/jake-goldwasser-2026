@@ -4940,12 +4940,31 @@
     return row;
   }
 
-  // A sticky column taller than the window would hide its own bottom;
-  // offsetting `top` by the overflow makes it scroll with the page until
-  // its last panel is in view, then stay put.
+  // The tools column scrolls along with the page and pins at whichever
+  // edge it reaches -- its top when scrolling up, its bottom when
+  // scrolling down -- so a column taller than the window never hides
+  // part of itself. Its sticky `top` only changes with scrolling (and is
+  // clamped when the column resizes), so opening a panel leaves that
+  // panel's header where it was and the contents open downward.
   var sidebarEl = document.getElementById('toolsSidebar');
+  var sidebarTop = 24;
+  var lastScrollY = window.scrollY;
   function fitStickySidebar() {
-    sidebarEl.style.top = Math.min(24, window.innerHeight - sidebarEl.offsetHeight - 24) + 'px';
+    var lowest = Math.min(24, window.innerHeight - sidebarEl.offsetHeight - 24);
+    sidebarTop = Math.max(lowest, Math.min(24, sidebarTop));
+    sidebarEl.style.top = sidebarTop + 'px';
+  }
+  window.addEventListener('scroll', function () {
+    sidebarTop -= window.scrollY - lastScrollY;
+    lastScrollY = window.scrollY;
+    fitStickySidebar();
+  }, { passive: true });
+  // After a panel opens, scroll just enough to show all of it -- but
+  // never so far that its own header goes off the top.
+  function revealPanel(panel) {
+    var r = panel.getBoundingClientRect();
+    var overflow = r.bottom - (window.innerHeight - 16);
+    if (overflow > 0) window.scrollBy({ top: Math.min(overflow, r.top - 16), behavior: 'smooth' });
   }
   window.addEventListener('resize', fitStickySidebar);
   if (window.ResizeObserver) new ResizeObserver(fitStickySidebar).observe(sidebarEl);
@@ -6010,10 +6029,19 @@
   document.querySelectorAll('.panel-toggle').forEach(function (toggle) {
     toggle.addEventListener('click', function () {
       var body = document.getElementById(toggle.getAttribute('aria-controls'));
+      var headerTop = toggle.getBoundingClientRect().top;
       body.hidden = !body.hidden;
       toggle.closest('.collapsible-panel').classList.toggle('is-open', !body.hidden);
       toggle.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
       fitStickySidebar();
+      // A sticky column can't extend past the bottom of its container, so
+      // when it grows near the end of the page it gets shoved upward,
+      // taking this header off screen. Scrolling by exactly that drift,
+      // before anything paints, keeps the header where it was clicked --
+      // the panel visibly opens downward.
+      var drift = toggle.getBoundingClientRect().top - headerTop;
+      if (Math.abs(drift) > 1) window.scrollBy({ top: drift, behavior: 'instant' });
+      if (!body.hidden) revealPanel(toggle.closest('.collapsible-panel'));
     });
   });
 
