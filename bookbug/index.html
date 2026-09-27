@@ -534,11 +534,6 @@
   .prefs-panel > .prefs-group-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
   .prefs-group[hidden] { display: none; }
   .prefs-panel > .prefs-group:first-child .prefs-group-title { border-top: none; margin-top: 0; padding-top: 0; }
-  .prefs-more {
-    appearance: none; margin-top: 8px; padding: 8px 0 2px; border: none; border-top: 1px solid var(--line); background: none; width: 100%;
-    text-align: left; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); cursor: pointer;
-  }
-  .prefs-more[hidden] { display: none; }
   .prefs-tour { align-self: flex-start; margin-top: 8px; }
   @media (max-width: 700px) { .prefs-area { justify-content: flex-start; } .prefs-panel { right: auto; left: 0; } }
 
@@ -1764,7 +1759,6 @@
           <div class="prefs-group-title">Everywhere</div>
           <label class="prefs-row"><input type="checkbox" data-pref="spellcheck"><span>Check spelling</span></label>
           <label class="prefs-row"><input type="checkbox" data-pref="smartPunctuation"><span>Smart punctuation<small>Curly “quotes” and ’apostrophes’; -- becomes —</small></span></label>
-          <button class="prefs-more" id="prefsMoreBtn" type="button" hidden></button>
           <button class="btn-link prefs-tour" id="prefsTourBtn" type="button">Show the quick tour again</button>
         </div>
       </div>
@@ -9601,23 +9595,17 @@
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       if (!panel.hidden) { close(); return; }
-      // The book type you're in first; other types on Home behind a click.
-      var primary = isPictureBookShown() ? 'picture' : isCartoonShown() ? null : 'collection';
-      // Collections, novels and essays share one group.
-      var forms = homeForms().filter(function (f) { return f !== 'cartoon'; }).map(function (f) { return f === 'picture' ? 'picture' : 'collection'; })
-        .filter(function (f, i, a) { return a.indexOf(f) === i; });
-      var others = ['collection', 'picture'].filter(function (f) { return f !== primary && forms.indexOf(f) !== -1; });
-      var groups = {};
-      panel.querySelectorAll('[data-prefs-form]').forEach(function (g) { groups[g.dataset.prefsForm] = g; g.hidden = g.dataset.prefsForm !== primary; });
-      if (primary) panel.insertBefore(groups[primary], panel.firstChild);
-      var more = document.getElementById('prefsMoreBtn');
-      more.hidden = !others.length;
-      more.textContent = others.map(function (f) { return f === 'picture' ? 'Picture books' : 'Poetry, novels & essays'; }).join(', ') + ' ›';
-      more.onclick = function (e) {
-        e.stopPropagation();
-        others.forEach(function (f) { groups[f].hidden = false; });
-        more.hidden = true;
-      };
+      // A group for each kind of book on Home (collections, novels and
+      // essays share one; cartoon books have none), all shown -- the kind
+      // you're in first. Hiding the others behind a link only hid them.
+      var primary = isPictureBookShown() ? 'picture' : isCartoonShown() ? null : (document.body.classList.contains('view-home') ? null : 'collection');
+      var forms = homeForms().filter(function (f) { return f !== 'cartoon'; }).map(function (f) { return f === 'picture' ? 'picture' : 'collection'; });
+      if (primary) forms.push(primary);
+      if (!forms.length) forms = ['collection'];
+      var order = ['collection', 'picture'].filter(function (f) { return forms.indexOf(f) !== -1; });
+      if (primary) order = [primary].concat(order.filter(function (f) { return f !== primary; }));
+      panel.querySelectorAll('[data-prefs-form]').forEach(function (g) { g.hidden = order.indexOf(g.dataset.prefsForm) === -1; });
+      order.slice().reverse().forEach(function (f) { panel.insertBefore(panel.querySelector('[data-prefs-form="' + f + '"]'), panel.firstChild); });
       panel.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
     });
