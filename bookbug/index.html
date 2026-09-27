@@ -1526,7 +1526,9 @@
   }
   textarea.pbt-field:hover { background: #F7F9FA; }
   /* Selected or being typed in: an accent bar down the left edge. */
-  textarea.pbt-field:focus, textarea.pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
+  /* The one being typed in; or, while no field has the caret, the one
+     selected -- never both, so only one page ever shows the bar. */
+  textarea.pbt-field:focus, #pbSheet:not(:has(textarea.pbt-field:focus)) textarea.pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
   textarea.pbt-field::placeholder { color: var(--ink-faint); font-style: italic; }
   .pbt-pic {
     appearance: none; display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: 6px; cursor: pointer;
@@ -11065,12 +11067,12 @@
     }
     f.addEventListener('focus', function () {
       pbFollow(s);
-      if (f.dataset.id) {
-        pbSel = { s: s, id: f.dataset.id };
-        pbSheet.querySelectorAll('.pbt-field.is-selected, .pbt-pic.is-selected').forEach(function (x) { x.classList.remove('is-selected'); });
-        f.classList.add('is-selected');
-        pbSyncFormatting();
-      }
+      // Whatever was selected before lets go, even when this field is an
+      // empty one with no box behind it yet (it used to keep its mark).
+      pbSheet.querySelectorAll('.pbt-field.is-selected, .pbt-pic.is-selected').forEach(function (x) { if (x !== f) x.classList.remove('is-selected'); });
+      pbSel = f.dataset.id ? { s: s, id: f.dataset.id } : null;
+      if (f.dataset.id) f.classList.add('is-selected');
+      pbSyncFormatting();
     });
     f.addEventListener('input', function () {
       var item = f.dataset.id ? pbFindItem(s, f.dataset.id) : null;
