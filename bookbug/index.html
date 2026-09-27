@@ -1473,33 +1473,20 @@
   }
 
 
-  /* Text view: a thumbnail, then each page's words at a readable size.
-     Each card lays itself out from its own width (not the window's), so
-     it never overflows: stacked when narrow, the two pages side by side
-     from 480px, and the thumbnail moves beside them from 600px. */
+  /* Text view: each page's words at a readable size. Each card lays
+     itself out from its own width (not the window's), so it never
+     overflows: stacked when narrow, the two pages side by side from 480px. */
   .pb-mode-text .pb-card { container-type: inline-size; padding: 8px 14px 12px; }
   .pbt-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
-  .pbt-thumb {
-    appearance: none; border: none; background: none; padding: 0; cursor: zoom-in; display: block;
-    width: 100%; max-width: 340px;
-  }
   /* Pages side by side stretch to the same height, so their footers
      (+ Text box) line up instead of sitting at ragged heights. */
   .pbt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 12px; min-width: 0; align-items: stretch; }
   @container (min-width: 480px) {
     .pbt-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  @container (min-width: 600px) {
-    .pbt-body { grid-template-columns: minmax(150px, 26%) minmax(0, 1fr); gap: 14px; }
-    .pbt-thumb { max-width: none; }
-  }
+
   .pb-mode-text .pb-card-head { margin-bottom: 6px; }
   .pbt-caption { flex: 1; min-width: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* The canvas is drawn at the column's width when the card renders; if
-     the column narrows later (the window, the tools panel) its fixed pixel
-     width ran on over the pages beside it. Always fit the column. */
-  .pbt-thumb canvas { display: block; width: 100% !important; height: auto !important; outline: 1px solid var(--line-strong); background: #FFFFFF; transition: outline-color .15s ease; }
-  .pbt-thumb:hover canvas { outline: 2px solid var(--accent); }
   /* Each page is one flat sheet: a label strip, its text boxes as rows
      split by hairlines, and + Text box as the footer -- rather than boxes
      floating inside boxes. */
@@ -11031,16 +11018,6 @@
     var w = c.parentNode.clientWidth || 150;
     pbDrawSpread(pbCanvasFor(c, w, pbSpreadH(w)), pbState.spreads[s], s, w, { placeholders: true });
   }
-  // Redrawn at the new size (sharp) when its column changes width.
-  var pbThumbRO = window.ResizeObserver ? new ResizeObserver(function (entries) {
-    entries.forEach(function (e) {
-      var w = Math.round(e.contentRect.width), card = e.target.closest('.pb-spread');
-      if (!w || e.target._w === w || !card) return;
-      var first = e.target._w == null;
-      e.target._w = w;
-      if (!first) pbScheduleThumb(+card.dataset.spread);
-    });
-  }) : null;
   var pbThumbTimers = {};
   // Spreads whose art notes are open (this session only).
   var pbNotesOpen = new WeakSet();
@@ -11124,19 +11101,8 @@
     var n = pbState.spreads.length, sp = pbState.spreads[s], pages = pbSpreadPages(s, n);
     var body = document.createElement('div');
     body.className = 'pbt-body';
-    var thumb = document.createElement('button');
-    thumb.type = 'button';
-    thumb.className = 'pbt-thumb';
-    thumb.title = 'Lay out this spread in Spread view';
-    thumb.appendChild(document.createElement('canvas'));
-    if (pbThumbRO) pbThumbRO.observe(thumb);
-    thumb.addEventListener('click', function () {
-      pbSetViewMode('spreads');
-      pbFollow(s);
-      var el = pbSpreadEl(s);
-      if (el) el.scrollIntoView({ block: 'center' });
-    });
-    body.appendChild(thumb);
+    // No thumbnail here: the Preview panel, Spread and Thumbnail views
+    // already show the page; this view is for the words.
     var texts = sp.items.filter(function (it) { return it.type === 'text'; })
       .sort(function (a, b) { return a.y - b.y; });
     // A box running across the fold (a spread title) gets its own row.
