@@ -1177,22 +1177,34 @@
   .home-start-card strong { font-family: "Zilla Slab", ui-serif, serif; font-size: 20px; }
   .home-start-card span { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
   .home-start-card::before { content: ''; display: block; width: 36px; height: 5px; background: #C1602A; margin-bottom: 6px; }
-  .home-start-card + .home-start-card::before { background: var(--swatch-blue); }
+  .home-start-card[data-form="collection"]::before { background: #6E7B3E; }
+  .home-start-card[data-form="novel"]::before { background: #B0532A; }
+  .home-start-card[data-form="essays"]::before { background: #5C6C30; }
+  .home-start-card[data-form="picture"]::before { background: #4F6E88; }
   .home-intro { margin: 0; color: var(--ink-soft); font-size: 14px; }
 
   /* Picture books are wide and squarish, not a tall trade page. */
-  .home-card-pb .home-cover { aspect-ratio: 1 / 1; position: relative; padding-bottom: 22px; }
-  /* A band of swatch color along the foot of each cover, rotating
-     through the wordmark's chips so the shelf reads as a set. */
-  .home-card-pb .home-cover::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: var(--swatch-blue);
-  }
-  .home-grid .home-card-pb:nth-child(4n+1) .home-cover::after { background: #C1602A; }
-  .home-grid .home-card-pb:nth-child(4n+2) .home-cover::after { background: var(--swatch-blue); }
-  .home-grid .home-card-pb:nth-child(4n+3) .home-cover::after { background: var(--swatch-green); }
-  .home-grid .home-card-pb:nth-child(4n) .home-cover::after { background: var(--swatch-brown); }
-  .home-card-new.home-card-pb .home-cover::after { display: none; }
-  .home-card-new.home-card-pb .home-cover { padding-bottom: 14px; }
+  .home-card-pb .home-cover { aspect-ratio: 1 / 1; }
+
+  /* Each book type's shelf is color-coded in the colorway its editor
+     opens in: the base swatch card (green) for poetry, terracotta for
+     novels, sage for essays, slate blue for picture books. The shelf
+     sits on that type's paper, ruled in its accent. */
+  .home-shelf { --shelf-paper: #F4EAD3; --shelf-accent: #6E7B3E; --shelf-ink: #2E2013; }
+  .home-shelf[data-form="novel"] { --shelf-paper: #F1DDCF; --shelf-accent: #B0532A; --shelf-ink: #2E1A12; }
+  .home-shelf[data-form="essays"] { --shelf-paper: #E0E5D0; --shelf-accent: #5C6C30; --shelf-ink: #1F2616; }
+  .home-shelf[data-form="picture"] { --shelf-paper: #DCE4E9; --shelf-accent: #4F6E88; --shelf-ink: #1C2934; }
+  .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px; border-top: 5px solid var(--shelf-accent); }
+  .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; }
+  .home-shelf .home-shelf-title { color: var(--shelf-ink); }
+  .home-shelf .home-new-plus { color: var(--shelf-accent); }
+  .home-shelf .home-card-new .home-cover { border-color: var(--shelf-accent); background: rgba(255, 255, 255, 0.35); }
+  .home-shelf .home-card:hover .home-cover, .home-shelf .home-card:focus-visible .home-cover { border-color: var(--shelf-accent); }
+  /* In the mixed archived shelf, a thin rule in each book's own color. */
+  .home-archived .home-card[data-form] .home-cover { border-top: 4px solid #6E7B3E; }
+  .home-archived .home-card[data-form="novel"] .home-cover { border-top-color: #B0532A; }
+  .home-archived .home-card[data-form="essays"] .home-cover { border-top-color: #5C6C30; }
+  .home-archived .home-card[data-form="picture"] .home-cover { border-top-color: #4F6E88; }
 
   .pb-view { display: flex; flex-direction: column; gap: 26px; }
   .pb-view[hidden] { display: none; }
@@ -1647,7 +1659,7 @@
           <!-- Grouped by book type: the type you're in comes first and the
                others are a click away (see the script). -->
           <div class="prefs-group" data-prefs-form="collection">
-            <div class="prefs-group-title">Collections, novels &amp; essays</div>
+            <div class="prefs-group-title">Poetry, novels &amp; essays</div>
             <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show entry numbers</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
@@ -2413,7 +2425,7 @@
           </button>
           <div class="panel-body" id="exportBody" hidden>
           <div class="stat-row">
-            <span class="stat-label">Entries</span>
+            <span class="stat-label" id="statPoemsLabel">Entries</span>
             <span class="stat-num" id="statPoems">0</span>
           </div>
           <div class="stat-row">
@@ -2475,7 +2487,7 @@
 
 <div class="modal-overlay" id="selectEntriesOverlay">
   <div class="modal-box select-entries-box">
-    <p style="margin-top:0;">Choose which entries to include:</p>
+    <p style="margin-top:0;" id="selectEntriesPrompt">Choose which entries to include:</p>
     <div class="select-entries-toolbar">
       <button class="btn btn-sm" id="selectEntriesToggleAllBtn" type="button">Uncheck all</button>
     </div>
@@ -2645,9 +2657,33 @@
   // Whether a book has anything worth keeping. An untouched blank book
   // isn't added to My Books until it does (see ensureCurrentInLibrary),
   // so "New book" clicks don't leave a trail of empty entries.
+  // (The untouched sample chapter doesn't count: a new book is only kept
+  // once it has something of its author's in it.)
   function hasContent(s) {
-    return !!(countEntries(s.poems) || (s.archivedPoems && s.archivedPoems.length) ||
+    var own = (s.poems || []).filter(function (p) { return !isUntouchedSample(p) && !entryIsEmpty(p); }).length;
+    return !!(own || (s.archivedPoems && s.archivedPoems.some(function (p) { return !isUntouchedSample(p); })) ||
       (s.bookTitle && s.bookTitle.trim()));
+  }
+
+  // A new novel or essay collection opens with a sample in it -- Lorem
+  // Ipsum set as the book will be (indented paragraphs, a scene break) --
+  // so there's something to see on the page from the start. It archives
+  // like anything else; the tour points to how.
+  var SAMPLE_LINES = [
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus, posuere velit aliquet. Cras mattis consectetur purus sit amet fermentum, sed lacinia nisi at ligula vehicula rhoncus.',
+    '“Vestibulum id ligula porta felis euismod semper,” she said. “Donec ullamcorper nulla non metus auctor fringilla.”',
+    'Nullam quis risus eget urna mollis ornare vel eu leo. Maecenas sed diam eget risus varius blandit sit amet non magna. Aenean lacinia bibendum nulla sed consectetur, and etiam porta sem malesuada magna mollis euismod.',
+    'Curabitur blandit tempus porttitor. Morbi leo risus, porta ac consectetur ac, vestibulum at eros. Praesent commodo cursus magna, vel scelerisque nisl consectetur et.',
+    '***',
+    'Donec sed odio dui. Duis mollis, est non commodo luctus, nisi erat porttitor ligula, eget lacinia odio sem nec elit. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus.',
+    'Sed posuere consectetur est at lobortis. Etiam porta sem malesuada magna mollis euismod.'
+  ];
+  function makeSampleEntry(form) {
+    var title = form === 'essays' ? 'Sample Essay' : 'Sample Chapter';
+    return { id: makeId(), title: title, lines: SAMPLE_LINES.slice(), sample: true, sampleTitle: title };
+  }
+  function isUntouchedSample(p) {
+    return !!(p && p.sample && p.title === p.sampleTitle && JSON.stringify(p.lines) === JSON.stringify(SAMPLE_LINES));
   }
 
   // A brand-new, empty book -- used by "New book" and after sign-in when
@@ -2750,10 +2786,11 @@
   // book type" on Home adds the other. Synced with the books.
   // ---------------------------------------------------------------------
   var BOOK_FORMS = {
-    collection: { shelf: 'My collections', add: 'Collection', plural: 'Collections', about: 'Poems or stories, each starting on a page of its own.', newLabel: 'New collection' },
-    novel: { shelf: 'My novels', add: 'Novel', plural: 'Novels', about: 'Chapters and parts, set as running prose with indented paragraphs.', newLabel: 'New novel' },
-    essays: { shelf: 'My essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection' },
-    picture: { shelf: 'My picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book' }
+    // `cover`: the typeface a book of this type shows its title in on Home.
+    collection: { shelf: 'Poetry collections', add: 'Poetry collection', plural: 'Poetry collections', about: 'Poems, each starting on a page of its own.', newLabel: 'New poetry collection', cover: 'futura' },
+    novel: { shelf: 'Novels', add: 'Novel', plural: 'Novels', about: 'Chapters and parts, set as running prose with indented paragraphs.', newLabel: 'New novel', cover: 'garamond' },
+    essays: { shelf: 'Essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection', cover: 'baskerville' },
+    picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book', cover: 'poppins' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
   function storedHomeForms() {
@@ -3054,6 +3091,7 @@
     var out = { id: sp.id || pbUid('s'), left: { role: role(sp.left) }, right: { role: role(sp.right) },
       notes: sp.notes || '', items: (sp.items || []).map(pbNormalizeItem).filter(Boolean) };
     if (typeof sp.archivedFrom === 'number') out.archivedFrom = sp.archivedFrom;
+    if (sp.itemOnly) { out.itemOnly = true; out.fromSpreadId = sp.fromSpreadId || null; }
     return out;
   }
 
@@ -3245,6 +3283,27 @@
   // archive/restore) keeps working on sections for free.
   function isSection(item) { return !!(item && item.kind === 'section'); }
   function makeSection(title) { return { id: makeId(), kind: 'section', title: title || '' }; }
+  // A blank title's stand-in: in a novel, "Chapter N" by position (so it
+  // renumbers as chapters move); elsewhere nothing ("Untitled" in lists).
+  function entryTitle(poem, st) {
+    st = st || state;
+    if ((poem.title || '').trim()) return poem.title;
+    if (isSection(poem) || bookFormOf(st) !== 'novel') return '';
+    var n = 0, list = st.poems || [];
+    for (var i = 0; i < list.length; i++) {
+      if (!isSection(list[i])) n++;
+      if (list[i] === poem || list[i].id === poem.id) return 'Chapter ' + n;
+    }
+    return '';
+  }
+  function entryLabel(poem, st) {
+    return entryTitle(poem, st) || (bookFormOf(st || state) === 'novel' ? 'Untitled chapter' : 'Untitled');
+  }
+  // Nothing in it at all: no title, no words, no pictures.
+  function entryIsEmpty(p) {
+    if (isSection(p)) return !(p.title || '').trim();
+    return !(p.title || '').trim() && !(p.lines || []).some(function (l) { return l && l.trim(); });
+  }
   function countEntries(list) {
     return (list || []).filter(function (p) { return !isSection(p); }).length;
   }
@@ -4206,7 +4265,8 @@
 
   function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, state) {
     var titleSizePt = resolveTitleSizePt(state);
-    var titleLines = poem.title ? wrapLine(poem.title, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
+    var shownTitle = entryTitle(poem, state);
+    var titleLines = shownTitle ? wrapLine(shownTitle, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
     var lineHeight = sizePt * 1.55;
@@ -4887,7 +4947,7 @@
           var bold = row.isSec && ts.sectionBold;
           var key = bold ? tocKeys.bold : tocKeys.reg, wt = bold ? 700 : 400;
           var indent = row.isSec ? 0 : plan.toc.entryIndent;
-          var label = poem.title && poem.title.trim() ? poem.title.trim() : (row.isSec ? 'Untitled section' : 'Untitled');
+          var label = row.isSec ? ((poem.title || '').trim() || 'Untitled section') : entryLabel(poem).trim();
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
           if (!ts.pageNumbers) {
             var plainText = ellipsize(label, plan.contentWidth - indent, plan.tocFontSize, ts.font, wt);
@@ -6634,7 +6694,7 @@
 
   function makeCard(poem, index, initialPlan, entryNum) {
     var card = document.createElement('div');
-    card.className = 'poem-card';
+    card.className = 'poem-card' + (poem.sample ? ' is-sample' : '');
     card.dataset.poemId = poem.id;
     // makeCard IS the open editor for this entry -- keeping it draggable
     // meant a click-and-drag gesture anywhere on the card (not just the
@@ -6661,7 +6721,7 @@
     // but this stays explicit so text selection here is never swallowed
     // by a drag gesture even if that changes back.
     titleInput.draggable = false;
-    titleInput.placeholder = 'Untitled';
+    titleInput.placeholder = entryLabel(poem);
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
@@ -6791,7 +6851,7 @@
     writerTitle.type = 'button';
     writerTitle.className = 'poem-writer-title';
     function updateWriterTitle() {
-      writerTitle.textContent = poem.title || 'Untitled';
+      writerTitle.textContent = poem.title || entryLabel(poem);
       writerTitle.classList.toggle('is-placeholder', !poem.title);
     }
     updateWriterTitle();
@@ -6876,7 +6936,7 @@
 
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
-    row.className = 'poem-compact-row';
+    row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '');
     row.dataset.poemId = poem.id;
     row.draggable = true;
 
@@ -6890,7 +6950,7 @@
     var titleBtn = document.createElement('button');
     titleBtn.type = 'button';
     titleBtn.className = 'poem-title-compact poem-title-compact-toggle';
-    titleBtn.textContent = poem.title || 'Untitled';
+    titleBtn.textContent = poem.title || entryLabel(poem);
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
     titleBtn.addEventListener('click', function () {
@@ -7426,9 +7486,17 @@
   async function archivePoem(index) {
     var target = state.poems[index];
     if (!target) return;
+    // Something with nothing in it isn't archived -- it's simply removed.
+    if (entryIsEmpty(target)) {
+      state.poems.splice(index, 1);
+      delete expandedCompactIds[target.id];
+      persist();
+      renderAll();
+      return;
+    }
     var label = isSection(target)
       ? 'the “' + (target.title || 'Untitled section') + '” section'
-      : '“' + (target.title || 'Untitled') + '”';
+      : '“' + entryLabel(target) + '”';
     var ok = await confirmDialog('Are you sure you want to send ' + label + ' to the archive?');
     if (!ok) return;
     var poem = state.poems.splice(index, 1)[0];
@@ -7466,7 +7534,7 @@
       row.className = 'poem-compact-row';
       var titleSpan = document.createElement('div');
       titleSpan.className = 'poem-title-compact';
-      titleSpan.textContent = (poem.title || 'Untitled') + (isSection(poem) ? ' (section)' : '');
+      titleSpan.textContent = (poem.title || (isSection(poem) ? 'Untitled' : entryLabel(poem))) + (isSection(poem) ? ' (section)' : '');
       var restoreBtn = document.createElement('button');
       restoreBtn.className = 'btn btn-sm';
       restoreBtn.type = 'button';
@@ -7478,7 +7546,7 @@
       deleteBtn.title = 'Delete forever';
       deleteBtn.textContent = '×';
       deleteBtn.addEventListener('click', async function () {
-        var ok = await confirmDialog('Permanently delete “' + (poem.title || 'Untitled') + '”? This can’t be undone.');
+        var ok = await confirmDialog('Permanently delete “' + (poem.title || entryLabel(poem)) + '”? This can’t be undone.');
         if (!ok) return;
         state.archivedPoems.splice(i, 1);
         persist();
@@ -7597,7 +7665,7 @@
       var item = state.poems[row.index];
       var indent = row.isSec ? '0' : (plan.toc.entryIndent * scale).toFixed(1) + 'px';
       var weight = row.isSec && ts.sectionBold ? '700' : '400';
-      var label = escapeHtml(item.title || (row.isSec ? 'Untitled section' : 'Untitled'));
+      var label = escapeHtml(row.isSec ? (item.title || 'Untitled section') : entryLabel(item));
       var open = '<div class="toc-row" data-poem-index="' + row.index + '" style="';
       if (!ts.pageNumbers) {
         html += open + 'padding-left:' + indent + '; font-weight:' + weight + '; text-align:' + ts.listAlign +
@@ -7858,7 +7926,7 @@
     title.rows = 1;
     title.className = 'stage-edit-title';
     title.value = poem.title || '';
-    title.placeholder = 'Untitled';
+    title.placeholder = entryLabel(poem);
     title.setAttribute('aria-label', 'Entry title');
     title.style.cssText = 'font-family:' + displayStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
       'px; line-height:1.28; text-align:' + (poem.titleAlign || state.titleAlignment) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
@@ -8050,9 +8118,10 @@
     var title = entry.title || 'Untitled book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
-    coverTitle.style.fontFamily = displayStackFor(data.titleFontChoice);
+    coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS[bookFormOf(data)].cover);
     card.querySelector('.home-cover-author').textContent = data.author || '';
     card.querySelector('.home-card-title').textContent = title;
+    card.dataset.form = bookFormOf(data);
     var n = countEntries(data.poems || []);
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + nounFor(n, data);
     card.addEventListener('click', function () { loadChapbook(entry.id); });
@@ -8095,6 +8164,7 @@
         var b = document.createElement('button');
         b.type = 'button';
         b.className = 'home-start-card';
+        b.dataset.form = f;
         b.innerHTML = '<strong></strong><span></span>';
         b.querySelector('strong').textContent = BOOK_FORMS[f].add;
         b.querySelector('span').textContent = BOOK_FORMS[f].about;
@@ -8106,6 +8176,7 @@
     forms.forEach(function (f) {
       var shelf = document.createElement('section');
       shelf.className = 'home-shelf';
+      shelf.dataset.form = f;
       shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3>' +
         '<button class="dots-btn" type="button" title="Shelf options" aria-haspopup="menu" aria-expanded="false">⋯</button></div><div class="home-grid"></div>';
       shelf.querySelector('.home-shelf-title').textContent = BOOK_FORMS[f].shelf;
@@ -8405,6 +8476,7 @@
   async function setChapbookArchived(id, archived) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry) return;
+    if (archived && (!entry.data || !hasContent(entry.data))) { await removeBookOutright(id); return; }
     if (archived) entry.archived = true;
     else delete entry.archived;
     entry.archiveChangedAt = Date.now();
@@ -8425,6 +8497,18 @@
     else startNewBook();
   }
 
+  // A book with nothing in it skips the archive: gone, with a tombstone
+  // so another device's copy doesn't bring it back.
+  async function removeBookOutright(id) {
+    library = library.filter(function (c) { return c.id !== id; });
+    trash = trash.filter(function (t) { return t.id !== id; });
+    trash.push({ id: id, deletedAt: Date.now() });
+    persistLibrary();
+    persistTrash();
+    if (state.chapbookId === id) leaveCurrentBook();
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
   // Only an archived book can be deleted for good: archive first, then
   // delete from the archive. The menus only offer it there; this holds
   // even if something else ever calls it.
@@ -8450,11 +8534,13 @@
     addHomeForm(form);
     flushPendingSave();
     state = blankChapbookState(form);
+    if (form === 'novel' || form === 'essays') state.poems.push(makeSampleEntry(form));
     if (googleUserName) state.author = googleUserName;
     saveStateCache();
     renderAll();
     closeChapbooksDropdown();
     showEditor();
+    maybeStartTour('collection');
   }
 
   // ---------------------------------------------------------------------
@@ -9112,7 +9198,7 @@
       panel.insertBefore(groups[primary], panel.firstChild);
       var more = document.getElementById('prefsMoreBtn');
       more.hidden = !others.length;
-      more.textContent = others.map(function (f) { return f === 'picture' ? 'Picture books' : 'Collections, novels & essays'; }).join(', ') + ' ›';
+      more.textContent = others.map(function (f) { return f === 'picture' ? 'Picture books' : 'Poetry, novels & essays'; }).join(', ') + ' ›';
       more.onclick = function (e) {
         e.stopPropagation();
         others.forEach(function (f) { groups[f].hidden = false; });
@@ -9176,6 +9262,9 @@
     seg.querySelector('[data-view="entries"]').title = 'Every ' + f.one + ' open in full';
     document.querySelector('#intakePanel .panel-title').textContent = 'Bring in your ' + f.many;
     document.querySelector('#archivePanel .panel-title').textContent = 'Archived ' + f.many;
+    document.getElementById('exportSelectBtn').textContent = 'Export select ' + f.many + '…';
+    document.getElementById('statPoemsLabel').textContent = Cap(f.many);
+    document.getElementById('selectEntriesPrompt').textContent = 'Choose which ' + f.many + ' to include:';
     ['novel', 'essays'].forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
@@ -9355,7 +9444,7 @@
         return;
       }
       body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">' +
-        escapeXml(poem.title || 'Untitled') + '</w:t></w:r></w:p>';
+        escapeXml(entryLabel(poem)) + '</w:t></w:r></w:p>';
       body += '<w:p/>';
       // Verse turns long lines over with a hanging indent, as in the PDF.
       var linePr = isLineated(poem) ? '<w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' : '';
@@ -9480,7 +9569,7 @@
       cb.dataset.index = i;
       cb.checked = true;
       var span = document.createElement('span');
-      span.textContent = isSection(poem) ? ('§ ' + (poem.title || 'Untitled section')) : (poem.title || 'Untitled');
+      span.textContent = isSection(poem) ? ('§ ' + (poem.title || 'Untitled section')) : entryLabel(poem);
       if (isSection(poem)) span.style.fontWeight = '700';
       label.appendChild(cb);
       label.appendChild(span);
@@ -9676,6 +9765,15 @@
   async function setPictureBookArchived(id, archived) {
     var entry = pbEntry(id);
     if (!entry) return;
+    if (archived && (!entry.data || !pictureBookHasContent(normalizePictureBook(entry.data)))) {
+      pbLibrary = pbLibrary.filter(function (c) { return c.id !== id; });
+      pbTrash.push({ id: id, deletedAt: Date.now() });
+      persistPbLibrary(); persistPbTrash();
+      if (pbId === id) { pbId = null; pbState = null; if (isPictureBookShown()) leavePictureBook(); }
+      renderChapbooksList();
+      if (cloudAuthToken) await syncLibraryToCloud();
+      return;
+    }
     if (archived) entry.archived = true;
     else delete entry.archived;
     entry.archiveChangedAt = Date.now();
@@ -10277,6 +10375,7 @@
     var data = entry.data || {};
     var card = document.createElement('div');
     card.className = 'home-card home-card-pb' + (entry.archived ? ' is-archived' : '');
+    card.dataset.form = 'picture';
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
@@ -10285,7 +10384,7 @@
     var title = entry.title || 'Untitled picture book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
-    coverTitle.style.fontFamily = displayStackFor(data.font || PB_V1_FONTS[data.typeface] || data.typeface || 'poppins');
+    coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS.picture.cover);
     card.querySelector('.home-cover-author').textContent = data.author || '';
     card.querySelector('.home-card-title').textContent = title;
     var pages = data.spreads ? pbTotalPagesFor(data.spreads.length) : ((data.rows || []).length * 2 + 2);
@@ -11590,7 +11689,7 @@
         pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
         pbQb('⟹', 'Align right', it.align === 'right', function () { pbSetItem({ align: 'right' }); }),
         pbQbSep(),
-        pbQb('Delete', 'Delete this text box', false, function () { pbItemAction('delete'); })
+        pbQb(pbItemHasInfo(it) ? 'Archive' : 'Delete', pbItemHasInfo(it) ? 'Send this text box to the archive' : 'Delete this empty text box', false, function () { pbItemAction('delete'); })
       );
     } else {
       [['left', 'Left'], ['spread', 'Spread'], ['right', 'Right']].forEach(function (a) {
@@ -11617,7 +11716,7 @@
         pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
         pbCleanMenu.style.top = (r.bottom + 6) + 'px';
       });
-      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Delete', 'Delete this picture', false, function () { pbItemAction('delete'); }));
+      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Archive', 'Send this picture to the archive', false, function () { pbItemAction('delete'); }));
     }
     pbPositionQuickbar();
   }
@@ -11659,6 +11758,7 @@
     pbSyncFormatting();
     pbPositionQuickbar();
   }
+  function pbItemHasInfo(it) { return it.type === 'image' || (!it.bind && !!(it.text || '').trim()); }
   function pbItemAction(action) {
     var it = pbSelected();
     if (!it) return;
@@ -11675,7 +11775,17 @@
       return;
     }
     pbCheckpoint();
-    if (action === 'delete') { items.splice(i, 1); pbSel = null; }
+    if (action === 'delete') {
+      items.splice(i, 1);
+      pbSel = null;
+      // A picture, or words of its own, go to the archive (as a piece of
+      // their spread, restored to it); an empty or title-bound box doesn't.
+      if (pbItemHasInfo(it)) {
+        var sp = pbState.spreads[s];
+        pbState.archived.unshift(pbNormalizeSpread({ id: pbUid('s'), itemOnly: true, fromSpreadId: sp.id, archivedFrom: s, items: [JSON.parse(JSON.stringify(it))] }));
+        renderPbArchive();
+      }
+    }
     else if (action === 'duplicate') {
       var copy = pbNormalizeItem(JSON.parse(JSON.stringify(it)));
       copy.id = pbUid(it.type === 'text' ? 't' : 'p');
@@ -11762,6 +11872,15 @@
       pbPersist(); pbRenderView(); pbFollow(s + 1);
     } else if (action === 'clear') {
       pbCheckpoint();
+      var cleared = pbState.spreads[s];
+      if (!pbSpreadIsEmpty(cleared)) {
+        var copy = pbNormalizeSpread(JSON.parse(JSON.stringify(cleared)));
+        copy.id = pbUid('s');
+        copy.items = copy.items.filter(function (it) { return !it.bind; });
+        copy.archivedFrom = s;
+        if (copy.items.length || copy.notes.trim()) pbState.archived.unshift(copy);
+        renderPbArchive();
+      }
       pbState.spreads[s].items = pbState.spreads[s].items.filter(function (it) { return it.bind; });
       pbState.spreads[s].notes = '';
       pbSel = null;
@@ -11844,6 +11963,9 @@
       pbFmt('pbFormattingPanel').classList.add('is-open');
       pbFmt('pbFormattingToggle').setAttribute('aria-expanded', 'true');
     }
+    document.querySelectorAll('#pbFmtText [data-item-action="delete"], #pbFmtImage [data-item-action="delete"]').forEach(function (b) {
+      b.textContent = it && pbItemHasInfo(it) ? 'Archive' : 'Delete';
+    });
     if (it && it.type === 'text') {
       setFontSelect(pbFmt('pbBoxFontSeg'), pbFontKey(it));
       var styled = pbHasStyles(pbFontKey(it));
@@ -12327,13 +12449,17 @@
   });
 
   // ---- Archived spreads ----
+  function pbSpreadIsEmpty(sp) { return !sp.items.length && !(sp.notes || '').trim(); }
   function pbArchiveSpread(s) {
     var n = pbState.spreads.length;
     if (s <= 0 || s >= n - 1) return;
     pbCheckpoint();
     var sp = pbState.spreads.splice(s, 1)[0];
-    sp.archivedFrom = s;
-    pbState.archived.unshift(sp);
+    // An empty spread isn't archived -- it's simply removed.
+    if (!pbSpreadIsEmpty(sp)) {
+      sp.archivedFrom = s;
+      pbState.archived.unshift(sp);
+    }
     pbSel = null;
     pbPersist();
     pbRenderView();
@@ -12363,16 +12489,24 @@
       item.appendChild(c);
       var txt = document.createElement('div');
       txt.className = 'pb-archive-text';
-      txt.textContent = sp.items.filter(function (it) { return it.type === 'text'; }).map(pbItemText).join(' / ') || sp.notes || '(no text)';
+      var what = sp.itemOnly ? (sp.items[0] && sp.items[0].type === 'image' ? 'A picture' : 'A text box') + ' from spread ' + (sp.archivedFrom || '') + ': ' : '';
+      txt.textContent = what + (sp.items.filter(function (it) { return it.type === 'text'; }).map(pbItemText).join(' / ') || sp.notes || (sp.itemOnly ? '' : '(no text)'));
       item.appendChild(txt);
       var restore = document.createElement('button');
       restore.type = 'button';
       restore.className = 'btn btn-sm';
       restore.textContent = 'Restore';
-      restore.title = 'Put this spread back where it was';
+      restore.title = sp.itemOnly ? 'Put it back on its spread' : 'Put this spread back where it was';
       restore.addEventListener('click', function () {
         pbCheckpoint();
         var back = pbState.archived.splice(gi, 1)[0];
+        var home = back.itemOnly && pbState.spreads.filter(function (x) { return x.id === back.fromSpreadId; })[0];
+        if (home) {
+          back.items.forEach(function (it) { home.items.push(it); });
+          pbPersist(); pbRenderView(); renderPbArchive();
+          pbFollow(pbState.spreads.indexOf(home));
+          return;
+        }
         var at = typeof back.archivedFrom === 'number' ? back.archivedFrom : pbState.spreads.length - 1;
         at = Math.max(1, Math.min(at, pbState.spreads.length - 1));
         delete back.archivedFrom;
@@ -12864,6 +12998,10 @@
       { sel: '#pbFormattingPanel', title: 'Formatting and Export', text: 'Here in Text view: the book’s shape, story type, page numbers, and the dummy and PowerPoint exports.' },
       { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop pictures straight onto a spread.' }
     ],
+    sample: [
+      { sel: '#poemList .is-sample', title: 'A sample to look at', text: 'This sample is set exactly as your book will be: indented paragraphs, a scene break, the chapter title. The preview shows it on the page.' },
+      { sel: '#poemList .is-sample .dots-btn', title: 'Archive it when you’re done', text: 'Open its ⋯ menu and choose Archive. It moves to the archive at the bottom of the list, where you can bring it back any time.' }
+    ],
     collection: [
       { sel: '#intakePanel', title: 'Bring in your entries', text: 'From Google Drive, a link, or pasted text. You can fix titles and line breaks afterward.' },
       { sel: '#entriesViewSeg', title: 'Switch views', text: 'See just section titles, one row per entry, or every entry open in full.' },
@@ -12884,10 +13022,12 @@
   }
   function endTour() {
     if (!tourState) return;
+    var ended = tourState.name;
     markTourSeen(tourState.name);
     document.querySelectorAll('.tour-target').forEach(function (x) { x.classList.remove('tour-target'); });
     tourCard.hidden = true;
     tourState = null;
+    if (ended === 'collection') maybeStartTour('sample');
   }
   function showTourStep() {
     document.querySelectorAll('.tour-target').forEach(function (x) { x.classList.remove('tour-target'); });
@@ -12931,10 +13071,13 @@
   window.addEventListener('resize', placeTourCard);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && tourState) endTour(); });
   function maybeStartTour(name) {
+    if (name === 'collection' && toursSeen().collection) name = 'sample';
+    if (name === 'sample' && !document.querySelector('#poemList .is-sample')) return;
     if (tourState || toursSeen()[name]) return;
     setTimeout(function () {
       if (tourState || toursSeen()[name]) return;
       if (name === 'picture' ? !isPictureBookShown() : (isHomeShown() || isPictureBookShown())) return;
+      if (name === 'sample' && !document.querySelector('#poemList .is-sample')) return;
       tourState = { name: name, i: 0 };
       showTourStep();
     }, 500);
