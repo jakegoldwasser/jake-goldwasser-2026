@@ -1270,13 +1270,16 @@
   }
   .pb-role:hover, .pb-role:focus { border-color: var(--line-strong); background-color: var(--surface); }
   .pb-role.is-story { color: var(--ink-faint); font-weight: 500; }
-  .pb-head-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
-  .pb-add-btn {
-    appearance: none; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); border-radius: 999px;
-    font-size: 11.5px; font-weight: 600; padding: 3px 10px; cursor: pointer; white-space: nowrap;
+  /* Art notes, + Picture and ⋯: one row of same-height pills. */
+  .pb-head-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .pb-add-btn, .pb-notes-btn {
+    appearance: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); cursor: pointer; white-space: nowrap;
+    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none;
+    transition: color .15s ease, border-color .15s ease, background-color .15s ease;
   }
-  .pb-add-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .pb-card-head .dots-btn { padding: 0 8px 4px; }
+  .pb-add-btn:hover, .pb-notes-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .pb-card-head .dots-btn { width: 28px; height: 28px; padding: 0 0 4px; border-radius: 999px; }
 
   /* The spread at the book's own proportions. --k is screen pixels per
      point, set from its width, so type sizes stay true as it resizes. */
@@ -1320,7 +1323,18 @@
 
   .pb-tb { position: absolute; transform-origin: 50% 50%; z-index: 5; cursor: move; }
   /* A little frame all round, to grab once the box is selected. */
-  .pb-tb::before { content: ''; position: absolute; inset: -7px; }
+  .pb-tb::before { content: ''; position: absolute; inset: -10px; }
+  /* Floating, bottom right, only in Spread view. Floats, so a hard offset
+     shadow in ink rather than a blur. */
+  .pb-to-text {
+    display: none; position: fixed; right: 20px; bottom: 20px; z-index: 40; height: 40px; padding: 0 18px; border-radius: 999px;
+    border: 2px solid var(--ink); background: var(--accent); color: var(--accent-ink); cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 700; box-shadow: 3px 3px 0 var(--ink);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .pb-view.pb-mode-spreads .pb-to-text { display: inline-flex; align-items: center; }
+  .pb-to-text:hover { transform: translate(-1px, -2px); box-shadow: 4px 5px 0 var(--ink); }
+  @media (max-width: 700px) { .pb-to-text { right: 16px; bottom: 16px; } }
   .pb-tb-text {
     position: relative; outline: none; white-space: pre-wrap; overflow-wrap: break-word; min-height: 1em; cursor: text;
     user-select: text; -webkit-user-select: text; color: #1C2934;
@@ -1362,15 +1376,8 @@
 
   .pb-notes-row { margin-top: 10px; }
   .pb-notes-row[hidden], body.pref-no-art-notes .pb-notes-row, body.pref-no-art-notes .pb-notes-btn { display: none; }
-  /* Small and quiet; a dot when the spread has notes tucked away. */
-  .pb-notes-btn {
-    appearance: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px;
-    border: 1px solid var(--line); background: transparent; color: var(--ink-faint); cursor: pointer;
-    font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-    transition: color .15s ease, border-color .15s ease, background-color .15s ease;
-  }
-  .pb-notes-btn:hover { color: var(--ink-soft); border-color: var(--line-strong); }
-  .pb-notes-btn.is-open { color: var(--accent); border-color: var(--accent); }
+  /* A dot when the spread has notes tucked away. */
+  .pb-notes-btn.is-open { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); }
   .pb-notes-btn.has-notes::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   textarea.pb-notes {
     display: block; width: 100%; resize: none; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
@@ -1477,7 +1484,9 @@
     appearance: none; border: none; background: none; padding: 0; cursor: zoom-in; display: block;
     width: 100%; max-width: 340px;
   }
-  .pbt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px 18px; min-width: 0; }
+  /* Pages side by side stretch to the same height, so their footers
+     (+ Text box) line up instead of sitting at ragged heights. */
+  .pbt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px 16px; min-width: 0; align-items: stretch; }
   @container (min-width: 480px) {
     .pbt-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -1492,11 +1501,18 @@
      width ran on over the pages beside it. Always fit the column. */
   .pbt-thumb canvas { display: block; width: 100% !important; height: auto !important; outline: 1px solid var(--line-strong); background: #FFFFFF; transition: outline-color .15s ease; }
   .pbt-thumb:hover canvas { outline: 2px solid var(--accent); }
-  .pbt-page { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  /* Each page is one flat sheet: a label strip, its text boxes as rows
+     split by hairlines, and + Text box as the footer -- rather than boxes
+     floating inside boxes. */
+  .pbt-page {
+    display: flex; flex-direction: column; min-width: 0; background: #FFFFFF;
+    border: 1px solid var(--line-strong); border-top: 3px solid var(--ink-soft);
+  }
   .pbt-across { grid-column: 1 / -1; }
-  .pbt-page.is-none { opacity: .55; }
+  .pbt-page.is-none { background: transparent; border: 1px dashed var(--line-strong); color: var(--ink-faint); }
+  .pbt-page.is-none .pbt-page-label { border-bottom: 0; }
   .pbt-page-label {
-    display: flex; align-items: center; gap: 6px; min-height: 24px;
+    display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--line);
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
   }
   .pbt-page-label .pb-role { letter-spacing: 0; text-transform: none; }
@@ -1505,23 +1521,28 @@
   .pbt-page-label .pbt-role-name { letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--ink-soft); font-size: 11.5px; }
   /* Art notes sit under the pages, their label above them when narrow. */
   textarea.pbt-field {
-    width: 100%; resize: none; overflow: hidden; min-height: 44px; padding: 8px 10px; border-radius: 6px;
-    border: 1px solid var(--line); background: #FFFFFF; color: #1C2934; font-size: 17px; line-height: 1.5; outline: none;
+    display: block; width: 100%; resize: none; overflow: hidden; min-height: 52px; padding: 12px 14px; border-radius: 0;
+    border: 0; border-bottom: 1px dashed var(--line); background: transparent; color: #1C2934; font-size: 17px; line-height: 1.5; outline: none;
+    transition: background-color .15s ease, box-shadow .15s ease;
   }
-  textarea.pbt-field:hover { border-color: var(--line-strong); }
-  textarea.pbt-field:focus, textarea.pbt-field.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  textarea.pbt-field:hover { background: #F7F9FA; }
+  /* Selected or being typed in: an accent bar down the left edge. */
+  textarea.pbt-field:focus, textarea.pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
   textarea.pbt-field::placeholder { color: var(--ink-faint); font-style: italic; }
   .pbt-pic {
     appearance: none; display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: 6px; cursor: pointer;
     border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: 12px; text-align: left;
   }
+  /* The page's footer: pushed to the bottom so both pages' line up. */
   .pbt-add {
-    appearance: none; align-self: flex-start; border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-soft);
-    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
-    transition: border-color .15s ease, color .15s ease;
+    appearance: none; margin-top: auto; width: 100%; text-align: left; border: 0; border-radius: 0; background: transparent;
+    color: var(--ink-faint); padding: 9px 14px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: background-color .15s ease, color .15s ease;
   }
-  .pbt-add:hover { border-color: var(--accent); border-style: solid; color: var(--accent); }
-  .pbt-fit { font-size: 12px; line-height: 1.45; color: var(--warning); background: var(--warning-soft); border-left: 3px solid var(--warning); padding: 5px 8px; }
+  .pbt-add:hover { background: var(--accent-soft); color: var(--accent); }
+  .pbt-fit { font-size: 12px; line-height: 1.45; color: var(--warning); background: var(--warning-soft); border-left: 3px solid var(--warning); padding: 6px 12px; }
+  .pbt-page > .pbt-pic { margin: 8px 10px 0; }
+  .pbt-page > .pbt-pic:last-child { margin-bottom: 10px; }
   .pb-tb.is-shrunk::before { outline: 1.5px dashed var(--warning); }
   .pbt-pic img { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; flex: 0 0 auto; }
   .pbt-pic:hover { border-color: var(--line-strong); }
@@ -11110,7 +11131,11 @@
         pbFieldFitNote(f, s, it);
       });
       if (!mine.length && ['endpaper', 'blank'].indexOf(sp[side].role) === -1) col.appendChild(pbMakeField(s, null, side));
-      // Another text box on this page: placed below the ones already there.
+      sp.items.forEach(function (it) {
+        if (it.type === 'image' && (it.area === side || (it.area === 'spread' && side === 'left'))) col.appendChild(pbMakePicChip(s, it));
+      });
+      // Another text box on this page, placed below the ones already
+      // there; the page's footer, so it goes last.
       if (mine.length) {
         var add = document.createElement('button');
         add.type = 'button';
@@ -11120,9 +11145,6 @@
         add.addEventListener('click', function () { pbAddTextInTextView(s, side, mine); });
         col.appendChild(add);
       }
-      sp.items.forEach(function (it) {
-        if (it.type === 'image' && (it.area === side || (it.area === 'spread' && side === 'left'))) col.appendChild(pbMakePicChip(s, it));
-      });
       cols.appendChild(col);
     });
     body.appendChild(cols);
@@ -12026,13 +12048,14 @@
     if (e.target.closest('.pb-tb, .pb-img-hit, .pb-img-free, .pb-h, .pb-quickbar, .pb-pop, .pbt-field, .pbt-pic, #pbFormattingPanel, .entry-menu, .font-picker-list, .modal-overlay')) return;
     pbSelect(null);
   });
-  // Double-click an empty spot on a page for a new text box there.
+  // Double-click a page for a new text box on it: centered at the
+  // bottom, where a picture book's words usually sit (drag it anywhere).
   pbSheet.addEventListener('dblclick', function (e) {
     var stage = e.target.closest('.pb-stage');
-    if (!stage || e.target.closest('.pb-tb, .pb-img-free, .pb-nonpage')) return;
+    if (!stage || e.target.closest('.pb-tb, .pb-img-free, .pb-nonpage, .pb-h')) return;
     var s = +stage.closest('.pb-spread').dataset.spread;
     var f = pbFrac(stage, e);
-    pbAddText(s, f.x, f.y);
+    pbAddText(s, f.x, null, 'bottom');
   });
   // Pictures dropped onto a spread land on the side they're dropped on.
   pbSheet.addEventListener('dragover', function (e) {
@@ -12058,15 +12081,17 @@
     });
   });
 
-  function pbAddText(s, fx, fy) {
+  function pbAddText(s, fx, fy, where) {
     var n = pbState.spreads.length, pages = pbSpreadPages(s, n);
     var side = fx != null ? (fx < 0.5 ? 'left' : 'right') : (pages.left ? 'left' : 'right');
     if (!pages[side]) side = side === 'left' ? 'right' : 'left';
     var w = pbStoryW(side), l = pbLive(side);
-    var x = fx != null ? Math.max(0, Math.min(1 - w, fx - w / 2)) : (l.x0 + l.x1) / 2 - w / 2;
+    var x = fx != null && where !== 'bottom' ? Math.max(0, Math.min(1 - w, fx - w / 2)) : (l.x0 + l.x1) / 2 - w / 2;
     var y = fy != null ? Math.max(0, fy - 0.03) : 0.42;
     pbCheckpoint();
-    var it = pbText(x, y, w, '', { align: 'left' });
+    var it = pbText(x, y, w, '', { align: where === 'bottom' ? 'center' : 'left' });
+    // Bottom: two lines' room above the bottom margin.
+    if (where === 'bottom') it.y = 1 - pbMargins().top - 2 * pbLineFrac(it);
     pbState.spreads[s].items.push(it);
     pbSel = null;
     pbSelect({ s: s, id: it.id });
@@ -12153,6 +12178,23 @@
         pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
         pbQb('⟹', 'Align right', it.align === 'right', function () { pbSetItem({ align: 'right' }); }),
         pbQbSep(),
+        (function () {
+          var placeBtn = pbQb('Place ▾', 'Put it at the top, middle or bottom of the page', false, function (e) {
+            e.stopPropagation();
+            var pages = pbSpreadPages(pbSel.s, pbState.spreads.length), g = pbGeom(it, pbSel.s);
+            var other = g.x + g.w / 2 < 0.5 ? 'right' : 'left';
+            pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-place="top">Top of the page</button>' +
+              '<button type="button" role="menuitem" data-place="middle">Middle of the page</button>' +
+              '<button type="button" role="menuitem" data-place="bottom">Bottom of the page</button>' +
+              (pages[other] ? '<button type="button" role="menuitem" data-place="other">Move to the ' + other + ' page</button>' : '');
+            pbCleanMenu.hidden = false;
+            var r = placeBtn.getBoundingClientRect();
+            pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
+            pbCleanMenu.style.top = (r.bottom + 6) + 'px';
+          });
+          return placeBtn;
+        })(),
+        pbQbSep(),
         pbQb(pbItemHasInfo(it) ? 'Archive' : 'Delete', pbItemHasInfo(it) ? 'Send this text box to the archive' : 'Delete this empty text box', false, function () { pbItemAction('delete'); })
       );
     } else {
@@ -12191,6 +12233,8 @@
   pbCleanMenu.hidden = true;
   document.body.appendChild(pbCleanMenu);
   pbCleanMenu.addEventListener('click', function (e) {
+    var pl = e.target.closest('[data-place]');
+    if (pl) { pbCleanMenu.hidden = true; pbPlaceText(pl.dataset.place); return; }
     var b = e.target.closest('[data-clean]');
     if (!b) return;
     pbCleanMenu.hidden = true;
@@ -12222,6 +12266,26 @@
     if (!pbPop.hidden) pbStylePopup();
     pbSyncFormatting();
     pbPositionQuickbar();
+  }
+  // One line of a text box, as a fraction of the page's height.
+  function pbLineFrac(it) { return pbFontSize(it) * pbLh(it) / (pbTrim(pbState.trim).pageH * 72); }
+  // Place ▾: put the selected text box at the top, middle or bottom of
+  // its page, centered in the text area -- or across on the facing page.
+  function pbPlaceText(where) {
+    var it = pbSelected();
+    if (!it || it.type !== 'text') return;
+    var s = pbSel.s, g = pbGeom(it, s), pages = pbSpreadPages(s, pbState.spreads.length);
+    var side = g.x + g.w / 2 < 0.5 ? 'left' : 'right';
+    if (where === 'other') {
+      var other = side === 'left' ? 'right' : 'left';
+      if (!pages[other]) return;
+      pbSetItem({ x: it.x + (other === 'right' ? 0.5 : -0.5) });
+      return;
+    }
+    var stage = pbStageEl(s), box = stage && stage.querySelector('.pb-tb[data-id="' + it.id + '"]');
+    var hF = box ? box.offsetHeight / stage.clientHeight : 2 * pbLineFrac(it), m = pbMargins(), l = pbLive(side);
+    var y = where === 'top' ? m.top : where === 'middle' ? 0.5 - hF / 2 : 1 - m.top - hF;
+    pbSetItem({ x: it.x + ((l.x0 + l.x1) / 2 - g.w / 2 - g.x), y: y, rot: 0 });
   }
   function pbItemHasInfo(it) { return it.type === 'image' || (!it.bind && !!(it.text || '').trim()); }
   function pbItemAction(action) {
@@ -12886,6 +12950,21 @@
     pbFmt('pbFlatplan').hidden = mode !== 'thumbs';
     if (pbState) pbRenderView();
   }
+  // Spread view: a floating way back to Text view, where the words are
+  // big enough to write in -- to the spread you were on.
+  var pbToTextBtn = document.createElement('button');
+  pbToTextBtn.type = 'button';
+  pbToTextBtn.className = 'pb-to-text';
+  pbToTextBtn.textContent = 'Text view';
+  pbToTextBtn.title = 'Write page by page, at a readable size';
+  pbToTextBtn.addEventListener('click', function () {
+    var cur = pbSheet.querySelector('.pb-spread.is-current');
+    var s = cur ? +cur.dataset.spread : null;
+    pbSetViewMode('text');
+    var el = s != null && pbSpreadEl(s);
+    if (el) el.scrollIntoView({ block: 'center' });
+  });
+  pbView.appendChild(pbToTextBtn);
   function pbRenderView() {
     if (!pbState) return;
     if (pbViewMode === 'thumbs') pbRenderFlatplan();
