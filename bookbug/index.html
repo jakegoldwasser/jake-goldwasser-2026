@@ -1476,10 +1476,6 @@
     }
   }
 
-  /* Formatting and Export belong to Text view; Spread and Thumbnail
-     views keep just the preview beside them. */
-  .pb-mode-spreads #pbFormattingPanel, .pb-mode-spreads #pbExportPanel,
-  .pb-mode-thumbs #pbFormattingPanel, .pb-mode-thumbs #pbExportPanel { display: none; }
 
   /* Text view: a thumbnail, then each page's words at a readable size.
      Each card lays itself out from its own width (not the window's), so
@@ -12970,8 +12966,28 @@
   // Text (the default: every page's words, big enough to read and
   // write), Spread (each spread as it prints) or Thumbnail (the whole
   // book small). Formatting and Export are in Text view.
+  // Formatting and Export are there in every view, but only Text view
+  // opens them as you left them; Spread and Thumbnail views start with
+  // them folded, so the preview beside the page gets the room.
+  var pbTextPanelsOpen = null;
+  function pbSetPanelOpen(id, open) {
+    var toggle = document.getElementById(id), body = document.getElementById(toggle.getAttribute('aria-controls'));
+    body.hidden = !open;
+    toggle.closest('.collapsible-panel').classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function pbPanelsForView(from, to) {
+    var ids = ['pbFormattingToggle', 'pbExportToggle'];
+    if (from === 'text' && to !== 'text') {
+      pbTextPanelsOpen = ids.map(function (id) { return document.getElementById(id).getAttribute('aria-expanded') === 'true'; });
+      ids.forEach(function (id) { pbSetPanelOpen(id, false); });
+    } else if (to === 'text' && from !== 'text' && pbTextPanelsOpen) {
+      ids.forEach(function (id, i) { pbSetPanelOpen(id, pbTextPanelsOpen[i]); });
+    }
+  }
   function pbSetViewMode(mode) {
     if (mode === 'flatplan') mode = 'thumbs';
+    if (pbViewMode !== mode) pbPanelsForView(pbViewMode, mode);
     pbClosePopup();
     if (pbSel) pbSelect(null);
     pbViewMode = mode;
