@@ -21,7 +21,7 @@
 <meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&family=Cutive&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&family=Cutive&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
@@ -1070,6 +1070,16 @@
   }
   .chapbooks-trash-link:hover { background: var(--surface-2); color: var(--ink-soft); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .move-box { max-width: 420px; width: 100%; }
+  .move-list { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+  .move-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding: 8px 10px 2px; }
+  .move-row { width: 100%; border: none; background: none; font: inherit; text-align: left; color: inherit; }
+  .bb-toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); z-index: 96; max-width: calc(100vw - 32px);
+    background: var(--ink); color: #FFFFFF; font-size: 13.5px; padding: 10px 16px; border-radius: 999px; box-shadow: 3px 3px 0 var(--line-strong);
+    opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+  }
+  .bb-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
 
   .select-entries-box { max-width: 440px; width: 100%; }
   .select-entries-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -1128,16 +1138,21 @@
      book is open the whole app turns to a cyanotype card -- pale slate
      paper, navy ink, and the wordmark's own slate-blue chip as the accent
      -- so the two book forms are told apart at a glance. */
-  /* Novels and essay collections get colorways of their own from the same
-     swatch card: a terracotta wash for novels (the wordmark's rust chip),
-     a sage one for essays (its moss chip). Home stays on the base card. */
-  body.form-novel:not(.view-home):not(.view-pb) {
+  /* Each text book type has a colorway of its own: light green for
+     poetry (the wordmark's green chip), terracotta for novels (its rust
+     chip), plum for essays. Home stays on the base card. */
+  body.form-novel:not(.view-home):not(.view-pb):not(.view-cb) {
     --paper: #F1DDCF; --surface: #FBF3EE; --surface-2: #F4E4D9; --ink: #2E1A12; --ink-soft: #6E4A3A; --ink-faint: #A88676;
     --line: #E7CDBD; --line-strong: #CFA78F; --accent: #B0532A; --accent-soft: #F1D5C5; --shadow: rgba(46, 26, 18, 0.14);
   }
-  body.form-essays:not(.view-home):not(.view-pb) {
-    --paper: #E0E5D0; --surface: #F6F7EF; --surface-2: #E9ECDD; --ink: #1F2616; --ink-soft: #52603F; --ink-faint: #8E9A7C;
-    --line: #D2D9C0; --line-strong: #AEB994; --accent: #5C6C30; --accent-soft: #DCE3C6; --shadow: rgba(31, 38, 22, 0.14);
+  body.form-essays:not(.view-home):not(.view-pb):not(.view-cb) {
+    --paper: #E7DFEA; --surface: #F8F5F9; --surface-2: #EEE7F0; --ink: #24182A; --ink-soft: #5B4865; --ink-faint: #9A89A3;
+    --line: #DCD0E0; --line-strong: #B9A6C1; --accent: #6E4A7E; --accent-soft: #E6D9EC; --shadow: rgba(36, 24, 42, 0.14);
+  }
+  /* Poetry: a light green wash from the wordmark's green chip. */
+  body.form-collection:not(.view-home):not(.view-pb):not(.view-cb) {
+    --paper: #E2EBD3; --surface: #F6F9F0; --surface-2: #EAF0DF; --ink: #1E2616; --ink-soft: #4F5E3C; --ink-faint: #8C9A78;
+    --line: #D0DBBE; --line-strong: #A9B98C; --accent: #5E7A2E; --accent-soft: #DDE8C8; --shadow: rgba(30, 38, 22, 0.14);
   }
   body.view-pb {
     --paper: #DCE4E9;
@@ -1177,9 +1192,9 @@
   .home-start-card strong { font-family: "Zilla Slab", ui-serif, serif; font-size: 20px; }
   .home-start-card span { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
   .home-start-card::before { content: ''; display: block; width: 36px; height: 5px; background: #C1602A; margin-bottom: 6px; }
-  .home-start-card[data-form="collection"]::before { background: #6E7B3E; }
+  .home-start-card[data-form="collection"]::before { background: #5E7A2E; }
   .home-start-card[data-form="novel"]::before { background: #B0532A; }
-  .home-start-card[data-form="essays"]::before { background: #5C6C30; }
+  .home-start-card[data-form="essays"]::before { background: #6E4A7E; }
   .home-start-card[data-form="picture"]::before { background: #4F6E88; }
   .home-intro { margin: 0; color: var(--ink-soft); font-size: 14px; }
 
@@ -1187,23 +1202,27 @@
   .home-card-pb .home-cover { aspect-ratio: 1 / 1; }
 
   /* Each book type's shelf is color-coded in the colorway its editor
-     opens in: the base swatch card (green) for poetry, terracotta for
-     novels, sage for essays, slate blue for picture books. The shelf
+     opens in: light green for poetry, terracotta for novels, plum for
+     essays, slate blue for picture books. The shelf
      sits on that type's paper, ruled in its accent. */
-  .home-shelf { --shelf-paper: #F4EAD3; --shelf-accent: #6E7B3E; --shelf-ink: #2E2013; }
+  .home-shelf { --shelf-paper: #E2EBD3; --shelf-accent: #5E7A2E; --shelf-ink: #1E2616; }
   .home-shelf[data-form="novel"] { --shelf-paper: #F1DDCF; --shelf-accent: #B0532A; --shelf-ink: #2E1A12; }
-  .home-shelf[data-form="essays"] { --shelf-paper: #E0E5D0; --shelf-accent: #5C6C30; --shelf-ink: #1F2616; }
+  .home-shelf[data-form="essays"] { --shelf-paper: #E7DFEA; --shelf-accent: #6E4A7E; --shelf-ink: #24182A; }
   .home-shelf[data-form="picture"] { --shelf-paper: #DCE4E9; --shelf-accent: #4F6E88; --shelf-ink: #1C2934; }
   .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px; border-top: 5px solid var(--shelf-accent); }
-  .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; }
+  .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; align-items: center; }
+  /* One row until "See all" (fitHomeShelves marks the books past it). */
+  .home-shelf:not(.is-open) .home-grid > .is-over { display: none; }
+  .home-see-all { font-size: 12px; font-weight: 600; color: var(--shelf-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .home-see-all[hidden] { display: none; }
   .home-shelf .home-shelf-title { color: var(--shelf-ink); }
   .home-shelf .home-new-plus { color: var(--shelf-accent); }
   .home-shelf .home-card-new .home-cover { border-color: var(--shelf-accent); background: rgba(255, 255, 255, 0.35); }
   .home-shelf .home-card:hover .home-cover, .home-shelf .home-card:focus-visible .home-cover { border-color: var(--shelf-accent); }
   /* In the mixed archived shelf, a thin rule in each book's own color. */
-  .home-archived .home-card[data-form] .home-cover { border-top: 4px solid #6E7B3E; }
+  .home-archived .home-card[data-form] .home-cover { border-top: 4px solid #5E7A2E; }
   .home-archived .home-card[data-form="novel"] .home-cover { border-top-color: #B0532A; }
-  .home-archived .home-card[data-form="essays"] .home-cover { border-top-color: #5C6C30; }
+  .home-archived .home-card[data-form="essays"] .home-cover { border-top-color: #6E4A7E; }
   .home-archived .home-card[data-form="picture"] .home-cover { border-top-color: #4F6E88; }
 
   .pb-view { display: flex; flex-direction: column; gap: 26px; }
@@ -1561,6 +1580,62 @@
   .tour-foot button.tour-next { background: #FFFFFF; color: var(--ink); border-color: #FFFFFF; }
   .tour-target { outline: 3px solid #C1602A !important; outline-offset: 4px; border-radius: 6px; }
 
+  /* ---- Cartoon books ----
+     Newsprint: gray-white stock, black ink, and the wordmark's umber
+     chip as the accent -- the cartoon page's own palette. */
+  body.view-cb {
+    --paper: #E7E4DE; --surface: #FAF9F6; --surface-2: #EFECE6; --ink: #1B1A18; --ink-soft: #57524A; --ink-faint: #968F84;
+    --line: #DAD5CC; --line-strong: #B9B1A4; --accent: #7A4E2B; --accent-soft: #EADBCD; --shadow: rgba(27, 26, 24, 0.14);
+  }
+  .home-shelf[data-form="cartoon"] { --shelf-paper: #E7E4DE; --shelf-accent: #7A4E2B; --shelf-ink: #1B1A18; }
+  .home-archived .home-card[data-form="cartoon"] .home-cover { border-top-color: #7A4E2B; }
+  .home-start-card[data-form="cartoon"]::before { background: #7A4E2B; }
+  .home-card-cb .home-cover { aspect-ratio: 11 / 8.5; }
+  .cb-view { display: flex; flex-direction: column; gap: 26px; }
+  .cb-view[hidden] { display: none; }
+  body.view-cb .page > .chapbook-header, body.view-cb #intakePanel,
+  body.view-cb #intakeCollapsedBar, body.view-cb .page > .workspace { display: none !important; }
+  @media (min-width: 861px) {
+    .cb-main { grid-column: 1; grid-row: 2; }
+    #cbSidebar { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 4px; margin-right: -4px; }
+  }
+  .cb-main { display: flex; flex-direction: column; gap: 16px; }
+  #cbTitleInput { max-width: 640px; }
+  .cb-view .book-title-row #cbTitleInput { flex: 0 1 auto; min-width: 4em; max-width: 100%; }
+  #cbList { display: flex; flex-direction: column; gap: 14px; }
+  .cb-item { position: relative; margin-left: 32px; container-type: inline-size; }
+  .cb-num { position: absolute; left: -36px; top: 14px; width: 32px; text-align: center; font-weight: 600; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .cb-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 12px 14px; }
+  .cb-item.is-current .cb-card { border-color: var(--accent); }
+  .cb-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @container (min-width: 560px) { .cb-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; } }
+  .cb-art {
+    position: relative; aspect-ratio: 4 / 3; background: #FFFFFF; border: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden;
+  }
+  .cb-art img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .cb-art.is-empty { border-style: dashed; color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px; }
+  .cb-art.is-drop { outline: 3px solid var(--accent); }
+  .cb-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  textarea.cb-caption {
+    width: 100%; resize: none; overflow: hidden; min-height: 64px; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line);
+    background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
+    font-family: 'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif; font-size: 18px;
+  }
+  textarea.cb-caption:focus { border-color: var(--accent); }
+  textarea.cb-caption::placeholder { color: var(--ink-faint); font-style: italic; }
+  .cb-caption-shown { font-family: 'Libre Caslon Text', Georgia, serif; font-size: 13px; color: var(--ink-soft); text-align: center; min-height: 1em; }
+  .cb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cb-row .checkline { margin: 0; }
+  .cb-row .dots-btn { margin-left: auto; }
+  .cb-preview-canvas { display: block; cursor: zoom-in; outline: 1px solid var(--line-strong); background: #FFFFFF; }
+  .cb-view .preview-stage { height: auto; }
+  @media (max-width: 700px) {
+    .cb-item { margin-left: 0; }
+    .cb-num { display: none; }
+    #cbListPanel { margin: 0 -12px; padding: 12px 8px; border-left: none; border-right: none; border-radius: 0; }
+  }
+
   /* New picture book dialog. */
   .pb-new-box { max-width: 620px; width: 100%; max-height: calc(100vh - 40px); overflow-y: auto; }
   .pb-new-box h2 { font-family: "Zilla Slab", ui-serif, serif; font-size: 22px; margin: 0 0 14px; }
@@ -1864,6 +1939,7 @@
                 <div class="pb-btn-row">
                   <button type="button" class="btn btn-sm" id="pbImgShadows" title="Evens out the gray of a scan or phone photo so the paper comes out white">Remove paper shadows</button>
                   <button type="button" class="btn btn-sm" id="pbImgTransparent" title="Lifts the drawing off its paper, so whatever is behind shows through">Make paper transparent</button>
+                  <button type="button" class="btn btn-sm" id="pbImgInk" title="Makes a photo or scan of a drawing into crisp black ink on white">Clean up line art</button>
                   <button type="button" class="btn btn-sm" id="pbImgOriginal" hidden>Use original</button>
                 </div>
                 <p class="field-note" style="margin:4px 0 0;">Works best on drawings and paintings on white paper.</p>
@@ -1946,6 +2022,102 @@
               <button class="btn" id="pbExportPptxBtn" type="button" style="width:100%; justify-content:center;">Export as .pptx</button>
               <p class="pb-export-note">One slide per spread: the art as a picture, the words as text you can edit.</p>
               <div class="export-status" id="pbExportStatus"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A cartoon book: drawings with captions, one to a page. -->
+  <div class="cb-view" id="cbView" hidden>
+    <div class="chapbook-header">
+      <div class="book-title-row">
+        <textarea id="cbTitleInput" rows="1" placeholder="Cartoon book title"></textarea>
+        <button class="dots-btn" id="cbBookMenuBtn" type="button" title="Cartoon book options" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false">⋯</button>
+      </div>
+      <input type="text" id="cbAuthorInput" placeholder="Cartoonist">
+    </div>
+    <div class="workspace" id="cbWorkspace">
+      <div class="tools-bar">
+        <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
+          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+          <span id="cbToolsToggleLabel">Hide Tools</span>
+        </button>
+      </div>
+      <div class="cb-main">
+        <div class="panel" id="cbListPanel">
+          <div class="poems-head">
+            <div class="panel-title" style="margin:0;">Cartoons</div>
+            <div class="poems-count" id="cbCount"></div>
+          </div>
+          <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption beside it.</p>
+          <div id="cbList"></div>
+          <div class="pb-sheet-foot">
+            <button class="btn add-poem-btn" id="cbAddBtn" type="button">+ Add cartoon</button>
+            <button class="btn btn-sm" id="cbArchiveToggleBtn" type="button" style="margin-left:auto;">Archive</button>
+          </div>
+          <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
+        </div>
+        <div class="panel" id="cbArchivePanel" hidden>
+          <div class="poems-head">
+            <div class="panel-title" style="margin:0;">Archived cartoons</div>
+            <button class="btn btn-sm btn-danger" id="cbEmptyArchiveBtn" type="button">Empty archive</button>
+          </div>
+          <div id="cbArchiveList"></div>
+        </div>
+      </div>
+      <div class="sidebar" id="cbSidebar">
+        <div class="panel preview-panel">
+          <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
+          <div class="preview-stage"><canvas class="cb-preview-canvas" id="cbPreview" title="Open larger"></canvas></div>
+          <div class="preview-nav">
+            <button type="button" id="cbPrevFirst" aria-label="First page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
+            <button type="button" id="cbPrevPrev" aria-label="Previous page">‹</button>
+            <span id="cbPrevCaption"></span>
+            <button type="button" id="cbPrevNext" aria-label="Next page">›</button>
+            <button type="button" id="cbPrevLast" aria-label="Last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
+          </div>
+        </div>
+        <div class="panel collapsible-panel" id="cbFormattingPanel">
+          <button type="button" class="panel-toggle" id="cbFormattingToggle" aria-expanded="false" aria-controls="cbFormattingBody">
+            <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="cbFormattingBody" hidden>
+            <div class="field">
+              <label>Page</label>
+              <div class="seg seg-3" id="cbPageSeg"><button type="button" data-val="letter">US Letter, landscape</button><button type="button" data-val="a4">A4, landscape</button></div>
+            </div>
+            <div class="field">
+              <label>Caption size</label>
+              <div class="pb-range"><input type="range" id="cbCaptionSize" min="11" max="28" step="1"><output id="cbCaptionSizeOut"></output></div>
+            </div>
+            <div class="field">
+              <label>Drawing size</label>
+              <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="100" step="1"><output id="cbArtSizeOut"></output></div>
+            </div>
+            <div class="checkline">
+              <input type="checkbox" id="cbTitlePage">
+              <label for="cbTitlePage" style="text-transform:none;letter-spacing:0;font-weight:400;">Title page</label>
+            </div>
+            <div class="checkline">
+              <input type="checkbox" id="cbNumbers">
+              <label for="cbNumbers" style="text-transform:none;letter-spacing:0;font-weight:400;">Number the cartoons</label>
+            </div>
+            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in Caslon, spoken lines in quotation marks, with curly quotes and proper dashes.</p>
+          </div>
+        </div>
+        <div class="panel collapsible-panel" id="cbExportPanel">
+          <button type="button" class="panel-toggle" id="cbExportToggle" aria-expanded="false" aria-controls="cbExportBody">
+            <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="cbExportBody" hidden>
+            <div class="stat-row"><span class="stat-label">Cartoons</span><span class="stat-num" id="cbStatCount">0</span></div>
+            <div class="stat-row"><span class="stat-label">Pages</span><span class="stat-num" id="cbStatPages">0</span></div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+              <button class="btn btn-primary" id="cbExportBtn" type="button" style="width:100%; justify-content:center;">Export PDF</button>
+              <p class="pb-export-note">Landscape, one cartoon to a page, the drawing fitted and centered with its caption beneath.</p>
+              <div class="export-status" id="cbExportStatus"></div>
             </div>
           </div>
         </div>
@@ -2461,6 +2633,7 @@
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+  <button type="button" role="menuitem" data-action="move">Move to another book…</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
 </div>
 
@@ -2790,7 +2963,8 @@
     collection: { shelf: 'Poetry collections', add: 'Poetry collection', plural: 'Poetry collections', about: 'Poems, each starting on a page of its own.', newLabel: 'New poetry collection', cover: 'futura' },
     novel: { shelf: 'Novels', add: 'Novel', plural: 'Novels', about: 'Chapters and parts, set as running prose with indented paragraphs.', newLabel: 'New novel', cover: 'garamond' },
     essays: { shelf: 'Essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection', cover: 'baskerville' },
-    picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book', cover: 'poppins' }
+    picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book', cover: 'poppins' },
+    cartoon: { shelf: 'Cartoon books', add: 'Cartoon book', plural: 'Cartoon books', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon book', cover: 'caslon' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
   function storedHomeForms() {
@@ -2804,6 +2978,7 @@
       if (library.some(function (c) { return !c.archived && bookFormOf(c.data) === f; })) out.push(f);
     });
     if (pbLibrary.some(function (c) { return !c.archived; })) out.push('picture');
+    if (cbLibrary.some(function (c) { return !c.archived; })) out.push('cartoon');
     return out;
   }
   function setHomeForms(forms, at) {
@@ -3181,6 +3356,52 @@
     return book;
   }
 
+  // ---------------------------------------------------------------------
+  // Cartoon books: drawings with captions, one to a page (see the
+  // Cartoon books UI further down). Their own library, synced alongside
+  // the others; the drawings live in the same picture store as picture
+  // books' (IndexedDB here, one item each in the cloud).
+  // ---------------------------------------------------------------------
+  var CB_LIBRARY_KEY = 'bookbug.cartoonBooks.v1';
+  var CB_TRASH_KEY = 'bookbug.cartoonBookTrash.v1';
+  var cbLibrary = [];
+  var cbTrash = [];
+  try { cbLibrary = JSON.parse(localStorage.getItem(CB_LIBRARY_KEY) || '[]'); } catch (e) { cbLibrary = []; }
+  try { cbTrash = JSON.parse(localStorage.getItem(CB_TRASH_KEY) || '[]'); } catch (e) { cbTrash = []; }
+  function persistCbLibrary() { try { localStorage.setItem(CB_LIBRARY_KEY, JSON.stringify(cbLibrary)); } catch (e) {} }
+  function persistCbTrash() { try { localStorage.setItem(CB_TRASH_KEY, JSON.stringify(cbTrash)); } catch (e) {} }
+  function cbEntry(id) { return id ? cbLibrary.filter(function (c) { return c.id === id; })[0] || null : null; }
+  function activeCartoonBooks() { return cbLibrary.filter(function (c) { return !c.archived; }); }
+  function archivedCartoonBooks() { return cbLibrary.filter(function (c) { return c.archived; }); }
+  function makeCartoonBookId() { return 'cbk' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  var CASLON_STACK = "'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif";
+
+  function cbNormalizeCartoon(c) {
+    c = c || {};
+    var out = { id: c.id || ('ct' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+      img: c.img || null, orig: c.orig || null, clean: c.clean || null,
+      caption: String(c.caption || ''), spoken: c.spoken !== false };
+    if (typeof c.archivedFrom === 'number') out.archivedFrom = c.archivedFrom;
+    return out;
+  }
+  function normalizeCartoonBook(d) {
+    d = d || {};
+    return {
+      v: 1, title: d.title || '', author: d.author || '',
+      page: d.page === 'a4' ? 'a4' : 'letter',
+      captionSize: typeof d.captionSize === 'number' ? d.captionSize : 16,
+      artSize: typeof d.artSize === 'number' ? d.artSize : 0.9,
+      titlePage: d.titlePage !== false, numbers: !!d.numbers,
+      cartoons: (d.cartoons || []).map(cbNormalizeCartoon),
+      archived: (d.archived || []).map(cbNormalizeCartoon),
+      images: d.images && typeof d.images === 'object' ? d.images : {}
+    };
+  }
+  function cbCartoonIsEmpty(c) { return !c.img && !(c.caption || '').trim(); }
+  function cartoonBookHasContent(d) {
+    return !!(d && ((d.title || '').trim() || d.archived.length || d.cartoons.some(function (c) { return !cbCartoonIsEmpty(c); })));
+  }
+
   // Dummies saved by the old Dummy Builder -- in this account's cloud
   // record (its own `dummybuilder` key) or in this browser -- become
   // picture books. The id is derived from the dummy's, so the same dummy
@@ -3441,7 +3662,7 @@
   // sign-in just shows the amber badge + Sign in button). The full-page
   // gate and loading screen are only for a first visit on a device.
   function hasCachedBooksForReturningUser() {
-    return !!getLastGoogleUser() && (library.length > 0 || pbLibrary.length > 0);
+    return !!getLastGoogleUser() && (library.length > 0 || pbLibrary.length > 0 || cbLibrary.length > 0);
   }
   function updateSignInGate() {
     var localFirst = hasCachedBooksForReturningUser();
@@ -3468,6 +3689,12 @@
     pbState = null;
     pbId = null;
     if (isPictureBookShown()) { if (homeMQ.matches) showHome(); else showEditor(); }
+    clearTimeout(cbSaveTimer);
+    cbSaveTimer = null;
+    cbLibrary = []; cbTrash = [];
+    persistCbLibrary(); persistCbTrash();
+    cbState = null; cbId = null;
+    if (isCartoonShown()) { if (homeMQ.matches) showHome(); else showEditor(); }
     try { localStorage.removeItem(LAST_OPENED_KEY); } catch (e) {}
     state = blankChapbookState();
     saveStateCache();
@@ -3560,6 +3787,7 @@
       persistLibrary();
       persistTrash();
       var pbChanged = mergePictureBooksFromCloud(ours, data.state);
+      if (mergeCartoonsFromCloud(ours)) pbChanged = true;
       var cloudOpened = ours.lastOpened || null;
       var localOpened = getLastOpened();
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
@@ -3649,7 +3877,8 @@
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: 'chapbookbuilder', data: {
           chapbooks: library, trash: trash, lastOpened: getLastOpened(),
-          pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms()
+          pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
+          cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash
         } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
@@ -6433,6 +6662,91 @@
     entryMenuBtn = null;
     entryMenuIndex = null;
   }
+  // ---- Moving an entry to another book ----
+  // Any other poetry collection, novel or essay collection this account
+  // has (not archived). The entry goes to the end of that book, with any
+  // pictures it carries; nothing is lost if names collide.
+  function moveTargets() {
+    return activeBooks().filter(function (c) { return c.id !== state.chapbookId && c.data; });
+  }
+  function moveEntryTo(idx, targetId) {
+    flushPendingSave();
+    var poem = state.poems[idx], target = library.filter(function (c) { return c.id === targetId; })[0];
+    if (!poem || !target || !target.data) return;
+    var data = target.data, copy = JSON.parse(JSON.stringify(poem));
+    delete copy.sample; delete copy.sampleTitle;
+    data.poems = data.poems || [];
+    data.images = data.images || {};
+    copy.lines = (copy.lines || []).map(function (line) {
+      var m = IMAGE_LINE_RE.exec(line);
+      var img = m && state.images && state.images['img' + m[1]];
+      if (!img) return line;
+      var key = 'img' + m[1];
+      if (data.images[key] && data.images[key].data !== img.data) {
+        var n = 1;
+        while (data.images['img' + n]) n++;
+        key = 'img' + n;
+      }
+      data.images[key] = img;
+      return line.replace(/\[image \d+/, '[image ' + key.slice(3));
+    });
+    data.poems.push(copy);
+    target.updatedAt = Date.now();
+    state.poems.splice(idx, 1);
+    delete expandedCompactIds[poem.id];
+    persistLibrary();
+    persist();
+    renderAll();
+    renderChapbooksList();
+    showToast('Moved “' + entryLabel(poem) + '” to ' + (target.title || 'Untitled book') + '.');
+  }
+  function openMoveDialog(idx) {
+    var poem = state.poems[idx];
+    if (!poem) return;
+    var ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    var box = document.createElement('div');
+    box.className = 'modal-box move-box';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML = '<p style="margin-top:0;"></p><div class="move-list"></div><div class="modal-actions"><button class="btn" type="button">Cancel</button></div>';
+    box.querySelector('p').textContent = 'Move “' + entryLabel(poem) + '” to:';
+    var list = box.querySelector('.move-list');
+    ['collection', 'novel', 'essays'].forEach(function (form) {
+      var books = moveTargets().filter(function (c) { return bookFormOf(c.data) === form; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+      if (!books.length) return;
+      var h = document.createElement('div');
+      h.className = 'move-group';
+      h.textContent = BOOK_FORMS[form].shelf;
+      list.appendChild(h);
+      books.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chapbook-row move-row';
+        b.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>';
+        b.querySelector('.chapbook-title').textContent = c.title || 'Untitled book';
+        b.querySelector('.chapbook-meta').textContent = nounFor(countEntries(c.data.poems || []), c.data);
+        b.addEventListener('click', function () { close(); moveEntryTo(idx, c.id); });
+        list.appendChild(b);
+      });
+    });
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    box.querySelector('.modal-actions .btn').addEventListener('click', close);
+  }
+  // A short note at the foot of the window.
+  var toastEl = null, toastTimer = null;
+  function showToast(msg) {
+    if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'bb-toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
+    toastEl.textContent = msg;
+    toastEl.classList.add('is-on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, 3500);
+  }
   function openEntryMenu(btn, index) {
     var reopening = entryMenuBtn === btn;
     closeEntryMenu();
@@ -6440,6 +6754,9 @@
     entryMenuIndex = index;
     entryMenuBtn = btn;
     btn.setAttribute('aria-expanded', 'true');
+    var poem = state.poems[index], moveBtn = entryMenu.querySelector('[data-action="move"]');
+    moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
+    moveBtn.textContent = 'Move ' + (poem ? TEXT_FORMS[bookFormOf(state)].one : 'entry') + ' to another book…';
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -6469,6 +6786,7 @@
     var idx = entryMenuIndex;
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
+    else if (item.dataset.action === 'move') openMoveDialog(idx);
     else duplicatePoem(idx);
   });
   document.addEventListener('click', function (e) { if (!entryMenu.contains(e.target)) closeEntryMenu(); });
@@ -8086,6 +8404,7 @@
   function isHomeShown() { return document.body.classList.contains('view-home'); }
   function showHome() {
     hidePictureBookView();
+    hideCartoonView();
     if (tourState) endTour();
     flushPendingSave();
     closeChapbooksDropdown();
@@ -8097,7 +8416,8 @@
   }
   function showEditor() {
     var fromPictureBook = hidePictureBookView();
-    if (!isHomeShown() && !fromPictureBook) return;
+    var fromCartoon = hideCartoonView();
+    if (!isHomeShown() && !fromPictureBook && !fromCartoon) return;
     maybeStartTour('collection');
     document.body.classList.remove('view-home');
     homeView.hidden = true;
@@ -8144,6 +8464,7 @@
   function startBookOfForm(form) {
     addHomeForm(form);
     if (form === 'picture') openNewPictureBookDialog();
+    else if (form === 'cartoon') startNewCartoonBook();
     else startNewBook(form);
   }
   function renderHome() {
@@ -8175,10 +8496,17 @@
       var shelf = document.createElement('section');
       shelf.className = 'home-shelf';
       shelf.dataset.form = f;
-      shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3></div><div class="home-grid"></div>';
+      shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3><button class="btn-link home-see-all" type="button" hidden></button></div><div class="home-grid"></div>';
       shelf.querySelector('.home-shelf-title').textContent = BOOK_FORMS[f].shelf;
+      if (homeShelfOpen[f]) shelf.classList.add('is-open');
+      shelf.querySelector('.home-see-all').addEventListener('click', function () {
+        homeShelfOpen[f] = !homeShelfOpen[f];
+        shelf.classList.toggle('is-open', !!homeShelfOpen[f]);
+        fitHomeShelves();
+      });
       var grid = shelf.querySelector('.home-grid');
       if (f === 'picture') renderPictureBookShelf(grid);
+      else if (f === 'cartoon') renderCartoonShelf(grid);
       else {
         grid.appendChild(makeNewCard(BOOK_FORMS[f].newLabel, function () { startNewBook(f); }));
         activeBooks().filter(function (c) { return bookFormOf(c.data) === f; })
@@ -8188,11 +8516,12 @@
       }
       shelves.appendChild(shelf);
     });
+    fitHomeShelves();
     var missing = Object.keys(BOOK_FORMS).filter(function (f) { return forms.indexOf(f) === -1; });
     document.getElementById('addTypeArea').hidden = !forms.length;
 
     // Archived books of every type share one shelf.
-    var archived = archivedBooks().concat(archivedPictureBooks());
+    var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks());
     document.getElementById('homeArchivedBtn').textContent = 'Archived' + (archived.length ? ' (' + archived.length + ')' : '');
     document.getElementById('homeArchivedBtn').hidden = !archived.length && !homeArchivedOpen;
     document.getElementById('homeArchived').hidden = !homeArchivedOpen;
@@ -8200,9 +8529,30 @@
     archivedGrid.innerHTML = '';
     if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">Nothing archived.</div>';
     archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-      archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : makeHomeCard(entry));
+      archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : cbEntry(entry.id) === entry ? makeCartoonCard(entry) : makeHomeCard(entry));
     });
   }
+  // Each shelf shows one row -- its New card and the most recent books
+  // that fit -- with "See all" when there are more (a row's worth is
+  // however many columns the window has room for).
+  var homeShelfOpen = {};
+  function fitHomeShelves() {
+    document.querySelectorAll('#homeShelves .home-shelf').forEach(function (shelf) {
+      var grid = shelf.querySelector('.home-grid'), btn = shelf.querySelector('.home-see-all');
+      var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+      var books = grid.children.length - 1;
+      var hidden = grid.children.length - cols;
+      Array.prototype.forEach.call(grid.children, function (c, i) { c.classList.toggle('is-over', i >= cols); });
+      btn.hidden = hidden <= 0 && !shelf.classList.contains('is-open');
+      btn.textContent = shelf.classList.contains('is-open') ? 'Show fewer' : 'See all ' + books;
+    });
+  }
+  var homeFitTimer = null;
+  window.addEventListener('resize', function () {
+    if (!isHomeShown()) return;
+    clearTimeout(homeFitTimer);
+    homeFitTimer = setTimeout(fitHomeShelves, 100);
+  });
   // Add book type: the forms not on Home yet.
   var addTypeBtn = document.getElementById('addTypeBtn'), addTypeMenu = document.getElementById('addTypeMenu');
   function closeAddTypeMenu() { addTypeMenu.hidden = true; addTypeBtn.setAttribute('aria-expanded', 'false'); }
@@ -8277,7 +8627,7 @@
   var bookMenuFromEditor = false;
   function openBookMenu(btn, entry) {
     var reopening = bookMenuBtn === btn;
-    bookMenuFromEditor = btn.id === 'currentBookMenuBtn' || btn.id === 'pbBookMenuBtn';
+    bookMenuFromEditor = btn.id === 'currentBookMenuBtn' || btn.id === 'pbBookMenuBtn' || btn.id === 'cbBookMenuBtn';
     closeBookMenu();
     if (reopening) return;
     bookMenuEntry = entry;
@@ -8300,6 +8650,12 @@
     var entry = bookMenuEntry;
     var fromEditor = bookMenuFromEditor;
     closeBookMenu();
+    if (cbEntry(entry.id) === entry) {
+      if (item.dataset.action === 'duplicate') duplicateCartoonBook(entry.id, fromEditor);
+      else if (item.dataset.action === 'archive') setCartoonBookArchived(entry.id, !entry.archived);
+      else deleteCartoonBookForever(entry.id);
+      return;
+    }
     if (pbEntry(entry.id) === entry) {
       if (item.dataset.action === 'duplicate') duplicatePictureBook(entry.id, fromEditor);
       else if (item.dataset.action === 'archive') setPictureBookArchived(entry.id, !entry.archived);
@@ -8366,6 +8722,7 @@
         row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); deleteChapbookForever(entry.id); });
         chapbooksPane.appendChild(row);
       });
+      archivedCartoonBooks().forEach(function (entry) { chapbooksPane.appendChild(cartoonMenuRow(entry, true)); });
       var archivedPbs = archivedPictureBooks();
       if (archivedPbs.length) {
         chapbooksPane.appendChild(makeDivider());
@@ -8416,6 +8773,18 @@
       });
       chapbooksPane.appendChild(makeDivider());
     }
+    if (menuForms.indexOf('cartoon') !== -1) {
+      var newCbBtn = document.createElement('button');
+      newCbBtn.className = 'chapbooks-new';
+      newCbBtn.type = 'button';
+      newCbBtn.textContent = '+ ' + BOOK_FORMS.cartoon.newLabel;
+      newCbBtn.addEventListener('click', startNewCartoonBook);
+      chapbooksPane.appendChild(newCbBtn);
+      activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+        chapbooksPane.appendChild(cartoonMenuRow(entry, false));
+      });
+      chapbooksPane.appendChild(makeDivider());
+    }
     Object.keys(BOOK_FORMS).filter(function (f) { return menuForms.indexOf(f) === -1; }).forEach(function (f) {
       var addType = document.createElement('button');
       addType.className = 'chapbooks-trash-link';
@@ -8425,7 +8794,7 @@
       chapbooksPane.appendChild(addType);
     });
 
-    var archivedCount = archivedBooks().length + archivedPictureBooks().length;
+    var archivedCount = archivedBooks().length + archivedPictureBooks().length + archivedCartoonBooks().length;
     var archivedLink = document.createElement('button');
     archivedLink.className = 'chapbooks-trash-link';
     archivedLink.type = 'button';
@@ -8645,7 +9014,7 @@
   var wideLayout = window.matchMedia('(min-width: 861px)');
   function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
   function computeStageMode() {
-    if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') ||
+    if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') || document.body.classList.contains('view-cb') ||
         document.querySelector('.workspace').classList.contains('tools-hidden')) return null;
     var f = panelOpen('formattingBody'), m = panelOpen('coversBody');
     if (f && m) return lastStagePanel;
@@ -9182,14 +9551,14 @@
       e.stopPropagation();
       if (!panel.hidden) { close(); return; }
       // The book type you're in first; other types on Home behind a click.
-      var primary = isPictureBookShown() ? 'picture' : 'collection';
+      var primary = isPictureBookShown() ? 'picture' : isCartoonShown() ? null : 'collection';
       // Collections, novels and essays share one group.
-      var forms = homeForms().map(function (f) { return f === 'picture' ? 'picture' : 'collection'; })
+      var forms = homeForms().filter(function (f) { return f !== 'cartoon'; }).map(function (f) { return f === 'picture' ? 'picture' : 'collection'; })
         .filter(function (f, i, a) { return a.indexOf(f) === i; });
       var others = ['collection', 'picture'].filter(function (f) { return f !== primary && forms.indexOf(f) !== -1; });
       var groups = {};
       panel.querySelectorAll('[data-prefs-form]').forEach(function (g) { groups[g.dataset.prefsForm] = g; g.hidden = g.dataset.prefsForm !== primary; });
-      panel.insertBefore(groups[primary], panel.firstChild);
+      if (primary) panel.insertBefore(groups[primary], panel.firstChild);
       var more = document.getElementById('prefsMoreBtn');
       more.hidden = !others.length;
       more.textContent = others.map(function (f) { return f === 'picture' ? 'Picture books' : 'Poetry, novels & essays'; }).join(', ') + ' ›';
@@ -9259,7 +9628,7 @@
     document.getElementById('exportSelectBtn').textContent = 'Export select ' + f.many + '…';
     document.getElementById('statPoemsLabel').textContent = Cap(f.many);
     document.getElementById('selectEntriesPrompt').textContent = 'Choose which ' + f.many + ' to include:';
-    ['novel', 'essays'].forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
+    ['collection', 'novel', 'essays'].forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
     applyFormWording();
@@ -9681,6 +10050,7 @@
 
   function showPictureBookView() {
     flushPendingSave();
+    hideCartoonView();
     closeChapbooksDropdown();
     closeBookMenu();
     document.body.classList.remove('view-home');
@@ -10069,11 +10439,40 @@
     ctx.putImageData(im, 0, 0);
     return c;
   }
+  // "Clean up line art": a photo or scan of a drawing made into crisp
+  // ink on white. After the paper is evened out (pbFlattenPaper), every
+  // pixel becomes a shade of gray from its lightness, pushed hard toward
+  // black or white with a narrow soft band so line edges stay smooth; then
+  // lone dark specks (paper grain, dust) with too few dark neighbors are
+  // cleared. It sharpens what's drawn -- it doesn't trace or redraw lines.
+  function pbInkify(c) {
+    var w = c.width, h = c.height, ctx = c.getContext('2d');
+    var im = ctx.getImageData(0, 0, w, h), d = im.data, n = w * h;
+    var v = new Uint8ClampedArray(n);
+    for (var i = 0, p = 0; i < n; i++, p += 4) {
+      var lum = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+      v[i] = lum <= 120 ? 0 : lum >= 205 ? 255 : Math.round((lum - 120) / 85 * 255);
+    }
+    // A speck is a dark spot with only a few dark pixels in the 5 x 5
+    // around it (up to about 2 x 2); any drawn line has far more.
+    var out = new Uint8ClampedArray(v);
+    for (var y = 2; y < h - 2; y++) for (var x = 2; x < w - 2; x++) {
+      var k = y * w + x;
+      if (v[k] > 160) continue;
+      var dark = 0;
+      for (var oy = -2; oy <= 2; oy++) for (var ox = -2; ox <= 2; ox++) if (v[k + oy * w + ox] <= 160) dark++;
+      if (dark <= 5) out[k] = 255;
+    }
+    for (i = 0, p = 0; i < n; i++, p += 4) { d[p] = d[p + 1] = d[p + 2] = out[i]; d[p + 3] = 255; }
+    ctx.putImageData(im, 0, 0);
+    return c;
+  }
   async function pbCleanImage(it, mode) {
     var srcId = it.orig || it.img;
     var src = await pbLoadImage(srcId);
     if (!src) throw new Error('This picture isn’t on this device yet.');
     var c = pbFlattenPaper(pbCanvasFrom(src, PB_IMG_MAX_DIM), mode === 'transparent');
+    if (mode === 'ink') c = pbInkify(c);
     var enc = await pbEncode(c, mode === 'transparent');
     var id = await pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
     pbCheckpoint();
@@ -10354,6 +10753,7 @@
 
   // When a picture arrives, redraw whatever shows it.
   function pbOnImageReady(id) {
+    cbOnImageReady(id);
     if (!pbState || !isPictureBookShown()) return;
     pbState.spreads.forEach(function (sp, s) {
       if (sp.items.some(function (it) { return it.img === id; })) pbRefreshSpread(s);
@@ -11704,6 +12104,7 @@
         e.stopPropagation();
         pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
           '<button type="button" role="menuitem" data-clean="transparent">Make paper transparent</button>' +
+          '<button type="button" role="menuitem" data-clean="ink">Clean up line art</button>' +
           (it.orig ? '<button type="button" role="menuitem" data-clean="original">Use original</button>' : '');
         pbCleanMenu.hidden = false;
         var r = cleanBtn.getBoundingClientRect();
@@ -11993,6 +12394,7 @@
       pbFmt('pbImgOriginal').hidden = !it.orig;
       pbFmt('pbImgShadows').classList.toggle('btn-primary', it.clean === 'shadows');
       pbFmt('pbImgTransparent').classList.toggle('btn-primary', it.clean === 'transparent');
+      pbFmt('pbImgInk').classList.toggle('btn-primary', it.clean === 'ink');
     }
   }
   var pbFormattingClosedByHand = false;
@@ -12106,7 +12508,7 @@
   async function pbRunClean(mode) {
     var it = pbSelected();
     if (!it) return;
-    var btn = pbFmt(mode === 'transparent' ? 'pbImgTransparent' : 'pbImgShadows');
+    var btn = pbFmt(mode === 'transparent' ? 'pbImgTransparent' : mode === 'ink' ? 'pbImgInk' : 'pbImgShadows');
     var label = btn.textContent;
     btn.disabled = true; btn.textContent = 'Working…';
     setPbExportStatus('');
@@ -12122,6 +12524,7 @@
   }
   pbFmt('pbImgShadows').addEventListener('click', function () { pbRunClean('shadows'); });
   pbFmt('pbImgTransparent').addEventListener('click', function () { pbRunClean('transparent'); });
+  pbFmt('pbImgInk').addEventListener('click', function () { pbRunClean('ink'); });
   pbFmt('pbImgOriginal').addEventListener('click', function () {
     var it = pbSelected();
     if (!it || !it.orig) return;
@@ -12980,6 +13383,654 @@
   pbFmt('pbExportPptxBtn').addEventListener('click', function () { runPbExport('pptx'); });
 
   // ---------------------------------------------------------------------
+  // Cartoon books. Each cartoon is a drawing and a caption, set the New
+  // Yorker way: the caption centered beneath the drawing in Caslon, a
+  // spoken line in quotation marks (no "he said"), curly quotes and real
+  // dashes. The export is a landscape PDF, one cartoon to a page.
+  // ---------------------------------------------------------------------
+  var cbState = null, cbId = null, cbSaveTimer = null, cbCur = 0, cbArchiveOpen = false;
+  var cbView = document.getElementById('cbView');
+  var cbList = document.getElementById('cbList');
+  var cbTitleInput = document.getElementById('cbTitleInput');
+  var cbAuthorInput = document.getElementById('cbAuthorInput');
+  function isCartoonShown() { return document.body.classList.contains('view-cb'); }
+  var cbFmt = function (id) { return document.getElementById(id); };
+
+  function cbFlushSave(force) {
+    clearTimeout(cbSaveTimer);
+    cbSaveTimer = null;
+    if (!cbState) return;
+    if (!cbId) {
+      if (force !== true && !cartoonBookHasContent(cbState)) return;
+      cbId = makeCartoonBookId();
+      cbLibrary.push({ id: cbId, title: '', updatedAt: Date.now(), data: null });
+      markOpened(cbId);
+      cbBookMenuBtn.hidden = false;
+    }
+    var entry = cbEntry(cbId);
+    if (!entry) return;
+    entry.title = cbState.title || 'Untitled cartoon book';
+    entry.updatedAt = Date.now();
+    entry.data = JSON.parse(JSON.stringify(cbState));
+    persistCbLibrary();
+    scheduleCloudAutosave();
+  }
+  function cbPersist() {
+    clearTimeout(cbSaveTimer);
+    cbSaveTimer = setTimeout(cbFlushSave, 300);
+    cbUpdateStats();
+    cbSchedulePreview();
+  }
+  function cbFlushPending() { if (cbSaveTimer) cbFlushSave(); }
+  window.addEventListener('pagehide', cbFlushPending);
+
+  function showCartoonView() {
+    flushPendingSave();
+    if (typeof hidePictureBookView === 'function') hidePictureBookView();
+    closeChapbooksDropdown();
+    closeBookMenu();
+    document.body.classList.remove('view-home');
+    homeView.hidden = true;
+    document.body.classList.add('view-cb');
+    cbView.hidden = false;
+    updateMatterStage();
+    window.scrollTo(0, 0);
+  }
+  function hideCartoonView() {
+    if (!isCartoonShown()) return false;
+    cbFlushPending();
+    cbCloseFull();
+    document.body.classList.remove('view-cb');
+    cbView.hidden = true;
+    return true;
+  }
+  function openCartoonBook(id) {
+    cbFlushPending();
+    var entry = cbEntry(id);
+    if (!entry || !entry.data) return;
+    cbState = normalizeCartoonBook(entry.data);
+    cbId = entry.id;
+    cbCur = 0; cbArchiveOpen = false;
+    markOpened(entry.id);
+    showCartoonView();
+    renderCartoonBook();
+  }
+  function startNewCartoonBook() {
+    cbFlushPending();
+    cbState = normalizeCartoonBook({ author: googleUserName || '' });
+    cbId = null;
+    cbCur = 0; cbArchiveOpen = false;
+    showCartoonView();
+    renderCartoonBook();
+    cbTitleInput.focus();
+  }
+  function leaveCartoonBook() {
+    clearTimeout(cbSaveTimer);
+    cbSaveTimer = null;
+    if (homeMQ.matches) showHome(); else showEditor();
+  }
+  async function duplicateCartoonBook(id, openCopy) {
+    cbFlushPending();
+    var src = cbEntry(id);
+    if (!src || !src.data) return;
+    var title = 'Copy of ' + (src.title || 'Untitled cartoon book');
+    var copy = { id: makeCartoonBookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(src.data)) };
+    copy.data.title = title;
+    cbLibrary.push(copy);
+    persistCbLibrary();
+    if (openCopy) openCartoonBook(copy.id); else renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  async function setCartoonBookArchived(id, archived) {
+    var entry = cbEntry(id);
+    if (!entry) return;
+    // An empty cartoon book isn't archived -- it's simply removed.
+    if (archived && (!entry.data || !cartoonBookHasContent(normalizeCartoonBook(entry.data)))) {
+      cbLibrary = cbLibrary.filter(function (c) { return c.id !== id; });
+      cbTrash.push({ id: id, deletedAt: Date.now() });
+      persistCbLibrary(); persistCbTrash();
+      if (cbId === id) { cbId = null; cbState = null; if (isCartoonShown()) leaveCartoonBook(); }
+      renderChapbooksList();
+      if (cloudAuthToken) await syncLibraryToCloud();
+      return;
+    }
+    if (archived) entry.archived = true; else delete entry.archived;
+    entry.archiveChangedAt = Date.now();
+    persistCbLibrary();
+    if (archived && cbId === id && isCartoonShown()) leaveCartoonBook();
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  async function deleteCartoonBookForever(id) {
+    var entry = cbEntry(id);
+    if (!entry || !entry.archived) return;
+    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled cartoon book') + '”? This can’t be undone.');
+    if (!ok) return;
+    cbLibrary = cbLibrary.filter(function (c) { return c.id !== id; });
+    cbTrash = cbTrash.filter(function (t) { return t.id !== id; });
+    cbTrash.push({ id: id, deletedAt: Date.now() });
+    persistCbLibrary(); persistCbTrash();
+    if (cbId === id) { cbId = null; cbState = null; if (isCartoonShown()) leaveCartoonBook(); }
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  function mergeCartoonsFromCloud(ours) {
+    cbFlushPending();
+    var merged = mergeLibraries(cbLibrary, cbTrash, ours.cartoonBooks || [], ours.cartoonBookTrash || []);
+    cbLibrary = merged.library;
+    cbTrash = merged.trash;
+    persistCbLibrary(); persistCbTrash();
+    var open = cbEntry(cbId);
+    if (open && open.data && cbState && JSON.stringify(normalizeCartoonBook(open.data)) !== JSON.stringify(cbState)) {
+      cbState = normalizeCartoonBook(open.data);
+      if (isCartoonShown()) renderCartoonBook();
+    }
+    return merged.changed;
+  }
+
+  // ---- Home and the phone menu ----
+  function makeCartoonCard(entry) {
+    var data = entry.data || {};
+    var card = document.createElement('div');
+    card.className = 'home-card home-card-cb' + (entry.archived ? ' is-archived' : '');
+    card.dataset.form = 'cartoon';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
+      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<button class="home-card-more" type="button" title="More" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
+    var title = entry.title || 'Untitled cartoon book';
+    var coverTitle = card.querySelector('.home-cover-title');
+    coverTitle.textContent = title;
+    coverTitle.style.fontFamily = CASLON_STACK;
+    card.querySelector('.home-cover-author').textContent = data.author || '';
+    card.querySelector('.home-card-title').textContent = title;
+    var n = (data.cartoons || []).filter(function (c) { return !cbCartoonIsEmpty(cbNormalizeCartoon(c)); }).length;
+    card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' cartoon' : ' cartoons');
+    card.addEventListener('click', function () { openCartoonBook(entry.id); });
+    card.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); openCartoonBook(entry.id); }
+    });
+    var moreBtn = card.querySelector('.home-card-more');
+    moreBtn.addEventListener('click', function (e) { e.stopPropagation(); openBookMenu(moreBtn, entry); });
+    return card;
+  }
+  function renderCartoonShelf(grid) {
+    grid.innerHTML = '';
+    grid.appendChild(makeNewCard(BOOK_FORMS.cartoon.newLabel, startNewCartoonBook, 'home-card-cb'));
+    activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      grid.appendChild(makeCartoonCard(entry));
+    });
+  }
+  function cartoonMenuRow(entry, archivedView) {
+    var row = document.createElement('div');
+    row.className = 'chapbook-row' + (isCartoonShown() && entry.id === cbId ? ' current' : '');
+    row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
+      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete permanently">×</button>'
+        : '<button class="chapbook-restore" type="button" title="Archive">⤓</button>');
+    row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled cartoon book';
+    row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+    row.addEventListener('click', function () { openCartoonBook(entry.id); });
+    row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); setCartoonBookArchived(entry.id, !archivedView); });
+    if (archivedView) row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); deleteCartoonBookForever(entry.id); });
+    return row;
+  }
+  var cbBookMenuBtn = document.getElementById('cbBookMenuBtn');
+  cbBookMenuBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+  cbBookMenuBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    cbFlushPending();
+    var entry = cbEntry(cbId);
+    if (entry) openBookMenu(cbBookMenuBtn, entry);
+  });
+
+  // ---- Title and cartoonist ----
+  wireSingleLine(cbTitleInput, function () { cbAuthorInput.focus(); });
+  cbTitleInput.addEventListener('input', function () { cbState.title = cbTitleInput.value; fitTitleInput(cbTitleInput); cbPersist(); });
+  cbAuthorInput.addEventListener('input', function () { cbState.author = cbAuthorInput.value; cbPersist(); });
+
+  // ---- Captions, set the New Yorker way ----
+  function cbTypeset(text, spoken) {
+    var t = String(text || '').trim().replace(/\s+/g, ' ');
+    if (!t) return '';
+    t = t.replace(/\s?---?\s?/g, '—').replace(/\.\.\./g, '…');
+    t = t.replace(/(^|[\s(\[{—–])"/g, '$1“').replace(/"/g, '”').replace(/(^|[\s(\[{—–])'/g, '$1‘').replace(/'/g, '’');
+    if (spoken && !/^[“‘"]/.test(t)) t = '“' + t + '”';
+    return t;
+  }
+
+  // ---- The list of cartoons ----
+  function cbUpdateStats() {
+    if (!cbState) return;
+    var n = cbState.cartoons.filter(function (c) { return !cbCartoonIsEmpty(c); }).length;
+    cbFmt('cbCount').textContent = n + (n === 1 ? ' cartoon' : ' cartoons');
+    cbFmt('cbStatCount').textContent = n;
+    cbFmt('cbStatPages').textContent = cbPages().length;
+    cbFmt('cbArchiveToggleBtn').textContent = (cbArchiveOpen ? 'Hide archive' : 'Archive') + (cbState.archived.length ? ' (' + cbState.archived.length + ')' : '');
+  }
+  var cbFileInput = cbFmt('cbFileInput'), cbFileTarget = null;
+  function cbPick(target) {
+    cbFileTarget = target;
+    cbFileInput.multiple = target == null;
+    cbFileInput.value = '';
+    cbFileInput.click();
+  }
+  cbFileInput.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(cbFileInput.files || []);
+    if (files.length) cbAddFiles(files, cbFileTarget);
+    cbFileTarget = null;
+  });
+  async function cbImportFile(file) {
+    var img = await pbBlobToImage(file);
+    var c = pbCanvasFrom(img, 2400);
+    URL.revokeObjectURL(img.src);
+    var enc = await pbEncode(c, /png|webp|gif/i.test(file.type) && pbHasAlpha(c));
+    return cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
+  }
+  async function cbStoreImage(blob, w, h) {
+    var id = pbUid('img');
+    await pbDbDo('readwrite', function (st) { return st.put({ blob: blob, type: blob.type }, id); });
+    pbImgEls[id] = await pbBlobToImage(blob);
+    cbState.images[id] = { w: w, h: h, type: blob.type };
+    var q = pbImgQueue(); q.push(id); pbSetImgQueue(q);
+    pbFlushImageQueue();
+    return id;
+  }
+  // Files onto one cartoon replace its drawing; otherwise each becomes a
+  // new cartoon at the end, in order.
+  async function cbAddFiles(files, targetId) {
+    files = files.filter(function (f) { return /^image\//.test(f.type); });
+    if (!files.length) return;
+    try {
+      for (var i = 0; i < files.length; i++) {
+        var id = await cbImportFile(files[i]);
+        var target = targetId && i === 0 && cbState.cartoons.filter(function (c) { return c.id === targetId; })[0];
+        if (target) { target.img = id; target.orig = null; target.clean = null; }
+        else cbState.cartoons.push(cbNormalizeCartoon({ img: id }));
+      }
+      cbPersist();
+      cbRenderList();
+    } catch (err) {
+      confirmDialog('Couldn’t add that drawing: ' + (err && err.message ? err.message : 'unknown error'));
+    }
+  }
+  function cbMakeItem(c, i) {
+    var wrap = document.createElement('div');
+    wrap.className = 'cb-item' + (cbPageIndexOf(c) === cbCur ? ' is-current' : '');
+    wrap.dataset.id = c.id;
+    var num = document.createElement('div');
+    num.className = 'cb-num';
+    num.textContent = i + 1;
+    wrap.appendChild(num);
+    var card = document.createElement('div');
+    card.className = 'cb-card';
+    var body = document.createElement('div');
+    body.className = 'cb-body';
+    var art = document.createElement('div');
+    art.className = 'cb-art' + (c.img ? '' : ' is-empty');
+    art.title = c.img ? 'Click to replace the drawing' : 'Add a drawing';
+    if (c.img) {
+      var el = pbImgEls[c.img];
+      if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; art.appendChild(im); }
+      else { art.textContent = 'Loading drawing…'; pbLoadImage(c.img); }
+    } else art.textContent = 'Click or drop a drawing here';
+    art.addEventListener('click', function () { cbPick(c.id); });
+    art.addEventListener('dragover', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1) { e.preventDefault(); e.stopPropagation(); art.classList.add('is-drop'); } });
+    art.addEventListener('dragleave', function () { art.classList.remove('is-drop'); });
+    art.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation(); art.classList.remove('is-drop');
+      cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files || []), c.id);
+    });
+    body.appendChild(art);
+    var side = document.createElement('div');
+    side.className = 'cb-side';
+    var ta = document.createElement('textarea');
+    ta.className = 'cb-caption';
+    ta.rows = 2;
+    ta.placeholder = 'Caption';
+    ta.value = c.caption;
+    ta.spellcheck = prefs.spellcheck;
+    var shown = document.createElement('div');
+    shown.className = 'cb-caption-shown';
+    shown.title = 'How the caption will be set';
+    function refreshShown() { shown.textContent = c.caption.trim() ? 'Set as: ' + cbTypeset(c.caption, c.spoken) : ''; }
+    refreshShown();
+    ta.addEventListener('input', function () { c.caption = ta.value; autoGrow(ta); refreshShown(); cbPersist(); });
+    ta.addEventListener('focus', function () { cbFollow(cbPageIndexOf(c)); });
+    side.append(ta, shown);
+    var row = document.createElement('div');
+    row.className = 'cb-row';
+    var spoken = document.createElement('label');
+    spoken.className = 'checkline';
+    spoken.innerHTML = '<input type="checkbox"><span style="font-size:12.5px;">Spoken (in quotation marks)</span>';
+    spoken.firstChild.checked = c.spoken;
+    spoken.firstChild.addEventListener('change', function (e) { c.spoken = e.target.checked; refreshShown(); cbPersist(); });
+    row.appendChild(spoken);
+    var dots = document.createElement('button');
+    dots.type = 'button'; dots.className = 'dots-btn'; dots.textContent = '⋯';
+    dots.setAttribute('aria-label', 'Options for cartoon ' + (i + 1));
+    dots.addEventListener('click', function (e) { e.stopPropagation(); cbOpenItemMenu(dots, c); });
+    row.appendChild(dots);
+    side.appendChild(row);
+    body.appendChild(side);
+    card.appendChild(body);
+    wrap.appendChild(card);
+    requestAnimationFrame(function () { autoGrow(ta); });
+    return wrap;
+  }
+  function cbRenderList() {
+    var y = window.scrollY;
+    cbList.innerHTML = '';
+    if (!cbState.cartoons.length) {
+      var hint = document.createElement('div');
+      hint.className = 'chapbooks-empty';
+      hint.textContent = 'No cartoons yet. Drop drawings here, or use + Add cartoon.';
+      cbList.appendChild(hint);
+    }
+    cbState.cartoons.forEach(function (c, i) { cbList.appendChild(cbMakeItem(c, i)); });
+    cbUpdateStats();
+    cbRenderArchive();
+    renderCbPreview();
+    window.scrollTo({ top: y, behavior: 'instant' });
+  }
+  // Drawings dropped anywhere on the list each become a cartoon.
+  cbFmt('cbListPanel').addEventListener('dragover', function (e) {
+    if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1) e.preventDefault();
+  });
+  cbFmt('cbListPanel').addEventListener('drop', function (e) {
+    if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault();
+    cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files), null);
+  });
+  cbFmt('cbAddBtn').addEventListener('click', function () { cbPick(null); });
+
+  // ⋯ on a cartoon: tidy the drawing, move it, archive it.
+  var cbItemMenu = document.createElement('div');
+  cbItemMenu.className = 'entry-menu';
+  cbItemMenu.setAttribute('role', 'menu');
+  cbItemMenu.hidden = true;
+  document.body.appendChild(cbItemMenu);
+  var cbMenuFor = null;
+  function cbOpenItemMenu(btn, c) {
+    var i = cbState.cartoons.indexOf(c);
+    cbMenuFor = c;
+    cbItemMenu.innerHTML =
+      (c.img ? '<button type="button" data-a="shadows">Remove paper shadows</button><button type="button" data-a="ink">Clean up line art</button>' +
+        (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') : '') +
+      (i > 0 ? '<button type="button" data-a="up">Move up</button>' : '') +
+      (i < cbState.cartoons.length - 1 ? '<button type="button" data-a="down">Move down</button>' : '') +
+      '<button type="button" data-a="archive">' + (cbCartoonIsEmpty(c) ? 'Delete' : 'Archive') + '</button>';
+    cbItemMenu.hidden = false;
+    var r = btn.getBoundingClientRect(), mh = cbItemMenu.offsetHeight, mw = cbItemMenu.offsetWidth;
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    cbItemMenu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + 'px';
+    cbItemMenu.style.top = top + 'px';
+  }
+  cbItemMenu.addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-a]');
+    if (!b || !cbMenuFor) return;
+    var c = cbMenuFor, a = b.dataset.a, list = cbState.cartoons, i = list.indexOf(c);
+    cbItemMenu.hidden = true;
+    if (a === 'up' || a === 'down') {
+      var j = a === 'up' ? i - 1 : i + 1;
+      list.splice(j, 0, list.splice(i, 1)[0]);
+      cbPersist(); cbRenderList();
+    } else if (a === 'archive') {
+      list.splice(i, 1);
+      // Something with nothing in it isn't archived -- just removed.
+      if (!cbCartoonIsEmpty(c)) { c.archivedFrom = i; cbState.archived.unshift(c); }
+      cbPersist(); cbRenderList();
+    } else if (a === 'original') {
+      c.img = c.orig; c.orig = null; c.clean = null;
+      cbPersist(); cbRenderList();
+    } else {
+      try {
+        var src = await pbLoadImage(c.orig || c.img);
+        if (!src) throw new Error('This drawing isn’t on this device yet.');
+        var cv = pbFlattenPaper(pbCanvasFrom(src, 2400), false);
+        if (a === 'ink') cv = pbInkify(cv);
+        var enc = await pbEncode(cv, false);
+        var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
+        c.orig = c.orig || c.img; c.img = id; c.clean = a;
+        cbPersist(); cbRenderList();
+      } catch (err) { confirmDialog(err && err.message ? err.message : 'Couldn’t clean up that drawing.'); }
+    }
+  });
+  document.addEventListener('click', function (e) { if (!cbItemMenu.contains(e.target)) cbItemMenu.hidden = true; });
+  window.addEventListener('scroll', function () { cbItemMenu.hidden = true; }, true);
+
+  // ---- Archived cartoons ----
+  function cbRenderArchive() {
+    cbFmt('cbArchivePanel').hidden = !cbArchiveOpen;
+    var list = cbFmt('cbArchiveList');
+    list.innerHTML = '';
+    cbFmt('cbEmptyArchiveBtn').disabled = !cbState.archived.length;
+    if (!cbState.archived.length) { list.innerHTML = '<div class="chapbooks-empty" style="padding:4px 0;">Nothing archived.</div>'; return; }
+    cbState.archived.forEach(function (c, gi) {
+      var item = document.createElement('div');
+      item.className = 'pb-archive-item';
+      var thumb = document.createElement('div');
+      thumb.className = 'cb-art' + (c.img ? '' : ' is-empty');
+      thumb.style.width = '160px';
+      if (c.img && pbImgEls[c.img]) { var im = document.createElement('img'); im.src = pbImgEls[c.img].src; im.alt = ''; thumb.appendChild(im); }
+      item.appendChild(thumb);
+      var txt = document.createElement('div');
+      txt.className = 'pb-archive-text';
+      txt.textContent = cbTypeset(c.caption, c.spoken) || '(no caption)';
+      item.appendChild(txt);
+      var restore = document.createElement('button');
+      restore.type = 'button'; restore.className = 'btn btn-sm'; restore.textContent = 'Restore';
+      restore.addEventListener('click', function () {
+        var back = cbState.archived.splice(gi, 1)[0];
+        var at = typeof back.archivedFrom === 'number' ? Math.min(back.archivedFrom, cbState.cartoons.length) : cbState.cartoons.length;
+        delete back.archivedFrom;
+        cbState.cartoons.splice(at, 0, back);
+        cbPersist(); cbRenderList();
+      });
+      item.appendChild(restore);
+      list.appendChild(item);
+    });
+  }
+  cbFmt('cbArchiveToggleBtn').addEventListener('click', function () { cbArchiveOpen = !cbArchiveOpen; cbUpdateStats(); cbRenderArchive(); });
+  cbFmt('cbEmptyArchiveBtn').addEventListener('click', async function () {
+    var n = cbState.archived.length;
+    if (!n) return;
+    if (!(await confirmDialog('Permanently delete ' + n + ' archived cartoon' + (n === 1 ? '' : 's') + '? This can’t be undone.'))) return;
+    cbState.archived = [];
+    cbPersist(); cbRenderArchive(); cbUpdateStats();
+  });
+
+  // ---- Pages: drawn once, for the preview and the PDF alike ----
+  function cbPageSize() { return cbState.page === 'a4' ? { w: 11.69, h: 8.27, label: 'A4' } : { w: 11, h: 8.5, label: 'US Letter' }; }
+  function cbPages() {
+    var pages = [];
+    if (cbState.titlePage) pages.push({ kind: 'title' });
+    var n = 0;
+    cbState.cartoons.forEach(function (c) { if (!cbCartoonIsEmpty(c)) pages.push({ kind: 'cartoon', c: c, n: ++n }); });
+    return pages;
+  }
+  function cbPageIndexOf(c) {
+    var pages = cbPages();
+    for (var i = 0; i < pages.length; i++) if (pages[i].c === c) return i;
+    return -1;
+  }
+  function cbDrawPage(ctx, Wpx, pg, placeholders) {
+    var ps = cbPageSize(), s = Wpx / ps.w, W = Wpx, H = ps.h * s, pt = s / 72;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1B1A18';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    if (!pg) return H;
+    if (pg.kind === 'title') {
+      var tSize = 40 * pt;
+      ctx.font = '400 ' + tSize + 'px ' + CASLON_STACK;
+      var tLines = pbWrapCanvas(ctx, cbState.title || 'Untitled', W * 0.7);
+      var y = H * 0.42 - (tLines.length - 1) * tSize * 0.6;
+      tLines.forEach(function (l, i) { ctx.fillText(l, W / 2, y + i * tSize * 1.2); });
+      if (cbState.author.trim()) {
+        ctx.font = 'italic 400 ' + (18 * pt) + 'px ' + CASLON_STACK;
+        ctx.fillText(cbState.author.trim(), W / 2, y + (tLines.length - 1) * tSize * 1.2 + 44 * pt);
+      }
+      return H;
+    }
+    var c = pg.c, m = 0.75 * s;
+    var capPx = cbState.captionSize * pt, lh = capPx * 1.35;
+    ctx.font = '400 ' + capPx + 'px ' + CASLON_STACK;
+    var caption = cbTypeset(c.caption, c.spoken);
+    var lines = caption ? pbWrapCanvas(ctx, caption, Math.min(W - 2 * m, 7 * s)) : [];
+    var capH = lines.length * lh, gap = lines.length ? 0.28 * s : 0, numH = cbState.numbers ? 0.35 * s : 0;
+    var el = c.img && pbImgEls[c.img];
+    if (c.img && !el) pbLoadImage(c.img);
+    var boxW = (W - 2 * m) * cbState.artSize, boxH = (H - 2 * m - capH - gap - numH) * cbState.artSize;
+    var dw = 0, dh = 0;
+    if (el) {
+      var iw = el.naturalWidth, ih = el.naturalHeight, sc = Math.min(boxW / iw, boxH / ih);
+      dw = iw * sc; dh = ih * sc;
+    } else if (c.img && placeholders) { dw = boxW * 0.6; dh = boxH * 0.6; }
+    // Drawing and caption as one block, a touch above the page's middle.
+    var blockH = dh + gap + capH;
+    var top = m + Math.max(0, (H - 2 * m - numH - blockH) * 0.45);
+    if (el) ctx.drawImage(el, (W - dw) / 2, top, dw, dh);
+    else if (dw && placeholders) { ctx.fillStyle = '#EFECE6'; ctx.fillRect((W - dw) / 2, top, dw, dh); ctx.fillStyle = '#1B1A18'; }
+    ctx.font = '400 ' + capPx + 'px ' + CASLON_STACK;
+    lines.forEach(function (l, i) { ctx.fillText(l, W / 2, top + dh + gap + i * lh + capPx); });
+    if (cbState.numbers) {
+      ctx.font = '400 ' + (10 * pt) + 'px ' + CASLON_STACK;
+      ctx.fillStyle = '#57524A';
+      ctx.fillText(String(pg.n), W / 2, H - m * 0.6);
+    }
+    return H;
+  }
+  var cbPreviewCanvas = cbFmt('cbPreview');
+  function renderCbPreview() {
+    if (!cbState || !isCartoonShown()) return;
+    var pages = cbPages();
+    cbCur = Math.max(0, Math.min(cbCur, pages.length - 1));
+    var w = Math.max(200, cbPreviewCanvas.parentNode.clientWidth || 272), ps = cbPageSize();
+    var ctx = pbCanvasFor(cbPreviewCanvas, w, w * ps.h / ps.w);
+    cbDrawPage(ctx, w, pages[cbCur], true);
+    var pg = pages[cbCur];
+    cbFmt('cbPrevCaption').textContent = !pg ? 'No pages yet' : pg.kind === 'title' ? 'Title page' : 'Cartoon ' + pg.n + ' of ' + pages.filter(function (p) { return p.kind === 'cartoon'; }).length;
+    cbFmt('cbPrevFirst').disabled = cbFmt('cbPrevPrev').disabled = cbCur <= 0;
+    cbFmt('cbPrevLast').disabled = cbFmt('cbPrevNext').disabled = cbCur >= pages.length - 1;
+    cbList.querySelectorAll('.cb-item').forEach(function (el) {
+      var c = cbState.cartoons.filter(function (x) { return x.id === el.dataset.id; })[0];
+      el.classList.toggle('is-current', !!c && cbPageIndexOf(c) === cbCur);
+    });
+    if (!cbFull.hidden) cbRenderFull();
+  }
+  var cbPrevRaf = null;
+  function cbSchedulePreview() { if (!cbPrevRaf) cbPrevRaf = requestAnimationFrame(function () { cbPrevRaf = null; renderCbPreview(); }); }
+  function cbFollow(i) { if (i >= 0 && i !== cbCur) { cbCur = i; renderCbPreview(); } }
+  ['cbPrevFirst', 'cbPrevPrev', 'cbPrevNext', 'cbPrevLast'].forEach(function (id) { cbFmt(id).addEventListener('mousedown', function (e) { e.preventDefault(); }); });
+  cbFmt('cbPrevFirst').addEventListener('click', function () { cbCur = 0; renderCbPreview(); });
+  cbFmt('cbPrevPrev').addEventListener('click', function () { cbCur--; renderCbPreview(); });
+  cbFmt('cbPrevNext').addEventListener('click', function () { cbCur++; renderCbPreview(); });
+  cbFmt('cbPrevLast').addEventListener('click', function () { cbCur = cbPages().length - 1; renderCbPreview(); });
+  window.addEventListener('resize', function () { if (isCartoonShown()) cbSchedulePreview(); });
+  // Full screen, a page at a time.
+  var cbFull = document.createElement('div');
+  cbFull.className = 'preview-full';
+  cbFull.hidden = true;
+  cbFull.innerHTML = '<button class="preview-full-close" type="button" aria-label="Close">×</button><div class="preview-full-stage"><canvas class="pb-full-canvas"></canvas>' +
+    '<div class="preview-full-nav"><span></span><button type="button" data-d="-1" aria-label="Previous page">‹</button><span></span><button type="button" data-d="1" aria-label="Next page">›</button><span></span></div></div>';
+  document.body.appendChild(cbFull);
+  function cbRenderFull() {
+    var ps = cbPageSize(), w = Math.floor(Math.min(window.innerWidth - 40, (window.innerHeight - 110) * ps.w / ps.h));
+    cbDrawPage(pbCanvasFor(cbFull.querySelector('canvas'), w, w * ps.h / ps.w), w, cbPages()[cbCur], true);
+    cbFull.querySelectorAll('.preview-full-nav span')[1].textContent = cbFmt('cbPrevCaption').textContent;
+  }
+  function cbCloseFull() { cbFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
+  cbPreviewCanvas.addEventListener('click', function () { cbFull.hidden = false; document.documentElement.classList.add('preview-full-open'); cbRenderFull(); });
+  cbFull.querySelector('.preview-full-close').addEventListener('click', cbCloseFull);
+  cbFull.addEventListener('click', function (e) { if (e.target === cbFull) cbCloseFull(); });
+  cbFull.querySelectorAll('[data-d]').forEach(function (b) {
+    b.addEventListener('click', function () { cbCur = Math.max(0, Math.min(cbPages().length - 1, cbCur + (+b.dataset.d))); renderCbPreview(); });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (cbFull.hidden) return;
+    if (e.key === 'Escape') { e.stopPropagation(); cbCloseFull(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { cbCur = Math.max(0, Math.min(cbPages().length - 1, cbCur + (e.key === 'ArrowLeft' ? -1 : 1))); renderCbPreview(); }
+  }, true);
+
+  // ---- Formatting ----
+  cbFmt('cbPageSeg').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () { cbState.page = b.dataset.val; cbSyncFormatting(); cbPersist(); });
+  });
+  cbFmt('cbCaptionSize').addEventListener('input', function () { cbState.captionSize = +cbFmt('cbCaptionSize').value; cbSyncFormatting(); cbPersist(); });
+  cbFmt('cbArtSize').addEventListener('input', function () { cbState.artSize = +cbFmt('cbArtSize').value / 100; cbSyncFormatting(); cbPersist(); });
+  cbFmt('cbTitlePage').addEventListener('change', function () { cbState.titlePage = cbFmt('cbTitlePage').checked; cbPersist(); cbRenderList(); });
+  cbFmt('cbNumbers').addEventListener('change', function () { cbState.numbers = cbFmt('cbNumbers').checked; cbPersist(); });
+  function cbSyncFormatting() {
+    cbFmt('cbPageSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === cbState.page); });
+    cbFmt('cbCaptionSize').value = cbState.captionSize; cbFmt('cbCaptionSizeOut').textContent = cbState.captionSize + ' pt';
+    cbFmt('cbArtSize').value = Math.round(cbState.artSize * 100); cbFmt('cbArtSizeOut').textContent = Math.round(cbState.artSize * 100) + '%';
+    cbFmt('cbTitlePage').checked = cbState.titlePage;
+    cbFmt('cbNumbers').checked = cbState.numbers;
+  }
+  // Show / Hide Tools.
+  var cbToolsHidden = false;
+  try { cbToolsHidden = localStorage.getItem('bookbug.cbToolsHidden.v1') === '1'; } catch (e) {}
+  function applyCbToolsHidden() {
+    cbFmt('cbWorkspace').classList.toggle('tools-hidden', cbToolsHidden);
+    cbFmt('cbToolsToggleBtn').setAttribute('aria-pressed', cbToolsHidden ? 'false' : 'true');
+    cbFmt('cbToolsToggleLabel').textContent = cbToolsHidden ? 'Show Tools' : 'Hide Tools';
+  }
+  cbFmt('cbToolsToggleBtn').addEventListener('click', function () {
+    cbToolsHidden = !cbToolsHidden;
+    try { localStorage.setItem('bookbug.cbToolsHidden.v1', cbToolsHidden ? '1' : '0'); } catch (e) {}
+    applyCbToolsHidden();
+    cbSchedulePreview();
+  });
+  applyCbToolsHidden();
+
+  function renderCartoonBook() {
+    if (!cbState) return;
+    cbTitleInput.value = cbState.title;
+    cbAuthorInput.value = cbState.author;
+    requestAnimationFrame(function () { fitTitleInput(cbTitleInput); });
+    cbBookMenuBtn.hidden = !cbEntry(cbId);
+    cbSyncFormatting();
+    cbRenderList();
+    cbFmt('cbExportStatus').textContent = '';
+    Object.keys(cbState.images).forEach(pbLoadImage);
+  }
+  function cbOnImageReady() { if (isCartoonShown() && cbState) { cbRenderList(); } }
+
+  // ---- Export: a landscape PDF, one cartoon to a page ----
+  cbFmt('cbExportBtn').addEventListener('click', async function () {
+    cbFlushPending();
+    var btn = cbFmt('cbExportBtn'), status = cbFmt('cbExportStatus');
+    var pages = cbPages();
+    if (!pages.some(function (p) { return p.kind === 'cartoon'; })) { status.textContent = 'Add a cartoon first.'; return; }
+    btn.disabled = true;
+    status.textContent = 'Building PDF…';
+    try {
+      await Promise.all(['400 16px ', 'italic 400 16px '].map(function (w) { return document.fonts.load(w + '"Libre Caslon Text"').catch(function () {}); }));
+      await Promise.all(Object.keys(cbState.images).map(pbLoadImage));
+      var ps = cbPageSize(), DPI = 200, out = [];
+      for (var i = 0; i < pages.length; i++) {
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(ps.w * DPI); cv.height = Math.round(ps.h * DPI);
+        cbDrawPage(cv.getContext('2d'), cv.width, pages[i], false);
+        var blob = await pbCanvasBlob(cv, 'image/jpeg', 0.92);
+        out.push({ wPt: ps.w * 72, hPt: ps.h * 72, wPx: cv.width, hPx: cv.height, jpeg: new Uint8Array(await blob.arrayBuffer()) });
+      }
+      var bytes = pbWritePdf(out, cbState.title || 'Cartoons');
+      var filename = ((cbState.title || 'cartoons').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'cartoons') + '.pdf';
+      var dl = null;
+      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+      if (dl) { await dl.save({ filename: filename, data: bytes }); status.textContent = 'Saved ' + filename + '.'; }
+      else { downloadBlob(filename, bytes, 'application/pdf'); status.textContent = 'Downloaded ' + filename + '.'; }
+    } catch (err) {
+      status.textContent = err && err.code === 'declined' ? '' : 'Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.';
+    }
+    btn.disabled = false;
+  });
+
+  // ---------------------------------------------------------------------
   // Quick tour: a few cards the first time someone opens each kind of
   // book, pointing at the parts that matter. "Show the quick tour again"
   // in Preferences brings them back.
@@ -13109,6 +14160,7 @@
       ed.style.tabSize = tabSizeFor(ed.style.fontFamily || displayStackFor(state.bodyFontChoice), parseFloat(getComputedStyle(ed).fontSize), TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
     });
     pbRegrow();
+    if (isCartoonShown()) fitTitleInput(cbTitleInput);
     document.querySelectorAll('.poem-compact-expanded textarea.poem-title').forEach(fitTitleInput);
     document.querySelectorAll('textarea.poem-title, #bookTitleInput').forEach(function (ta) {
       if (!ta.closest('.is-writing') || ta.classList.contains('poem-title')) autoGrow(ta);
