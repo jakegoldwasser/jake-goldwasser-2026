@@ -1479,9 +1479,14 @@
   /* Snap guides while dragging a text box: rust for the page's own
      lines, slate-blue for "back where it started". */
   .pb-guide { position: absolute; z-index: 8; pointer-events: none; }
-  .pb-guide-v { top: 0; bottom: 0; border-left: 1.5px solid #C1602A; }
-  .pb-guide-h { left: 0; right: 0; border-top: 1.5px solid #C1602A; }
-  .pb-guide.is-start { border-color: var(--accent); border-style: dashed; }
+  .pb-guide-v { top: 0; bottom: 0; border-left: 1px solid #C1602A; }
+  .pb-guide-h { left: 0; right: 0; border-top: 1px solid #C1602A; }
+  .pb-guide-tag {
+    position: absolute; white-space: nowrap; font: 600 10.5px/1 "Work Sans", sans-serif; letter-spacing: 0.02em;
+    color: #FFFFFF; background: #C1602A; padding: 3px 6px; border-radius: 999px;
+  }
+  .pb-guide-v .pb-guide-tag { top: 6px; left: 4px; }
+  .pb-guide-h .pb-guide-tag { left: 6px; top: 4px; }
   /* The whole picture, faintly, while it's dragged partly off its page. */
   .pb-img-ghost { position: absolute; z-index: 2; opacity: .28; pointer-events: none; max-width: none; outline: 1px dashed var(--accent); }
 
@@ -2859,6 +2864,22 @@
     return pbText(x, y, w, text, Object.assign({ auto: role, autoText: text }, extra || {}));
   }
   // Sets page p's role and lays out what that page usually holds.
+  // Front and back matter, laid out the way picture books set them.
+  // Sizes are multiples of the story's type size (`rel`), so the
+  // hierarchy holds at any trim: title about 3x the story text, the
+  // byline a touch larger than it, copyright small.
+  //  - Title page: title centered in the upper third, "by Author" below
+  //    it with room between; on a title spread, both go on the right-hand
+  //    page (text stays out of the gutter; art runs across).
+  //  - Half title: the title alone, smaller, in the upper third.
+  //  - Dedication: story size, italic, centered in the upper third.
+  //  - Copyright: a small centered block set up from the bottom margin.
+  var PB_MATTER_V = 2;
+  function pbLiveFor(book, side) {
+    var t = pbTrim(book.trim), out = book.margin / (2 * t.pageW), gut = book.gutter / (2 * t.pageW);
+    return side === 'left' ? { x0: out, x1: 0.5 - gut } : { x0: 0.5 + gut, x1: 1 - out };
+  }
+  var PB_COPYRIGHT_LINES = 3;
   function pbApplyRole(book, p, role) {
     var n = book.spreads.length, spot = pbPageSpot(p, n), sp = book.spreads[spot.s], side = spot.side;
     if (!sp) return;
@@ -2868,34 +2889,68 @@
     sp[side].role = role;
     pbDropAuto(sp, side);
     if (wasSpreadTitle && role !== 'title') {
-      // Breaking up a title spread: the other page keeps a title of its own.
+      // Breaking up a title spread: the other page goes back to story.
       pbDropAuto(sp, other);
       sp[other].role = 'story';
     }
-    var px = side === 'left' ? 0 : 0.5;
-    function x(f) { return px + f * 0.5; }
+    var t = pbTrim(book.trim), topM = book.margin / t.pageH;
+    // A centered box across `frac` of a page's text area.
+    function box(onSide, frac, y, extra, text) {
+      var l = pbLiveFor(book, onSide), w = (l.x1 - l.x0) * frac;
+      return pbAuto(role === 'title' ? 'title' : role, l.x0 + (l.x1 - l.x0 - w) / 2, y, w, text || '', Object.assign({ align: 'center' }, extra));
+    }
+    // A copyright block whose last line sits on the bottom margin.
+    function copyright(onSide, autoRole) {
+      var rel = 0.55, lh = 1.3, size = Math.max(7, pbAutoSize(book.trim) * rel);
+      var h = PB_COPYRIGHT_LINES * size * lh / (t.pageH * 72);
+      var it = box(onSide, 0.9, 1 - topM - h, { rel: rel, lh: lh, bind: 'copyright' });
+      if (autoRole) it.auto = autoRole;
+      return it;
+    }
+    function titlePage(onSide, spread) {
+      sp.items.push(box(onSide, 0.92, spread ? 0.26 : 0.22, { rel: spread ? 3.2 : 2.8, lh: 1.1, bold: true, bind: 'title' }));
+      sp.items.push(box(onSide, 0.9, spread ? 0.56 : 0.52, { rel: 1.2, bind: 'byline' }));
+    }
     if (role === 'title' && ((side === 'left' && otherIsPage) || (side === 'right' && sp.left.role === 'title' && pbSpreadPages(spot.s, n).left))) {
       sp.left.role = sp.right.role = 'title';
       pbDropAuto(sp, 'left'); pbDropAuto(sp, 'right');
-      sp.items.push(pbAuto('title', 0.15, 0.32, 0.7, '', { size: 40, bold: true, bind: 'title' }));
-      sp.items.push(pbAuto('title', 0.3, 0.52, 0.4, '', { size: 18, bind: 'author' }));
-      // The copyright, small at the foot of the left page.
+      titlePage('right', true);
+      // The copyright, small at the foot of the left page (unless the
+      // book already has one).
       if (!book.spreads.some(function (o) { return o.items.some(function (it) { return it.bind === 'copyright'; }); })) {
-        sp.items.push(pbAuto('title', 0.05, 0.84, 0.4, '', { size: 8, bind: 'copyright' }));
+        sp.items.push(copyright('left', 'title'));
       }
     } else if (role === 'title') {
-      sp.items.push(pbAuto('title', x(0.1), 0.3, 0.4, '', { size: 32, bold: true, bind: 'title' }));
-      sp.items.push(pbAuto('title', x(0.1), 0.48, 0.4, '', { size: 16, bind: 'author' }));
+      titlePage(side, false);
     } else if (role === 'half-title') {
-      sp.items.push(pbAuto(role, x(0.1), 0.4, 0.4, '', { size: 24, bold: true, bind: 'title' }));
+      sp.items.push(box(side, 0.85, 0.28, { rel: 1.8, lh: 1.15, bold: true, bind: 'title' }));
     } else if (role === 'copyright') {
-      sp.items.push(pbAuto(role, x(0.1), 0.78, 0.4, '', { size: 9, bind: 'copyright' }));
+      sp.items.push(copyright(side));
     } else if (role === 'dedication') {
-      sp.items.push(pbAuto(role, x(0.15), 0.42, 0.35, 'For …', { size: 16, italic: true }));
+      sp.items.push(box(side, 0.7, 0.3, { rel: 1, italic: true }, 'For …'));
     } else if (role === 'copyright-dedication') {
-      sp.items.push(pbAuto(role, x(0.15), 0.3, 0.35, 'For …', { size: 16, italic: true }));
-      sp.items.push(pbAuto(role, x(0.1), 0.78, 0.4, '', { size: 9, bind: 'copyright' }));
+      sp.items.push(box(side, 0.7, 0.3, { rel: 1, italic: true }, 'For …'));
+      sp.items.push(copyright(side));
     }
+    book.matterV = PB_MATTER_V;
+  }
+  // Books laid out before the current matter conventions: any matter
+  // page whose auto-made text hasn't been touched is laid out afresh.
+  function pbRelayoutMatter(book) {
+    if (book.matterV === PB_MATTER_V) return false;
+    var total = pbTotalPagesFor(book.spreads.length);
+    for (var p = 1; p <= total; p++) {
+      var role = pbRoleAt(book, p);
+      if (role === 'story' || role === 'endpaper' || role === 'blank') continue;
+      var spot = pbPageSpot(p, book.spreads.length), sp = book.spreads[spot.s];
+      // Title/author boxes are always the page's own, whoever made them.
+      sp.items.forEach(function (it) { if (it.bind && !it.auto) it.auto = role; });
+      var untouched = sp.items.filter(function (it) { return it.auto; }).every(function (it) { return it.bind || it.text === it.autoText; });
+      // The right page of a title spread is laid out with its left page.
+      if (untouched && !(role === 'title' && spot.side === 'right' && sp.left.role === 'title')) pbApplyRole(book, p, role);
+    }
+    book.matterV = PB_MATTER_V;
+    return true;
   }
   // After anything moves, pages keep only roles that still make sense
   // where they now are; the rest go back to story.
@@ -2937,7 +2992,8 @@
       bold: !!it.bold, italic: !!it.italic, align: ['left', 'center', 'right'].indexOf(it.align) !== -1 ? it.align : 'center',
       lh: typeof it.lh === 'number' ? it.lh : null, color: it.color || 'ink',
       bg: /^#[0-9A-F]{6}$/i.test(it.bg || '') ? it.bg : null,
-      bind: ['title', 'author', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
+      bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
+      rel: typeof it.rel === 'number' ? it.rel : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null };
   }
   function pbNormalizeSpread(sp) {
@@ -3002,7 +3058,7 @@
     return pbValidated({
       v: 2, title: d.title || '', author: d.author || '', trim: pbTrim(d.trim).key,
       font: getFontChoice(d.font || 'poppins').key, size: typeof d.size === 'number' ? d.size : 18,
-      snapOuter: !!d.snapOuter, pageNums: ['outer', 'center', 'none'].indexOf(d.pageNums) !== -1 ? d.pageNums : 'outer',
+      snapOuter: !!d.snapOuter, matterV: d.matterV || 0, pageNums: ['outer', 'center', 'none'].indexOf(d.pageNums) !== -1 ? d.pageNums : 'outer',
       // Story layout (see PB_STANDARD): type size (automatic for the trim
       // unless set), leading, text width and margins.
       sizeAuto: d.sizeAuto !== false,
@@ -9486,6 +9542,7 @@
     if (!entry || !entry.data) return;
     pbState = normalizePictureBook(entry.data);
     pbId = entry.id;
+    if (pbRelayoutMatter(pbState)) pbPersist();
     pbCur = 0;
     pbSel = null;
     pbUndoStack = [];
@@ -9858,10 +9915,12 @@
   ];
   function pbColor(c) { return c === 'ink' || !c ? '#161616' : c; }
   function pbCopyrightText() {
-    return 'Text copyright © ' + new Date().getFullYear() + (pbState.author.trim() ? ' ' + pbState.author.trim() : '') + '\nAll rights reserved.';
+    var y = new Date().getFullYear(), a = pbState.author.trim();
+    return 'Text copyright © ' + y + (a ? ' by ' + a : '') + '\nAll rights reserved.\nFirst edition, ' + y;
   }
   function pbItemText(it) {
     if (it.bind === 'copyright') return pbCopyrightText();
+    if (it.bind === 'byline') return pbState.author.trim() ? 'by ' + pbState.author.trim() : '';
     return it.bind ? (pbState[it.bind] || '') : (it.text || '');
   }
   // Where a text box actually sits: as placed, or, with "Snap story text
@@ -9896,6 +9955,7 @@
   // copyright and other matter text grows and shrinks with the trim
   // while type size is automatic.
   function pbFontSize(it) {
+    if (it.rel) return Math.max(6, Math.round(pbBookSize() * it.rel * 2) / 2);
     if (!it.size) return pbBookSize();
     return it.auto && pbState.sizeAuto ? Math.round(it.size * pbAutoSize(pbState.trim) / 17 * 2) / 2 : it.size;
   }
@@ -10275,7 +10335,7 @@
       f.dataset.id = it.id;
       if (it.bind) f.dataset.bind = it.bind;
       f.value = pbItemText(it);
-      f.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : 'Words for this page';
+      f.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Words for this page';
       pbStyleField(f, it, s);
     } else {
       f.placeholder = 'Words for p. ' + pbSpreadPages(s, pbState.spreads.length)[side];
@@ -10702,7 +10762,7 @@
     box.style.transform = 'rotate(' + g.rot + 'deg)';
     var ed = document.createElement('div');
     ed.className = 'pb-tb-text';
-    ed.dataset.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : 'Type here';
+    ed.dataset.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Type here';
     ed.textContent = pbItemText(it);
     pbStyleText(ed, it, g);
     box.appendChild(ed);
@@ -10736,34 +10796,28 @@
     var my = pbMargins().top, L = pbLive('left'), R = pbLive('right');
     // Each target: where the box's left (or top) would go, and where to draw the line.
     var xs = [
-      { v: x0, line: x0 + wF / 2, start: true },
-      { v: 0.25 - wF / 2, line: 0.25 }, { v: 0.75 - wF / 2, line: 0.75 }, { v: 0.5 - wF / 2, line: 0.5 },
-      { v: (L.x0 + L.x1) / 2 - wF / 2, line: (L.x0 + L.x1) / 2 }, { v: (R.x0 + R.x1) / 2 - wF / 2, line: (R.x0 + R.x1) / 2 },
-      { v: L.x0, line: L.x0 }, { v: L.x1 - wF, line: L.x1 }, { v: R.x0, line: R.x0 }, { v: R.x1 - wF, line: R.x1 }
+      { v: x0, line: x0 + wF / 2, start: true, label: 'Where it started' },
+      { v: 0.25 - wF / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wF / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wF / 2, line: 0.5, label: 'Spread center' },
+      { v: (L.x0 + L.x1) / 2 - wF / 2, line: (L.x0 + L.x1) / 2, label: 'Text area center' }, { v: (R.x0 + R.x1) / 2 - wF / 2, line: (R.x0 + R.x1) / 2, label: 'Text area center' },
+      { v: L.x0, line: L.x0, label: 'Outer margin' }, { v: L.x1 - wF, line: L.x1, label: 'Gutter' }, { v: R.x0, line: R.x0, label: 'Gutter' }, { v: R.x1 - wF, line: R.x1, label: 'Outer margin' }
     ];
     // Where it rested before its last move, too, so a slip bigger than
     // the snap distance can still be dragged straight back.
-    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wF / 2, start: true });
+    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wF / 2, start: true, label: 'Where it was' });
     var ys = [
-      { v: y0, line: y0 + hF / 2, start: true },
-      { v: 0.5 - hF / 2, line: 0.5 }, { v: my, line: my }, { v: 1 - my - hF, line: 1 - my }
+      { v: y0, line: y0 + hF / 2, start: true, label: 'Where it started' },
+      { v: 0.5 - hF / 2, line: 0.5, label: 'Page middle' }, { v: my, line: my, label: 'Top margin' }, { v: 1 - my - hF, line: 1 - my, label: 'Bottom margin' }
     ];
-    if (typeof it._prevY === 'number') ys.push({ v: it._prevY, line: it._prevY + hF / 2, start: true });
+    if (typeof it._prevY === 'number') ys.push({ v: it._prevY, line: it._prevY + hF / 2, start: true, label: 'Where it was' });
     stage.querySelectorAll('.pb-tb').forEach(function (other) {
       if (other === box) return;
       var ox = other.offsetLeft / sw, ow = other.offsetWidth / sw, oy = other.offsetTop / sh, oh = other.offsetHeight / sh;
-      xs.push({ v: ox, line: ox }, { v: ox + ow / 2 - wF / 2, line: ox + ow / 2 }, { v: ox + ow - wF, line: ox + ow });
-      ys.push({ v: oy, line: oy }, { v: oy + oh / 2 - hF / 2, line: oy + oh / 2 });
+      xs.push({ v: ox, line: ox, label: 'Lined up with text' }, { v: ox + ow / 2 - wF / 2, line: ox + ow / 2, label: 'Lined up with text' }, { v: ox + ow - wF, line: ox + ow, label: 'Lined up with text' });
+      ys.push({ v: oy, line: oy, label: 'Lined up with text' }, { v: oy + oh / 2 - hF / 2, line: oy + oh / 2, label: 'Lined up with text' });
     });
     var guides = [];
     function clearGuides() { guides.forEach(function (gd) { gd.remove(); }); guides = []; }
-    function guide(axis, pos, start) {
-      var gd = document.createElement('div');
-      gd.className = 'pb-guide pb-guide-' + axis + (start ? ' is-start' : '');
-      gd.style[axis === 'v' ? 'left' : 'top'] = (pos * 100) + '%';
-      stage.appendChild(gd);
-      guides.push(gd);
-    }
+    function guide(axis, pos, label) { guides.push(pbPicGuide(stage, axis, pos, label)); }
     function nearest(list, v, px) {
       var best = null;
       pbSnapTargets(list, px).forEach(function (c) {
@@ -10779,8 +10833,8 @@
       clearGuides();
       if (!ev.altKey) {
         var sx = nearest(xs, x, sw), sy = nearest(ys, y, sh);
-        if (sx) { x = sx.v; guide('v', sx.line, sx.start); }
-        if (sy) { y = sy.v; guide('h', sy.line, sy.start); }
+        if (sx) { x = sx.v; guide('v', sx.line, sx.label); }
+        if (sy) { y = sy.v; guide('h', sy.line, sy.label); }
       }
       last = { x: x, y: y };
       box.style.left = (x * 100) + '%';
@@ -10821,6 +10875,12 @@
   // boxes write through to the book's own title and author; editing a
   // copyright line makes it ordinary text.
   function pbSetText(it, value) {
+    // A byline stays tied to the author while it reads "by …".
+    if (it.bind === 'byline') {
+      var m = /^\s*by\s+(.*)$/i.exec(value);
+      if (m) { pbState.author = m[1]; pbAuthorInput.value = m[1]; pbRefreshBound(); pbPersist(); return; }
+      it.bind = null;
+    }
     if (it.bind === 'title' || it.bind === 'author') {
       pbState[it.bind] = value;
       (it.bind === 'title' ? pbTitleInput : pbAuthorInput).value = value;
@@ -10893,7 +10953,7 @@
     var pages = pbSpreadPages(s, pbState.spreads.length);
     pbPop.querySelector('.pb-pop-where').textContent = 'p. ' + (pages[pbPageSide(it)] || pages.left || pages.right);
     pbPopText.value = pbItemText(it);
-    pbPopText.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : 'Type the words for this page';
+    pbPopText.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Type the words for this page';
     pbPopText.spellcheck = prefs.spellcheck;
     pbPop.hidden = false;
     pbStylePopup();
@@ -11049,11 +11109,20 @@
   // whole picture while you drag). It snaps to centered, to its edges
   // flush with the page, and to where it started; Alt (Option) turns
   // snapping off.
-  function pbPicGuide(stage, axis, pos, start) {
+  // A snap line while dragging: thin, solid rust (unlike the pale dashed
+  // margin guides), with a tag saying what it has caught on.
+  function pbPicGuide(stage, axis, pos, label) {
     var gd = document.createElement('div');
-    gd.className = 'pb-guide pb-guide-' + axis + (start ? ' is-start' : '');
+    gd.className = 'pb-guide pb-guide-' + axis;
     gd.style[axis === 'v' ? 'left' : 'top'] = (pos * 100) + '%';
+    if (label) {
+      var tag = document.createElement('span');
+      tag.className = 'pb-guide-tag';
+      tag.textContent = label;
+      gd.appendChild(tag);
+    }
     stage.appendChild(gd);
+    return gd;
   }
   // A starting spot within a pixel of a real target (centered, an edge)
   // defers to it, so things settle exactly on the line.
@@ -11080,16 +11149,16 @@
       var ghost = null, xs, ys, ir0;
       if (it.fit === 'free') {
         var wF = it.w, hF = el ? it.w * rw * el.naturalHeight / el.naturalWidth / rh : 0.3;
-        xs = [{ v: it.x, line: it.x + wF / 2, start: true }, { v: 0.25 - wF / 2, line: 0.25 }, { v: 0.75 - wF / 2, line: 0.75 }, { v: 0.5 - wF / 2, line: 0.5 },
-          { v: 0, line: 0 }, { v: 0.5 - wF, line: 0.5 }, { v: 0.5, line: 0.5 }, { v: 1 - wF, line: 1 }];
-        ys = [{ v: it.y, line: it.y + hF / 2, start: true }, { v: 0.5 - hF / 2, line: 0.5 }, { v: 0, line: 0 }, { v: 1 - hF, line: 1 }];
+        xs = [{ v: it.x, line: it.x + wF / 2, start: true, label: 'Where it started' }, { v: 0.25 - wF / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wF / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wF / 2, line: 0.5, label: 'Spread center' },
+          { v: 0, line: 0, label: 'Edge of the page' }, { v: 0.5 - wF, line: 0.5, label: 'Fold' }, { v: 0.5, line: 0.5, label: 'Fold' }, { v: 1 - wF, line: 1, label: 'Edge of the page' }];
+        ys = [{ v: it.y, line: it.y + hF / 2, start: true, label: 'Where it started' }, { v: 0.5 - hF / 2, line: 0.5, label: 'Page middle' }, { v: 0, line: 0, label: 'Top edge' }, { v: 1 - hF, line: 1, label: 'Bottom edge' }];
       } else if (el) {
         ir0 = pbImgRect(it, rw, rh, el);
         var ex = (ir0.w - ir0.aw) / (2 * ir0.aw), ey = (ir0.h - rh) / (2 * rh);
         var cx = (ir0.ax + ir0.aw / 2) / rw;
-        xs = [{ v: ir0.ox, line: cx + ir0.ox * ir0.aw / rw, start: true }, { v: 0, line: cx },
-          { v: ex, line: ir0.ax / rw }, { v: -ex, line: (ir0.ax + ir0.aw) / rw }];
-        ys = [{ v: ir0.oy, line: 0.5 + ir0.oy, start: true }, { v: 0, line: 0.5 }, { v: ey, line: 0 }, { v: -ey, line: 1 }];
+        xs = [{ v: ir0.ox, line: cx + ir0.ox * ir0.aw / rw, start: true, label: 'Where it started' }, { v: 0, line: cx, label: 'Centered' },
+          { v: ex, line: ir0.ax / rw, label: 'Flush with the edge' }, { v: -ex, line: (ir0.ax + ir0.aw) / rw, label: 'Flush with the edge' }];
+        ys = [{ v: ir0.oy, line: 0.5 + ir0.oy, start: true, label: 'Where it started' }, { v: 0, line: 0.5, label: 'Centered' }, { v: ey, line: 0, label: 'Flush with the edge' }, { v: -ey, line: 1, label: 'Flush with the edge' }];
         // Flush edges a pixel from centered (a picture the page's own
         // shape) are just centered.
         if (Math.abs(ex * ir0.aw) < 1) xs = xs.filter(function (c) { return c.v === 0 || c.start; });
@@ -11112,8 +11181,8 @@
           var x = before.x + dx / rw, y = before.y + dy / rh;
           if (!ev.altKey) {
             var sx = pbSnapTo(xs, x, rw), sy = pbSnapTo(ys, y, rh);
-            if (sx) { x = sx.v; pbPicGuide(stage, 'v', sx.line, sx.start); }
-            if (sy) { y = sy.v; pbPicGuide(stage, 'h', sy.line, sy.start); }
+            if (sx) { x = sx.v; pbPicGuide(stage, 'v', sx.line, sx.label); }
+            if (sy) { y = sy.v; pbPicGuide(stage, 'h', sy.line, sy.label); }
           }
           it.x = x; it.y = y;
           node.style.left = (x * 100) + '%';
@@ -11123,8 +11192,8 @@
           var ox = ir0.ox + dx / ir0.aw, oy = ir0.oy + dy / rh;
           if (!ev.altKey) {
             var gx = pbSnapTo(xs, ox, ir0.aw), gy = pbSnapTo(ys, oy, rh);
-            if (gx) { ox = gx.v; pbPicGuide(stage, 'v', gx.line, gx.start); }
-            if (gy) { oy = gy.v; pbPicGuide(stage, 'h', gy.line, gy.start); }
+            if (gx) { ox = gx.v; pbPicGuide(stage, 'v', gx.line, gx.label); }
+            if (gy) { oy = gy.v; pbPicGuide(stage, 'h', gy.line, gy.label); }
           }
           it.ox = ox; it.oy = oy;
           var r = pbImgRect(it, rw, rh, el), img = node.querySelector('img');
