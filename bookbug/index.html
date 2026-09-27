@@ -1339,7 +1339,9 @@
   .pb-to-text svg { flex: 0 0 auto; }
   @media (max-width: 700px) { .pb-to-text { right: 16px; bottom: 16px; } }
   .pb-tb-text {
-    position: relative; outline: none; white-space: pre-wrap; overflow-wrap: break-word; min-height: 1em; cursor: text;
+    /* pre, not pre-wrap: the lines come already broken (pbSetLines), and
+       the browser mustn't break them a second time. */
+    position: relative; outline: none; white-space: pre; min-height: 1em; cursor: text;
     user-select: text; -webkit-user-select: text; color: #1C2934;
   }
   .pb-tb:not(.is-selected) .pb-tb-text { cursor: move; }
@@ -10655,27 +10657,48 @@
     var styled = pbHasStyles(pbFontKey(it));
     return (styled && it.italic ? 'italic ' : '') + (styled && it.bold ? '700 ' : '400 ') + px + 'px ' + displayStackFor(pbFontKey(it));
   }
+  // Line breaks for everything set on a page (and the only ones: Spread
+  // view shows these same lines, so screen and PDF always agree). No
+  // orphans: a paragraph never ends on a lone word -- the word before it
+  // comes down too, as long as the line before keeps at least two.
   function pbWrapCanvas(ctx, text, maxW) {
     var out = [];
     String(text).split('\n').forEach(function (para) {
       if (!para) { out.push(''); return; }
-      var line = '';
+      var lines = [], line = '', broke = false;
       para.split(/(\s+)/).forEach(function (tok) {
         if (!tok) return;
         var test = line + tok;
         if (!line || ctx.measureText(test.replace(/\s+$/, '')).width <= maxW) { line = test; return; }
-        out.push(line.replace(/\s+$/, ''));
+        lines.push(line.replace(/\s+$/, ''));
         line = /^\s+$/.test(tok) ? '' : tok;
         // A single word wider than the box breaks where it must.
         while (ctx.measureText(line).width > maxW && line.length > 1) {
           var cut = line.length - 1;
           while (cut > 1 && ctx.measureText(line.slice(0, cut)).width > maxW) cut--;
-          out.push(line.slice(0, cut)); line = line.slice(cut);
+          lines.push(line.slice(0, cut)); line = line.slice(cut);
+          broke = true;
         }
       });
-      out.push(line.replace(/\s+$/, ''));
+      lines.push(line.replace(/\s+$/, ''));
+      var n = lines.length;
+      if (n > 1 && !broke && !/\s/.test(lines[n - 1].trim())) {
+        var prev = lines[n - 2].trim(), words = prev.split(/\s+/);
+        if (words.length >= 3) {
+          var moved = words.pop(), last = moved + ' ' + lines[n - 1].trim();
+          if (ctx.measureText(last).width <= maxW) { lines[n - 2] = words.join(' '); lines[n - 1] = last; }
+        }
+      }
+      out.push.apply(out, lines);
     });
     return out;
+  }
+  // The same lines, for a box on screen at its set size and width.
+  function pbSetLines(it, g) {
+    var t = pbTrim(pbState.trim), text = pbItemText(it);
+    if (!text) return '';
+    pbMeasureCtx2.font = pbCtxFont(it, g.size);
+    return pbWrapCanvas(pbMeasureCtx2, text, g.w * 2 * t.pageW * 72).join('\n');
   }
   function pbImgRect(it, W, H, el) {
     var iw = el.naturalWidth || el.width, ih = el.naturalHeight || el.height;
@@ -10907,7 +10930,7 @@
   function pbRefreshBound() {
     pbSheet.querySelectorAll('.pb-tb[data-bind]').forEach(function (box) {
       var it = pbFindItem(+box.closest('.pb-spread').dataset.spread, box.dataset.id);
-      if (it) box.querySelector('.pb-tb-text').textContent = pbItemText(it);
+      if (it) box.querySelector('.pb-tb-text').textContent = pbSetLines(it, pbGeom(it, +box.closest('.pb-spread').dataset.spread));
     });
     pbSheet.querySelectorAll('.pbt-field[data-bind]').forEach(function (f) {
       var it = pbFindItem(+f.closest('.pb-spread').dataset.spread, f.dataset.id);
@@ -11010,6 +11033,10 @@
   if (document.fonts && document.fonts.addEventListener) {
     document.fonts.addEventListener('loadingdone', function () {
       if (pbSheet) pbSheet.querySelectorAll('textarea.pbt-field').forEach(autoGrow);
+      // Line breaks measured before a typeface arrived were measured in
+      // its fallback: measure again, and reset the spreads on screen.
+      pbGeomCache = new WeakMap();
+      if (pbState && isPictureBookShown() && pbViewMode === 'spreads') pbState.spreads.forEach(function (sp, s) { pbRenderStage(s); });
     });
   }
   function pbDrawTextThumb(s) {
@@ -11495,7 +11522,7 @@
     var ed = document.createElement('div');
     ed.className = 'pb-tb-text';
     ed.dataset.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Type here';
-    ed.textContent = pbItemText(it);
+    ed.textContent = pbSetLines(it, g);
     pbStyleText(ed, it, g);
     box.appendChild(ed);
     box.addEventListener('pointerdown', function (e) {
