@@ -37,6 +37,20 @@ per app (`{ chapbookbuilder: {...} }` -- Bookbug's key predates its
 rename) so another tool could share the same sign-in without overwriting
 Bookbug's data.
 
+## Picture-book images
+
+Pictures in picture books don't go in the JSON blob (one item has a 400 KB
+cap). Each is its own item in a second table, `BookbugImages` (partition
+key `userId`, sort key `imageId`, on-demand billing), holding the image
+bytes (binary, at most 390 KB; the page shrinks pictures to fit):
+
+- `GET ?image=<id>` returns `{ type, data }` (base64).
+- `PUT ?image=<id>` with `{ type, data }` stores one; `{ delete: true }` removes it.
+
+The Lambda's role needs `dynamodb:GetItem`, `PutItem` and `DeleteItem` on
+that table (the `bookbug-images-access` inline policy). Set
+`IMAGE_TABLE_NAME` to use a different table.
+
 ## Import from a link
 
 `GET ?fetch=<url>` (signed-in users only) returns `{ url, contentType, googleDoc, text }`

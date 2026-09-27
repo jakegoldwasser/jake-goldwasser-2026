@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
@@ -13,8 +13,8 @@ import { isIP } from 'node:net';
 //   { chapbookbuilder: { chapbooks, trash, lastOpened, pictureBooks, pictureBookTrash } }
 // (Bookbug's key predates its rename.) A `dummybuilder: { dummies }` key
 // may also be there from the retired Dummy Builder; Bookbug reads it once
-// to bring those dummies in as picture books and leaves it in place. A tool only ever reads/writes its
-// own top-level key, so a future tool sharing this backend can't clobber
+// to bring those dummies in as picture books and leaves it in place.
+// A tool only ever reads/writes its own top-level key, so a future tool sharing this backend can't clobber
 // Bookbug's data for the same signed-in user.
 //
 // Older records (saved before this namespacing existed) have the
@@ -24,6 +24,14 @@ import { isIP } from 'node:net';
 // existing users don't lose anything.
 
 const TABLE_NAME = process.env.TABLE_NAME || 'ChapbookBuilderUsers';
+// Picture-book art lives apart from the JSON blob above, one item per
+// image (userId + imageId), so a book's pictures never push that one
+// item past DynamoDB's 400 KB limit. The page keeps each image under
+// IMAGE_MAX_BYTES before sending it.
+const IMAGE_TABLE_NAME = process.env.IMAGE_TABLE_NAME || 'BookbugImages';
+const IMAGE_MAX_BYTES = 390 * 1024;
+const IMAGE_ID = /^[A-Za-z0-9_-]{6,64}$/;
+const IMAGE_TYPES = /^image\/(jpeg|png|webp)$/;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // Signs this backend's own session tokens (see issueSession). Any long
 // random string; changing it signs everyone out. If unset, no sessions
@@ -209,6 +217,45 @@ export const handler = async (event) => {
       const known = /^(bad_url|blocked_host|google_private|unsupported_type|too_large|too_many_redirects|http_\d+)$/.test(code);
       return respond(422, { error: known ? code : 'fetch_failed' });
     }
+  }
+
+  // ---- Picture-book images ----
+  // GET ?image=<id> -> { type, data (base64) }; PUT ?image=<id> with
+  // { type, data } stores it, or { delete: true } removes it. PUT rather
+  // than DELETE because the Function URL's CORS allows GET and PUT only.
+  const imageId = event.queryStringParameters?.image;
+  if (imageId !== undefined) {
+    if (!IMAGE_ID.test(imageId)) return respond(400, { error: 'Bad image id' });
+    const key = { userId: { S: userId }, imageId: { S: imageId } };
+    if (method === 'GET') {
+      const result = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: key }));
+      if (!result.Item) return respond(404, { error: 'No such image' });
+      return respond(200, { type: result.Item.type.S, data: Buffer.from(result.Item.data.B).toString('base64') });
+    }
+    if (method === 'PUT') {
+      let payload;
+      try {
+        const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+        payload = JSON.parse(raw);
+      } catch (e) {
+        return respond(400, { error: 'Invalid JSON body' });
+      }
+      if (payload && payload.delete) {
+        await ddb.send(new DeleteItemCommand({ TableName: IMAGE_TABLE_NAME, Key: key }));
+        return respond(200, { ok: true });
+      }
+      if (!payload || !IMAGE_TYPES.test(payload.type || '') || typeof payload.data !== 'string') {
+        return respond(400, { error: 'Expected { type, data }' });
+      }
+      const bytes = Buffer.from(payload.data, 'base64');
+      if (!bytes.length || bytes.length > IMAGE_MAX_BYTES) return respond(413, { error: 'Image too large' });
+      await ddb.send(new PutItemCommand({
+        TableName: IMAGE_TABLE_NAME,
+        Item: { ...key, type: { S: payload.type }, data: { B: bytes }, updatedAt: { N: String(Date.now()) } }
+      }));
+      return respond(200, { ok: true });
+    }
+    return respond(405, { error: 'Method not allowed' });
   }
 
   if (method === 'GET') {
