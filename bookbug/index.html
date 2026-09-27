@@ -1424,6 +1424,15 @@
     textarea.pbt-field { font-size: 17px; }
   }
 
+  /* Snap guides while dragging a text box: rust for the page's own
+     lines, slate-blue for "back where it started". */
+  .pb-guide { position: absolute; z-index: 8; pointer-events: none; }
+  .pb-guide-v { top: 0; bottom: 0; border-left: 1.5px solid #C1602A; }
+  .pb-guide-h { left: 0; right: 0; border-top: 1.5px solid #C1602A; }
+  .pb-guide.is-start { border-color: var(--accent); border-style: dashed; }
+  /* The whole picture, faintly, while it's dragged partly off its page. */
+  .pb-img-ghost { position: absolute; z-index: 2; opacity: .28; pointer-events: none; max-width: none; outline: 1px dashed var(--accent); }
+
   /* Page numbers on a spread. */
   .pb-folio-mark { position: absolute; z-index: 4; pointer-events: none; color: #333333; font-size: calc(10px * var(--k, 1)); line-height: 1; white-space: nowrap; }
 
@@ -2834,6 +2843,7 @@
         area: ['left', 'right', 'spread'].indexOf(it.area) !== -1 ? it.area : 'spread',
         fit: ['bleed', 'center', 'free'].indexOf(it.fit) !== -1 ? it.fit : 'bleed',
         fx: num(it.fx, 0.5), fy: num(it.fy, 0.5), scale: num(it.scale, 0.8),
+        ox: typeof it.ox === 'number' ? it.ox : null, oy: typeof it.oy === 'number' ? it.oy : null, zoom: num(it.zoom, 1),
         x: num(it.x, 0.25), y: num(it.y, 0.2), w: num(it.w, 0.5), rot: num(it.rot, 0) };
     }
     return { id: it.id, type: 'text', x: num(it.x, 0.1), y: num(it.y, 0.1), w: num(it.w, 0.3), rot: num(it.rot, 0),
@@ -9822,11 +9832,17 @@
       var fw = it.w * W, fh = fw * ih / iw;
       return { free: true, x: it.x * W, y: it.y * H, w: fw, h: fh };
     }
-    var sc = it.fit === 'center' ? Math.min(aw * it.scale / iw, H * it.scale / ih) : Math.max(aw / iw, H / ih);
-    var dw = iw * sc, dh = ih * sc;
-    var dx = it.fit === 'center' ? ax + (aw - dw) / 2 : ax + (aw - dw) * it.fx;
-    var dy = it.fit === 'center' ? (H - dh) / 2 : (H - dh) * it.fy;
-    return { x: dx, y: dy, w: dw, h: dh, ax: ax, aw: aw };
+    // Full bleed covers its page(s) at zoom 1 and can be zoomed in;
+    // centered fits inside at `scale`. Either way the picture's center
+    // sits at the page's center plus (ox, oy) -- fractions of the page's
+    // width and height, not limited to the page, so it can be moved
+    // anywhere (what hangs off the page is trimmed).
+    var sc = it.fit === 'center' ? Math.min(aw * it.scale / iw, H * it.scale / ih) : Math.max(aw / iw, H / ih) * (it.zoom || 1);
+    var dw = iw * sc, dh = ih * sc, ox, oy;
+    if (typeof it.ox === 'number') { ox = it.ox; oy = it.oy || 0; }
+    else if (it.fit === 'bleed') { ox = (aw - dw) * (it.fx - 0.5) / aw; oy = (H - dh) * (it.fy - 0.5) / H; }
+    else { ox = 0; oy = 0; }
+    return { x: ax + aw / 2 + ox * aw - dw / 2, y: H / 2 + oy * H - dh / 2, w: dw, h: dh, ax: ax, aw: aw, ox: ox, oy: oy };
   }
   // opts: text / art (default both), nonPages ('shade' | 'blank'),
   // placeholders (draw a gray box for a picture not on this device).
@@ -10513,19 +10529,8 @@
     box.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || e.target.closest('.pb-h')) return;
       e.preventDefault();
-      var stage = box.parentNode, x0 = it.x, y0 = it.y;
-      pbTrack(e, function (ev, dx, dy) {
-        var r = stage.getBoundingClientRect();
-        box.style.left = ((g.x + dx / r.width) * 100) + '%';
-        box.style.top = ((y0 + dy / r.height) * 100) + '%';
-        pbPositionQuickbar(box);
-      }, function (ev, moved) {
-        var r = stage.getBoundingClientRect();
+      pbDragBox(e, box, s, it, function (moved) {
         if (moved) {
-          pbCheckpoint();
-          it.x = x0 + (ev.clientX - e.clientX) / r.width;
-          it.y = y0 + (ev.clientY - e.clientY) / r.height;
-          pbPersist();
           pbSelect({ s: s, id: it.id });
           pbRefreshSpread(s);
         } else {
@@ -10536,6 +10541,86 @@
     });
     if (pbSel && pbSel.id === it.id) pbAddTextHandles(box, s, it);
     return box;
+  }
+  // Dragging a text box, with snapping: it catches on its page's center
+  // and the spread's, the safe margins, other boxes' edges and centers,
+  // and on the spot it started from -- so a nudge by accident drops right
+  // back into place. A line shows what it's caught on; hold Alt (Option)
+  // to move freely.
+  var PB_SNAP_PX = 7;
+  function pbDragBox(e, box, s, it, onEnd) {
+    var stage = box.closest('.pb-stage');
+    var g = pbGeom(it, s), x0 = g.x, y0 = it.y;
+    var sw = stage.clientWidth, sh = stage.clientHeight;
+    var wF = box.offsetWidth / sw, hF = box.offsetHeight / sh;
+    var t = pbTrim(pbState.trim), mx = 0.5 / (2 * t.pageW), my = 0.5 / t.pageH;
+    // Each target: where the box's left (or top) would go, and where to draw the line.
+    var xs = [
+      { v: x0, line: x0 + wF / 2, start: true },
+      { v: 0.25 - wF / 2, line: 0.25 }, { v: 0.75 - wF / 2, line: 0.75 }, { v: 0.5 - wF / 2, line: 0.5 },
+      { v: mx, line: mx }, { v: 0.5 - mx - wF, line: 0.5 - mx }, { v: 0.5 + mx, line: 0.5 + mx }, { v: 1 - mx - wF, line: 1 - mx }
+    ];
+    // Where it rested before its last move, too, so a slip bigger than
+    // the snap distance can still be dragged straight back.
+    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wF / 2, start: true });
+    var ys = [
+      { v: y0, line: y0 + hF / 2, start: true },
+      { v: 0.5 - hF / 2, line: 0.5 }, { v: my, line: my }, { v: 1 - my - hF, line: 1 - my }
+    ];
+    if (typeof it._prevY === 'number') ys.push({ v: it._prevY, line: it._prevY + hF / 2, start: true });
+    stage.querySelectorAll('.pb-tb').forEach(function (other) {
+      if (other === box) return;
+      var ox = other.offsetLeft / sw, ow = other.offsetWidth / sw, oy = other.offsetTop / sh, oh = other.offsetHeight / sh;
+      xs.push({ v: ox, line: ox }, { v: ox + ow / 2 - wF / 2, line: ox + ow / 2 }, { v: ox + ow - wF, line: ox + ow });
+      ys.push({ v: oy, line: oy }, { v: oy + oh / 2 - hF / 2, line: oy + oh / 2 });
+    });
+    var guides = [];
+    function clearGuides() { guides.forEach(function (gd) { gd.remove(); }); guides = []; }
+    function guide(axis, pos, start) {
+      var gd = document.createElement('div');
+      gd.className = 'pb-guide pb-guide-' + axis + (start ? ' is-start' : '');
+      gd.style[axis === 'v' ? 'left' : 'top'] = (pos * 100) + '%';
+      stage.appendChild(gd);
+      guides.push(gd);
+    }
+    function nearest(list, v, px) {
+      var best = null;
+      pbSnapTargets(list, px).forEach(function (c) {
+        var d = Math.abs(c.v - v) * px;
+        // The starting spot wins a tie, so it's always easy to get back to.
+        if (d <= PB_SNAP_PX && (!best || d < best.d - 0.5 || (c.start && d <= best.d + 0.5))) best = { c: c, d: d };
+      });
+      return best && best.c;
+    }
+    var last = { x: x0, y: y0 };
+    pbTrack(e, function (ev, dx, dy) {
+      var x = x0 + dx / sw, y = y0 + dy / sh;
+      clearGuides();
+      if (!ev.altKey) {
+        var sx = nearest(xs, x, sw), sy = nearest(ys, y, sh);
+        if (sx) { x = sx.v; guide('v', sx.line, sx.start); }
+        if (sy) { y = sy.v; guide('h', sy.line, sy.start); }
+      }
+      last = { x: x, y: y };
+      box.style.left = (x * 100) + '%';
+      box.style.top = (y * 100) + '%';
+      pbPositionQuickbar(box);
+    }, function (ev, moved) {
+      clearGuides();
+      if (moved && (last.x !== x0 || last.y !== y0)) {
+        pbCheckpoint();
+        var px = it.x, py = it.y;
+        // Store the move relative to where it was placed (a snapped-to-edge
+        // box keeps its own x underneath).
+        it.x += last.x - x0;
+        it.y = last.y;
+        // Remembered for this session only (not saved with the book).
+        Object.defineProperty(it, '_prevX', { value: px, writable: true, configurable: true, enumerable: false });
+        Object.defineProperty(it, '_prevY', { value: py, writable: true, configurable: true, enumerable: false });
+        pbPersist();
+      }
+      onEnd(moved);
+    });
   }
   function pbStyleText(ed, it, g) {
     var styled = pbHasStyles(pbFontKey(it));
@@ -10665,19 +10750,9 @@
     grip.title = 'Drag to move';
     grip.addEventListener('pointerdown', function (e) {
       e.preventDefault(); e.stopPropagation();
-      var stage = box.parentNode, x0 = it.x, y0 = it.y;
-      pbTrack(e, function (ev, dx, dy) {
-        var r = stage.getBoundingClientRect();
-        box.style.left = ((x0 + dx / r.width) * 100) + '%';
-        box.style.top = ((y0 + dy / r.height) * 100) + '%';
-        pbPositionQuickbar(box);
-      }, function (ev, moved) {
+      pbDragBox(e, box, s, it, function (moved) {
         if (!moved) return;
-        var r = stage.getBoundingClientRect();
-        pbCheckpoint();
-        it.x = x0 + (ev.clientX - e.clientX) / r.width;
-        it.y = y0 + (ev.clientY - e.clientY) / r.height;
-        pbPersist();
+        pbRefreshSpread(s);
         pbSyncFormatting();
       });
     });
@@ -10784,41 +10859,125 @@
   // Click selects a picture. Dragging moves a free one, or, in full
   // bleed, slides the picture around inside its page(s) to choose what
   // shows.
+  // Click selects a picture; dragging moves it -- anywhere, including
+  // partly off its page (that part is trimmed; a faint ghost shows the
+  // whole picture while you drag). It snaps to centered, to its edges
+  // flush with the page, and to where it started; Alt (Option) turns
+  // snapping off.
+  function pbPicGuide(stage, axis, pos, start) {
+    var gd = document.createElement('div');
+    gd.className = 'pb-guide pb-guide-' + axis + (start ? ' is-start' : '');
+    gd.style[axis === 'v' ? 'left' : 'top'] = (pos * 100) + '%';
+    stage.appendChild(gd);
+  }
+  // A starting spot within a pixel of a real target (centered, an edge)
+  // defers to it, so things settle exactly on the line.
+  function pbSnapTargets(list, px) {
+    return list.filter(function (c) {
+      return !c.start || !list.some(function (o) { return !o.start && Math.abs(o.v - c.v) * px < 1; });
+    });
+  }
+  function pbSnapTo(list, v, px) {
+    var best = null;
+    pbSnapTargets(list, px).forEach(function (c) {
+      var d = Math.abs(c.v - v) * px;
+      if (d <= PB_SNAP_PX && (!best || d < best.d - 0.5 || (c.start && d <= best.d + 0.5))) best = { c: c, d: d };
+    });
+    return best && best.c;
+  }
   function pbWireImageDrag(node, s, it) {
     node.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || e.target.closest('.pb-h')) return;
       e.preventDefault();
       var stage = node.closest('.pb-stage'), el = pbImgEls[it.img];
-      var x0 = it.x, y0 = it.y, fx0 = it.fx, fy0 = it.fy;
+      var rw = stage.clientWidth, rh = stage.clientHeight;
+      var before = { x: it.x, y: it.y, ox: it.ox, oy: it.oy };
+      var ghost = null, xs, ys, ir0;
+      if (it.fit === 'free') {
+        var wF = it.w, hF = el ? it.w * rw * el.naturalHeight / el.naturalWidth / rh : 0.3;
+        xs = [{ v: it.x, line: it.x + wF / 2, start: true }, { v: 0.25 - wF / 2, line: 0.25 }, { v: 0.75 - wF / 2, line: 0.75 }, { v: 0.5 - wF / 2, line: 0.5 },
+          { v: 0, line: 0 }, { v: 0.5 - wF, line: 0.5 }, { v: 0.5, line: 0.5 }, { v: 1 - wF, line: 1 }];
+        ys = [{ v: it.y, line: it.y + hF / 2, start: true }, { v: 0.5 - hF / 2, line: 0.5 }, { v: 0, line: 0 }, { v: 1 - hF, line: 1 }];
+      } else if (el) {
+        ir0 = pbImgRect(it, rw, rh, el);
+        var ex = (ir0.w - ir0.aw) / (2 * ir0.aw), ey = (ir0.h - rh) / (2 * rh);
+        var cx = (ir0.ax + ir0.aw / 2) / rw;
+        xs = [{ v: ir0.ox, line: cx + ir0.ox * ir0.aw / rw, start: true }, { v: 0, line: cx },
+          { v: ex, line: ir0.ax / rw }, { v: -ex, line: (ir0.ax + ir0.aw) / rw }];
+        ys = [{ v: ir0.oy, line: 0.5 + ir0.oy, start: true }, { v: 0, line: 0.5 }, { v: ey, line: 0 }, { v: -ey, line: 1 }];
+        // Flush edges a pixel from centered (a picture the page's own
+        // shape) are just centered.
+        if (Math.abs(ex * ir0.aw) < 1) xs = xs.filter(function (c) { return c.v === 0 || c.start; });
+        if (Math.abs(ey * rh) < 1) ys = ys.filter(function (c) { return c.v === 0 || c.start; });
+        ghost = document.createElement('img');
+        ghost.className = 'pb-img-ghost';
+        ghost.src = el.src;
+        stage.appendChild(ghost);
+      } else return;
+      function placeGhost() {
+        if (!ghost) return;
+        var r = pbImgRect(it, rw, rh, el);
+        ghost.style.left = (r.x / rw * 100) + '%'; ghost.style.top = (r.y / rh * 100) + '%';
+        ghost.style.width = (r.w / rw * 100) + '%'; ghost.style.height = (r.h / rh * 100) + '%';
+      }
+      placeGhost();
       pbTrack(e, function (ev, dx, dy) {
-        var r = stage.getBoundingClientRect();
+        stage.querySelectorAll('.pb-guide').forEach(function (g) { g.remove(); });
         if (it.fit === 'free') {
-          node.style.left = ((x0 + dx / r.width) * 100) + '%';
-          node.style.top = ((y0 + dy / r.height) * 100) + '%';
-          pbMoveSelOverlay(stage, it, x0 + dx / r.width, y0 + dy / r.height);
-        } else if (it.fit === 'bleed' && el) {
-          var ir = pbImgRect(it, r.width, r.height, el);
-          var spareX = ir.aw - ir.w, spareY = r.height - ir.h;
-          it.fx = spareX < -1 ? Math.max(0, Math.min(1, fx0 + dx / spareX)) : 0.5;
-          it.fy = spareY < -1 ? Math.max(0, Math.min(1, fy0 + dy / spareY)) : 0.5;
-          var img = node.querySelector('img');
-          var nr = pbImgRect(it, r.width, r.height, el);
-          if (img) { img.style.left = ((nr.x - nr.ax) / nr.aw * 100) + '%'; img.style.top = (nr.y / r.height * 100) + '%'; }
+          var x = before.x + dx / rw, y = before.y + dy / rh;
+          if (!ev.altKey) {
+            var sx = pbSnapTo(xs, x, rw), sy = pbSnapTo(ys, y, rh);
+            if (sx) { x = sx.v; pbPicGuide(stage, 'v', sx.line, sx.start); }
+            if (sy) { y = sy.v; pbPicGuide(stage, 'h', sy.line, sy.start); }
+          }
+          it.x = x; it.y = y;
+          node.style.left = (x * 100) + '%';
+          node.style.top = (y * 100) + '%';
+          pbMoveSelOverlay(stage, it, x, y);
+        } else {
+          var ox = ir0.ox + dx / ir0.aw, oy = ir0.oy + dy / rh;
+          if (!ev.altKey) {
+            var gx = pbSnapTo(xs, ox, ir0.aw), gy = pbSnapTo(ys, oy, rh);
+            if (gx) { ox = gx.v; pbPicGuide(stage, 'v', gx.line, gx.start); }
+            if (gy) { oy = gy.v; pbPicGuide(stage, 'h', gy.line, gy.start); }
+          }
+          it.ox = ox; it.oy = oy;
+          var r = pbImgRect(it, rw, rh, el), img = node.querySelector('img');
+          if (img) { img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / rh * 100) + '%'; }
+          placeGhost();
         }
       }, function (ev, moved) {
+        stage.querySelectorAll('.pb-guide').forEach(function (g) { g.remove(); });
+        if (ghost) ghost.remove();
         if (moved) {
-          var r = stage.getBoundingClientRect();
-          var fxNow = it.fx, fyNow = it.fy;
-          it.fx = fx0; it.fy = fy0;
+          var now = { x: it.x, y: it.y, ox: it.ox, oy: it.oy };
+          Object.assign(it, before);
           pbCheckpoint();
-          if (it.fit === 'free') { it.x = x0 + (ev.clientX - e.clientX) / r.width; it.y = y0 + (ev.clientY - e.clientY) / r.height; }
-          else { it.fx = fxNow; it.fy = fyNow; }
+          Object.assign(it, now);
           pbPersist();
         }
         pbSelect({ s: s, id: it.id });
+        if (moved) pbRefreshSpread(s);
       });
     });
+    // Pinch (or Ctrl/Cmd + scroll) zooms a full-bleed picture.
+    node.addEventListener('wheel', function (e) {
+      if (!(e.ctrlKey || e.metaKey) || it.fit !== 'bleed') return;
+      e.preventDefault();
+      pbZoomPicture(it, s, Math.exp(-e.deltaY / 200));
+    }, { passive: false });
   }
+  function pbZoomPicture(it, s, factor) {
+    var el = pbImgEls[it.img];
+    if (el && typeof it.ox !== 'number') {
+      var t = pbTrim(pbState.trim), r = pbImgRect(it, 2 * t.pageW, t.pageH, el);
+      it.ox = r.ox; it.oy = r.oy;
+    }
+    var z = Math.max(0.5, Math.min(4, Math.round((it.zoom || 1) * factor * 100) / 100));
+    if (pbSel && pbSel.id === it.id) pbSetItem({ zoom: z });
+    else { it.zoom = z; pbPersist(); pbRefreshSpread(s); }
+  }
+
   // Selection frame for a picture, with resize and turn handles on a free one.
   function pbAddImageSelection(stage, s, it) {
     var ov = document.createElement('div');
@@ -11049,6 +11208,13 @@
       [['left', 'Left'], ['spread', 'Spread'], ['right', 'Right']].forEach(function (a) {
         pbQuickbar.appendChild(pbQb(a[1], a[0] === 'spread' ? 'Across the whole spread' : 'On the ' + a[1].toLowerCase() + ' page', it.area === a[0] && it.fit !== 'free', function () { pbSetItem({ area: a[0], fit: it.fit === 'free' ? 'bleed' : it.fit }); }));
       });
+      if (it.fit === 'bleed') {
+        pbQuickbar.append(pbQbSep(),
+          pbQb('−', 'Zoom out', false, function () { pbZoomPicture(it, pbSel.s, 1 / 1.1); }),
+          (function () { var z = document.createElement('span'); z.className = 'pb-qb-size'; z.textContent = Math.round((it.zoom || 1) * 100) + '%'; return z; })(),
+          pbQb('+', 'Zoom in (or pinch)', false, function () { pbZoomPicture(it, pbSel.s, 1.1); }));
+      }
+      if (it.fit !== 'free') pbQuickbar.appendChild(pbQb('Reset', 'Back to filling the page, centered', false, function () { pbSetItem({ ox: 0, oy: 0, zoom: 1 }); }));
       pbQuickbar.appendChild(pbQbSep());
       [['bleed', 'Bleed'], ['center', 'Centered'], ['free', 'Free']].forEach(function (f) {
         pbQuickbar.appendChild(pbQb(f[1], f[0] === 'bleed' ? 'Fill to the edges; drag to choose what shows' : f[0] === 'center' ? 'Whole picture, centered' : 'Place it anywhere, any size and angle', it.fit === f[0], function () { pbSetFit(it, f[0]); }));
@@ -11310,10 +11476,14 @@
     } else if (it) {
       pbFmt('pbImgArea').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', it.fit !== 'free' && b.dataset.val === it.area); b.disabled = it.fit === 'free'; });
       pbFmt('pbImgFit').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === it.fit); });
-      pbFmt('pbImgFitNote').textContent = it.fit === 'bleed' ? 'Fills its page(s) to the edges. Drag the picture to choose what shows.'
-        : it.fit === 'center' ? 'The whole picture, centered on its page(s).' : 'Drag it anywhere. The corner handle resizes it and the top handle turns it.';
-      pbFmt('pbImgScaleField').hidden = it.fit !== 'center';
-      pbFmt('pbImgScale').value = Math.round(it.scale * 100); pbRangeOut('pbImgScale', Math.round(it.scale * 100) + '%');
+      pbFmt('pbImgFitNote').textContent = it.fit === 'bleed' ? 'Fills its page(s) to the edges. Drag to move it anywhere; zoom in to show less. It snaps back to centered.'
+        : it.fit === 'center' ? 'The whole picture, fitted to its page(s). Drag to move it; it snaps back to centered.' : 'Drag it anywhere. The corner handle resizes it and the top handle turns it.';
+      pbFmt('pbImgScaleField').hidden = it.fit === 'free';
+      pbFmt('pbImgScaleField').querySelector('label').textContent = it.fit === 'bleed' ? 'Zoom' : 'Size';
+      var pct = Math.round((it.fit === 'bleed' ? (it.zoom || 1) : it.scale) * 100);
+      pbFmt('pbImgScale').min = it.fit === 'bleed' ? 50 : 10;
+      pbFmt('pbImgScale').max = it.fit === 'bleed' ? 400 : 100;
+      pbFmt('pbImgScale').value = pct; pbRangeOut('pbImgScale', pct + '%');
       pbFmt('pbImgRotField').hidden = it.fit !== 'free';
       pbFmt('pbImgRot').value = it.rot; pbRangeOut('pbImgRot', it.rot + '°');
       pbFmt('pbImgOriginal').hidden = !it.orig;
@@ -11364,7 +11534,7 @@
   pbWireRange('pbBoxLh', function (it, v) { it.lh = v; }, function (v) { return v.toFixed(2); });
   pbWireRange('pbBoxW', function (it, v) { var c = it.x + it.w / 2; it.w = v / 200; it.x = c - it.w / 2; }, function (v) { return v + '% of a page'; });
   pbWireRange('pbBoxRot', function (it, v) { it.rot = v; }, function (v) { return v + '°'; });
-  pbWireRange('pbImgScale', function (it, v) { it.scale = v / 100; }, function (v) { return v + '%'; });
+  pbWireRange('pbImgScale', function (it, v) { if (it.fit === 'bleed') it.zoom = v / 100; else it.scale = v / 100; }, function (v) { return v + '%'; });
   pbWireRange('pbImgRot', function (it, v) { it.rot = v; }, function (v) { return v + '°'; });
   // Top / Middle / Bottom / Center across, on whichever page the box is on.
   pbFmt('pbBoxPlace').querySelectorAll('button').forEach(function (b) {
