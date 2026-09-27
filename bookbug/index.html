@@ -2796,16 +2796,14 @@
   function storedHomeForms() {
     try { return JSON.parse(localStorage.getItem(HOME_FORMS_KEY) || 'null'); } catch (e) { return null; }
   }
-  // Until someone chooses, Home shows whichever forms they already have
-  // books in (so nobody's shelf disappears on them).
+  // Home shows a shelf for each book type the person has books of (not
+  // counting archived ones) -- a type with none isn't there at all.
   function homeForms() {
-    var s = storedHomeForms();
-    if (s && Array.isArray(s.forms)) return s.forms.filter(function (f) { return BOOK_FORMS[f]; });
     var out = [];
     ['collection', 'novel', 'essays'].forEach(function (f) {
-      if (library.some(function (c) { return bookFormOf(c.data) === f; })) out.push(f);
+      if (library.some(function (c) { return !c.archived && bookFormOf(c.data) === f; })) out.push(f);
     });
-    if (pbLibrary.length) out.push('picture');
+    if (pbLibrary.some(function (c) { return !c.archived; })) out.push('picture');
     return out;
   }
   function setHomeForms(forms, at) {
@@ -8157,7 +8155,7 @@
     if (!forms.length) {
       var intro = document.createElement('p');
       intro.className = 'home-intro';
-      intro.textContent = 'What are you making? You can add the other kind any time.';
+      intro.textContent = 'What are you making? You can start another kind any time.';
       var start = document.createElement('div');
       start.className = 'home-start';
       Object.keys(BOOK_FORMS).forEach(function (f) {
@@ -8177,12 +8175,8 @@
       var shelf = document.createElement('section');
       shelf.className = 'home-shelf';
       shelf.dataset.form = f;
-      shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3>' +
-        '<button class="dots-btn" type="button" title="Shelf options" aria-haspopup="menu" aria-expanded="false">⋯</button></div><div class="home-grid"></div>';
+      shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3></div><div class="home-grid"></div>';
       shelf.querySelector('.home-shelf-title').textContent = BOOK_FORMS[f].shelf;
-      var dots = shelf.querySelector('.dots-btn');
-      dots.setAttribute('aria-label', BOOK_FORMS[f].shelf + ' options');
-      dots.addEventListener('click', function (e) { e.stopPropagation(); openShelfMenu(dots, f); });
       var grid = shelf.querySelector('.home-grid');
       if (f === 'picture') renderPictureBookShelf(grid);
       else {
@@ -8217,7 +8211,7 @@
     if (!addTypeMenu.hidden) { closeAddTypeMenu(); return; }
     addTypeMenu.innerHTML = '';
     var missingForms = Object.keys(BOOK_FORMS).filter(function (f) { return homeForms().indexOf(f) === -1; });
-    if (!missingForms.length) addTypeMenu.innerHTML = '<div class="chapbooks-empty">Every book type is already on Home.</div>';
+    if (!missingForms.length) addTypeMenu.innerHTML = '<div class="chapbooks-empty">Every book type is already on Home. Start a new one from its shelf.</div>';
     missingForms.forEach(function (f) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -8225,7 +8219,7 @@
       b.innerHTML = '<span></span><small></small>';
       b.firstChild.textContent = BOOK_FORMS[f].add;
       b.lastChild.textContent = BOOK_FORMS[f].about;
-      b.addEventListener('click', function () { closeAddTypeMenu(); addHomeForm(f); renderHome(); renderChapbooksList(); });
+      b.addEventListener('click', function () { closeAddTypeMenu(); startBookOfForm(f); });
       addTypeMenu.appendChild(b);
     });
     addTypeMenu.hidden = false;
@@ -8426,8 +8420,8 @@
       var addType = document.createElement('button');
       addType.className = 'chapbooks-trash-link';
       addType.type = 'button';
-      addType.textContent = 'Add book type: ' + BOOK_FORMS[f].add;
-      addType.addEventListener('click', function () { addHomeForm(f); renderChapbooksList(); });
+      addType.textContent = '+ New ' + BOOK_FORMS[f].add.toLowerCase();
+      addType.addEventListener('click', function () { startBookOfForm(f); });
       chapbooksPane.appendChild(addType);
     });
 
