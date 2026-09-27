@@ -10,8 +10,10 @@ import { isIP } from 'node:net';
 //
 // Storage is one DynamoDB item per Google user (keyed by their stable
 // Google "sub" id), holding a single JSON blob namespaced per app:
-//   { chapbookbuilder: { chapbooks, trash, lastOpened } }
-// (Bookbug's key predates its rename.) A tool only ever reads/writes its
+//   { chapbookbuilder: { chapbooks, trash, lastOpened, pictureBooks, pictureBookTrash } }
+// (Bookbug's key predates its rename.) A `dummybuilder: { dummies }` key
+// may also be there from the retired Dummy Builder; Bookbug reads it once
+// to bring those dummies in as picture books and leaves it in place. A tool only ever reads/writes its
 // own top-level key, so a future tool sharing this backend can't clobber
 // Bookbug's data for the same signed-in user.
 //

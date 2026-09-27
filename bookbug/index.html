@@ -221,7 +221,7 @@
     .loading-dots span:nth-child(3) { animation-delay: .3s; }
   }
   @keyframes loadingDot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
-  #bookTitleInput {
+  #bookTitleInput, #pbTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
     padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
@@ -229,17 +229,17 @@
   }
   /* The rules under the book title and author only show on hover (and
      while typing, which is the only cue a touch screen gets). */
-  #bookTitleInput:hover { border-bottom-color: var(--line-strong); }
-  #bookTitleInput:focus { border-bottom-color: var(--accent); }
-  #bookTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
-  #authorInput {
+  #bookTitleInput:hover, #pbTitleInput:hover { border-bottom-color: var(--line-strong); }
+  #bookTitleInput:focus, #pbTitleInput:focus { border-bottom-color: var(--accent); }
+  #bookTitleInput::placeholder, #pbTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
+  #authorInput, #pbAuthorInput {
     font-family: "Work Sans", sans-serif; font-size: 14px; color: var(--ink-soft); background: transparent;
     border: none; border-bottom: 1px solid transparent; padding: 2px 2px 6px; outline: none; width: 100%;
     max-width: 320px; transition: border-color .15s ease;
   }
-  #authorInput:hover { border-bottom-color: var(--line); }
-  #authorInput:focus { border-bottom-color: var(--accent); }
-  #authorInput::placeholder { color: var(--ink-faint); }
+  #authorInput:hover, #pbAuthorInput:hover { border-bottom-color: var(--line); }
+  #authorInput:focus, #pbAuthorInput:focus { border-bottom-color: var(--accent); }
+  #authorInput::placeholder, #pbAuthorInput::placeholder { color: var(--ink-faint); }
 
   button, select, input[type="text"], input[type="number"], textarea {
     font-family: inherit; color: inherit;
@@ -1105,6 +1105,141 @@
     .title-align-seg button { padding: 4px 7px; }
   }
 
+
+  /* ---- Picture books ----
+     The spread-by-spread dummy (formerly its own tool, Dummy Builder),
+     drawn in Bookbug's paper-and-ink system: each spread is two paper
+     pages meeting at a dashed fold, like the printed dummy it exports. */
+  .home-shelf { display: flex; flex-direction: column; gap: 12px; }
+  .home-shelf + .home-shelf { margin-top: 14px; }
+  .home-shelf-title {
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft);
+    margin: 0; padding-bottom: 6px; border-bottom: 3px solid var(--ink);
+  }
+  /* Picture books are wide and squarish, not a tall trade page. */
+  .home-card-pb .home-cover { aspect-ratio: 1 / 1; justify-content: center; position: relative; padding-bottom: 22px; }
+  /* A band of swatch color along the foot of each cover; it rotates
+     through the wordmark's chips so the shelf reads as a set. */
+  .home-card-pb .home-cover::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: var(--swatch-green);
+  }
+  .home-grid .home-card-pb:nth-child(4n+1) .home-cover::after { background: #C1602A; }
+  .home-grid .home-card-pb:nth-child(4n+2) .home-cover::after { background: var(--swatch-green); }
+  .home-grid .home-card-pb:nth-child(4n+3) .home-cover::after { background: var(--swatch-blue); }
+  .home-grid .home-card-pb:nth-child(4n) .home-cover::after { background: var(--swatch-brown); }
+  .home-card-new.home-card-pb .home-cover::after { display: none; }
+  .home-card-new.home-card-pb .home-cover { padding-bottom: 14px; }
+
+  .pb-view { display: flex; flex-direction: column; gap: 26px; }
+  .pb-view[hidden] { display: none; }
+  body.view-pb .page > .chapbook-header, body.view-pb #intakePanel,
+  body.view-pb #intakeCollapsedBar, body.view-pb .page > .workspace { display: none !important; }
+  @media (min-width: 861px) { .pb-main { grid-column: 1; grid-row: 2; } }
+  .pb-main { display: flex; flex-direction: column; gap: 16px; }
+  #pbTitleInput { max-width: 640px; }
+  .pb-view .book-title-row #pbTitleInput { flex: 0 1 auto; min-width: 4em; max-width: 100%; }
+
+  #pbSheet { position: relative; }
+  .pb-spread { position: relative; margin-left: 32px; }
+  .pb-spread.dragging { opacity: 0.4; }
+  .pb-num {
+    position: absolute; left: -36px; top: 34px; width: 32px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-weight: 600; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; cursor: grab; user-select: none;
+  }
+  .pb-num-grip { font-size: 13px; line-height: 1; opacity: 0; transition: opacity .15s ease; }
+  .pb-spread:hover .pb-num-grip { opacity: 1; }
+  .pb-num-fixed { cursor: default; }
+  .pb-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 8px 12px 10px; }
+  .pb-spread.is-current .pb-card { border-color: var(--accent); }
+  .pb-card-head { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+  .pb-card-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  .pb-card-label-phone { display: none; }
+  .pb-card-head .pb-folio { flex: 1; display: flex; justify-content: space-between; }
+  .pb-card-head .dots-btn { padding: 0 8px 4px; }
+
+  /* The two pages of a spread, meeting at a dashed fold. */
+  .pb-pages { display: grid; grid-template-columns: 1fr 1fr; background: #FBF9F5; border: 1px solid var(--line-strong); border-radius: 3px; }
+  .pb-page { position: relative; min-width: 0; display: flex; flex-direction: column; padding: 10px 14px 8px; }
+  .pb-page + .pb-page {
+    background-image: repeating-linear-gradient(to bottom, var(--line-strong) 0, var(--line-strong) 6px, transparent 6px, transparent 11px);
+    background-size: 1.5px 100%; background-repeat: no-repeat;
+  }
+  /* The half of the title and end spreads that isn't part of the book. */
+  .pb-page.is-blank {
+    background-color: var(--surface-2); min-height: 96px;
+    background-image: repeating-linear-gradient(135deg, transparent 0, transparent 9px, var(--line) 9px, var(--line) 10px);
+  }
+  .pb-page.is-blank + .pb-page, .pb-page + .pb-page.is-blank { border-left: 1.5px dashed var(--line-strong); background-size: auto; }
+  .pb-page.is-blank + .pb-page { background-image: none; }
+  .pb-blank-note { margin: auto; font-size: 11px; font-style: italic; color: var(--ink-faint); background: var(--surface-2); padding: 2px 6px; }
+  textarea.pb-text {
+    display: block; width: 100%; min-height: 64px; resize: none; overflow: hidden; border: none; outline: none; background: transparent;
+    color: #241A1F; font-family: var(--pb-font, 'Poppins', Arial, sans-serif); font-size: calc(15px * var(--pb-font-scale, 1));
+    line-height: 1.5; padding: 2px 0;
+  }
+  textarea.pb-text::placeholder { color: var(--ink-faint); font-style: italic; }
+  .pb-split-rule { border-top: 1.5px dashed var(--line-strong); margin: 6px 0; }
+  /* Placement and split: quiet until you're on that page. */
+  .pb-page-tools { display: flex; align-items: center; gap: 6px; margin-top: 4px; opacity: 0; transition: opacity .15s ease; }
+  .pb-page:hover .pb-page-tools, .pb-page:focus-within .pb-page-tools { opacity: 1; }
+  @media (hover: none) { .pb-page-tools { opacity: 1; } }
+  .pb-page-tools .title-align-seg button { padding: 3px 7px; }
+  .pb-split-btn {
+    appearance: none; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); border-radius: 999px;
+    font-size: 11px; font-weight: 600; padding: 3px 10px; cursor: pointer; margin-left: auto; white-space: nowrap;
+  }
+  .pb-split-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pb-illo-row { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
+  .pb-illo-label {
+    flex: 0 0 auto; padding-top: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  textarea.pb-illo {
+    flex: 1; min-width: 0; resize: none; overflow: hidden; border: 1px solid transparent; border-radius: 6px; background: transparent;
+    font-size: 13px; font-style: italic; color: var(--ink-soft); line-height: 1.5; padding: 3px 6px; outline: none; min-height: 28px;
+  }
+  textarea.pb-illo:hover { border-color: var(--line); }
+  textarea.pb-illo:focus { border-color: var(--accent); background: var(--surface); }
+  textarea.pb-illo::placeholder { color: var(--ink-faint); }
+  #pbSheet .poem-gap { margin: 2px 0; }
+
+  /* Preview: one spread at a time, at the book's own proportions. */
+  .pb-spread-preview { display: flex; cursor: zoom-in; }
+  .pb-pv-page { position: relative; overflow: hidden; flex: 1 1 0; }
+  .pb-pv-page + .pb-pv-page { border-left: 1px dashed #B9A988; }
+  .pb-pv-page.is-blank { background: #EFE7D6; }
+  .pb-pv-inner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .pb-pv-block { position: absolute; white-space: pre; color: #163240; }
+  .pb-pv-block.is-muted { color: #4F7480; }
+  .pb-pv-block > div { overflow: visible; }
+  .pb-view .preview-stage { height: auto; }
+  .pb-preview-full .pb-spread-preview { cursor: default; }
+
+  .pb-archive-item {
+    display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-soft);
+  }
+  .pb-archive-item:first-of-type { border-top: none; }
+  .pb-archive-side { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 7.5em; overflow: hidden; }
+  .pb-archive-side.is-empty { color: var(--ink-faint); font-style: italic; }
+  .pb-export-note { font-size: 11.5px; color: var(--ink-faint); line-height: 1.5; margin: -2px 0 4px; }
+
+  @media (max-width: 700px) {
+    .pb-view { gap: 16px; }
+    #pbSpreadsPanel { margin: 0 -12px; padding: 12px 8px; border-left: none; border-right: none; border-radius: 0; }
+    .pb-spread { margin-left: 0; }
+    .pb-num { display: none; }
+    .pb-card-label-phone { display: inline; }
+    .pb-pages { grid-template-columns: 1fr; }
+    .pb-page + .pb-page { background-image: none; border-top: 1.5px dashed var(--line-strong); }
+    .pb-page.is-blank { display: none; }
+    .pb-page.is-blank + .pb-page { border-top: none; border-left: none; }
+    textarea.pb-text, textarea.pb-illo, .pb-view select { font-size: 16px; }
+    .pb-archive-item { grid-template-columns: 1fr auto; }
+    .pb-archive-item .pb-archive-side + .pb-archive-side { grid-column: 1; }
+  }
+
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; }
 </style>
@@ -1197,10 +1332,104 @@
         <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
       </div>
     </div>
-    <div class="home-grid" id="homeGrid"></div>
+    <section class="home-shelf" aria-labelledby="homeBooksTitle">
+      <h3 class="home-shelf-title" id="homeBooksTitle">My books</h3>
+      <div class="home-grid" id="homeGrid"></div>
+    </section>
+    <section class="home-shelf" aria-labelledby="homePbTitle">
+      <h3 class="home-shelf-title" id="homePbTitle">My picture books</h3>
+      <div class="home-grid" id="homePbGrid"></div>
+    </section>
     <div class="home-archived" id="homeArchived" hidden>
       <h3 class="home-archived-title">Archived</h3>
       <div class="home-grid" id="homeArchivedGrid"></div>
+    </div>
+  </div>
+
+  <!-- A picture book: title page, spreads, end page -- the dummy.
+       Shown in place of the book editor while one is open. -->
+  <div class="pb-view" id="pbView" hidden>
+    <div class="chapbook-header">
+      <div class="book-title-row">
+        <textarea id="pbTitleInput" rows="1" placeholder="Picture book title"></textarea>
+        <button class="dots-btn" id="pbBookMenuBtn" type="button" title="Picture book options" aria-label="Picture book options" aria-haspopup="menu" aria-expanded="false">⋯</button>
+      </div>
+      <input type="text" id="pbAuthorInput" placeholder="Author name">
+    </div>
+
+    <div class="workspace" id="pbWorkspace">
+      <div class="tools-bar">
+        <button class="btn tools-toggle" id="pbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="pbSidebar" title="Show or hide Preview, Formatting and Export">
+          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+          <span id="pbToolsToggleLabel">Hide Tools</span>
+        </button>
+      </div>
+      <div class="pb-main">
+        <div class="panel" id="pbSpreadsPanel">
+          <div class="poems-head">
+            <div class="panel-title" style="margin:0;">Spreads</div>
+            <div class="poems-count" id="pbCount"></div>
+          </div>
+          <div id="pbSheet"></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn add-poem-btn" id="pbAddSpreadBtn" type="button">+ Add spread</button>
+            <button class="btn btn-sm" id="pbArchiveToggleBtn" type="button" style="margin-left:auto;" title="View archived spreads">Archive</button>
+          </div>
+        </div>
+        <div class="panel" id="pbArchivePanel" hidden>
+          <div class="poems-head">
+            <div class="panel-title" style="margin:0;">Archived spreads</div>
+            <button class="btn btn-sm btn-danger" id="pbEmptyArchiveBtn" type="button">Empty archive</button>
+          </div>
+          <div id="pbArchiveList"></div>
+        </div>
+      </div>
+
+      <div class="sidebar" id="pbSidebar">
+        <div class="panel preview-panel">
+          <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
+          <div class="preview-stage"><div class="preview-page pb-spread-preview" id="pbPreview" title="Open a larger preview"></div></div>
+          <div class="preview-nav">
+            <button type="button" id="pbPrevFirst" aria-label="Title page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
+            <button type="button" id="pbPrevPrev" aria-label="Previous spread">‹</button>
+            <span id="pbPrevCaption"></span>
+            <button type="button" id="pbPrevNext" aria-label="Next spread">›</button>
+            <button type="button" id="pbPrevLast" aria-label="End page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
+          </div>
+        </div>
+        <div class="panel collapsible-panel" id="pbFormattingPanel">
+          <button type="button" class="panel-toggle" id="pbFormattingToggle" aria-expanded="false" aria-controls="pbFormattingBody">
+            <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="pbFormattingBody" hidden>
+            <div class="field">
+              <label>Typeface</label>
+              <div class="seg seg-fonts" id="pbFontSeg" data-font-seg></div>
+            </div>
+            <div class="field">
+              <label for="pbTrimSelect">Book size</label>
+              <select id="pbTrimSelect"></select>
+            </div>
+          </div>
+        </div>
+        <div class="panel collapsible-panel" id="pbExportPanel">
+          <button type="button" class="panel-toggle" id="pbExportToggle" aria-expanded="false" aria-controls="pbExportBody">
+            <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="pbExportBody" hidden>
+            <div class="stat-row"><span class="stat-label">Spreads</span><span class="stat-num" id="pbStatSpreads">0</span></div>
+            <div class="stat-row"><span class="stat-label">Pages</span><span class="stat-num" id="pbStatPages">0</span></div>
+            <div class="stat-row"><span class="stat-label">Words</span><span class="stat-num" id="pbStatWords">0</span></div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+              <button class="btn btn-primary" id="pbExportDigitalBtn" type="button" style="width:100%; justify-content:center;">Export digital dummy</button>
+              <button class="btn" id="pbExportPrintBtn" type="button" style="width:100%; justify-content:center;">Export printable dummy</button>
+              <p class="pb-export-note">Prints double-sided on US Letter, landscape. Fold the stack in half and staple along the fold.</p>
+              <button class="btn" id="pbExportPptxBtn" type="button" style="width:100%; justify-content:center;">Export as .pptx</button>
+              <div class="export-status" id="pbExportStatus"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1948,6 +2177,134 @@
     try { localStorage.setItem(TRASH_KEY, JSON.stringify(trash)); } catch (e) {}
   }
 
+  // ---------------------------------------------------------------------
+  // Picture books: a second shelf on Home, kept apart from the books
+  // above because a picture book is laid out by the spread, not flowed
+  // entry by entry (see the Picture books UI further down). Same rules
+  // as books: in the library, archived, or deleted with a tombstone in
+  // pbTrash; cached here and synced under the same cloud key.
+  // ---------------------------------------------------------------------
+  var PB_LIBRARY_KEY = 'bookbug.pictureBooks.v1';
+  var PB_TRASH_KEY = 'bookbug.pictureBookTrash.v1';
+  var pbLibrary = [];
+  var pbTrash = [];
+  try { pbLibrary = JSON.parse(localStorage.getItem(PB_LIBRARY_KEY) || '[]'); } catch (e) { pbLibrary = []; }
+  try { pbTrash = JSON.parse(localStorage.getItem(PB_TRASH_KEY) || '[]'); } catch (e) { pbTrash = []; }
+  function persistPbLibrary() {
+    try { localStorage.setItem(PB_LIBRARY_KEY, JSON.stringify(pbLibrary)); } catch (e) {}
+  }
+  function persistPbTrash() {
+    try { localStorage.setItem(PB_TRASH_KEY, JSON.stringify(pbTrash)); } catch (e) {}
+  }
+  function pbEntry(id) { return id ? pbLibrary.filter(function (c) { return c.id === id; })[0] || null : null; }
+  function activePictureBooks() { return pbLibrary.filter(function (c) { return !c.archived; }); }
+  function archivedPictureBooks() { return pbLibrary.filter(function (c) { return c.archived; }); }
+  function makePictureBookId() { return 'pb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // Page sizes are the usual picture-book trims, not the book ones.
+  var PB_TRIMS = [
+    { key: '8.5x8.5', label: '8.5 × 8.5 in — square', pageW: 8.5, pageH: 8.5 },
+    { key: '8x8', label: '8 × 8 in — square', pageW: 8, pageH: 8 },
+    { key: '8.5x11', label: '8.5 × 11 in — portrait', pageW: 8.5, pageH: 11 },
+    { key: '8x10', label: '8 × 10 in — portrait', pageW: 8, pageH: 10 },
+    { key: '10x8', label: '10 × 8 in — landscape', pageW: 10, pageH: 8 },
+    { key: '11x8.5', label: '11 × 8.5 in — landscape', pageW: 11, pageH: 8.5 }
+  ];
+  function pbTrim(key) {
+    for (var i = 0; i < PB_TRIMS.length; i++) if (PB_TRIMS[i].key === key) return PB_TRIMS[i];
+    return PB_TRIMS[0];
+  }
+  var PB_POSITIONS = ['top', 'middle', 'bottom'];
+  var PB_DEFAULT_POS = 'bottom';
+  // 15 spreads plus the title and end pages is 32 pages, the standard
+  // picture-book length.
+  var PB_INITIAL_SPREADS = 15;
+  // Dummy Builder offered three faces Bookbug doesn't load; each maps to
+  // the nearest one it does.
+  var PB_FONT_ALIASES = { lora: 'sourceserif', spectral: 'sourceserif', crimsontext: 'garamond' };
+
+  function pbBlankRow() {
+    return {
+      verso: '', verso2: '', versoSplit: false, recto: '', recto2: '', rectoSplit: false, illustration: '',
+      versoTextPosition: PB_DEFAULT_POS, verso2TextPosition: PB_DEFAULT_POS,
+      rectoTextPosition: PB_DEFAULT_POS, recto2TextPosition: PB_DEFAULT_POS
+    };
+  }
+  function pbNormalizeRow(row) {
+    row = row || {};
+    // Very old dummies had one textPosition for the whole spread.
+    var legacyPos = PB_POSITIONS.indexOf(row.textPosition) !== -1 ? row.textPosition : PB_DEFAULT_POS;
+    function pos(field) { return PB_POSITIONS.indexOf(row[field]) !== -1 ? row[field] : legacyPos; }
+    var out = {
+      verso: row.verso || '', verso2: row.verso2 || '', versoSplit: !!row.versoSplit,
+      recto: row.recto || '', recto2: row.recto2 || '', rectoSplit: !!row.rectoSplit,
+      illustration: row.illustration || '',
+      versoTextPosition: pos('versoTextPosition'), verso2TextPosition: pos('verso2TextPosition'),
+      rectoTextPosition: pos('rectoTextPosition'), recto2TextPosition: pos('recto2TextPosition')
+    };
+    // Where an archived spread sat, so Restore can put it back there.
+    if (typeof row.archivedFrom === 'number') out.archivedFrom = row.archivedFrom;
+    return out;
+  }
+  // Every field a picture book saves, defaulted the same way wherever it
+  // comes from (a new book, the cache, the cloud, an old dummy). The
+  // field names are Dummy Builder's, so its dummies load unchanged;
+  // `graveyard` is the archive of spreads.
+  function normalizePictureBook(d) {
+    d = d || {};
+    var rows = [];
+    if (Array.isArray(d.rows) && d.rows.length) rows = d.rows.map(pbNormalizeRow);
+    else for (var i = 0; i < PB_INITIAL_SPREADS; i++) rows.push(pbBlankRow());
+    var face = PB_FONT_ALIASES[d.typeface] || d.typeface || 'poppins';
+    return {
+      title: d.title || '',
+      author: d.author || '',
+      rows: rows,
+      trimSize: pbTrim(d.trimSize).key,
+      typeface: getFontChoice(face).key,
+      titlePage: d.titlePage || '',
+      endPage: d.endPage || '',
+      titlePageTextPosition: PB_POSITIONS.indexOf(d.titlePageTextPosition) !== -1 ? d.titlePageTextPosition : PB_DEFAULT_POS,
+      endPageTextPosition: PB_POSITIONS.indexOf(d.endPageTextPosition) !== -1 ? d.endPageTextPosition : PB_DEFAULT_POS,
+      titlePageIllustration: d.titlePageIllustration || '',
+      endPageIllustration: d.endPageIllustration || '',
+      graveyard: Array.isArray(d.graveyard) ? d.graveyard.map(pbNormalizeRow) : []
+    };
+  }
+  function pictureBookHasContent(d) {
+    if (!d) return false;
+    if ((d.title || '').trim() || (d.titlePage || '').trim() || (d.endPage || '').trim() ||
+        (d.titlePageIllustration || '').trim() || (d.endPageIllustration || '').trim() || d.graveyard.length) return true;
+    return d.rows.some(function (r) {
+      return (r.verso + r.verso2 + r.recto + r.recto2 + r.illustration).trim();
+    });
+  }
+
+  // Dummies saved by the old Dummy Builder -- in this account's cloud
+  // record (its own `dummybuilder` key) or in this browser -- become
+  // picture books. The id is derived from the dummy's, so the same dummy
+  // found in both places comes in once.
+  function pictureBookFromDummy(d) {
+    if (!d || !d.id) return null;
+    var data = normalizePictureBook(d);
+    return { id: 'pbd-' + d.id, title: data.title || 'Untitled picture book', updatedAt: d.updatedAt || Date.now(), data: data };
+  }
+  function legacyLocalDummies() {
+    var out = [];
+    try {
+      var index = JSON.parse(localStorage.getItem('book-dummy-index-v1') || '[]');
+      (Array.isArray(index) ? index : []).forEach(function (e) {
+        var raw = localStorage.getItem('book-dummy-story-' + e.id);
+        if (!raw) return;
+        var d = JSON.parse(raw);
+        d.id = e.id;
+        d.updatedAt = e.updatedAt;
+        out.push(d);
+      });
+    } catch (e) {}
+    return out;
+  }
+
   // Which book was open last, and when -- synced with the library so
   // signing in on any device reopens it.
   var LAST_OPENED_KEY = 'poetryBooklet.lastOpened.v1';
@@ -2162,7 +2519,7 @@
   // sign-in just shows the amber badge + Sign in button). The full-page
   // gate and loading screen are only for a first visit on a device.
   function hasCachedBooksForReturningUser() {
-    return !!getLastGoogleUser() && library.length > 0;
+    return !!getLastGoogleUser() && (library.length > 0 || pbLibrary.length > 0);
   }
   function updateSignInGate() {
     var localFirst = hasCachedBooksForReturningUser();
@@ -2180,6 +2537,15 @@
     trash = [];
     persistLibrary();
     persistTrash();
+    clearTimeout(pbSaveTimer);
+    pbSaveTimer = null;
+    pbLibrary = [];
+    pbTrash = [];
+    persistPbLibrary();
+    persistPbTrash();
+    pbState = null;
+    pbId = null;
+    if (isPictureBookShown()) { if (homeMQ.matches) showHome(); else showEditor(); }
     try { localStorage.removeItem(LAST_OPENED_KEY); } catch (e) {}
     state = blankChapbookState();
     saveStateCache();
@@ -2271,6 +2637,7 @@
       var migrated = migrateTrashToArchive();
       persistLibrary();
       persistTrash();
+      var pbChanged = mergePictureBooksFromCloud(ours, data.state);
       var cloudOpened = ours.lastOpened || null;
       var localOpened = getLastOpened();
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
@@ -2284,7 +2651,7 @@
       else { renderChapbooksList(); if (isHomeShown()) renderHome(); }
       initialLoadDone = true;
       updateSignInGate();
-      if (merged.changed || migrated) await syncLibraryToCloud();
+      if (merged.changed || migrated || pbChanged) await syncLibraryToCloud();
       else setAccountStatus('Signed in', 'synced');
     } catch (e) {
       finishInitialLoad();
@@ -2327,12 +2694,15 @@
   // (so settings picked on it survive a reload).
   function openLastOpenedBook() {
     var last = getLastOpened();
+    // A picture book opened last: the book editor still gets the most
+    // recent book behind it, without that becoming "last opened".
+    var lastPictureBook = last && pbEntry(last.id);
     var entry = (last && library.filter(function (c) { return c.id === last.id; })[0]) ||
       activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
     if (entry && entry.data) {
       state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
       state.chapbookId = entry.id;
-      markOpened(entry.id);
+      if (!lastPictureBook) markOpened(entry.id);
     } else if (state.chapbookId || state.isExample) {
       state = blankChapbookState();
       if (googleUserName) state.author = googleUserName;
@@ -2341,6 +2711,9 @@
     saveStateCache();
     renderAll();
     renderChapbooksList();
+    // Phones have no Home, so they reopen straight into it.
+    if (lastPictureBook && !lastPictureBook.archived && !homeMQ.matches &&
+        !(isPictureBookShown() && pbId === lastPictureBook.id)) openPictureBook(lastPictureBook.id);
   }
 
   async function syncLibraryToCloud() {
@@ -2352,7 +2725,10 @@
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app: 'chapbookbuilder', data: { chapbooks: library, trash: trash, lastOpened: getLastOpened() } })
+        body: JSON.stringify({ app: 'chapbookbuilder', data: {
+          chapbooks: library, trash: trash, lastOpened: getLastOpened(),
+          pictureBooks: pbLibrary, pictureBookTrash: pbTrash
+        } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
       if (!res.ok) { setAccountStatus('Signed in — couldn’t save to the cloud', 'error'); return; }
@@ -2819,6 +3195,15 @@
   // One indent (Tab, or the toolbar's Indent button) is a half inch --
   // the default tab stop in Google Docs and Word.
   var TAB_STOP_PT = 36;
+  // CSS tab-size for an editor whose tab stop should be `px` wide, given
+  // as a count of the font's own spaces. Safari doesn't reliably honor a
+  // length here and falls back to 8 spaces -- well short of Docs' half
+  // inch -- but every engine honors the number form.
+  function tabSizeFor(fontStack, fontPx, px) {
+    measureCtx.font = fontPx + 'px ' + fontStack;
+    var space = measureCtx.measureText(' ').width || fontPx * 0.25;
+    return (Math.round(px / space * 100) / 100).toFixed(2);
+  }
 
   function wrapLine(text, maxWidthPt, sizePt, fontFamily, weight) {
     text = text || '';
@@ -5429,7 +5814,7 @@
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight(editor.style.fontFamily);
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
-    editor.style.tabSize = Math.round(TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
+    editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
       state.isExample = false;
@@ -6606,7 +6991,7 @@
     body.setAttribute('aria-multiline', 'true');
     body.setAttribute('aria-label', 'Entry text');
     body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
-      'px; line-height:1.55; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + Math.round(TAB_STOP_PT * scale) + 'px;';
+      'px; line-height:1.55; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; persist(); });
     body.addEventListener('keydown', function (ev) {
@@ -6753,6 +7138,7 @@
   var homeArchivedOpen = false;
   function isHomeShown() { return document.body.classList.contains('view-home'); }
   function showHome() {
+    hidePictureBookView();
     flushPendingSave();
     closeChapbooksDropdown();
     document.body.classList.add('view-home');
@@ -6762,7 +7148,8 @@
     window.scrollTo(0, 0);
   }
   function showEditor() {
-    if (!isHomeShown()) return;
+    var fromPictureBook = hidePictureBookView();
+    if (!isHomeShown() && !fromPictureBook) return;
     document.body.classList.remove('view-home');
     homeView.hidden = true;
     updateMatterStage();
@@ -6807,14 +7194,17 @@
       grid.appendChild(makeHomeCard(entry));
     });
 
-    var archived = archivedBooks();
+    renderPictureBookShelf();
+
+    // Archived books and picture books share one shelf.
+    var archived = archivedBooks().concat(archivedPictureBooks());
     document.getElementById('homeArchivedBtn').textContent = 'Archived' + (archived.length ? ' (' + archived.length + ')' : '');
     document.getElementById('homeArchived').hidden = !homeArchivedOpen;
     var archivedGrid = document.getElementById('homeArchivedGrid');
     archivedGrid.innerHTML = '';
-    if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">No archived books.</div>';
+    if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">Nothing archived.</div>';
     archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-      archivedGrid.appendChild(makeHomeCard(entry));
+      archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : makeHomeCard(entry));
     });
   }
   document.getElementById('homeArchivedBtn').addEventListener('click', function () {
@@ -6839,7 +7229,7 @@
   var bookMenuFromEditor = false;
   function openBookMenu(btn, entry) {
     var reopening = bookMenuBtn === btn;
-    bookMenuFromEditor = btn.id === 'currentBookMenuBtn';
+    bookMenuFromEditor = btn.id === 'currentBookMenuBtn' || btn.id === 'pbBookMenuBtn';
     closeBookMenu();
     if (reopening) return;
     bookMenuEntry = entry;
@@ -6860,8 +7250,15 @@
     var item = e.target.closest('button[data-action]');
     if (!item || !bookMenuEntry) return;
     var entry = bookMenuEntry;
+    var fromEditor = bookMenuFromEditor;
     closeBookMenu();
-    if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id, bookMenuFromEditor);
+    if (pbEntry(entry.id) === entry) {
+      if (item.dataset.action === 'duplicate') duplicatePictureBook(entry.id, fromEditor);
+      else if (item.dataset.action === 'archive') setPictureBookArchived(entry.id, !entry.archived);
+      else deletePictureBookForever(entry.id);
+      return;
+    }
+    if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id, fromEditor);
     else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
     else deleteChapbookForever(entry.id);
   });
@@ -6921,6 +7318,13 @@
         row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); deleteChapbookForever(entry.id); });
         chapbooksPane.appendChild(row);
       });
+      var archivedPbs = archivedPictureBooks();
+      if (archivedPbs.length) {
+        chapbooksPane.appendChild(makeDivider());
+        archivedPbs.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+          chapbooksPane.appendChild(pictureBookMenuRow(entry, true));
+        });
+      }
       return;
     }
 
@@ -6955,7 +7359,18 @@
     }
 
     chapbooksPane.appendChild(makeDivider());
-    var archivedCount = archivedBooks().length;
+    var newPbBtn = document.createElement('button');
+    newPbBtn.className = 'chapbooks-new';
+    newPbBtn.type = 'button';
+    newPbBtn.textContent = '+ New picture book';
+    newPbBtn.addEventListener('click', startNewPictureBook);
+    chapbooksPane.appendChild(newPbBtn);
+    activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      chapbooksPane.appendChild(pictureBookMenuRow(entry, false));
+    });
+
+    chapbooksPane.appendChild(makeDivider());
+    var archivedCount = archivedBooks().length + archivedPictureBooks().length;
     var archivedLink = document.createElement('button');
     archivedLink.className = 'chapbooks-trash-link';
     archivedLink.type = 'button';
@@ -7158,7 +7573,7 @@
   var wideLayout = window.matchMedia('(min-width: 861px)');
   function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
   function computeStageMode() {
-    if (!wideLayout.matches || document.body.classList.contains('view-home') ||
+    if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') ||
         document.querySelector('.workspace').classList.contains('tools-hidden')) return null;
     var f = panelOpen('formattingBody'), m = panelOpen('coversBody');
     if (f && m) return lastStagePanel;
@@ -7683,7 +8098,7 @@
         try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
         applyPrefClasses();
         if (box.dataset.pref === 'spellcheck') {
-          document.querySelectorAll('.poem-text, .stage-edit-body').forEach(function (ed) { ed.spellcheck = prefs.spellcheck; });
+          document.querySelectorAll('.poem-text, .stage-edit-body, .pb-text, .pb-illo').forEach(function (ed) { ed.spellcheck = prefs.spellcheck; });
         }
       });
     });
@@ -7703,7 +8118,7 @@
   // curly -- opening after a space, dash or bracket, closing (and
   // apostrophes) otherwise -- and a second hyphen makes an em dash. In
   // every place you write: entries, titles, section titles, the page.
-  var SMART_TARGETS = '.poem-text, textarea.poem-title, input.section-title, .stage-edit-body, .stage-edit-title, #bookTitleInput';
+  var SMART_TARGETS = '.poem-text, textarea.poem-title, input.section-title, .stage-edit-body, .stage-edit-title, #bookTitleInput, .pb-text, .pb-illo, #pbTitleInput';
   document.addEventListener('beforeinput', function (e) {
     if (!prefs.smartPunctuation || e.inputType !== 'insertText' || !e.data || e.data.length !== 1) return;
     if (!e.target.closest || !e.target.closest(SMART_TARGETS)) return;
@@ -8080,6 +8495,1363 @@
     await runExportForState(Object.assign({}, state, { poems: selected }), buildImposedBookletPdf, '-printable.pdf');
   });
 
+  // ---------------------------------------------------------------------
+  // Picture books (formerly Dummy Builder): a title page (a lone recto),
+  // a run of two-page spreads, and an end page (a lone verso). Each page
+  // holds its text at the top, middle or bottom -- or split in two, top
+  // half and bottom half -- and each spread has illustration notes. It
+  // exports the dummy: a digital one in reading order, a printable one
+  // imposed for folding, and a PowerPoint with one slide per spread.
+  // ---------------------------------------------------------------------
+  var pbState = null;         // the open picture book (normalizePictureBook shape)
+  var pbId = null;            // its library id, once it has content
+  var pbSaveTimer = null;
+  var pbPreviewIndex = 0;     // 0 = title page, 1..n = spreads, n+1 = end page
+  var pbView = document.getElementById('pbView');
+  var pbSheet = document.getElementById('pbSheet');
+  var pbTitleInput = document.getElementById('pbTitleInput');
+  var pbAuthorInput = document.getElementById('pbAuthorInput');
+  var pbArchiveOpen = false;
+
+  function isPictureBookShown() { return document.body.classList.contains('view-pb'); }
+
+  function pbFlushSave() {
+    clearTimeout(pbSaveTimer);
+    pbSaveTimer = null;
+    if (!pbState) return;
+    if (!pbId) {
+      if (!pictureBookHasContent(pbState)) return;
+      pbId = makePictureBookId();
+      pbLibrary.push({ id: pbId, title: '', updatedAt: Date.now(), data: null });
+      markOpened(pbId);
+      updatePbBookMenuBtn();
+    }
+    var entry = pbEntry(pbId);
+    if (!entry) return;
+    entry.title = pbState.title || 'Untitled picture book';
+    entry.updatedAt = Date.now();
+    entry.data = JSON.parse(JSON.stringify(pbState));
+    persistPbLibrary();
+    scheduleCloudAutosave();
+  }
+  function pbPersist() {
+    clearTimeout(pbSaveTimer);
+    pbSaveTimer = setTimeout(pbFlushSave, 300);
+    updatePbStats();
+  }
+  function pbFlushPending() { if (pbSaveTimer) pbFlushSave(); }
+  window.addEventListener('pagehide', pbFlushPending);
+
+  function showPictureBookView() {
+    flushPendingSave();
+    closeChapbooksDropdown();
+    closeBookMenu();
+    document.body.classList.remove('view-home');
+    homeView.hidden = true;
+    document.body.classList.add('view-pb');
+    pbView.hidden = false;
+    updateMatterStage();
+    window.scrollTo(0, 0);
+  }
+  // Leaves the picture book, if one is showing; says whether it was.
+  function hidePictureBookView() {
+    if (!isPictureBookShown()) return false;
+    pbFlushPending();
+    closePbPreviewFull();
+    document.body.classList.remove('view-pb');
+    pbView.hidden = true;
+    return true;
+  }
+
+  function openPictureBook(id) {
+    pbFlushPending();
+    var entry = pbEntry(id);
+    if (!entry || !entry.data) return;
+    pbState = normalizePictureBook(entry.data);
+    pbId = entry.id;
+    pbPreviewIndex = 0;
+    pbArchiveOpen = false;
+    markOpened(entry.id);
+    showPictureBookView();
+    renderPictureBook();
+  }
+  function startNewPictureBook() {
+    pbFlushPending();
+    pbState = normalizePictureBook({ author: googleUserName || '' });
+    pbId = null;
+    pbPreviewIndex = 0;
+    pbArchiveOpen = false;
+    showPictureBookView();
+    renderPictureBook();
+    pbTitleInput.focus();
+  }
+
+  // Back to Home on desktop; on a phone (no Home), on to the book editor.
+  function leavePictureBook() {
+    clearTimeout(pbSaveTimer);
+    pbSaveTimer = null;
+    if (homeMQ.matches) showHome();
+    else showEditor();
+  }
+
+  async function duplicatePictureBook(id, openCopy) {
+    pbFlushPending();
+    var src = pbEntry(id);
+    if (!src || !src.data) return;
+    var title = 'Copy of ' + (src.title || 'Untitled picture book');
+    var copy = { id: makePictureBookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(src.data)) };
+    copy.data.title = title;
+    pbLibrary.push(copy);
+    persistPbLibrary();
+    if (openCopy) openPictureBook(copy.id);
+    else renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  async function setPictureBookArchived(id, archived) {
+    var entry = pbEntry(id);
+    if (!entry) return;
+    if (archived) entry.archived = true;
+    else delete entry.archived;
+    entry.archiveChangedAt = Date.now();
+    persistPbLibrary();
+    if (archived && pbId === id && isPictureBookShown()) leavePictureBook();
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  // Like books, only an archived picture book can be deleted for good.
+  async function deletePictureBookForever(id) {
+    var entry = pbEntry(id);
+    if (!entry || !entry.archived) return;
+    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled picture book') + '”? This can’t be undone.');
+    if (!ok) return;
+    pbLibrary = pbLibrary.filter(function (c) { return c.id !== id; });
+    pbTrash = pbTrash.filter(function (t) { return t.id !== id; });
+    pbTrash.push({ id: id, deletedAt: Date.now() });
+    persistPbLibrary();
+    persistPbTrash();
+    if (pbId === id) {
+      pbId = null;
+      pbState = null;
+      if (isPictureBookShown()) leavePictureBook();
+    }
+    renderChapbooksList();
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+
+  // Folds the account's picture books into the ones cached here (see
+  // pullLibraryFromCloud). The first time an account is seen here, its
+  // old Dummy Builder dummies come in too. Says whether the cloud needs
+  // the result.
+  function mergePictureBooksFromCloud(ours, wholeState) {
+    pbFlushPending();
+    var cloudList = ours.pictureBooks;
+    var firstTime = !Array.isArray(cloudList);
+    if (firstTime) {
+      var dummies = ((wholeState && wholeState.dummybuilder && wholeState.dummybuilder.dummies) || []).concat(legacyLocalDummies());
+      cloudList = dummies.map(pictureBookFromDummy).filter(function (e) { return e && pictureBookHasContent(e.data); });
+    }
+    var merged = mergeLibraries(pbLibrary, pbTrash, cloudList, ours.pictureBookTrash || []);
+    pbLibrary = merged.library;
+    pbTrash = merged.trash;
+    persistPbLibrary();
+    persistPbTrash();
+    // The open picture book picks up a newer copy from another device.
+    var open = pbEntry(pbId);
+    if (open && open.data && pbState && JSON.stringify(open.data) !== JSON.stringify(pbState)) {
+      pbState = normalizePictureBook(open.data);
+      if (isPictureBookShown()) renderPictureBook();
+    }
+    return merged.changed || (firstTime && pbLibrary.length > 0);
+  }
+
+  // ---- Home and the phone menu ----
+  function makePictureBookCard(entry) {
+    var data = entry.data || {};
+    var card = document.createElement('div');
+    card.className = 'home-card home-card-pb' + (entry.archived ? ' is-archived' : '');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
+      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<button class="home-card-more" type="button" title="More" aria-label="Picture book options" aria-haspopup="menu" aria-expanded="false">⋯</button>';
+    var title = entry.title || 'Untitled picture book';
+    var coverTitle = card.querySelector('.home-cover-title');
+    coverTitle.textContent = title;
+    coverTitle.style.fontFamily = displayStackFor(PB_FONT_ALIASES[data.typeface] || data.typeface || 'poppins');
+    card.querySelector('.home-cover-author').textContent = data.author || '';
+    card.querySelector('.home-card-title').textContent = title;
+    var n = (data.rows || []).length;
+    card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' spread' : ' spreads');
+    card.addEventListener('click', function () { openPictureBook(entry.id); });
+    card.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); openPictureBook(entry.id); }
+    });
+    var moreBtn = card.querySelector('.home-card-more');
+    moreBtn.addEventListener('click', function (e) { e.stopPropagation(); openBookMenu(moreBtn, entry); });
+    return card;
+  }
+  function renderPictureBookShelf() {
+    var grid = document.getElementById('homePbGrid');
+    grid.innerHTML = '';
+    var newCard = document.createElement('button');
+    newCard.type = 'button';
+    newCard.className = 'home-card home-card-new home-card-pb';
+    newCard.innerHTML = '<div class="home-cover"><span class="home-new-plus">+</span></div><div class="home-card-title">New picture book</div>';
+    newCard.addEventListener('click', startNewPictureBook);
+    grid.appendChild(newCard);
+    activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+      grid.appendChild(makePictureBookCard(entry));
+    });
+  }
+  // Rows for the phone's Home dropdown (see renderChapbooksList).
+  function pictureBookMenuRow(entry, archivedView) {
+    var row = document.createElement('div');
+    row.className = 'chapbook-row' + (isPictureBookShown() && entry.id === pbId ? ' current' : '');
+    row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
+      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete permanently">×</button>'
+        : '<button class="chapbook-restore" type="button" title="Archive">⤓</button>');
+    row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled picture book';
+    row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+    row.addEventListener('click', function () { openPictureBook(entry.id); });
+    row.querySelector('.chapbook-restore').addEventListener('click', function (e) {
+      e.stopPropagation();
+      setPictureBookArchived(entry.id, !archivedView);
+    });
+    if (archivedView) row.querySelector('.chapbook-del').addEventListener('click', function (e) { e.stopPropagation(); deletePictureBookForever(entry.id); });
+    return row;
+  }
+
+  // The open picture book's own ⋯, beside its title.
+  var pbBookMenuBtn = document.getElementById('pbBookMenuBtn');
+  function updatePbBookMenuBtn() { pbBookMenuBtn.hidden = !pbEntry(pbId); }
+  pbBookMenuBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+  pbBookMenuBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    pbFlushPending();
+    var entry = pbEntry(pbId);
+    if (entry) openBookMenu(pbBookMenuBtn, entry);
+  });
+
+  // ---- Title and author ----
+  // Sized to its text, like the book title, so the ⋯ sits right after it.
+  wireSingleLine(pbTitleInput, function () { pbAuthorInput.focus(); });
+  pbTitleInput.addEventListener('input', function () {
+    pbState.title = pbTitleInput.value;
+    fitTitleInput(pbTitleInput);
+    pbPersist();
+    pbSchedulePreview();
+  });
+  pbAuthorInput.addEventListener('input', function () {
+    pbState.author = pbAuthorInput.value;
+    pbPersist();
+    pbSchedulePreview();
+  });
+
+  // ---- The spreads ----
+  function pbCountWords(str) { str = (str || '').trim(); return str ? str.split(/\s+/).length : 0; }
+  function pbWordTotal() {
+    var total = pbCountWords(pbState.titlePage) + pbCountWords(pbState.endPage);
+    pbState.rows.forEach(function (r) { total += pbCountWords(r.verso) + pbCountWords(r.verso2) + pbCountWords(r.recto) + pbCountWords(r.recto2); });
+    return total;
+  }
+  function pbTotalPages() { return pbState.rows.length * 2 + 2; }
+  function updatePbStats() {
+    if (!pbState) return;
+    var n = pbState.rows.length, pages = pbTotalPages(), words = pbWordTotal();
+    document.getElementById('pbCount').textContent = n + (n === 1 ? ' spread' : ' spreads') + ' · ' + pages + ' pages · ' + words + (words === 1 ? ' word' : ' words');
+    document.getElementById('pbStatSpreads').textContent = n;
+    document.getElementById('pbStatPages').textContent = pages;
+    document.getElementById('pbStatWords').textContent = words;
+  }
+
+  function pbTextarea(className, placeholder, value, onInput, previewIndex) {
+    var ta = document.createElement('textarea');
+    ta.className = className;
+    ta.rows = 1;
+    ta.placeholder = placeholder;
+    ta.value = value || '';
+    ta.spellcheck = prefs.spellcheck;
+    ta.setAttribute('aria-label', placeholder);
+    ta.addEventListener('input', function () { onInput(ta.value); autoGrow(ta); pbPersist(); pbSchedulePreview(); });
+    ta.addEventListener('focus', function () { pbFollow(previewIndex); });
+    return ta;
+  }
+
+  // Top / Middle / Bottom for one page's text.
+  function pbPositionSeg(label, get, set) {
+    var seg = document.createElement('div');
+    seg.className = 'title-align-seg';
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Where the text sits — ' + label);
+    [['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']].forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = p[1];
+      b.title = 'Text sits at the ' + p[1].toLowerCase() + ' of the page';
+      b.classList.toggle('active', get() === p[0]);
+      b.setAttribute('aria-pressed', get() === p[0] ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        set(p[0]);
+        seg.querySelectorAll('button').forEach(function (x) {
+          x.classList.toggle('active', x === b);
+          x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+        });
+        pbPersist();
+        pbSchedulePreview();
+      });
+      seg.appendChild(b);
+    });
+    return seg;
+  }
+
+  // One page of a spread: its text (one box, or two when split) and
+  // the placement / split controls under it.
+  function pbMakePage(i, prefix, label) {
+    var row = pbState.rows[i];
+    var page = document.createElement('div');
+    page.className = 'pb-page';
+    var previewIndex = i + 1;
+    page.appendChild(pbTextarea('pb-text', row[prefix + 'Split'] ? label + ', top half' : label, row[prefix], function (v) { pbState.rows[i][prefix] = v; }, previewIndex));
+    var tools = document.createElement('div');
+    tools.className = 'pb-page-tools';
+    if (row[prefix + 'Split']) {
+      var rule = document.createElement('div');
+      rule.className = 'pb-split-rule';
+      page.appendChild(rule);
+      page.appendChild(pbTextarea('pb-text', label + ', bottom half', row[prefix + '2'], function (v) { pbState.rows[i][prefix + '2'] = v; }, previewIndex));
+    } else {
+      // A split page's halves always sit at the top of each half, so
+      // there's no placement to choose then.
+      tools.appendChild(pbPositionSeg(label + ', spread ' + (i + 1),
+        function () { return pbState.rows[i][prefix + 'TextPosition']; },
+        function (v) { pbState.rows[i][prefix + 'TextPosition'] = v; }));
+    }
+    var split = document.createElement('button');
+    split.type = 'button';
+    split.className = 'pb-split-btn';
+    split.textContent = row[prefix + 'Split'] ? 'Merge' : 'Split';
+    split.title = row[prefix + 'Split'] ? 'Put this page’s text back in one box' : 'Two blocks of text: one in the top half of the page, one in the bottom half';
+    split.addEventListener('click', function () {
+      var r = pbState.rows[i];
+      if (r[prefix + 'Split']) {
+        if (r[prefix + '2']) r[prefix] = r[prefix] ? r[prefix] + '\n\n' + r[prefix + '2'] : r[prefix + '2'];
+        r[prefix + '2'] = '';
+        r[prefix + 'Split'] = false;
+      } else {
+        r[prefix + 'Split'] = true;
+      }
+      pbPersist();
+      renderPbSheet();
+      pbFollow(previewIndex);
+    });
+    tools.appendChild(split);
+    page.appendChild(tools);
+    return page;
+  }
+
+  // The title page and end page: one real page beside the half of the
+  // spread that isn't part of the book (the pastedown).
+  function pbMakeSinglePage(which) {
+    var isTitle = which === 'title';
+    var textKey = isTitle ? 'titlePage' : 'endPage';
+    var posKey = isTitle ? 'titlePageTextPosition' : 'endPageTextPosition';
+    var page = document.createElement('div');
+    page.className = 'pb-page';
+    var previewIndex = isTitle ? 0 : pbState.rows.length + 1;
+    page.appendChild(pbTextarea('pb-text', isTitle ? 'Title page text (the book title and author print above it)' : 'End page text',
+      pbState[textKey], function (v) { pbState[textKey] = v; }, previewIndex));
+    var tools = document.createElement('div');
+    tools.className = 'pb-page-tools';
+    tools.appendChild(pbPositionSeg(isTitle ? 'title page' : 'end page',
+      function () { return pbState[posKey]; }, function (v) { pbState[posKey] = v; }));
+    page.appendChild(tools);
+    var blank = document.createElement('div');
+    blank.className = 'pb-page is-blank';
+    blank.innerHTML = '<span class="pb-blank-note">Not a page</span>';
+    var pages = document.createElement('div');
+    pages.className = 'pb-pages';
+    if (isTitle) pages.append(blank, page); else pages.append(page, blank);
+    return pages;
+  }
+
+  function pbIlloRow(value, onInput, previewIndex) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-illo-row';
+    var lab = document.createElement('span');
+    lab.className = 'pb-illo-label';
+    lab.textContent = 'Art';
+    wrap.appendChild(lab);
+    var ta = pbTextarea('pb-illo', 'Illustration notes', value, onInput, previewIndex);
+    ta.title = 'Notes for the illustrator. They go in the PowerPoint’s speaker notes, not on the page.';
+    wrap.appendChild(ta);
+    return wrap;
+  }
+
+  function pbFolio(left, right) {
+    var f = document.createElement('div');
+    f.className = 'pb-folio';
+    f.innerHTML = '<span class="pb-card-label"></span><span class="pb-card-label"></span>';
+    f.children[0].textContent = left;
+    f.children[1].textContent = right;
+    return f;
+  }
+
+  function pbMakeGap(index) {
+    var gap = document.createElement('div');
+    gap.className = 'poem-gap';
+    gap.innerHTML = '<div class="poem-gap-line"></div><div class="poem-gap-actions"><button class="poem-gap-btn" type="button" title="Add a spread here" aria-label="Add a spread here">+</button></div>';
+    gap.querySelector('button').addEventListener('click', function () { pbInsertSpread(index); });
+    return gap;
+  }
+  function pbInsertSpread(index) {
+    pbState.rows.splice(index, 0, pbBlankRow());
+    pbPersist();
+    renderPbSheet();
+    pbFollow(index + 1);
+    var card = pbSheet.querySelector('[data-spread="' + index + '"] textarea.pb-text');
+    if (card) { card.focus(); card.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  }
+
+  function pbArchiveSpread(i, blankInstead) {
+    var row = pbState.rows[i];
+    var hasText = (row.verso + row.verso2 + row.recto + row.recto2 + row.illustration).trim();
+    if (hasText) {
+      var copy = JSON.parse(JSON.stringify(row));
+      copy.archivedFrom = i;
+      pbState.graveyard.unshift(copy);
+    }
+    if (blankInstead) pbState.rows[i] = pbBlankRow();
+    else if (pbState.rows.length > 1) pbState.rows.splice(i, 1);
+    else pbState.rows[0] = pbBlankRow();
+    pbPersist();
+    renderPbSheet();
+    renderPbArchive();
+    pbFollow(Math.min(i + 1, pbState.rows.length));
+  }
+
+  // ⋯ on a spread: the same popover the entries use.
+  var pbSpreadMenu = document.createElement('div');
+  pbSpreadMenu.className = 'entry-menu';
+  pbSpreadMenu.setAttribute('role', 'menu');
+  pbSpreadMenu.hidden = true;
+  pbSpreadMenu.innerHTML = '<button type="button" role="menuitem" data-action="below">Add spread below</button>' +
+    '<button type="button" role="menuitem" data-action="duplicate">Duplicate</button>' +
+    '<button type="button" role="menuitem" data-action="clear">Clear text</button>' +
+    '<button type="button" role="menuitem" data-action="archive">Archive</button>';
+  document.body.appendChild(pbSpreadMenu);
+  var pbSpreadMenuIndex = null, pbSpreadMenuBtn = null;
+  function closePbSpreadMenu() {
+    if (pbSpreadMenu.hidden) return;
+    pbSpreadMenu.hidden = true;
+    if (pbSpreadMenuBtn) pbSpreadMenuBtn.setAttribute('aria-expanded', 'false');
+    pbSpreadMenuBtn = null;
+    pbSpreadMenuIndex = null;
+  }
+  function openPbSpreadMenu(btn, i) {
+    var reopening = pbSpreadMenuBtn === btn;
+    closePbSpreadMenu();
+    if (reopening) return;
+    pbSpreadMenuIndex = i;
+    pbSpreadMenuBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    pbSpreadMenu.hidden = false;
+    var r = btn.getBoundingClientRect();
+    var mw = pbSpreadMenu.offsetWidth, mh = pbSpreadMenu.offsetHeight;
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    pbSpreadMenu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + 'px';
+    pbSpreadMenu.style.top = top + 'px';
+  }
+  pbSpreadMenu.addEventListener('click', function (e) {
+    var item = e.target.closest('button[data-action]');
+    if (!item || pbSpreadMenuIndex === null) return;
+    var i = pbSpreadMenuIndex;
+    closePbSpreadMenu();
+    var action = item.dataset.action;
+    if (action === 'below') pbInsertSpread(i + 1);
+    else if (action === 'duplicate') {
+      pbState.rows.splice(i + 1, 0, pbNormalizeRow(JSON.parse(JSON.stringify(pbState.rows[i]))));
+      pbPersist();
+      renderPbSheet();
+      pbFollow(i + 2);
+    } else if (action === 'clear') pbArchiveSpread(i, true);
+    else pbArchiveSpread(i, false);
+  });
+  document.addEventListener('click', function (e) { if (!pbSpreadMenu.contains(e.target)) closePbSpreadMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePbSpreadMenu(); });
+  window.addEventListener('scroll', closePbSpreadMenu, true);
+  window.addEventListener('resize', closePbSpreadMenu);
+
+  // Drag a spread by its number; a line shows where it will land, and
+  // every number shows the order you'd get by dropping there.
+  var pbDragFrom = null;
+  var pbDropLine = document.createElement('div');
+  pbDropLine.className = 'drop-line';
+  pbDropLine.hidden = true;
+  var pbDropTo = null;
+  function pbSpreadEls() { return Array.prototype.slice.call(pbSheet.querySelectorAll('.pb-spread[data-spread]')); }
+  function pbClearDrop() {
+    pbDropLine.hidden = true;
+    pbDropTo = null;
+    pbSpreadEls().forEach(function (el) { var n = el.querySelector('.pb-num-n'); if (n) n.textContent = +el.dataset.spread + 1; });
+  }
+  pbSheet.addEventListener('dragover', function (e) {
+    if (pbDragFrom === null) return;
+    var els = pbSpreadEls();
+    if (!els.length) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // The gap nearest the pointer, from before the first spread to after the last.
+    var to = els.length, y;
+    for (var k = 0; k < els.length; k++) {
+      var r = els[k].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { to = k; break; }
+    }
+    if (to < els.length) {
+      var cur = els[to].getBoundingClientRect();
+      var prev = to > 0 ? els[to - 1].getBoundingClientRect() : null;
+      y = prev ? (prev.bottom + cur.top) / 2 : cur.top - 4;
+    } else {
+      y = els[els.length - 1].getBoundingClientRect().bottom + 4;
+    }
+    if (pbDropLine.parentNode !== pbSheet) pbSheet.appendChild(pbDropLine);
+    pbDropLine.style.top = (y - pbSheet.getBoundingClientRect().top) + 'px';
+    pbDropLine.hidden = false;
+    pbDropTo = to;
+    var order = els.map(function (el) { return +el.dataset.spread; });
+    var dest = to > pbDragFrom ? to - 1 : to;
+    order.splice(dest, 0, order.splice(pbDragFrom, 1)[0]);
+    order.forEach(function (orig, pos) { var n = els[orig].querySelector('.pb-num-n'); if (n) n.textContent = pos + 1; });
+  });
+  pbSheet.addEventListener('dragleave', function (e) {
+    if (!pbSheet.contains(e.relatedTarget)) pbClearDrop();
+  });
+  pbSheet.addEventListener('drop', function (e) {
+    if (pbDragFrom === null || pbDropTo === null) return;
+    e.preventDefault();
+    var from = pbDragFrom, to = pbDropTo;
+    if (to > from) to -= 1;
+    pbDragFrom = null;
+    pbClearDrop();
+    if (to === from) return;
+    pbState.rows.splice(to, 0, pbState.rows.splice(from, 1)[0]);
+    pbPersist();
+    renderPbSheet();
+    pbFollow(to + 1);
+  });
+
+  function pbMakeSpread(i) {
+    var row = pbState.rows[i];
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-spread';
+    wrap.dataset.spread = i;
+    wrap.dataset.preview = i + 1;
+
+    var num = document.createElement('div');
+    num.className = 'pb-num';
+    num.draggable = true;
+    num.title = 'Drag to move this spread';
+    num.innerHTML = '<span class="pb-num-n"></span><span class="pb-num-grip" aria-hidden="true">⋮⋮</span>';
+    num.firstChild.textContent = i + 1;
+    num.addEventListener('dragstart', function (e) {
+      pbDragFrom = i;
+      wrap.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', 'spread ' + (i + 1)); } catch (err) {}
+      try { e.dataTransfer.setDragImage(wrap, 20, 20); } catch (err) {}
+    });
+    num.addEventListener('dragend', function () { pbDragFrom = null; wrap.classList.remove('dragging'); pbClearDrop(); });
+    wrap.appendChild(num);
+
+    var card = document.createElement('div');
+    card.className = 'pb-card';
+    var head = document.createElement('div');
+    head.className = 'pb-card-head';
+    var phoneLabel = document.createElement('span');
+    phoneLabel.className = 'pb-card-label pb-card-label-phone';
+    phoneLabel.textContent = 'Spread ' + (i + 1) + ' ·';
+    head.appendChild(phoneLabel);
+    var v = 2 * (i + 1), r = v + 1;
+    head.appendChild(pbFolio('p. ' + v + ' · verso', 'recto · p. ' + r));
+    var dots = document.createElement('button');
+    dots.type = 'button';
+    dots.className = 'dots-btn';
+    dots.textContent = '⋯';
+    dots.title = 'Spread options';
+    dots.setAttribute('aria-label', 'Options for spread ' + (i + 1));
+    dots.setAttribute('aria-haspopup', 'menu');
+    dots.setAttribute('aria-expanded', 'false');
+    dots.addEventListener('click', function (e) { e.stopPropagation(); openPbSpreadMenu(dots, i); });
+    head.appendChild(dots);
+    card.appendChild(head);
+
+    var pages = document.createElement('div');
+    pages.className = 'pb-pages';
+    pages.append(pbMakePage(i, 'verso', 'Verso text'), pbMakePage(i, 'recto', 'Recto text'));
+    card.appendChild(pages);
+    card.appendChild(pbIlloRow(row.illustration, function (val) { pbState.rows[i].illustration = val; }, i + 1));
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  function pbMakeEndSpread(which) {
+    var isTitle = which === 'title';
+    var wrap = document.createElement('div');
+    wrap.className = 'pb-spread';
+    wrap.dataset.preview = isTitle ? 0 : pbState.rows.length + 1;
+    var card = document.createElement('div');
+    card.className = 'pb-card';
+    var head = document.createElement('div');
+    head.className = 'pb-card-head';
+    var total = pbTotalPages();
+    head.appendChild(isTitle ? pbFolio('Title page', 'recto · p. 1') : pbFolio('p. ' + total + ' · verso', 'End page'));
+    card.appendChild(head);
+    card.appendChild(pbMakeSinglePage(which));
+    var illoKey = isTitle ? 'titlePageIllustration' : 'endPageIllustration';
+    card.appendChild(pbIlloRow(pbState[illoKey], function (val) { pbState[illoKey] = val; }, +wrap.dataset.preview));
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  function renderPbSheet() {
+    var scrollY = window.scrollY;
+    pbSheet.innerHTML = '';
+    pbSheet.appendChild(pbMakeEndSpread('title'));
+    pbSheet.appendChild(pbMakeGap(0));
+    pbState.rows.forEach(function (row, i) {
+      pbSheet.appendChild(pbMakeSpread(i));
+      pbSheet.appendChild(pbMakeGap(i + 1));
+    });
+    pbSheet.appendChild(pbMakeEndSpread('end'));
+    requestAnimationFrame(function () { pbSheet.querySelectorAll('textarea').forEach(autoGrow); });
+    updatePbStats();
+    updatePbArchiveButton();
+    pbMarkCurrent();
+    window.scrollTo({ top: scrollY, behavior: 'instant' });
+  }
+
+  // ---- Archived spreads ----
+  function pbSideText(row, prefix) {
+    var a = row[prefix] || '', b = row[prefix + '2'] || '';
+    return b ? (a ? a + '\n\n' + b : b) : a;
+  }
+  function updatePbArchiveButton() {
+    var n = pbState.graveyard.length;
+    var btn = document.getElementById('pbArchiveToggleBtn');
+    btn.textContent = (pbArchiveOpen ? 'Hide archive' : 'Archive') + (n ? ' (' + n + ')' : '');
+    document.getElementById('pbArchivePanel').hidden = !pbArchiveOpen;
+  }
+  function renderPbArchive() {
+    updatePbArchiveButton();
+    var list = document.getElementById('pbArchiveList');
+    list.innerHTML = '';
+    document.getElementById('pbEmptyArchiveBtn').disabled = !pbState.graveyard.length;
+    if (!pbState.graveyard.length) {
+      list.innerHTML = '<div class="chapbooks-empty" style="padding:4px 0;">Nothing archived. Archiving or clearing a spread puts its text here.</div>';
+      return;
+    }
+    pbState.graveyard.forEach(function (row, gi) {
+      var item = document.createElement('div');
+      item.className = 'pb-archive-item';
+      ['verso', 'recto'].forEach(function (prefix) {
+        var t = pbSideText(row, prefix);
+        var side = document.createElement('div');
+        side.className = 'pb-archive-side' + (t ? '' : ' is-empty');
+        side.textContent = t || '(blank ' + prefix + ')';
+        item.appendChild(side);
+      });
+      var restore = document.createElement('button');
+      restore.type = 'button';
+      restore.className = 'btn btn-sm';
+      restore.textContent = 'Restore';
+      restore.title = 'Put this spread back where it was';
+      restore.addEventListener('click', function () {
+        var back = pbState.graveyard.splice(gi, 1)[0];
+        var at = typeof back.archivedFrom === 'number' ? Math.min(back.archivedFrom, pbState.rows.length) : pbState.rows.length;
+        delete back.archivedFrom;
+        pbState.rows.splice(at, 0, pbNormalizeRow(back));
+        pbPersist();
+        renderPbSheet();
+        renderPbArchive();
+        pbFollow(at + 1);
+      });
+      item.appendChild(restore);
+      list.appendChild(item);
+    });
+  }
+  document.getElementById('pbArchiveToggleBtn').addEventListener('click', function () {
+    pbArchiveOpen = !pbArchiveOpen;
+    renderPbArchive();
+    if (pbArchiveOpen) document.getElementById('pbArchivePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  document.getElementById('pbEmptyArchiveBtn').addEventListener('click', async function () {
+    var n = pbState.graveyard.length;
+    if (!n) return;
+    var ok = await confirmDialog('Permanently delete ' + n + ' archived spread' + (n === 1 ? '' : 's') + '? This can’t be undone.');
+    if (!ok) return;
+    pbState.graveyard = [];
+    pbPersist();
+    renderPbArchive();
+  });
+  document.getElementById('pbAddSpreadBtn').addEventListener('click', function () { pbInsertSpread(pbState.rows.length); });
+
+  // ---- Page layout, shared by the preview and the PDFs ----
+  // Every text block is placed here once, measured with the book's
+  // typeface on a canvas, so the preview wraps exactly as the PDF does.
+  var pbMeasureCtx = null;
+  function pbFont(weight, size) { return weight + ' ' + size + 'px ' + displayStackFor(pbState.typeface); }
+  function pbMeasure(str, weight, size) {
+    if (!pbMeasureCtx) pbMeasureCtx = document.createElement('canvas').getContext('2d');
+    pbMeasureCtx.font = pbFont(weight, size);
+    return pbMeasureCtx.measureText(str).width;
+  }
+  function pbWrap(text, maxWidth, weight, size, maxLines) {
+    var lines = [];
+    String(text || '').split(/\r\n|\r|\n/).forEach(function (para) {
+      if (!para) { lines.push(''); return; }
+      var current = '';
+      para.split(' ').forEach(function (word) {
+        var test = current ? current + ' ' + word : word;
+        if (!current || pbMeasure(test, weight, size) <= maxWidth) current = test;
+        else { lines.push(current); current = word; }
+      });
+      lines.push(current);
+    });
+    if (maxLines && lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      var last = lines[maxLines - 1];
+      while (last.length > 0 && pbMeasure(last + '…', weight, size) > maxWidth) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + '…';
+    }
+    return lines;
+  }
+  // What goes on page `pageNum` of `totalPages` (1 is the title page,
+  // the last is the end page); `rows` may carry a blank padding spread.
+  function pbPageInfo(pageNum, totalPages, rows) {
+    if (pageNum === 1) return { text: pbState.titlePage, position: pbState.titlePageTextPosition, isTitle: true };
+    if (pageNum === totalPages) return { text: pbState.endPage, position: pbState.endPageTextPosition };
+    var isVerso = pageNum % 2 === 0;
+    var prefix = isVerso ? 'verso' : 'recto';
+    var row = rows[(isVerso ? pageNum / 2 : (pageNum - 1) / 2) - 1] || pbBlankRow();
+    if (row[prefix + 'Split']) return { split: true, text: row[prefix], text2: row[prefix + '2'] };
+    return { text: row[prefix], position: row[prefix + 'TextPosition'] };
+  }
+  // Blocks for one page, `boxW` × `boxH` points at `scale` (1 = full
+  // size), each { x, y (from the page's top), w, lines, weight, size,
+  // lineH, muted }.
+  function pbLayoutPage(info, boxW, boxH, scale) {
+    var blocks = [];
+    var pad = Math.max(10, boxW * 0.09);
+    var fontSize = Math.max(8, 17 * scale), lineH = Math.max(11, 22 * scale);
+    function push(x, y, w, lines, weight, size, lh, muted) {
+      if (!lines.some(function (l) { return l; })) return;
+      blocks.push({ x: x, y: y, w: w, lines: lines, weight: weight, size: size, lineH: lh, muted: !!muted });
+    }
+    // A measure at least half the page wide, widening toward three
+    // quarters only as far as the text needs to fit.
+    function wrapWidth(text, maxLines) {
+      var minW = boxW * 0.5, maxW = boxW * 0.75;
+      if (pbWrap(text, minW, 400, fontSize, 0).length <= maxLines) return minW;
+      for (var k = 1; k <= 6; k++) {
+        var w = minW + (maxW - minW) * (k / 6);
+        if (pbWrap(text, w, 400, fontSize, 0).length <= maxLines) return w;
+      }
+      return maxW;
+    }
+    function region(text, top, h, position) {
+      if (!String(text || '').trim()) return;
+      var maxLines = Math.max(1, Math.floor((h - pad * 2) / lineH));
+      var ww = wrapWidth(text, maxLines);
+      var lines = pbWrap(text, ww, 400, fontSize, maxLines);
+      // Centered on the page by its longest line, ragged right.
+      var bw = 0;
+      lines.forEach(function (l) { bw = Math.max(bw, pbMeasure(l, 400, fontSize)); });
+      bw = Math.min(ww, Math.max(bw, 1));
+      var bh = lines.length * lineH;
+      var y = position === 'top' ? top + pad : position === 'middle' ? top + h / 2 - bh / 2 : top + h - pad - bh;
+      push((boxW - bw) / 2, y, bw, lines, 400, fontSize, lineH);
+    }
+    var top = 0, h = boxH;
+    if (info.isTitle) {
+      // Book title and author across the top of the title page.
+      var title = (pbState.title || '').trim(), author = (pbState.author || '').trim();
+      if (title || author) {
+        var maxW = boxW - pad * 2, y = pad;
+        if (title) {
+          var ts = Math.max(13, 24 * scale), tl = pbWrap(title, maxW, 600, ts, 3), tw = 0;
+          tl.forEach(function (l) { tw = Math.max(tw, pbMeasure(l, 600, ts)); });
+          tw = Math.min(maxW, Math.max(tw, 1));
+          push((boxW - tw) / 2, y, tw, tl, 600, ts, ts + 5);
+          y += tl.length * (ts + 5) + 4;
+        }
+        if (author) {
+          var as = Math.max(9, 13 * scale), al = pbWrap(author, maxW, 400, as, 2), aw = 0;
+          al.forEach(function (l) { aw = Math.max(aw, pbMeasure(l, 400, as)); });
+          aw = Math.min(maxW, Math.max(aw, 1));
+          push((boxW - aw) / 2, y, aw, al, 400, as, as + 4, true);
+          y += al.length * (as + 4);
+        }
+        top = y + pad;
+        h = boxH - top;
+      }
+    }
+    if (info.split) {
+      region(info.text, 0, boxH / 2, 'top');
+      region(info.text2, boxH / 2, boxH / 2, 'top');
+    } else {
+      region(info.text, top, h, info.position || PB_DEFAULT_POS);
+    }
+    return blocks;
+  }
+
+  // ---- Preview ----
+  function pbPreviewCount() { return pbState.rows.length + 2; }
+  function pbSpreadPages(index) {
+    var total = pbTotalPages();
+    if (index === 0) return { left: null, right: 1 };
+    if (index === pbState.rows.length + 1) return { left: total, right: null };
+    return { left: 2 * index, right: 2 * index + 1 };
+  }
+  function pbCaption(index) {
+    var p = pbSpreadPages(index);
+    if (index === 0) return 'Title page · p. 1';
+    if (p.right === null) return 'End page · p. ' + p.left;
+    return 'Spread ' + index + ' of ' + pbState.rows.length + ' · pp. ' + p.left + '–' + p.right;
+  }
+  function pbRenderSpreadInto(box, index, widthPx) {
+    var trim = pbTrim(pbState.trimSize);
+    var pw = trim.pageW * 72, ph = trim.pageH * 72;
+    var s = widthPx / (2 * pw);
+    box.style.width = Math.round(widthPx) + 'px';
+    box.style.height = Math.round(ph * s) + 'px';
+    box.innerHTML = '';
+    var pages = pbSpreadPages(index), total = pbTotalPages();
+    [pages.left, pages.right].forEach(function (pageNum) {
+      var half = document.createElement('div');
+      half.className = 'pb-pv-page' + (pageNum ? '' : ' is-blank');
+      if (pageNum) {
+        var inner = document.createElement('div');
+        inner.className = 'pb-pv-inner';
+        inner.style.width = pw + 'px';
+        inner.style.height = ph + 'px';
+        inner.style.transform = 'scale(' + s + ')';
+        pbLayoutPage(pbPageInfo(pageNum, total, pbState.rows), pw, ph, 1).forEach(function (b) {
+          var el = document.createElement('div');
+          el.className = 'pb-pv-block' + (b.muted ? ' is-muted' : '');
+          el.style.left = b.x + 'px';
+          el.style.top = b.y + 'px';
+          el.style.font = pbFont(b.weight, b.size);
+          el.style.lineHeight = b.lineH + 'px';
+          b.lines.forEach(function (l) {
+            var line = document.createElement('div');
+            line.style.height = b.lineH + 'px';
+            line.textContent = l || ' ';
+            el.appendChild(line);
+          });
+          inner.appendChild(el);
+        });
+        half.appendChild(inner);
+      }
+      box.appendChild(half);
+    });
+  }
+  var pbPreviewBox = document.getElementById('pbPreview');
+  function renderPbPreview() {
+    if (!pbState || !isPictureBookShown()) return;
+    pbPreviewIndex = Math.max(0, Math.min(pbPreviewIndex, pbPreviewCount() - 1));
+    var stage = pbPreviewBox.parentNode;
+    var width = Math.max(200, stage.clientWidth || 272);
+    pbRenderSpreadInto(pbPreviewBox, pbPreviewIndex, width);
+    document.getElementById('pbPrevCaption').textContent = pbCaption(pbPreviewIndex);
+    var last = pbPreviewCount() - 1;
+    document.getElementById('pbPrevFirst').disabled = document.getElementById('pbPrevPrev').disabled = pbPreviewIndex === 0;
+    document.getElementById('pbPrevLast').disabled = document.getElementById('pbPrevNext').disabled = pbPreviewIndex === last;
+    if (!pbFull.hidden) renderPbPreviewFull();
+  }
+  var pbPreviewRaf = null;
+  function pbSchedulePreview() {
+    if (pbPreviewRaf) return;
+    pbPreviewRaf = requestAnimationFrame(function () { pbPreviewRaf = null; renderPbPreview(); });
+  }
+  function pbMarkCurrent() {
+    pbSheet.querySelectorAll('.pb-spread').forEach(function (el) {
+      el.classList.toggle('is-current', +el.dataset.preview === pbPreviewIndex);
+    });
+  }
+  // The preview follows whichever spread you're working on.
+  function pbFollow(index) {
+    if (index === pbPreviewIndex) return;
+    pbPreviewIndex = index;
+    pbMarkCurrent();
+    renderPbPreview();
+  }
+  function pbStep(delta) { pbFollow(Math.max(0, Math.min(pbPreviewCount() - 1, pbPreviewIndex + delta))); }
+  // Keeps focus off the arrows, so a click can't scroll the page and
+  // move them (see .preview-nav).
+  ['pbPrevFirst', 'pbPrevPrev', 'pbPrevNext', 'pbPrevLast'].forEach(function (id) {
+    document.getElementById(id).addEventListener('mousedown', function (e) { e.preventDefault(); });
+  });
+  document.getElementById('pbPrevFirst').addEventListener('click', function () { pbFollow(0); });
+  document.getElementById('pbPrevPrev').addEventListener('click', function () { pbStep(-1); });
+  document.getElementById('pbPrevNext').addEventListener('click', function () { pbStep(1); });
+  document.getElementById('pbPrevLast').addEventListener('click', function () { pbFollow(pbPreviewCount() - 1); });
+  window.addEventListener('resize', function () { if (isPictureBookShown()) pbSchedulePreview(); });
+
+  // Full-screen preview, same frame as the books' one.
+  var pbFull = document.createElement('div');
+  pbFull.className = 'preview-full pb-preview-full';
+  pbFull.hidden = true;
+  pbFull.setAttribute('role', 'dialog');
+  pbFull.setAttribute('aria-modal', 'true');
+  pbFull.setAttribute('aria-label', 'Spread preview');
+  pbFull.innerHTML = '<button class="preview-full-close" type="button" aria-label="Close preview">×</button>' +
+    '<div class="preview-full-stage"><div class="preview-page pb-spread-preview"></div>' +
+    '<div class="preview-full-nav">' +
+    '<button type="button" data-step="first" aria-label="Title page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>' +
+    '<button type="button" data-step="-1" aria-label="Previous spread">‹</button><span></span>' +
+    '<button type="button" data-step="1" aria-label="Next spread">›</button>' +
+    '<button type="button" data-step="last" aria-label="End page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>' +
+    '</div></div>';
+  document.body.appendChild(pbFull);
+  function renderPbPreviewFull() {
+    var trim = pbTrim(pbState.trimSize);
+    var aspect = (2 * trim.pageW) / trim.pageH;
+    var w = Math.min(window.innerWidth - 40, (window.innerHeight - 110) * aspect);
+    pbRenderSpreadInto(pbFull.querySelector('.pb-spread-preview'), pbPreviewIndex, w);
+    pbFull.querySelector('.preview-full-nav span').textContent = pbCaption(pbPreviewIndex);
+    var last = pbPreviewCount() - 1;
+    pbFull.querySelectorAll('[data-step]').forEach(function (b) {
+      var back = b.dataset.step === 'first' || b.dataset.step === '-1';
+      b.disabled = back ? pbPreviewIndex === 0 : pbPreviewIndex === last;
+    });
+  }
+  function openPbPreviewFull() {
+    pbFull.hidden = false;
+    document.documentElement.classList.add('preview-full-open');
+    renderPbPreviewFull();
+  }
+  function closePbPreviewFull() {
+    if (pbFull.hidden) return;
+    pbFull.hidden = true;
+    document.documentElement.classList.remove('preview-full-open');
+  }
+  pbPreviewBox.addEventListener('click', openPbPreviewFull);
+  pbFull.querySelector('.preview-full-close').addEventListener('click', closePbPreviewFull);
+  pbFull.addEventListener('click', function (e) { if (e.target === pbFull) closePbPreviewFull(); });
+  pbFull.querySelectorAll('[data-step]').forEach(function (b) {
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      var st = b.dataset.step;
+      if (st === 'first') pbFollow(0);
+      else if (st === 'last') pbFollow(pbPreviewCount() - 1);
+      else pbStep(+st);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (pbFull.hidden) return;
+    if (e.key === 'Escape') { e.stopPropagation(); closePbPreviewFull(); }
+    else if (e.key === 'ArrowLeft') pbStep(-1);
+    else if (e.key === 'ArrowRight') pbStep(1);
+  }, true);
+  window.addEventListener('resize', function () { if (!pbFull.hidden) renderPbPreviewFull(); });
+
+  // ---- Formatting ----
+  var pbTrimSelect = document.getElementById('pbTrimSelect');
+  PB_TRIMS.forEach(function (t) {
+    var opt = document.createElement('option');
+    opt.value = t.key; opt.textContent = t.label;
+    pbTrimSelect.appendChild(opt);
+  });
+  pbTrimSelect.addEventListener('change', function () { pbState.trimSize = pbTrimSelect.value; pbPersist(); renderPbPreview(); });
+  wireSeg('pbFontSeg', function (val) { pbState.typeface = val; applyPbTypeface(); pbPersist(); renderPbPreview(); });
+  function applyPbTypeface() {
+    var fc = getFontChoice(pbState.typeface);
+    pbView.style.setProperty('--pb-font', fc.displayStack);
+    pbView.style.setProperty('--pb-font-scale', fc.sizeScale || 1);
+    pbSheet.querySelectorAll('textarea.pb-text').forEach(autoGrow);
+  }
+  // Panels open and close as the books' ones do (and each remembers
+  // nothing: they start closed).
+  ['pbFormattingToggle', 'pbExportToggle'].forEach(function (id) {
+    var toggle = document.getElementById(id);
+    toggle.addEventListener('click', function () {
+      var body = document.getElementById(toggle.getAttribute('aria-controls'));
+      body.hidden = !body.hidden;
+      toggle.closest('.collapsible-panel').classList.toggle('is-open', !body.hidden);
+      toggle.setAttribute('aria-expanded', body.hidden ? 'false' : 'true');
+    });
+  });
+  // Show / Hide Tools, remembered on this device.
+  var PB_TOOLS_KEY = 'bookbug.pbToolsHidden.v1';
+  var pbToolsHidden = false;
+  try { pbToolsHidden = localStorage.getItem(PB_TOOLS_KEY) === '1'; } catch (e) {}
+  function applyPbToolsHidden() {
+    document.getElementById('pbWorkspace').classList.toggle('tools-hidden', pbToolsHidden);
+    var btn = document.getElementById('pbToolsToggleBtn');
+    btn.setAttribute('aria-pressed', pbToolsHidden ? 'false' : 'true');
+    document.getElementById('pbToolsToggleLabel').textContent = pbToolsHidden ? 'Show Tools' : 'Hide Tools';
+    if (!pbToolsHidden) pbSchedulePreview();
+  }
+  document.getElementById('pbToolsToggleBtn').addEventListener('click', function () {
+    pbToolsHidden = !pbToolsHidden;
+    try { localStorage.setItem(PB_TOOLS_KEY, pbToolsHidden ? '1' : '0'); } catch (e) {}
+    applyPbToolsHidden();
+  });
+  applyPbToolsHidden();
+
+  function renderPictureBook() {
+    if (!pbState) return;
+    pbTitleInput.value = pbState.title;
+    pbAuthorInput.value = pbState.author;
+    requestAnimationFrame(function () { fitTitleInput(pbTitleInput); });
+    pbTrimSelect.value = pbState.trimSize;
+    setFontSelect(document.getElementById('pbFontSeg'), pbState.typeface);
+    applyPbTypeface();
+    updatePbBookMenuBtn();
+    renderPbSheet();
+    renderPbArchive();
+    renderPbPreview();
+    setPbExportStatus('');
+  }
+
+  // ---- Export: digital dummy, printable dummy, PowerPoint ----
+  var pbExportStatusEl = document.getElementById('pbExportStatus');
+  function setPbExportStatus(msg) { pbExportStatusEl.textContent = msg || ''; }
+  function pbSlug() {
+    return (pbState.title || 'picture-book').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'picture-book';
+  }
+
+  // PDF text is drawn with the book's own webfont on a canvas and
+  // embedded as grayscale images (none of these faces are PDF base
+  // fonts); the cut and fold lines stay vector.
+  var PB_PDF_W = 792, PB_PDF_H = 612, PB_PDF_MARGIN = 36, PB_RASTER = 2;
+  function pbEnsureFonts() {
+    var stack = displayStackFor(pbState.typeface);
+    return Promise.all(['400 16px ' + stack, '600 16px ' + stack].map(function (s) {
+      try { return document.fonts.load(s); } catch (e) { return Promise.resolve(); }
+    })).then(function () { return document.fonts.ready; }).catch(function () { return null; });
+  }
+  function pbRasterBlock(b) {
+    var heightPt = Math.max(1, b.lines.length * b.lineH);
+    var wPx = Math.max(1, Math.ceil(b.w * PB_RASTER)), hPx = Math.max(1, Math.ceil(heightPt * PB_RASTER));
+    var canvas = document.createElement('canvas');
+    canvas.width = wPx; canvas.height = hPx;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(PB_RASTER, PB_RASTER);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, b.w, heightPt);
+    ctx.font = pbFont(b.weight, b.size);
+    ctx.fillStyle = b.muted ? '#4F7480' : '#163240';
+    b.lines.forEach(function (line, i) { if (line) ctx.fillText(line, 0, i * b.lineH + b.lineH * 0.82); });
+    var data = ctx.getImageData(0, 0, wPx, hPx).data;
+    var gray = new Uint8Array(wPx * hPx);
+    for (var i = 0, j = 0; i < data.length; i += 4, j++) gray[j] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    return { heightPt: heightPt, wPx: wPx, hPx: hPx, gray: gray };
+  }
+  // PDF RunLengthDecode (ISO 32000-1 7.4.5): mostly-white text
+  // rasters shrink a lot under it.
+  function pbRle(bytes) {
+    var out = [], i = 0, n = bytes.length;
+    while (i < n) {
+      var run = 1;
+      while (i + run < n && bytes[i + run] === bytes[i] && run < 128) run++;
+      if (run >= 2) { out.push(257 - run, bytes[i]); i += run; }
+      else {
+        var start = i, count = 0;
+        while (i < n && count < 128) { if (i + 1 < n && bytes[i] === bytes[i + 1]) break; count++; i++; }
+        if (count === 0) { count = 1; i++; }
+        out.push(count - 1);
+        for (var k = 0; k < count; k++) out.push(bytes[start + k]);
+      }
+    }
+    out.push(128);
+    return out;
+  }
+  function pbDashStr(w) { return '0.6 G\n[6 3] 0 d\n' + w + ' w\n'; }
+
+  // One PDF page per face: two book pages side by side on landscape
+  // Letter, a dashed cut line around them and a dashed fold between.
+  function pbFaceOps(face, totalPages, rows, trim, scale) {
+    var boxW = trim.pageW * 72 * scale, boxH = trim.pageH * 72 * scale;
+    var startX = PB_PDF_MARGIN + (PB_PDF_W - PB_PDF_MARGIN * 2 - boxW * 2) / 2;
+    var startY = PB_PDF_MARGIN + (PB_PDF_H - PB_PDF_MARGIN * 2 - boxH) / 2;
+    var ops = [{ type: 'rect', x: startX, y: startY, w: boxW * 2, h: boxH },
+      { type: 'line', x1: startX + boxW, y1: startY, x2: startX + boxW, y2: startY + boxH }];
+    function image(x, yTopPdf, b) {
+      var r = pbRasterBlock(b);
+      ops.push({ type: 'image', x: x, y: yTopPdf - r.heightPt, w: b.w, h: r.heightPt, wPx: r.wPx, hPx: r.hPx, rle: pbRle(r.gray) });
+    }
+    function label(centerX, yBottom, text, size) {
+      var w = pbMeasure(text, 600, size) + 2;
+      image(centerX - w / 2, yBottom + size + 3, { w: w, lines: [text], weight: 600, size: size, lineH: size + 3, muted: true });
+    }
+    [[face.left, startX], [face.right, startX + boxW]].forEach(function (pair) {
+      var pageNum = pair[0], x = pair[1];
+      if (!pageNum) return;
+      pbLayoutPage(pbPageInfo(pageNum, totalPages, rows), boxW, boxH, scale).forEach(function (b) {
+        image(x + b.x, startY + boxH - b.y, b);
+      });
+      label(x + boxW / 2, startY - 16, 'p. ' + pageNum, 9);
+    });
+    var cap = pbWrap(face.label, PB_PDF_W - PB_PDF_MARGIN * 2, 600, 8, 1);
+    image(PB_PDF_MARGIN, 14 + 10, { w: PB_PDF_W - PB_PDF_MARGIN * 2, lines: cap, weight: 600, size: 8, lineH: 10, muted: true });
+    return ops;
+  }
+
+  async function pbAssemblePdf(metaTitle, faces, totalPages, rows, trim, scale) {
+    await pbEnsureFonts();
+    var parts = [], offsets = [], pos = 0, nextObj = 1;
+    function put(chunk) {
+      var u8 = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : new Uint8Array(chunk);
+      parts.push(u8); pos += u8.length;
+    }
+    function alloc() { return nextObj++; }
+    function begin(num) { offsets[num] = pos; put(num + ' 0 obj\n'); }
+    function end() { put('endobj\n'); }
+    put('%PDF-1.4\n');
+    var catalogNum = alloc(), pagesNum = alloc(), kids = [];
+    faces.forEach(function (face) {
+      var ops = pbFaceOps(face, totalPages, rows, trim, scale);
+      var pageNum = alloc(), contentNum = alloc();
+      var imgs = ops.filter(function (o) { return o.type === 'image'; });
+      var imgNums = imgs.map(function () { return alloc(); });
+      kids.push(pageNum);
+      var content = [], xobj = [], k = 0;
+      ops.forEach(function (op) {
+        if (op.type === 'rect') pushAscii(content, pbDashStr(2) + op.x.toFixed(2) + ' ' + op.y.toFixed(2) + ' ' + op.w.toFixed(2) + ' ' + op.h.toFixed(2) + ' re\nS\n');
+        else if (op.type === 'line') pushAscii(content, pbDashStr(2) + op.x1.toFixed(2) + ' ' + op.y1.toFixed(2) + ' m\n' + op.x2.toFixed(2) + ' ' + op.y2.toFixed(2) + ' l\nS\n');
+        else {
+          var num = imgNums[k++];
+          xobj.push('/Im' + num + ' ' + num + ' 0 R');
+          pushAscii(content, 'q\n' + op.w.toFixed(2) + ' 0 0 ' + op.h.toFixed(2) + ' ' + op.x.toFixed(2) + ' ' + op.y.toFixed(2) + ' cm\n/Im' + num + ' Do\nQ\n');
+        }
+      });
+      begin(pageNum);
+      put('<< /Type /Page /Parent ' + pagesNum + ' 0 R /MediaBox [0 0 ' + PB_PDF_W + ' ' + PB_PDF_H + ']' + (face.rotate180 ? ' /Rotate 180' : '') +
+        ' /Resources << /XObject << ' + xobj.join(' ') + ' >> >> /Contents ' + contentNum + ' 0 R >>\n');
+      end();
+      var cu8 = new Uint8Array(content);
+      begin(contentNum);
+      put('<< /Length ' + cu8.length + ' >>\nstream\n'); put(cu8); put('\nendstream\n');
+      end();
+      imgs.forEach(function (op, idx) {
+        var r = new Uint8Array(op.rle);
+        begin(imgNums[idx]);
+        put('<< /Type /XObject /Subtype /Image /Width ' + op.wPx + ' /Height ' + op.hPx +
+          ' /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /RunLengthDecode /Length ' + r.length + ' >>\nstream\n');
+        put(r); put('\nendstream\n');
+        end();
+      });
+    });
+    begin(catalogNum); put('<< /Type /Catalog /Pages ' + pagesNum + ' 0 R >>\n'); end();
+    begin(pagesNum);
+    put('<< /Type /Pages /Kids [' + kids.map(function (k) { return k + ' 0 R'; }).join(' ') + '] /Count ' + kids.length + ' >>\n');
+    end();
+    var infoNum = alloc();
+    begin(infoNum); put('<< /Title '); put(pdfLiteralStringBytes(toAsciiSafe(metaTitle))); put(' /Producer (Bookbug) >>\n'); end();
+    var xrefAt = pos, xref = ['0000000000 65535 f \n'];
+    for (var n = 1; n < nextObj; n++) xref.push(pad10(offsets[n] || 0) + ' 00000 n \n');
+    put('xref\n0 ' + nextObj + '\n' + xref.join(''));
+    put('trailer\n<< /Size ' + nextObj + ' /Root ' + catalogNum + ' 0 R /Info ' + infoNum + ' 0 R >>\nstartxref\n' + xrefAt + '\n%%EOF');
+    var total = 0;
+    parts.forEach(function (p) { total += p.length; });
+    var out = new Uint8Array(total), o = 0;
+    parts.forEach(function (p) { out.set(p, o); o += p.length; });
+    return out;
+  }
+  function pbPdfScale(trim) {
+    return Math.min((PB_PDF_W - PB_PDF_MARGIN * 2) / (2 * trim.pageW * 72), (PB_PDF_H - PB_PDF_MARGIN * 2) / (trim.pageH * 72), 1);
+  }
+  function pbDimLabel(trim, scale) {
+    return (trim.pageW * scale).toFixed(2) + '" × ' + (trim.pageH * scale).toFixed(2) + '" per page';
+  }
+  // Reading order: title page, each spread, end page.
+  function buildDigitalDummyPdf() {
+    var trim = pbTrim(pbState.trimSize), scale = pbPdfScale(trim), dim = pbDimLabel(trim, scale);
+    var rows = pbState.rows, total = rows.length * 2 + 2;
+    var faces = [{ left: null, right: 1, label: 'Title page · p. 1 · ' + dim }];
+    for (var s = 1; s <= rows.length; s++) {
+      faces.push({ left: 2 * s, right: 2 * s + 1, label: 'Spread ' + s + ' of ' + rows.length + ' · pp. ' + (2 * s) + ', ' + (2 * s + 1) + ' · ' + dim });
+    }
+    faces.push({ left: total, right: null, label: 'End page · p. ' + total + ' · ' + dim });
+    return pbAssemblePdf((pbState.title || 'Untitled picture book') + ' - Digital Dummy', faces, total, rows, trim, scale);
+  }
+  // Saddle-stitch imposition: the page count must be a multiple of 4,
+  // and 2 × spreads + 2 only is when the spread count is odd, so an even
+  // count gets one blank spread (in the file only). Backs are turned
+  // 180° so they come out right way up when a duplex printer flips the
+  // sheet.
+  function buildPrintableDummyPdf() {
+    var trim = pbTrim(pbState.trimSize), scale = pbPdfScale(trim), dim = pbDimLabel(trim, scale);
+    var rows = pbState.rows.slice();
+    if (rows.length % 2 === 0) rows.push(pbBlankRow());
+    var total = rows.length * 2 + 2, sheets = total / 4, faces = [];
+    for (var i = 1; i <= sheets; i++) {
+      var fl = total - 2 * i + 2, fr = 2 * i - 1, bl = 2 * i, br = total - 2 * i + 1;
+      faces.push({ left: fl, right: fr, label: 'Sheet ' + i + ' of ' + sheets + ' — Front · pp. ' + fl + ', ' + fr + ' · ' + dim });
+      faces.push({ left: bl, right: br, label: 'Sheet ' + i + ' of ' + sheets + ' — Back · pp. ' + bl + ', ' + br + ' · ' + dim, rotate180: true });
+    }
+    return pbAssemblePdf((pbState.title || 'Untitled picture book') + ' - Printable Dummy', faces, total, rows, trim, scale);
+  }
+
+  // PowerPoint: one slide per spread at the book's spread size, the text
+  // in dashed boxes either side of a dashed fold, illustration notes in
+  // each slide's speaker notes.
+  // The first family in the display stack is the real font's name
+  // ("Zilla Slab", not the menu's "Slab Serif").
+  function pptxFontName() { return displayStackFor(pbState.typeface).split(',')[0].replace(/['"]/g, '').trim(); }
+  function pbTextRuns(text, sz, algn) {
+    var face = escapeXml(pptxFontName());
+    var pPr = algn ? '<a:pPr algn="' + algn + '"/>' : '';
+    return String(text || '').split(/\r\n|\r|\n/).map(function (line) {
+      if (!line) return '<a:p>' + pPr + '</a:p>';
+      return '<a:p>' + pPr + '<a:r><a:rPr lang="en-US" sz="' + sz + '" dirty="0"><a:latin typeface="' + face + '"/></a:rPr><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
+    }).join('');
+  }
+  var PPTX_NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+  var XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  var REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/';
+  function pptxRels(list) {
+    return XML_HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      list.map(function (r) { return '<Relationship Id="' + r[0] + '" Type="' + (r[1].indexOf('http') === 0 ? r[1] : REL_NS + r[1]) + '" Target="' + r[2] + '"/>'; }).join('') +
+      '</Relationships>';
+  }
+  function pptxTextBox(id, name, x, y, w, h, text) {
+    return '<p:sp><p:nvSpPr><p:cNvPr id="' + id + '" name="' + name + '"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
+      '<p:spPr><a:xfrm><a:off x="' + x + '" y="' + y + '"/><a:ext cx="' + w + '" cy="' + h + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+      '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill><a:prstDash val="dash"/></a:ln></p:spPr>' +
+      '<p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>' + pbTextRuns(text, 1800, 'l') + '</p:txBody></p:sp>';
+  }
+  function pptxSlide(row, W, H) {
+    var MARGIN = 457200, GAP = 114300, BOTTOM = 228600, half = W / 2;
+    var sideW = half - MARGIN - GAP, boxW = Math.round(sideW * 0.8);
+    var bottomY = Math.round(H * 0.75), boxH = Math.round(H * 0.25 - BOTTOM), midY = Math.round((H - boxH) / 2);
+    var shapes = '<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="2" name="Gutter"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>' +
+      '<p:spPr><a:xfrm><a:off x="' + Math.round(half) + '" y="0"/><a:ext cx="0" cy="' + H + '"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>' +
+      '<a:ln w="38100"><a:solidFill><a:srgbClr val="999999"/></a:solidFill><a:prstDash val="dash"/></a:ln></p:spPr></p:cxnSp>';
+    var id = 3;
+    function side(x, prefix, label) {
+      if (row[prefix + 'Split']) {
+        shapes += pptxTextBox(id++, label + ' 1', x, midY, boxW, boxH, row[prefix]);
+        shapes += pptxTextBox(id++, label + ' 2', x, bottomY, boxW, boxH, row[prefix + '2']);
+      } else shapes += pptxTextBox(id++, label, x, bottomY, boxW, boxH, row[prefix]);
+    }
+    side(Math.round(MARGIN + (sideW - boxW) / 2), 'verso', 'Verso');
+    side(Math.round(half + GAP + (sideW - boxW) / 2), 'recto', 'Recto');
+    return XML_HEAD + '<p:sld ' + PPTX_NS + '><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+      shapes + '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>';
+  }
+  function pptxNotes(text) {
+    return XML_HEAD + '<p:notes ' + PPTX_NS + '><p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>' +
+      '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>' +
+      '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>' + pbTextRuns(text, 1200) + '</p:txBody></p:sp>' +
+      '</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>';
+  }
+  function pptxTheme() {
+    var face = escapeXml(pptxFontName());
+    var fills = '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>';
+    return XML_HEAD + '<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Bookbug"><a:themeElements>' +
+      '<a:clrScheme name="Bookbug"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>' +
+      '<a:dk2><a:srgbClr val="2E2013"/></a:dk2><a:lt2><a:srgbClr val="EFE3C8"/></a:lt2><a:accent1><a:srgbClr val="6E7B3E"/></a:accent1>' +
+      '<a:accent2><a:srgbClr val="C1602A"/></a:accent2><a:accent3><a:srgbClr val="5C7A93"/></a:accent3><a:accent4><a:srgbClr val="7A4E2B"/></a:accent4>' +
+      '<a:accent5><a:srgbClr val="A6957A"/></a:accent5><a:accent6><a:srgbClr val="8B3A2B"/></a:accent6><a:hlink><a:srgbClr val="6E7B3E"/></a:hlink>' +
+      '<a:folHlink><a:srgbClr val="7A4E2B"/></a:folHlink></a:clrScheme>' +
+      '<a:fontScheme name="Bookbug"><a:majorFont><a:latin typeface="' + face + '"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>' +
+      '<a:minorFont><a:latin typeface="' + face + '"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>' +
+      '<a:fmtScheme name="Bookbug"><a:fillStyleLst>' + fills + fills + fills + '</a:fillStyleLst>' +
+      '<a:lnStyleLst><a:ln w="6350">' + fills + '</a:ln><a:ln w="12700">' + fills + '</a:ln><a:ln w="19050">' + fills + '</a:ln></a:lnStyleLst>' +
+      '<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>' +
+      '<a:bgFillStyleLst>' + fills + fills + fills + '</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>';
+  }
+  function buildPictureBookPptx() {
+    var trim = pbTrim(pbState.trimSize);
+    var W = Math.round(trim.pageW * 2 * 914400), H = Math.round(trim.pageH * 914400);
+    var rows = pbState.rows, n = rows.length, files = [];
+    var enc = new TextEncoder();
+    function add(name, xml) { files.push({ name: name, data: enc.encode(xml) }); }
+    var CT = 'application/vnd.openxmlformats-officedocument.';
+    var overrides = '<Override PartName="/ppt/presentation.xml" ContentType="' + CT + 'presentationml.presentation.main+xml"/>' +
+      '<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="' + CT + 'presentationml.slideMaster+xml"/>' +
+      '<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="' + CT + 'presentationml.slideLayout+xml"/>' +
+      '<Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="' + CT + 'presentationml.notesMaster+xml"/>' +
+      '<Override PartName="/ppt/theme/theme1.xml" ContentType="' + CT + 'theme+xml"/>';
+    for (var i = 1; i <= n; i++) {
+      overrides += '<Override PartName="/ppt/slides/slide' + i + '.xml" ContentType="' + CT + 'presentationml.slide+xml"/>' +
+        '<Override PartName="/ppt/notesSlides/notesSlide' + i + '.xml" ContentType="' + CT + 'presentationml.notesSlide+xml"/>';
+    }
+    overrides += '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+      '<Override PartName="/docProps/app.xml" ContentType="' + CT + 'extended-properties+xml"/>';
+    add('[Content_Types].xml', XML_HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' + overrides + '</Types>');
+    add('_rels/.rels', pptxRels([['rId1', 'officeDocument', 'ppt/presentation.xml'],
+      ['rId2', 'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties', 'docProps/core.xml'],
+      ['rId3', 'extended-properties', 'docProps/app.xml']]));
+    var sldIds = '', presRels = [['rId1', 'slideMaster', 'slideMasters/slideMaster1.xml']];
+    for (var j = 1; j <= n; j++) {
+      sldIds += '<p:sldId id="' + (255 + j) + '" r:id="rId' + (j + 1) + '"/>';
+      presRels.push(['rId' + (j + 1), 'slide', 'slides/slide' + j + '.xml']);
+    }
+    var notesRid = 'rId' + (n + 2);
+    presRels.push([notesRid, 'notesMaster', 'notesMasters/notesMaster1.xml']);
+    add('ppt/presentation.xml', XML_HEAD + '<p:presentation ' + PPTX_NS + '><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>' +
+      '<p:notesMasterIdLst><p:notesMasterId r:id="' + notesRid + '"/></p:notesMasterIdLst><p:sldIdLst>' + sldIds + '</p:sldIdLst>' +
+      '<p:sldSz cx="' + W + '" cy="' + H + '"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>');
+    add('ppt/_rels/presentation.xml.rels', pptxRels(presRels));
+    add('ppt/theme/theme1.xml', pptxTheme());
+    var clrMap = '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>';
+    var emptyTree = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/></p:spTree>';
+    add('ppt/slideMasters/slideMaster1.xml', XML_HEAD + '<p:sldMaster ' + PPTX_NS + '><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>' + emptyTree + '</p:cSld>' +
+      clrMap + '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>');
+    add('ppt/slideMasters/_rels/slideMaster1.xml.rels', pptxRels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'theme', '../theme/theme1.xml']]));
+    add('ppt/slideLayouts/slideLayout1.xml', XML_HEAD + '<p:sldLayout ' + PPTX_NS + ' type="blank" preserve="1"><p:cSld name="Blank">' + emptyTree + '</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>');
+    add('ppt/slideLayouts/_rels/slideLayout1.xml.rels', pptxRels([['rId1', 'slideMaster', '../slideMasters/slideMaster1.xml']]));
+    add('ppt/notesMasters/notesMaster1.xml', XML_HEAD + '<p:notesMaster ' + PPTX_NS + '><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>' + emptyTree + '</p:cSld>' + clrMap + '</p:notesMaster>');
+    add('ppt/notesMasters/_rels/notesMaster1.xml.rels', pptxRels([['rId1', 'theme', '../theme/theme1.xml']]));
+    for (var k = 1; k <= n; k++) {
+      add('ppt/slides/slide' + k + '.xml', pptxSlide(rows[k - 1], W, H));
+      add('ppt/slides/_rels/slide' + k + '.xml.rels', pptxRels([['rId1', 'slideLayout', '../slideLayouts/slideLayout1.xml'], ['rId2', 'notesSlide', '../notesSlides/notesSlide' + k + '.xml']]));
+      add('ppt/notesSlides/notesSlide' + k + '.xml', pptxNotes(rows[k - 1].illustration));
+      add('ppt/notesSlides/_rels/notesSlide' + k + '.xml.rels', pptxRels([['rId1', 'notesMaster', '../notesMasters/notesMaster1.xml'], ['rId2', 'slide', '../slides/slide' + k + '.xml']]));
+    }
+    add('docProps/core.xml', XML_HEAD + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+      '<dc:title>' + escapeXml(pbState.title || 'Untitled picture book') + '</dc:title><dc:creator>' + escapeXml(pbState.author || 'Bookbug') + '</dc:creator></cp:coreProperties>');
+    add('docProps/app.xml', XML_HEAD + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Bookbug</Application><Slides>' + n + '</Slides></Properties>');
+    return makeZip(files);
+  }
+
+  async function runPbExport(btn, kind) {
+    pbFlushPending();
+    var btns = ['pbExportDigitalBtn', 'pbExportPrintBtn', 'pbExportPptxBtn'].map(function (id) { return document.getElementById(id); });
+    btns.forEach(function (b) { b.disabled = true; });
+    setPbExportStatus(kind === 'pptx' ? 'Building PowerPoint…' : 'Building PDF…');
+    try {
+      var bytes, filename, mime;
+      if (kind === 'pptx') {
+        bytes = buildPictureBookPptx();
+        filename = pbSlug() + '.pptx';
+        mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      } else {
+        bytes = await (kind === 'print' ? buildPrintableDummyPdf() : buildDigitalDummyPdf());
+        filename = pbSlug() + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
+        mime = 'application/pdf';
+      }
+      var dl = null;
+      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+      if (dl) { await dl.save({ filename: filename, data: bytes }); setPbExportStatus('Saved ' + filename + '.'); }
+      else {
+        downloadBlob(filename, bytes, mime);
+        setPbExportStatus('Downloaded ' + filename + (kind === 'pptx' ? '. In Google Slides, use File → Import slides.' : '.'));
+      }
+    } catch (err) {
+      if (err && err.code === 'declined') setPbExportStatus('');
+      else setPbExportStatus('Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.');
+    }
+    btns.forEach(function (b) { b.disabled = false; });
+  }
+  document.getElementById('pbExportDigitalBtn').addEventListener('click', function () { runPbExport(this, 'digital'); });
+  document.getElementById('pbExportPrintBtn').addEventListener('click', function () { runPbExport(this, 'print'); });
+  document.getElementById('pbExportPptxBtn').addEventListener('click', function () { runPbExport(this, 'pptx'); });
+
   pruneUnusedImages();
   renderAll();
   migrateTrashToArchive();
@@ -8088,6 +9860,11 @@
   bookAtLoad = JSON.stringify(state);
   updateSignInGate();
   if (homeMQ.matches) showHome();
+  else {
+    var openedAtLoad = getLastOpened();
+    var pbAtLoad = openedAtLoad && pbEntry(openedAtLoad.id);
+    if (pbAtLoad && !pbAtLoad.archived) openPictureBook(pbAtLoad.id);
+  }
   // The ▾ only belongs where Home is still a dropdown of books (phones).
   function syncMyBooksLabel() { chapbooksMenuBtn.textContent = homeMQ.matches ? 'Home' : 'Home ▾'; }
   syncMyBooksLabel();
@@ -8096,6 +9873,15 @@
   // Wrapping titles and auto-height text boxes need re-measuring
   // whenever the width or the loaded fonts change.
   function regrowAll() {
+    // Tab stops were measured against whatever font was ready then.
+    document.querySelectorAll('.poem-card .poem-text').forEach(function (ed) {
+      ed.style.tabSize = tabSizeFor(ed.style.fontFamily || displayStackFor(state.bodyFontChoice), parseFloat(getComputedStyle(ed).fontSize), TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
+    });
+    if (isPictureBookShown()) {
+      fitTitleInput(pbTitleInput);
+      pbSheet.querySelectorAll('textarea').forEach(autoGrow);
+      pbSchedulePreview();
+    }
     document.querySelectorAll('.poem-compact-expanded textarea.poem-title').forEach(fitTitleInput);
     document.querySelectorAll('textarea.poem-title, #bookTitleInput').forEach(function (ta) {
       if (!ta.closest('.is-writing') || ta.classList.contains('poem-title')) autoGrow(ta);
