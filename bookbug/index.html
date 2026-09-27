@@ -1177,10 +1177,17 @@
     flex: 1; font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0;
   }
   .home-shelf-head .dots-btn { padding: 0 8px 4px; }
-  .add-type-area { position: relative; }
-  .add-type-menu { position: absolute; right: 0; top: calc(100% + 6px); left: auto; z-index: 60; min-width: 300px; }
-  .add-type-menu button { display: flex; flex-direction: column; gap: 2px; }
-  .add-type-menu small { font-size: 11.5px; color: var(--ink-faint); font-weight: 400; }
+  /* New book dialog: a name, then the kinds as small cards to pick from. */
+  .new-book-box { max-width: 600px; width: 100%; max-height: calc(100vh - 40px); overflow-y: auto; }
+  .new-book-box h2 { font-family: "Zilla Slab", ui-serif, serif; font-size: 22px; margin: 0 0 14px; }
+  .new-book-box .prompt-input { font-size: 16px; }
+  .new-book-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .new-book-types .home-start-card { padding: 12px 14px; gap: 4px; border-width: 2px; border-color: var(--line-strong); }
+  .new-book-types .home-start-card strong { font-size: 16px; }
+  .new-book-types .home-start-card span { font-size: 12px; line-height: 1.45; }
+  .new-book-types .home-start-card::before { margin-bottom: 2px; }
+  /* Chosen: ink border and a tinted fill (no reflow -- same border width). */
+  .new-book-types .home-start-card.is-active { border-color: var(--ink); background: var(--accent-soft); }
   /* A new account's Home: pick what you're making. */
   .home-start { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; max-width: 720px; }
   .home-start-card {
@@ -1797,12 +1804,9 @@
     <div class="home-head">
       <h2 class="home-title">Home</h2>
       <div class="home-head-actions">
-        <!-- One shelf per kind of book you make; this adds another. -->
-        <div class="add-type-area" id="addTypeArea">
-          <button class="btn btn-sm" id="addTypeBtn" type="button" aria-haspopup="menu" aria-expanded="false">Add book type ▾</button>
-          <div class="entry-menu add-type-menu" id="addTypeMenu" role="menu" hidden></div>
-        </div>
         <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
+        <!-- One way to start anything: name it, then pick what kind. -->
+        <button class="btn btn-sm btn-primary" id="newBookBtn" type="button" aria-haspopup="dialog">New book</button>
       </div>
     </div>
     <div id="homeShelves"></div>
@@ -8487,13 +8491,66 @@
     newCard.addEventListener('click', onClick);
     return newCard;
   }
-  // Name it first: dropping straight into an empty editor felt abrupt.
-  // Cancel backs out without adding the type to Home.
-  async function startBookOfForm(form) {
-    if (form === 'picture') { addHomeForm(form); openNewPictureBookDialog(); return; }
-    var name = await promptDialog('Name your new ' + BOOK_FORMS[form].add.replace(/^(New|Add)\s+/i, '').toLowerCase() + ':', '');
-    if (name === null) return;
-    name = name.trim();
+  // New book: name it and choose what kind, rather than landing straight
+  // in an empty editor. `form` preselects a kind (a shelf's own button).
+  // Cancel backs out without adding anything to Home.
+  function openNewBookDialog(form) {
+    var ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    var box = document.createElement('div');
+    box.className = 'modal-box new-book-box';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', 'New book');
+    box.innerHTML = '<h2>New book</h2>' +
+      '<div class="subhead">Title</div><input type="text" class="prompt-input" placeholder="Untitled — you can name it later">' +
+      '<div class="subhead">What kind of book?</div><div class="new-book-types" role="radiogroup"></div>' +
+      '<div class="modal-actions" style="margin-top:18px;"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="ok">Create</button></div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    var nameInput = box.querySelector('input'), ok = box.querySelector('[data-act="ok"]'), types = box.querySelector('.new-book-types');
+    function pick(f) {
+      form = f;
+      types.querySelectorAll('.home-start-card').forEach(function (c) {
+        var on = c.dataset.form === f;
+        c.classList.toggle('is-active', on);
+        c.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+      ok.disabled = !form;
+    }
+    Object.keys(BOOK_FORMS).forEach(function (f) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'home-start-card';
+      b.dataset.form = f;
+      b.setAttribute('role', 'radio');
+      b.innerHTML = '<strong></strong><span></span>';
+      b.querySelector('strong').textContent = BOOK_FORMS[f].add;
+      b.querySelector('span').textContent = BOOK_FORMS[f].about;
+      b.addEventListener('click', function () { pick(f); });
+      b.addEventListener('dblclick', function () { pick(f); create(); });
+      types.appendChild(b);
+    });
+    pick(form && BOOK_FORMS[form] ? form : null);
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    function create() {
+      if (!form) { types.querySelector('.home-start-card').focus(); return; }
+      var name = nameInput.value.trim(), f = form;
+      close();
+      createBookOfForm(f, name);
+    }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    box.querySelector('[data-act="cancel"]').addEventListener('click', close);
+    ok.addEventListener('click', create);
+    nameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); create(); } });
+    setTimeout(function () { nameInput.focus(); }, 0);
+  }
+  document.getElementById('newBookBtn').addEventListener('click', function () { openNewBookDialog(null); });
+  function startBookOfForm(form) { openNewBookDialog(form); }
+  function createBookOfForm(form, name) {
+    if (form === 'picture') { addHomeForm(form); openNewPictureBookDialog(name); return; }
     addHomeForm(form);
     if (form === 'cartoon') {
       startNewCartoonBook();
@@ -8554,7 +8611,7 @@
     });
     fitHomeShelves();
     var missing = Object.keys(BOOK_FORMS).filter(function (f) { return forms.indexOf(f) === -1; });
-    document.getElementById('addTypeArea').hidden = !forms.length;
+    document.getElementById('newBookBtn').hidden = !forms.length;
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks());
@@ -8589,29 +8646,6 @@
     clearTimeout(homeFitTimer);
     homeFitTimer = setTimeout(fitHomeShelves, 100);
   });
-  // Add book type: the forms not on Home yet.
-  var addTypeBtn = document.getElementById('addTypeBtn'), addTypeMenu = document.getElementById('addTypeMenu');
-  function closeAddTypeMenu() { addTypeMenu.hidden = true; addTypeBtn.setAttribute('aria-expanded', 'false'); }
-  addTypeBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (!addTypeMenu.hidden) { closeAddTypeMenu(); return; }
-    addTypeMenu.innerHTML = '';
-    var missingForms = Object.keys(BOOK_FORMS).filter(function (f) { return homeForms().indexOf(f) === -1; });
-    if (!missingForms.length) addTypeMenu.innerHTML = '<div class="chapbooks-empty">Every book type is already on Home. Start a new one from its shelf.</div>';
-    missingForms.forEach(function (f) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute('role', 'menuitem');
-      b.innerHTML = '<span></span><small></small>';
-      b.firstChild.textContent = BOOK_FORMS[f].add;
-      b.lastChild.textContent = BOOK_FORMS[f].about;
-      b.addEventListener('click', function () { closeAddTypeMenu(); startBookOfForm(f); });
-      addTypeMenu.appendChild(b);
-    });
-    addTypeMenu.hidden = false;
-    addTypeBtn.setAttribute('aria-expanded', 'true');
-  });
-  document.addEventListener('click', function (e) { if (!addTypeMenu.contains(e.target)) closeAddTypeMenu(); });
   // A shelf's ⋯: take that book type off Home. Its books stay saved and
   // come back with it.
   var shelfMenu = document.createElement('div');
@@ -8821,14 +8855,12 @@
       });
       chapbooksPane.appendChild(makeDivider());
     }
-    Object.keys(BOOK_FORMS).filter(function (f) { return menuForms.indexOf(f) === -1; }).forEach(function (f) {
-      var addType = document.createElement('button');
-      addType.className = 'chapbooks-trash-link';
-      addType.type = 'button';
-      addType.textContent = '+ New ' + BOOK_FORMS[f].add.toLowerCase();
-      addType.addEventListener('click', function () { startBookOfForm(f); });
-      chapbooksPane.appendChild(addType);
-    });
+    var addBook = document.createElement('button');
+    addBook.className = 'chapbooks-trash-link';
+    addBook.type = 'button';
+    addBook.textContent = '+ New book…';
+    addBook.addEventListener('click', function () { closeChapbooksDropdown(); openNewBookDialog(null); });
+    chapbooksPane.appendChild(addBook);
 
     var archivedCount = archivedBooks().length + archivedPictureBooks().length + archivedCartoonBooks().length;
     var archivedLink = document.createElement('button');
@@ -13131,7 +13163,7 @@
   }
 
   // ---- New picture book: length, shape, and front/back matter ----
-  function openNewPictureBookDialog() {
+  function openNewPictureBookDialog(name) {
     var ov = document.createElement('div');
     ov.className = 'modal-overlay open';
     var box = document.createElement('div');
@@ -13198,6 +13230,7 @@
     box.querySelector('[data-act="ok"]').addEventListener('click', function () {
       close();
       startPictureBook(pbNewBook(pages, layout, trim, googleUserName || ''));
+      if (name) { pbTitleInput.value = name; pbTitleInput.dispatchEvent(new Event('input')); }
     });
     box.querySelector('[data-act="ok"]').focus();
   }
