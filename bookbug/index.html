@@ -1128,6 +1128,17 @@
      book is open the whole app turns to a cyanotype card -- pale slate
      paper, navy ink, and the wordmark's own slate-blue chip as the accent
      -- so the two book forms are told apart at a glance. */
+  /* Novels and essay collections get colorways of their own from the same
+     swatch card: a terracotta wash for novels (the wordmark's rust chip),
+     a sage one for essays (its moss chip). Home stays on the base card. */
+  body.form-novel:not(.view-home):not(.view-pb) {
+    --paper: #F1DDCF; --surface: #FBF3EE; --surface-2: #F4E4D9; --ink: #2E1A12; --ink-soft: #6E4A3A; --ink-faint: #A88676;
+    --line: #E7CDBD; --line-strong: #CFA78F; --accent: #B0532A; --accent-soft: #F1D5C5; --shadow: rgba(46, 26, 18, 0.14);
+  }
+  body.form-essays:not(.view-home):not(.view-pb) {
+    --paper: #E0E5D0; --surface: #F6F7EF; --surface-2: #E9ECDD; --ink: #1F2616; --ink-soft: #52603F; --ink-faint: #8E9A7C;
+    --line: #D2D9C0; --line-strong: #AEB994; --accent: #5C6C30; --accent-soft: #DCE3C6; --shadow: rgba(31, 38, 22, 0.14);
+  }
   body.view-pb {
     --paper: #DCE4E9;
     --surface: #F3F6F8;
@@ -1634,7 +1645,7 @@
           <!-- Grouped by book type: the type you're in comes first and the
                others are a click away (see the script). -->
           <div class="prefs-group" data-prefs-form="collection">
-            <div class="prefs-group-title">Collections</div>
+            <div class="prefs-group-title">Collections, novels &amp; essays</div>
             <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show entry numbers</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
@@ -2172,6 +2183,11 @@
               <button data-val="2">2.0</button>
             </div>
           </div>
+          <div class="field">
+            <label>Paragraphs</label>
+            <div class="seg seg-3" id="paragraphSeg"><button data-val="indent">Indented</button><button data-val="space">Spaced</button></div>
+            <p class="field-note" style="margin:4px 0 0;">For prose. Indented is how books set it: no blank lines, and a line of *** makes a scene break. Poems keep their lines.</p>
+          </div>
           <div class="checkline">
             <input type="checkbox" id="pageNumbersCheck" checked>
             <label for="pageNumbersCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show page numbers</label>
@@ -2597,8 +2613,31 @@
       intakeCollapsed: false,
       intakeSourceLabel: null,
       chapbookId: null,
-      archivedPoems: []
+      archivedPoems: [],
+      // Which kind of text book this is (see TEXT_FORMS), and how prose
+      // paragraphs are set: 'space' (a blank line between) or 'indent'.
+      form: 'collection',
+      paragraphs: 'space'
     };
+  }
+  // Collections, novels and essay collections share one editor; each
+  // starts from the conventions of its kind and names its parts its own
+  // way. (Picture books are their own editor.)
+  var TEXT_FORMS = {
+    collection: { one: 'entry', many: 'entries', section: 'section', defaults: {} },
+    novel: { one: 'chapter', many: 'chapters', section: 'part',
+      // A trade novel: 5.5 x 8.5, Garamond, indented paragraphs, chapter
+      // titles centered, folios in the outer corners, no contents page.
+      defaults: { trimKey: 'digest', bodyFontChoice: 'garamond', titleFontChoice: 'garamond', titleAlignment: 'center',
+        paragraphs: 'indent', includeToc: false, pageNumberStyle: 'corners' } },
+    essays: { one: 'essay', many: 'essays', section: 'section',
+      defaults: { trimKey: 'digest', bodyFontChoice: 'garamond', titleFontChoice: 'zillaslab',
+        paragraphs: 'indent', includeToc: true, pageNumberStyle: 'corners' } }
+  };
+  function bookFormOf(data) { return data && TEXT_FORMS[data.form] ? data.form : 'collection'; }
+  function nounFor(n, data) {
+    var f = TEXT_FORMS[bookFormOf(data)];
+    return n + ' ' + (n === 1 ? f.one : f.many);
   }
 
   // Whether a book has anything worth keeping. An untouched blank book
@@ -2611,8 +2650,9 @@
 
   // A brand-new, empty book -- used by "New book" and after sign-in when
   // the account has no books yet.
-  function blankChapbookState() {
+  function blankChapbookState(form) {
     var s = defaultSettings();
+    if (TEXT_FORMS[form]) { Object.assign(s, TEXT_FORMS[form].defaults); s.form = form; }
     s.isExample = false;
     s.poems = [];
     return s;
@@ -2708,8 +2748,10 @@
   // book type" on Home adds the other. Synced with the books.
   // ---------------------------------------------------------------------
   var BOOK_FORMS = {
-    collection: { shelf: 'My collections', add: 'Collection', about: 'Poems, stories or essays, one entry to a page.', newLabel: 'New collection' },
-    picture: { shelf: 'My picture books', add: 'Picture book', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book' }
+    collection: { shelf: 'My collections', add: 'Collection', plural: 'Collections', about: 'Poems or stories, each starting on a page of its own.', newLabel: 'New collection' },
+    novel: { shelf: 'My novels', add: 'Novel', plural: 'Novels', about: 'Chapters and parts, set as running prose with indented paragraphs.', newLabel: 'New novel' },
+    essays: { shelf: 'My essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection' },
+    picture: { shelf: 'My picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
   function storedHomeForms() {
@@ -2721,7 +2763,9 @@
     var s = storedHomeForms();
     if (s && Array.isArray(s.forms)) return s.forms.filter(function (f) { return BOOK_FORMS[f]; });
     var out = [];
-    if (library.length) out.push('collection');
+    ['collection', 'novel', 'essays'].forEach(function (f) {
+      if (library.some(function (c) { return bookFormOf(c.data) === f; })) out.push(f);
+    });
     if (pbLibrary.length) out.push('picture');
     return out;
   }
@@ -4170,14 +4214,27 @@
     // the full content height, same as any other untitled page.
     var laterCap = Math.max(1, Math.floor(contentHeightPt / lineHeight));
 
-    var verse = isLineated(poem);
+    // Novels and essays are prose throughout, however short a line of dialogue.
+    var verse = bookFormOf(state) === 'collection' ? isLineated(poem) : false;
+    // Book-style prose paragraphs: each one's first line indented and no
+    // blank lines between -- except the first paragraph of the piece and
+    // the one after a scene break (a line of *** or #), set full out. The
+    // whole paragraph wraps a little narrower than the column so the
+    // indented first line fits.
+    var indented = !verse && state.paragraphs === 'indent';
+    var paraIndent = sizePt * 1.5, fullOut = true;
     var bodyAlign = poem.bodyAlign || state.bodyAlignment;
     // Hanging turnovers only make sense against a left margin.
     var hangPt = verse && bodyAlign === 'left' ? sizePt * 1.5 : 0;
     var renderLines = [];
     var wasWrapped = false;
     poem.lines.forEach(function (line) {
-      if (line === undefined || line.trim() === '') { renderLines.push({ blank: true }); return; }
+      if (line === undefined || line.trim() === '') { if (!indented) renderLines.push({ blank: true }); return; }
+      if (indented && /^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) {
+        renderLines.push({ blank: true }, { blank: false, text: '*   *   *', center: true, indent: 0 }, { blank: true });
+        fullOut = true;
+        return;
+      }
       var imgKey = imageKeyForLine(line, state);
       if (imgKey) {
         // Centered, at most the text column's width, and never taller
@@ -4194,11 +4251,13 @@
       // and Word, whatever the typeface or size.
       var tabs = (line.match(/^\t+/) || [''])[0].length;
       var tabPt = Math.min(tabs * TAB_STOP_PT, contentWidthPt * 0.6);
-      var wrapped = wrapFormatted(line.slice(tabs).replace(/\t/g, ' '), contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt);
+      var firstIndent = indented && !fullOut ? paraIndent : 0;
+      var wrapped = wrapFormatted(line.slice(tabs).replace(/\t/g, ' '), contentWidthPt - tabPt - (indented ? paraIndent : 0), sizePt, state.bodyFontChoice, hangPt);
       if (wrapped.length > 1 && verse) wasWrapped = true;
-      wrapped.forEach(function (w) {
-        renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt });
+      wrapped.forEach(function (w, wi) {
+        renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt + (wi === 0 ? firstIndent : 0) });
       });
+      fullOut = false;
     });
 
     // Fill pages by rows rather than a fixed line count -- an image
@@ -4901,7 +4960,7 @@
           }
           var lineY = top - layout.lineHeight + layout.lineHeight * 0.28;
           var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice, 400);
-          var x = resolveX(effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
+          var x = resolveX(rl.center ? 'center' : effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
           drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
@@ -5312,7 +5371,7 @@
     state.intakeSourceLabel = title;
     state.sourceAdded = true;
     if (!state.bookTitle) state.bookTitle = title;
-    var msg = (wasExample ? 'Imported ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
+    var msg = (wasExample ? 'Imported ' : 'Added ') + nounFor(entryCount, state);
     if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
     setStatus(msg + ' from “' + title + '”.');
     persist();
@@ -5716,7 +5775,7 @@
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
     state.sourceAdded = true;
-    var msg = (wasExample ? 'Parsed ' : 'Added ') + entryCount + (entryCount === 1 ? ' entry' : ' entries');
+    var msg = (wasExample ? 'Parsed ' : 'Added ') + nounFor(entryCount, state);
     if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
     pasteStatus.textContent = msg + '.';
     persist();
@@ -6392,7 +6451,7 @@
     gap.className = 'poem-gap';
     gap.innerHTML = '<div class="poem-gap-line"></div>' +
       '<div class="poem-gap-actions">' +
-      '<button class="poem-gap-btn" type="button" title="Add entry here">+</button>' +
+      '<button class="poem-gap-btn" type="button" title="Add ' + TEXT_FORMS[bookFormOf(state)].one + ' here">+</button>' +
       '<button class="poem-gap-btn poem-gap-btn-section" type="button" title="Add a section here">§+</button>' +
       '</div>';
     gap.querySelectorAll('.poem-gap-btn')[0].addEventListener('click', function () {
@@ -7205,7 +7264,7 @@
       var leadRow = document.createElement('div');
       leadRow.className = 'section-lead-row';
       var n = countEntries(parts.lead);
-      leadRow.textContent = 'Before the first section · ' + n + (n === 1 ? ' entry' : ' entries');
+      leadRow.textContent = 'Before the first section · ' + nounFor(n, state);
       poemList.appendChild(leadRow);
     }
     parts.blocks.forEach(function (block, k) {
@@ -7242,7 +7301,7 @@
       title.addEventListener('pointerdown', function () { row.draggable = false; });
       title.addEventListener('blur', function () { row.draggable = true; });
       row.insertBefore(title, row.querySelector('.section-block-count'));
-      row.querySelector('.section-block-count').textContent = n + (n === 1 ? ' entry' : ' entries');
+      row.querySelector('.section-block-count').textContent = nounFor(n, state);
       // Clicking anywhere on the bar (not its title text or its
       // buttons) shows or hides the section's entry titles, same as ▸.
       // A drag never fires click, so dragging the bar still just moves it.
@@ -7310,7 +7369,7 @@
     if (sectionsOnly) {
       renderSectionsOnly();
       var total = countEntries(state.poems);
-      poemsCount.textContent = total + (total === 1 ? ' entry' : ' entries');
+      poemsCount.textContent = nounFor(total, state);
       updateArchiveButton();
       if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
       return;
@@ -7329,7 +7388,7 @@
       poemList.appendChild(makeGap(i + 1));
     });
     var entryCount = countEntries(state.poems);
-    poemsCount.textContent = entryCount + (entryCount === 1 ? ' entry' : ' entries');
+    poemsCount.textContent = nounFor(entryCount, state);
     updateArchiveButton();
     // The entry being written in may not have been re-rendered as a full
     // card (e.g. collapsed in compact view) -- don't leave the page locked.
@@ -7696,7 +7755,7 @@
             '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
           return;
         }
-        var indentStyle = rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
+        var indentStyle = rl.center ? ' style="text-align:center"' : rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
         html += '<div' + indentStyle + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
@@ -7704,7 +7763,8 @@
 
       var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
       var entryNo = countEntries(state.poems.slice(0, item.index + 1));
-      caption.textContent = 'Entry ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
+      var one = TEXT_FORMS[bookFormOf(state)].one;
+      caption.textContent = one.charAt(0).toUpperCase() + one.slice(1) + ' ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
     }
 
   }
@@ -7992,7 +8052,7 @@
     card.querySelector('.home-cover-author').textContent = data.author || '';
     card.querySelector('.home-card-title').textContent = title;
     var n = countEntries(data.poems || []);
-    card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' entry' : ' entries');
+    card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + nounFor(n, data);
     card.addEventListener('click', function () { loadChapbook(entry.id); });
     card.addEventListener('keydown', function (e) {
       if ((e.key === 'Enter' || e.key === ' ') && e.target === card) { e.preventDefault(); loadChapbook(entry.id); }
@@ -8015,7 +8075,7 @@
   function startBookOfForm(form) {
     addHomeForm(form);
     if (form === 'picture') openNewPictureBookDialog();
-    else startNewBook();
+    else startNewBook(form);
   }
   function renderHome() {
     closeBookMenu();
@@ -8053,15 +8113,16 @@
       var grid = shelf.querySelector('.home-grid');
       if (f === 'picture') renderPictureBookShelf(grid);
       else {
-        grid.appendChild(makeNewCard(BOOK_FORMS.collection.newLabel, startNewBook));
-        activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-          grid.appendChild(makeHomeCard(entry));
-        });
+        grid.appendChild(makeNewCard(BOOK_FORMS[f].newLabel, function () { startNewBook(f); }));
+        activeBooks().filter(function (c) { return bookFormOf(c.data) === f; })
+          .sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+            grid.appendChild(makeHomeCard(entry));
+          });
       }
       shelves.appendChild(shelf);
     });
     var missing = Object.keys(BOOK_FORMS).filter(function (f) { return forms.indexOf(f) === -1; });
-    document.getElementById('addTypeArea').hidden = !forms.length || !missing.length;
+    document.getElementById('addTypeArea').hidden = !forms.length;
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks());
@@ -8082,7 +8143,9 @@
     e.stopPropagation();
     if (!addTypeMenu.hidden) { closeAddTypeMenu(); return; }
     addTypeMenu.innerHTML = '';
-    Object.keys(BOOK_FORMS).filter(function (f) { return homeForms().indexOf(f) === -1; }).forEach(function (f) {
+    var missingForms = Object.keys(BOOK_FORMS).filter(function (f) { return homeForms().indexOf(f) === -1; });
+    if (!missingForms.length) addTypeMenu.innerHTML = '<div class="chapbooks-empty">Every book type is already on Home.</div>';
+    missingForms.forEach(function (f) {
       var b = document.createElement('button');
       b.type = 'button';
       b.setAttribute('role', 'menuitem');
@@ -8108,7 +8171,7 @@
     shelfMenu.innerHTML = '<button type="button" role="menuitem">Remove from Home</button>';
     shelfMenu.firstChild.addEventListener('click', async function () {
       closeShelfMenu();
-      var count = form === 'picture' ? pbLibrary.length : library.length;
+      var count = form === 'picture' ? pbLibrary.length : library.filter(function (c) { return bookFormOf(c.data) === form; }).length;
       if (count) {
         var ok = await confirmDialog('Take ' + BOOK_FORMS[form].shelf.replace(/^My /, '') + ' off Home? The ' + count + ' you have stay saved, and come back if you add this book type again.');
         if (!ok) return;
@@ -8249,37 +8312,30 @@
     // The same book types as Home's shelves (collections, if none chosen yet).
     var menuForms = homeForms();
     if (!menuForms.length) menuForms = ['collection'];
-    if (menuForms.indexOf('collection') !== -1) {
-    var newBtn = document.createElement('button');
-    newBtn.className = 'chapbooks-new';
-    newBtn.type = 'button';
-    newBtn.textContent = '+ ' + BOOK_FORMS.collection.newLabel;
-    newBtn.addEventListener('click', startNewBook);
-    chapbooksPane.appendChild(newBtn);
-    chapbooksPane.appendChild(makeDivider());
-
-    if (!activeBooks().length) {
-      var emptyLib = document.createElement('div');
-      emptyLib.className = 'chapbooks-empty';
-      emptyLib.textContent = 'No books yet — this one is saved here as soon as you add something to it.';
-      chapbooksPane.appendChild(emptyLib);
-    } else {
-      activeBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-        var row = document.createElement('div');
-        row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
-        row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-restore" type="button" title="Archive">⤓</button>';
-        row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
-        row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
-        row.addEventListener('click', function () { loadChapbook(entry.id); });
-        row.querySelector('.chapbook-restore').addEventListener('click', function (e) {
-          e.stopPropagation();
-          setChapbookArchived(entry.id, true);
+    ['collection', 'novel', 'essays'].forEach(function (form) {
+      if (menuForms.indexOf(form) === -1) return;
+      var newBtn = document.createElement('button');
+      newBtn.className = 'chapbooks-new';
+      newBtn.type = 'button';
+      newBtn.textContent = '+ ' + BOOK_FORMS[form].newLabel;
+      newBtn.addEventListener('click', function () { startNewBook(form); });
+      chapbooksPane.appendChild(newBtn);
+      activeBooks().filter(function (c) { return bookFormOf(c.data) === form; })
+        .sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+          var row = document.createElement('div');
+          row.className = 'chapbook-row' + (entry.id === state.chapbookId && !isPictureBookShown() ? ' current' : '');
+          row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-restore" type="button" title="Archive">⤓</button>';
+          row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
+          row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
+          row.addEventListener('click', function () { loadChapbook(entry.id); });
+          row.querySelector('.chapbook-restore').addEventListener('click', function (e) {
+            e.stopPropagation();
+            setChapbookArchived(entry.id, true);
+          });
+          chapbooksPane.appendChild(row);
         });
-        chapbooksPane.appendChild(row);
-      });
-    }
-    chapbooksPane.appendChild(makeDivider());
-    }
+      chapbooksPane.appendChild(makeDivider());
+    });
 
     if (menuForms.indexOf('picture') !== -1) {
       var newPbBtn = document.createElement('button');
@@ -8387,10 +8443,11 @@
 
   // The current book is already in My Books (or empty), so there's
   // nothing to confirm -- just switch.
-  function startNewBook() {
-    addHomeForm('collection');
+  function startNewBook(form) {
+    form = typeof form === 'string' && TEXT_FORMS[form] ? form : 'collection';
+    addHomeForm(form);
     flushPendingSave();
-    state = blankChapbookState();
+    state = blankChapbookState(form);
     if (googleUserName) state.author = googleUserName;
     saveStateCache();
     renderAll();
@@ -8771,6 +8828,7 @@
   function wireSetting(segId, key) {
     wireSeg(segId, function (val) { state[key] = val; state.isExample = false; persist(); renderAll(); });
   }
+  wireSetting('paragraphSeg', 'paragraphs');
   wireSetting('sectionFontSeg', 'sectionFontChoice');
   wireSetting('sectionAlignSeg', 'sectionAlignment');
   wireSetting('sectionSizeSeg', 'sectionSizeMode');
@@ -8919,6 +8977,7 @@
       if (el.tagName === 'SELECT') { setFontSelect(el, val); return; }
       document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === val); });
     }
+    markSeg('paragraphSeg', state.paragraphs === 'indent' ? 'indent' : 'space');
     markSeg('sectionFontSeg', sec.font);
     markSeg('sectionAlignSeg', sec.align);
     markSeg('sectionSizeSeg', state.sectionSizeMode || 'medium');
@@ -9004,7 +9063,7 @@
       var n = countEntries(state.poems);
       document.getElementById('intakeCollapsedText').innerHTML = '';
       var strong = document.createElement('strong');
-      strong.textContent = n + (n === 1 ? ' entry' : ' entries');
+      strong.textContent = nounFor(n, state);
       document.getElementById('intakeCollapsedText').appendChild(strong);
       document.getElementById('intakeCollapsedText').appendChild(document.createTextNode(
         state.intakeSourceLabel ? ' loaded from “' + state.intakeSourceLabel + '”' : ' loaded'
@@ -9042,14 +9101,16 @@
       if (!panel.hidden) { close(); return; }
       // The book type you're in first; other types on Home behind a click.
       var primary = isPictureBookShown() ? 'picture' : 'collection';
-      var forms = homeForms();
-      var others = Object.keys(BOOK_FORMS).filter(function (f) { return f !== primary && forms.indexOf(f) !== -1; });
+      // Collections, novels and essays share one group.
+      var forms = homeForms().map(function (f) { return f === 'picture' ? 'picture' : 'collection'; })
+        .filter(function (f, i, a) { return a.indexOf(f) === i; });
+      var others = ['collection', 'picture'].filter(function (f) { return f !== primary && forms.indexOf(f) !== -1; });
       var groups = {};
       panel.querySelectorAll('[data-prefs-form]').forEach(function (g) { groups[g.dataset.prefsForm] = g; g.hidden = g.dataset.prefsForm !== primary; });
       panel.insertBefore(groups[primary], panel.firstChild);
       var more = document.getElementById('prefsMoreBtn');
       more.hidden = !others.length;
-      more.textContent = others.map(function (f) { return BOOK_FORMS[f].add + 's'; }).join(', ') + ' ›';
+      more.textContent = others.map(function (f) { return f === 'picture' ? 'Picture books' : 'Collections, novels & essays'; }).join(', ') + ' ›';
       more.onclick = function (e) {
         e.stopPropagation();
         others.forEach(function (f) { groups[f].hidden = false; });
@@ -9098,7 +9159,25 @@
     document.execCommand('insertText', false, ch === '"' ? (opening ? '\u201c' : '\u201d') : (opening ? '\u2018' : '\u2019'));
   });
 
+  // Names the parts the way this kind of book does (entries, chapters,
+  // essays; sections or parts), and puts the page in its colorway.
+  function applyFormWording() {
+    var form = bookFormOf(state), f = TEXT_FORMS[form];
+    var Cap = function (w) { return w.charAt(0).toUpperCase() + w.slice(1); };
+    document.getElementById('addPoemBtn').textContent = '+ Add ' + f.one;
+    document.getElementById('addSectionBtn').textContent = '+ Add ' + f.section;
+    var seg = document.getElementById('entriesViewSeg');
+    seg.querySelector('[data-view="sections"]').textContent = Cap(f.section) + ' View';
+    seg.querySelector('[data-view="sections"]').title = 'Just the ' + f.section + ' titles, to rename or reorder whole ' + f.section + 's';
+    seg.querySelector('[data-view="titles"]').title = 'One row per ' + f.one + '; click a title to open it';
+    seg.querySelector('[data-view="entries"]').textContent = Cap(f.one) + ' View';
+    seg.querySelector('[data-view="entries"]').title = 'Every ' + f.one + ' open in full';
+    document.querySelector('#intakePanel .panel-title').textContent = 'Bring in your ' + f.many;
+    document.querySelector('#archivePanel .panel-title').textContent = 'Archived ' + f.many;
+    ['novel', 'essays'].forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
+  }
   function renderAll() {
+    applyFormWording();
     syncSidebarFromState();
     renderPoems();
     updateStats();
