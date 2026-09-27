@@ -8461,11 +8461,21 @@
     newCard.addEventListener('click', onClick);
     return newCard;
   }
-  function startBookOfForm(form) {
+  // Name it first: dropping straight into an empty editor felt abrupt.
+  // Cancel backs out without adding the type to Home.
+  async function startBookOfForm(form) {
+    if (form === 'picture') { addHomeForm(form); openNewPictureBookDialog(); return; }
+    var name = await promptDialog('Name your new ' + BOOK_FORMS[form].add.replace(/^(New|Add)\s+/i, '').toLowerCase() + ':', '');
+    if (name === null) return;
+    name = name.trim();
     addHomeForm(form);
-    if (form === 'picture') openNewPictureBookDialog();
-    else if (form === 'cartoon') startNewCartoonBook();
-    else startNewBook(form);
+    if (form === 'cartoon') {
+      startNewCartoonBook();
+      if (name) { cbTitleInput.value = name; cbTitleInput.dispatchEvent(new Event('input')); }
+    } else {
+      startNewBook(form);
+      if (name) { state.bookTitle = name; persist(); renderAll(); }
+    }
   }
   function renderHome() {
     closeBookMenu();
@@ -10924,6 +10934,23 @@
     f.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     f.style.textAlign = pbGeom(it, s).align;
     f.classList.toggle('is-selected', !!(pbSel && pbSel.id === it.id));
+    // A new font, weight or alignment rewraps the words: refit the height.
+    if (f.isConnected) autoGrow(f);
+  }
+  // Text view fields size themselves to their words, so anything that
+  // rewraps them after the first measure (the page font arriving late, the
+  // column getting wider or narrower) has to refit them, or the last lines
+  // get clipped under the box's bottom edge while you type.
+  var pbFieldRO = window.ResizeObserver ? new ResizeObserver(function (entries) {
+    entries.forEach(function (e) {
+      var f = e.target, w = Math.round(e.contentRect.width);
+      if (f._growW !== w) { f._growW = w; autoGrow(f); }
+    });
+  }) : null;
+  if (document.fonts && document.fonts.addEventListener) {
+    document.fonts.addEventListener('loadingdone', function () {
+      if (pbSheet) pbSheet.querySelectorAll('textarea.pbt-field').forEach(autoGrow);
+    });
   }
   function pbDrawTextThumb(s) {
     var el = pbSpreadEl(s), c = el && el.querySelector('.pbt-thumb canvas');
@@ -10941,6 +10968,7 @@
     f.className = 'pbt-field';
     f.rows = 1;
     f.spellcheck = prefs.spellcheck;
+    if (pbFieldRO) pbFieldRO.observe(f);
     var sp = pbState.spreads[s];
     if (it) {
       f.dataset.id = it.id;
