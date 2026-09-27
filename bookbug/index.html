@@ -1485,6 +1485,8 @@
     transition: border-color .15s ease, color .15s ease;
   }
   .pbt-add:hover { border-color: var(--accent); border-style: solid; color: var(--accent); }
+  .pbt-fit { font-size: 12px; line-height: 1.45; color: var(--warning); background: var(--warning-soft); border-left: 3px solid var(--warning); padding: 5px 8px; }
+  .pb-tb.is-shrunk::before { outline: 1.5px dashed var(--warning); }
   .pbt-pic img { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; flex: 0 0 auto; }
   .pbt-pic:hover { border-color: var(--line-strong); }
   .pbt-pic.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
@@ -10007,15 +10009,49 @@
   }
   // Where a text box actually sits: as placed, or, with "Snap story text
   // to the outer edges" on, against its page's outer margin.
+  // Where a text box actually sits, and at what size. A box always stays
+  // inside the page's text area: with "Snap story text to the outer
+  // edges" on, against its page's outer margin; and however its words
+  // grow, it moves up so its last line never passes the bottom margin
+  // (or down off the top). Words too long for the whole text area are
+  // set smaller, just enough to fit -- `shrunk` says so. Never off the
+  // page.
+  var pbMeasureCtx2 = document.createElement('canvas').getContext('2d');
+  function pbTextHeightFrac(it, wFrac, size) {
+    var t = pbTrim(pbState.trim);
+    pbMeasureCtx2.font = pbCtxFont(it, size);
+    var lines = pbWrapCanvas(pbMeasureCtx2, pbItemText(it) || ' ', wFrac * 2 * t.pageW * 72).length;
+    return lines * size * pbLh(it) / (t.pageH * 72);
+  }
+  var pbGeomCache = new WeakMap();
   function pbGeom(it, s) {
-    var g = { x: it.x, y: it.y, w: it.w, rot: it.rot, align: it.align };
-    if (it.type !== 'text' || !pbState.snapOuter || it.auto || pbStraddles(it)) return g;
-    var side = pbPageSide(it), sp = pbState.spreads[s];
-    if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side]) return g;
-    var l = pbLive(side);
-    g.w = Math.min(it.w, l.x1 - l.x0);
-    g.x = side === 'left' ? l.x0 : l.x1 - g.w;
-    g.align = side;
+    var sp = pbState.spreads[s];
+    var key = [pbItemText(it), it.x, it.y, it.w, it.rot, it.align, pbFontSize(it), pbLh(it), pbFontKey(it), it.bold, it.italic,
+      pbState.trim, pbState.margin, pbState.gutter, pbState.snapOuter, sp && sp.left.role, sp && sp.right.role].join('|');
+    var hit = pbGeomCache.get(it);
+    if (hit && hit.key === key) return hit.g;
+    var g = { x: it.x, y: it.y, w: it.w, rot: it.rot, align: it.align, size: it.type === 'text' ? pbFontSize(it) : 0, h: 0, shrunk: false };
+    if (it.type !== 'text') return g;
+    if (pbState.snapOuter && !it.auto && !pbStraddles(it)) {
+      var side = pbPageSide(it);
+      if (sp && sp[side].role === 'story' && pbSpreadPages(s, pbState.spreads.length)[side]) {
+        var l = pbLive(side);
+        g.w = Math.min(it.w, l.x1 - l.x0);
+        g.x = side === 'left' ? l.x0 : l.x1 - g.w;
+        g.align = side;
+      }
+    }
+    var m = pbMargins(), room = 1 - 2 * m.top;
+    g.h = pbTextHeightFrac(it, g.w, g.size);
+    while (g.h > room && g.size > 6) {
+      g.size = Math.max(6, Math.round((g.size - 0.5) * 2) / 2);
+      g.h = pbTextHeightFrac(it, g.w, g.size);
+      g.shrunk = true;
+    }
+    g.y = Math.max(m.top, Math.min(1 - m.top - g.h, g.y));
+    var L = pbLive('left'), R = pbLive('right');
+    g.x = Math.max(L.x0, Math.min(R.x1 - g.w, g.x));
+    pbGeomCache.set(it, { key: key, g: g });
     return g;
   }
   // Folios: story pages only, in the outer bottom corners or centered,
@@ -10144,7 +10180,7 @@
         var text = pbItemText(it);
         if (!text.trim()) return;
         var g = pbGeom(it, s);
-        var px = pbFontSize(it) * k, lineH = px * pbLh(it), bw = g.w * W;
+        var px = g.size * k, lineH = px * pbLh(it), bw = g.w * W;
         ctx.save();
         ctx.font = pbCtxFont(it, px);
         var lines = pbWrapCanvas(ctx, text, bw);
@@ -10448,8 +10484,16 @@
       pbSetText(item, f.value);
       autoGrow(f);
       pbScheduleThumb(s);
+      pbFieldFitNote(f, s, item);
     });
     return f;
+  }
+  // Under a field whose words are too long for the page.
+  function pbFieldFitNote(f, s, it) {
+    var g = pbGeom(it, s), note = f.nextElementSibling && f.nextElementSibling.classList.contains('pbt-fit') ? f.nextElementSibling : null;
+    if (!g.shrunk) { if (note) note.remove(); return; }
+    if (!note) { note = document.createElement('div'); note.className = 'pbt-fit'; f.after(note); }
+    note.textContent = 'Too long for the page, so it’s set at ' + g.size + ' pt instead of ' + pbFontSize(it) + ' pt. Shorten it, widen the box, or split it across pages.';
   }
   function pbMakePicChip(s, it) {
     var b = document.createElement('button');
@@ -10521,7 +10565,11 @@
       }
       col.appendChild(lab);
       var mine = texts.filter(function (it) { return !pbStraddles(it) && pbPageSide(it) === side; });
-      mine.forEach(function (it) { col.appendChild(pbMakeField(s, it, side)); });
+      mine.forEach(function (it) {
+        var f = pbMakeField(s, it, side);
+        col.appendChild(f);
+        pbFieldFitNote(f, s, it);
+      });
       if (!mine.length && ['endpaper', 'blank'].indexOf(sp[side].role) === -1) col.appendChild(pbMakeField(s, null, side));
       // Another text box on this page: placed below the ones already there.
       if (mine.length) {
@@ -10835,7 +10883,8 @@
   function pbMakeTextBox(s, it) {
     var g = pbGeom(it, s);
     var box = document.createElement('div');
-    box.className = 'pb-tb' + (pbSel && pbSel.id === it.id ? ' is-selected' : '');
+    box.className = 'pb-tb' + (pbSel && pbSel.id === it.id ? ' is-selected' : '') + (g.shrunk ? ' is-shrunk' : '');
+    if (g.shrunk) box.title = 'Too long for the page, so set at ' + g.size + ' pt to fit. Shorten it or widen the box.';
     box.dataset.id = it.id;
     if (it.bind) box.dataset.bind = it.bind;
     box.style.left = (g.x * 100) + '%';
@@ -10872,7 +10921,7 @@
   var PB_SNAP_PX = 7;
   function pbDragBox(e, box, s, it, onEnd) {
     var stage = box.closest('.pb-stage');
-    var g = pbGeom(it, s), x0 = g.x, y0 = it.y;
+    var g = pbGeom(it, s), x0 = g.x, y0 = g.y;
     var sw = stage.clientWidth, sh = stage.clientHeight;
     var wF = box.offsetWidth / sw, hF = box.offsetHeight / sh;
     var my = pbMargins().top, L = pbLive('left'), R = pbLive('right');
@@ -10942,7 +10991,8 @@
   function pbStyleText(ed, it, g) {
     var styled = pbHasStyles(pbFontKey(it));
     ed.style.fontFamily = displayStackFor(pbFontKey(it));
-    ed.style.fontSize = 'calc(' + pbFontSize(it) + 'px * var(--k, 1))';
+    var size = g && g.size ? g.size : pbFontSize(it);
+    ed.style.fontSize = 'calc(' + size + 'px * var(--k, 1))';
     ed.style.fontWeight = styled && it.bold ? '700' : '400';
     ed.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     ed.style.textAlign = (g || it).align;
@@ -10951,7 +11001,7 @@
     // A background sits a little way out around the words (as a spread
     // shadow, so the text itself doesn't move).
     ed.style.background = it.bg || '';
-    ed.style.boxShadow = it.bg ? '0 0 0 calc(' + (pbFontSize(it) * 0.35) + 'px * var(--k, 1)) ' + it.bg : '';
+    ed.style.boxShadow = it.bg ? '0 0 0 calc(' + (size * 0.35) + 'px * var(--k, 1)) ' + it.bg : '';
   }
   // Setting a box's words, wherever they're typed. Title and author
   // boxes write through to the book's own title and author; editing a
@@ -11056,9 +11106,11 @@
     if (!it) return;
     pbSetText(it, pbPopText.value);
     autoGrow(pbPopText);
-    var stage = pbStageEl(pbPopFor.s), box = stage && stage.querySelector('.pb-tb[data-id="' + it.id + '"] .pb-tb-text');
-    if (box) box.textContent = pbItemText(it);
+    // Redrawn (not just retyped) so the box keeps itself on the page.
+    var at = pbPopFor.s;
+    if (!pbPopRaf) pbPopRaf = requestAnimationFrame(function () { pbPopRaf = null; pbRefreshSpread(at); });
   });
+  var pbPopRaf = null;
   pbPop.querySelector('.pb-pop-done').addEventListener('click', function () { pbClosePopup(); });
   pbPop.addEventListener('mousedown', function (e) { if (e.target.closest('button')) e.preventDefault(); });
   pbPopText.addEventListener('keydown', function (e) {
@@ -12079,12 +12131,7 @@
     });
   });
   // A text box's height, as a share of the page: measured the way it prints.
-  function pbBoxHeightFrac(it, s) {
-    var t = pbTrim(pbState.trim), ctx = document.createElement('canvas').getContext('2d');
-    var W = 2 * t.pageW * 72, g = pbGeom(it, s);
-    ctx.font = pbCtxFont(it, pbFontSize(it));
-    return pbWrapCanvas(ctx, pbItemText(it) || ' ', g.w * W).length * pbFontSize(it) * pbLh(it) / (t.pageH * 72);
-  }
+  function pbBoxHeightFrac(it, s) { return pbGeom(it, s).h; }
 
   // ---- Preview and read-through ----
   function pbCaption(s) {
@@ -12652,9 +12699,8 @@
       if (it.type !== 'text') return;
       var text = pbItemText(it);
       if (!text.trim()) return;
-      var size = pbFontSize(it), styled = pbHasStyles(pbFontKey(it));
+      var g = pbGeom(it, s), size = g.size, styled = pbHasStyles(pbFontKey(it));
       ctx.font = pbCtxFont(it, size);
-      var g = pbGeom(it, s);
       var lines = pbWrapCanvas(ctx, text, g.w * Wpt).length;
       var hEmu = Math.round(lines * size * pbLh(it) * 12700);
       var padE = it.bg ? Math.round(size * 0.35 * 12700) : 0;
