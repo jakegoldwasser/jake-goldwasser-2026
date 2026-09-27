@@ -1370,7 +1370,15 @@
   .pb-size-step input { width: 44px; border: none; border-left: 1px solid var(--line-strong); border-right: 1px solid var(--line-strong); text-align: center; font-size: 13px; height: 32px; background: var(--surface); color: var(--ink); }
   .pb-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
   .pb-swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line-strong); cursor: pointer; padding: 0; }
-  .pb-swatches button.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+  .pb-swatches button.active, .pb-swatch-custom.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+  /* "No background": a white chip struck through. */
+  .pb-swatches .pb-swatch-none { background: linear-gradient(135deg, #FFFFFF 45%, #C1602A 45%, #C1602A 55%, #FFFFFF 55%); }
+  /* Custom color: a rainbow chip over the browser's own color picker. */
+  .pb-swatch-custom {
+    position: relative; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line-strong); cursor: pointer; overflow: hidden;
+    background: conic-gradient(#C1602A, #E3B23C, #6E7B3E, #4F6E88, #7A4E8B, #C1602A);
+  }
+  .pb-swatch-custom input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; border: none; padding: 0; }
   .pb-btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
   .pb-trim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .pb-trim {
@@ -1407,16 +1415,45 @@
   .pb-mode-spreads #pbFormattingPanel, .pb-mode-spreads #pbExportPanel,
   .pb-mode-thumbs #pbFormattingPanel, .pb-mode-thumbs #pbExportPanel { display: none; }
 
-  /* Text view: a thumbnail, then each page's words at a readable size. */
-  .pbt-body { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: start; }
-  .pbt-thumb { appearance: none; border: none; background: none; padding: 0; cursor: zoom-in; display: block; width: 150px; }
+  /* Text view: a thumbnail, then each page's words at a readable size.
+     Each card lays itself out from its own width (not the window's), so
+     it never overflows: stacked when narrow, the two pages side by side
+     from 480px, and the thumbnail moves beside them from 600px. */
+  .pb-mode-text .pb-card { container-type: inline-size; padding: 10px 16px 14px; }
+  .pbt-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  .pbt-thumb {
+    appearance: none; border: none; background: none; padding: 0; cursor: zoom-in; display: block;
+    width: 100%; max-width: 340px;
+  }
+  .pbt-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px 18px; min-width: 0; }
+  @container (min-width: 480px) {
+    .pbt-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @container (min-width: 600px) {
+    .pbt-body { grid-template-columns: minmax(150px, 26%) minmax(0, 1fr); gap: 18px; }
+    .pbt-thumb { max-width: none; }
+  }
+  .pb-mode-text .pb-card-head { margin-bottom: 10px; }
+  .pbt-caption { flex: 1; min-width: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pbt-thumb canvas { display: block; outline: 1px solid var(--line-strong); background: #FFFFFF; transition: outline-color .15s ease; }
   .pbt-thumb:hover canvas { outline: 2px solid var(--accent); }
-  .pbt-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; min-width: 0; }
   .pbt-page { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .pbt-across { grid-column: 1 / -1; }
   .pbt-page.is-none { opacity: .55; }
-  .pbt-page-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+  .pbt-page-label {
+    display: flex; align-items: center; gap: 6px; min-height: 24px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  .pbt-page-label .pb-role { letter-spacing: 0; text-transform: none; }
+  /* Label-sized even on phones (the viewport tag already stops iOS zooming). */
+  .pb-view .pbt-page-label select.pb-role { font-size: 12px; }
+  .pbt-page-label .pbt-role-name { letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--ink-soft); font-size: 11.5px; }
+  /* Art notes sit under the pages, their label above them when narrow. */
+  @container (max-width: 479px) {
+    .pb-notes-row { flex-direction: column; gap: 2px; }
+    .pb-notes-label { padding-top: 0; }
+    textarea.pb-notes { width: 100%; padding-left: 0; }
+  }
   textarea.pbt-field {
     width: 100%; resize: none; overflow: hidden; min-height: 44px; padding: 8px 10px; border-radius: 6px;
     border: 1px solid var(--line); background: #FFFFFF; color: #1C2934; font-size: 17px; line-height: 1.5; outline: none;
@@ -1437,12 +1474,7 @@
   .pbt-pic img { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; flex: 0 0 auto; }
   .pbt-pic:hover { border-color: var(--line-strong); }
   .pbt-pic.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); }
-  @media (max-width: 700px) {
-    .pbt-body { grid-template-columns: 1fr; }
-    .pbt-thumb { width: 100%; }
-    .pbt-cols { grid-template-columns: 1fr; }
-    textarea.pbt-field { font-size: 17px; }
-  }
+
 
   /* Snap guides while dragging a text box: rust for the page's own
      lines, slate-blue for "back where it started". */
@@ -1744,8 +1776,12 @@
                 <div class="pb-range"><input type="range" id="pbBoxLh" min="0.9" max="2.2" step="0.05"><output id="pbBoxLhOut"></output></div>
               </div>
               <div class="field">
-                <label>Color</label>
+                <label>Text color</label>
                 <div class="pb-swatches" id="pbBoxColor"></div>
+              </div>
+              <div class="field">
+                <label>Background</label>
+                <div class="pb-swatches" id="pbBoxBg"></div>
               </div>
               <div class="field">
                 <label>Width</label>
@@ -1823,8 +1859,28 @@
                   <input type="number" id="pbGlobalSize" min="6" max="120" aria-label="Story type size in points">
                   <button type="button" id="pbGlobalSizeUp" aria-label="Larger">+</button>
                 </div>
-                <span class="pb-fmt-hint" style="margin:0;">pt, every story page</span>
+                <button type="button" class="btn btn-sm" id="pbSizeAuto" title="The standard size for this book's trim, adjusting when the trim changes">Auto</button>
               </div>
+              <p class="field-note" id="pbSizeNote" style="margin:4px 0 0;"></p>
+            </div>
+            <div class="field">
+              <label>Line spacing</label>
+              <div class="pb-range"><input type="range" id="pbBookLh" min="1" max="2" step="0.05"><output id="pbBookLhOut"></output></div>
+            </div>
+            <div class="field">
+              <label>Text box width</label>
+              <div class="pb-range"><input type="range" id="pbBookTextW" min="30" max="100" step="1"><output id="pbBookTextWOut"></output></div>
+            </div>
+            <div class="field">
+              <label>Outer margins</label>
+              <div class="pb-range"><input type="range" id="pbBookMargin" min="0.25" max="1.5" step="0.125"><output id="pbBookMarginOut"></output></div>
+            </div>
+            <div class="field">
+              <label>Gutter (from the fold)</label>
+              <div class="pb-range"><input type="range" id="pbBookGutter" min="0.25" max="1.5" step="0.125"><output id="pbBookGutterOut"></output></div>
+            </div>
+            <div class="pb-btn-row" style="margin:-2px 0 12px;">
+              <button type="button" class="btn btn-sm" id="pbLayoutStandard" title="Automatic type size, 135% leading, text 60% of the page wide, 0.5 in margins, 0.75 in gutter">Use standard layout</button>
             </div>
             <div class="checkline">
               <input type="checkbox" id="pbSnapOuter">
@@ -2690,6 +2746,16 @@
     { key: '11x8.5', label: '11 × 8.5', shape: 'Landscape', pageW: 11, pageH: 8.5 },
     { key: '12x9', label: '12 × 9', shape: 'Landscape', pageW: 12, pageH: 9 }
   ];
+  // Industry-standard story layout for a picture book: type about 2 pt
+  // per inch of the page's short side (14 pt small books to 24 pt big
+  // ones -- 17 pt on an 8.5 in square), leading of 135%, a text block
+  // about 60% of the page wide, half an inch clear of the trim and three
+  // quarters of an inch clear of the fold.
+  var PB_STANDARD = { lh: 1.35, textW: 0.6, margin: 0.5, gutter: 0.75 };
+  function pbAutoSize(trimKey) {
+    var t = pbTrim(trimKey);
+    return Math.max(14, Math.min(24, Math.round(Math.min(t.pageW, t.pageH) * 2)));
+  }
   function pbTrim(key) {
     for (var i = 0; i < PB_TRIMS.length; i++) if (PB_TRIMS[i].key === key) return PB_TRIMS[i];
     return PB_TRIMS[1];
@@ -2852,7 +2918,7 @@
   }
   function pbText(x, y, w, text, extra) {
     return Object.assign({ id: pbUid('t'), type: 'text', x: x, y: y, w: w, rot: 0, text: text || '',
-      font: null, size: null, bold: false, italic: false, align: 'center', lh: 1.35, color: 'ink' }, extra || {});
+      font: null, size: null, bold: false, italic: false, align: 'center', lh: null, color: 'ink' }, extra || {});
   }
 
   function pbNormalizeItem(it) {
@@ -2869,7 +2935,8 @@
     return { id: it.id, type: 'text', x: num(it.x, 0.1), y: num(it.y, 0.1), w: num(it.w, 0.3), rot: num(it.rot, 0),
       text: String(it.text || ''), font: it.font || null, size: typeof it.size === 'number' ? it.size : null,
       bold: !!it.bold, italic: !!it.italic, align: ['left', 'center', 'right'].indexOf(it.align) !== -1 ? it.align : 'center',
-      lh: num(it.lh, 1.35), color: it.color || 'ink',
+      lh: typeof it.lh === 'number' ? it.lh : null, color: it.color || 'ink',
+      bg: /^#[0-9A-F]{6}$/i.test(it.bg || '') ? it.bg : null,
       bind: ['title', 'author', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null };
   }
@@ -2894,9 +2961,9 @@
     function pageBoxes(text, text2, split, pos, side) {
       var x0 = side === 'left' ? 0.125 : 0.625, out = [];
       if (split) {
-        if ((text || '').trim()) out.push(pbText(x0, 0.09, 0.25, text, { size: 17, align: 'left' }));
-        if ((text2 || '').trim()) out.push(pbText(x0, 0.54, 0.25, text2, { size: 17, align: 'left' }));
-      } else if ((text || '').trim()) out.push(pbText(x0, boxY[pos] || boxY.bottom, 0.25, text, { size: 17, align: 'left' }));
+        if ((text || '').trim()) out.push(pbText(x0, 0.09, 0.25, text, { align: 'left' }));
+        if ((text2 || '').trim()) out.push(pbText(x0, 0.54, 0.25, text2, { align: 'left' }));
+      } else if ((text || '').trim()) out.push(pbText(x0, boxY[pos] || boxY.bottom, 0.25, text, { align: 'left' }));
       return out;
     }
     function rowToSpread(r) {
@@ -2936,6 +3003,13 @@
       v: 2, title: d.title || '', author: d.author || '', trim: pbTrim(d.trim).key,
       font: getFontChoice(d.font || 'poppins').key, size: typeof d.size === 'number' ? d.size : 18,
       snapOuter: !!d.snapOuter, pageNums: ['outer', 'center', 'none'].indexOf(d.pageNums) !== -1 ? d.pageNums : 'outer',
+      // Story layout (see PB_STANDARD): type size (automatic for the trim
+      // unless set), leading, text width and margins.
+      sizeAuto: d.sizeAuto !== false,
+      lh: typeof d.lh === 'number' ? d.lh : PB_STANDARD.lh,
+      textW: typeof d.textW === 'number' ? d.textW : PB_STANDARD.textW,
+      margin: typeof d.margin === 'number' ? d.margin : PB_STANDARD.margin,
+      gutter: typeof d.gutter === 'number' ? d.gutter : PB_STANDARD.gutter,
       spreads: spreads, archived: (d.archived || []).map(pbNormalizeSpread),
       images: d.images && typeof d.images === 'object' ? d.images : {}
     });
@@ -8897,6 +8971,7 @@
         prefs[box.dataset.pref] = box.checked;
         try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
         applyPrefClasses();
+        if (box.dataset.pref === 'showGuides' && isPictureBookShown()) pbSchedulePreview();
         if (box.dataset.pref === 'spellcheck') {
           document.querySelectorAll('.poem-text, .stage-edit-body, .pb-tb-text, .pb-notes').forEach(function (ed) { ed.spellcheck = prefs.spellcheck; });
         }
@@ -9368,7 +9443,8 @@
   function pbCheckpoint() {
     if (!pbState) return;
     pbUndoStack.push(JSON.stringify({ spreads: pbState.spreads, archived: pbState.archived, trim: pbState.trim, font: pbState.font, size: pbState.size,
-      snapOuter: pbState.snapOuter, pageNums: pbState.pageNums }));
+      snapOuter: pbState.snapOuter, pageNums: pbState.pageNums, sizeAuto: pbState.sizeAuto, lh: pbState.lh,
+      textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter }));
     if (pbUndoStack.length > 40) pbUndoStack.shift();
   }
   function pbUndo() {
@@ -9795,9 +9871,9 @@
     if (it.type !== 'text' || !pbState.snapOuter || it.auto || pbStraddles(it)) return g;
     var side = pbPageSide(it), sp = pbState.spreads[s];
     if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side]) return g;
-    var mx = 0.5 / (2 * pbTrim(pbState.trim).pageW);
-    g.w = Math.min(it.w, 0.5 - 2 * mx);
-    g.x = side === 'left' ? mx : 1 - mx - g.w;
+    var l = pbLive(side);
+    g.w = Math.min(it.w, l.x1 - l.x0);
+    g.x = side === 'left' ? l.x0 : l.x1 - g.w;
     g.align = side;
     return g;
   }
@@ -9815,7 +9891,32 @@
     return out;
   }
   function pbFontKey(it) { return it.font || pbState.font; }
-  function pbFontSize(it) { return it.size || pbState.size; }
+  function pbBookSize() { return pbState.sizeAuto ? pbAutoSize(pbState.trim) : pbState.size; }
+  // A box's own size if it has one, else the book's story size. Title,
+  // copyright and other matter text grows and shrinks with the trim
+  // while type size is automatic.
+  function pbFontSize(it) {
+    if (!it.size) return pbBookSize();
+    return it.auto && pbState.sizeAuto ? Math.round(it.size * pbAutoSize(pbState.trim) / 17 * 2) / 2 : it.size;
+  }
+  function pbLh(it) { return it.lh || pbState.lh; }
+  // The margins as fractions of the spread: outer (and top/bottom) and
+  // the gutter each side of the fold.
+  function pbMargins() {
+    var t = pbTrim(pbState.trim);
+    return { out: pbState.margin / (2 * t.pageW), gut: pbState.gutter / (2 * t.pageW), top: pbState.margin / t.pageH };
+  }
+  // The area text should stay inside on one page.
+  function pbLive(side) {
+    var m = pbMargins();
+    return side === 'left' ? { x0: m.out, x1: 0.5 - m.gut } : { x0: 0.5 + m.gut, x1: 1 - m.out };
+  }
+  function pbStoryW(side) { var l = pbLive(side); return Math.min(pbState.textW * 0.5, l.x1 - l.x0); }
+  // A new story box: the standard width, centered in the page's text area.
+  function pbNewStoryBox(side, y, extra) {
+    var l = pbLive(side), w = pbStoryW(side);
+    return pbText((l.x0 + l.x1) / 2 - w / 2, y, w, '', Object.assign({ align: 'left' }, extra || {}));
+  }
   // Typefaces with real bold and italic (Cutive, our American
   // Typewriter, has only a regular).
   function pbHasStyles(key) { return key !== 'courier'; }
@@ -9901,13 +10002,18 @@
         var text = pbItemText(it);
         if (!text.trim()) return;
         var g = pbGeom(it, s);
-        var px = pbFontSize(it) * k, lineH = px * it.lh, bw = g.w * W;
+        var px = pbFontSize(it) * k, lineH = px * pbLh(it), bw = g.w * W;
         ctx.save();
         ctx.font = pbCtxFont(it, px);
         var lines = pbWrapCanvas(ctx, text, bw);
         var bh = lines.length * lineH;
         ctx.translate(g.x * W + bw / 2, g.y * H + bh / 2);
         ctx.rotate(g.rot * Math.PI / 180);
+        if (it.bg) {
+          var pad = px * 0.35;
+          ctx.fillStyle = it.bg;
+          ctx.fillRect(-bw / 2 - pad, -bh / 2 - pad, bw + 2 * pad, bh + 2 * pad);
+        }
         ctx.fillStyle = pbColor(it.color);
         ctx.textBaseline = 'middle';
         ctx.textAlign = g.align === 'left' ? 'left' : g.align === 'right' ? 'right' : 'center';
@@ -9928,6 +10034,22 @@
       });
     }
     ctx.restore();
+    // On screen only (opts.guides): the fold, and dashed lines at the
+    // gutter margins each side of it.
+    if (opts.guides) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(28, 41, 52, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(Math.round(W / 2) + 0.5, 0); ctx.lineTo(Math.round(W / 2) + 0.5, H); ctx.stroke();
+      if (prefs.showGuides) {
+        ctx.strokeStyle = 'rgba(193, 96, 42, 0.55)';
+        ctx.setLineDash([3, 3]);
+        [pbLive('left').x1, pbLive('right').x0].forEach(function (x) {
+          ctx.beginPath(); ctx.moveTo(Math.round(x * W) + 0.5, 0); ctx.lineTo(Math.round(x * W) + 0.5, H); ctx.stroke();
+        });
+      }
+      ctx.restore();
+    }
     // The halves that aren't pages: the inside covers either side.
     var pages = pbSpreadPages(s, pbState.spreads.length);
     if (opts.nonPages !== 'blank') {
@@ -10174,7 +10296,7 @@
         if (!f.value.trim()) return;
         // Where story words usually go: the lower part of the page.
         pbCheckpoint();
-        item = pbText(side === 'left' ? 0.125 : 0.625, 0.7, 0.25, '', { align: 'left' });
+        item = pbNewStoryBox(side, 0.7);
         pbState.spreads[s].items.push(item);
         f.dataset.id = item.id;
         pbSel = { s: s, id: item.id };
@@ -10247,7 +10369,14 @@
       }
       var lab = document.createElement('div');
       lab.className = 'pbt-page-label';
-      lab.textContent = 'p. ' + pages[side] + (sp[side].role !== 'story' ? ' · ' + pbRoleLabel(sp[side].role) : '');
+      lab.textContent = 'p. ' + pages[side];
+      if (pbRoleOptions(pbState, pages[side]).length > 1) lab.appendChild(pbMakeRoleSelect(s, side));
+      else if (sp[side].role !== 'story') {
+        var rn = document.createElement('span');
+        rn.className = 'pbt-role-name';
+        rn.textContent = pbRoleLabel(sp[side].role);
+        lab.appendChild(rn);
+      }
       col.appendChild(lab);
       var mine = texts.filter(function (it) { return !pbStraddles(it) && pbPageSide(it) === side; });
       mine.forEach(function (it) { col.appendChild(pbMakeField(s, it, side)); });
@@ -10285,7 +10414,7 @@
     mine.forEach(function (it) { bottom = Math.max(bottom, it.y + pbBoxHeightFrac(it, s)); });
     var y = Math.min(0.85, bottom + 0.04);
     pbCheckpoint();
-    var it = pbText(side === 'left' ? 0.125 : 0.625, y, 0.25, '', { align: 'left' });
+    var it = pbNewStoryBox(side, y);
     pbState.spreads[s].items.push(it);
     pbSel = { s: s, id: it.id };
     pbRenderSpread(s);
@@ -10370,7 +10499,14 @@
       }
       folios.appendChild(f);
     });
-    head.appendChild(folios);
+    if (pbViewMode === 'text') {
+      // Text view names each page by its own column; the head just says which spread.
+      var cap = document.createElement('span');
+      cap.className = 'pbt-caption';
+      var cp = pbCaption(s).split(' · ');
+      cap.textContent = cp[0] + ' · ' + cp[1];
+      head.appendChild(cap);
+    } else head.appendChild(folios);
     var actions = document.createElement('div');
     actions.className = 'pb-head-actions';
     var addPic = document.createElement('button');
@@ -10446,19 +10582,19 @@
       el.style.transform = 'translate(' + (pn.align === 'left' ? '0' : pn.align === 'right' ? '-100%' : '-50%') + ', -50%)';
       stage.appendChild(el);
     });
-    // Guides: the fold, and a safe area half an inch in from the trim.
+    // Guides: the fold, and each page's text area inside the margins.
     var fold = document.createElement('div');
     fold.className = 'pb-fold';
     stage.appendChild(fold);
-    var mx = 0.5 / (2 * t.pageW) * 100, my = 0.5 / t.pageH * 100;
+    var mTop = pbMargins().top * 100;
     ['left', 'right'].forEach(function (side) {
       if (!pages[side]) return;
-      var g = document.createElement('div');
+      var l = pbLive(side), g = document.createElement('div');
       g.className = 'pb-safe';
-      g.style.left = (side === 'left' ? mx : 50 + mx) + '%';
-      g.style.width = (50 - 2 * mx) + '%';
-      g.style.top = my + '%';
-      g.style.height = (100 - 2 * my) + '%';
+      g.style.left = (l.x0 * 100) + '%';
+      g.style.width = ((l.x1 - l.x0) * 100) + '%';
+      g.style.top = mTop + '%';
+      g.style.height = (100 - 2 * mTop) + '%';
       stage.appendChild(g);
     });
     ['left', 'right'].forEach(function (side) {
@@ -10597,12 +10733,13 @@
     var g = pbGeom(it, s), x0 = g.x, y0 = it.y;
     var sw = stage.clientWidth, sh = stage.clientHeight;
     var wF = box.offsetWidth / sw, hF = box.offsetHeight / sh;
-    var t = pbTrim(pbState.trim), mx = 0.5 / (2 * t.pageW), my = 0.5 / t.pageH;
+    var my = pbMargins().top, L = pbLive('left'), R = pbLive('right');
     // Each target: where the box's left (or top) would go, and where to draw the line.
     var xs = [
       { v: x0, line: x0 + wF / 2, start: true },
       { v: 0.25 - wF / 2, line: 0.25 }, { v: 0.75 - wF / 2, line: 0.75 }, { v: 0.5 - wF / 2, line: 0.5 },
-      { v: mx, line: mx }, { v: 0.5 - mx - wF, line: 0.5 - mx }, { v: 0.5 + mx, line: 0.5 + mx }, { v: 1 - mx - wF, line: 1 - mx }
+      { v: (L.x0 + L.x1) / 2 - wF / 2, line: (L.x0 + L.x1) / 2 }, { v: (R.x0 + R.x1) / 2 - wF / 2, line: (R.x0 + R.x1) / 2 },
+      { v: L.x0, line: L.x0 }, { v: L.x1 - wF, line: L.x1 }, { v: R.x0, line: R.x0 }, { v: R.x1 - wF, line: R.x1 }
     ];
     // Where it rested before its last move, too, so a slip bigger than
     // the snap distance can still be dragged straight back.
@@ -10673,8 +10810,12 @@
     ed.style.fontWeight = styled && it.bold ? '700' : '400';
     ed.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     ed.style.textAlign = (g || it).align;
-    ed.style.lineHeight = String(it.lh);
+    ed.style.lineHeight = String(pbLh(it));
     ed.style.color = pbColor(it.color);
+    // A background sits a little way out around the words (as a spread
+    // shadow, so the text itself doesn't move).
+    ed.style.background = it.bg || '';
+    ed.style.boxShadow = it.bg ? '0 0 0 calc(' + (pbFontSize(it) * 0.35) + 'px * var(--k, 1)) ' + it.bg : '';
   }
   // Setting a box's words, wherever they're typed. Title and author
   // boxes write through to the book's own title and author; editing a
@@ -10715,7 +10856,7 @@
     pbPopText.style.fontWeight = styled && it.bold ? '700' : '400';
     pbPopText.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     pbPopText.style.textAlign = pbGeom(it, pbPopFor.s).align;
-    pbPopText.style.lineHeight = String(Math.max(1.3, it.lh));
+    pbPopText.style.lineHeight = String(Math.max(1.3, pbLh(it)));
     var tools = pbPop.querySelector('.pb-pop-tools');
     tools.innerHTML = '';
     tools.append(
@@ -11155,8 +11296,8 @@
     var n = pbState.spreads.length, pages = pbSpreadPages(s, n);
     var side = fx != null ? (fx < 0.5 ? 'left' : 'right') : (pages.left ? 'left' : 'right');
     if (!pages[side]) side = side === 'left' ? 'right' : 'left';
-    var w = 0.25;
-    var x = fx != null ? Math.max(0, Math.min(1 - w, fx - w / 2)) : (side === 'left' ? 0.125 : 0.625);
+    var w = pbStoryW(side), l = pbLive(side);
+    var x = fx != null ? Math.max(0, Math.min(1 - w, fx - w / 2)) : (l.x0 + l.x1) / 2 - w / 2;
     var y = fy != null ? Math.max(0, fy - 0.03) : 0.42;
     pbCheckpoint();
     var it = pbText(x, y, w, '', { align: 'left' });
@@ -11512,8 +11653,8 @@
       pbFmt('pbBoxBiNote').hidden = styled;
       pbFmt('pbBoxSize').value = pbFontSize(it);
       pbFmt('pbBoxAlign').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === it.align); });
-      pbFmt('pbBoxLh').value = it.lh; pbRangeOut('pbBoxLh', it.lh.toFixed(2));
-      pbFmt('pbBoxColor').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === (it.color || 'ink')); });
+      pbFmt('pbBoxLh').value = pbLh(it); pbRangeOut('pbBoxLh', Math.round(pbLh(it) * 100) + '%');
+      pbSyncSwatches(it);
       var pw = Math.round(it.w * 200);
       pbFmt('pbBoxW').value = pw; pbRangeOut('pbBoxW', pw + '% of a page');
       pbFmt('pbBoxRot').value = it.rot; pbRangeOut('pbBoxRot', it.rot + '°');
@@ -11552,14 +11693,53 @@
   pbFmt('pbBoxAlign').querySelectorAll('button').forEach(function (b) {
     b.addEventListener('click', function () { pbSetItem({ align: b.dataset.val }); });
   });
-  PB_COLORS.forEach(function (c) {
-    var b = document.createElement('button');
-    b.type = 'button'; b.dataset.val = c[0]; b.title = c[2];
-    b.setAttribute('aria-label', c[2]);
-    b.style.background = c[1];
-    b.addEventListener('click', function () { pbSetItem({ color: c[0] }); });
-    pbFmt('pbBoxColor').appendChild(b);
-  });
+  // A row of swatches plus a custom color well; `none` adds a "no
+  // background" swatch. The well shows (and is ringed for) a custom pick.
+  function pbBuildSwatches(boxId, key, none) {
+    var row = pbFmt(boxId);
+    var list = (none ? [[null, 'transparent', 'None']] : []).concat(PB_COLORS.map(function (c) { return [c[0], c[1], c[2]]; }));
+    if (none) list = list.filter(function (c) { return c[0] !== 'ink'; }).concat([['#161616', '#161616', 'Black']]);
+    list.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.dataset.val = c[0] || 'none'; b.title = c[2];
+      b.setAttribute('aria-label', c[2]);
+      if (c[0]) b.style.background = c[1]; else b.className = 'pb-swatch-none';
+      b.addEventListener('click', function () { var ch = {}; ch[key] = c[0]; pbSetItem(ch); });
+      row.appendChild(b);
+    });
+    var well = document.createElement('label');
+    well.className = 'pb-swatch-custom';
+    well.title = 'Custom color';
+    well.innerHTML = '<input type="color" aria-label="Custom color">';
+    var input = well.firstChild, started = false;
+    input.addEventListener('input', function () {
+      var it = pbSelected();
+      if (!it) return;
+      if (!started) { pbCheckpoint(); started = true; }
+      it[key] = input.value.toUpperCase();
+      pbPersist(); pbRefreshSpread(pbSel.s);
+      if (!pbPop.hidden) pbStylePopup();
+      pbSyncSwatches(it);
+    });
+    input.addEventListener('change', function () { started = false; pbSyncFormatting(); });
+    row.appendChild(well);
+  }
+  pbBuildSwatches('pbBoxColor', 'color', false);
+  pbBuildSwatches('pbBoxBg', 'bg', true);
+  function pbSyncSwatches(it) {
+    [['pbBoxColor', it.color || 'ink', '#161616'], ['pbBoxBg', it.bg || 'none', '#FFFFFF']].forEach(function (r) {
+      var row = pbFmt(r[0]), hit = false;
+      row.querySelectorAll('button').forEach(function (b) {
+        var on = b.dataset.val.toUpperCase() === String(r[1]).toUpperCase();
+        b.classList.toggle('active', on); if (on) hit = true;
+      });
+      var well = row.querySelector('.pb-swatch-custom');
+      well.classList.toggle('active', !hit);
+      var hex = /^#[0-9A-F]{6}$/i.test(r[1]) ? r[1] : r[2];
+      well.firstChild.value = hex.toLowerCase();
+      well.style.background = hit ? '' : r[1];
+    });
+  }
   // Sliders show their change live, and make one undo step when let go.
   function pbWireRange(id, apply, fmt) {
     var el = pbFmt(id), started = false;
@@ -11575,7 +11755,7 @@
     });
     el.addEventListener('change', function () { started = false; });
   }
-  pbWireRange('pbBoxLh', function (it, v) { it.lh = v; }, function (v) { return v.toFixed(2); });
+  pbWireRange('pbBoxLh', function (it, v) { it.lh = v; }, function (v) { return Math.round(v * 100) + '%'; });
   pbWireRange('pbBoxW', function (it, v) { var c = it.x + it.w / 2; it.w = v / 200; it.x = c - it.w / 2; }, function (v) { return v + '% of a page'; });
   pbWireRange('pbBoxRot', function (it, v) { it.rot = v; }, function (v) { return v + '°'; });
   pbWireRange('pbImgScale', function (it, v) { if (it.fit === 'bleed') it.zoom = v / 100; else it.scale = v / 100; }, function (v) { return v + '%'; });
@@ -11586,13 +11766,12 @@
       var it = pbSelected();
       if (!it) return;
       var hFrac = pbBoxHeightFrac(it, pbSel.s);
-      var t = pbTrim(pbState.trim), my = 0.5 / t.pageH, mx = 0.5 / (2 * t.pageW);
-      var onRight = it.x + it.w / 2 >= 0.5, pageL = onRight ? 0.5 : 0;
+      var my = pbMargins().top, l = pbLive(pbPageSide(it));
       var ch = {};
       if (b.dataset.place === 'top') ch.y = my;
       else if (b.dataset.place === 'middle') ch.y = 0.5 - hFrac / 2;
       else if (b.dataset.place === 'bottom') ch.y = 1 - my - hFrac;
-      else { ch.x = pageL + 0.25 - it.w / 2; if (it.w > 0.5 - 2 * mx) ch.x = pageL + mx; }
+      else ch.x = it.w > l.x1 - l.x0 ? l.x0 : (l.x0 + l.x1) / 2 - it.w / 2;
       pbSetItem(ch);
     });
   });
@@ -11646,6 +11825,7 @@
         pbState.trim = t.key;
         pbPersist();
         pbRenderTrimGrid();
+        pbSyncBookLayout();
         pbRenderView();
       });
       grid.appendChild(b);
@@ -11669,16 +11849,71 @@
     pbPersist(); pbRefreshAll();
   });
   function pbSetGlobalSize(v) {
-    if (!(v >= 6 && v <= 120)) { pbFmt('pbGlobalSize').value = pbState.size; return; }
+    if (!(v >= 6 && v <= 120)) { pbSyncBookLayout(); return; }
     pbCheckpoint();
     pbState.size = v;
+    pbState.sizeAuto = false;
     pbStoryBoxes(function (it) { it.size = null; });
-    pbFmt('pbGlobalSize').value = v;
-    pbPersist(); pbRefreshAll();
+    pbPersist(); pbRefreshAll(); pbSyncBookLayout();
   }
-  pbFmt('pbGlobalSizeDown').addEventListener('click', function () { pbSetGlobalSize(pbState.size - 1); });
-  pbFmt('pbGlobalSizeUp').addEventListener('click', function () { pbSetGlobalSize(pbState.size + 1); });
+  pbFmt('pbGlobalSizeDown').addEventListener('click', function () { pbSetGlobalSize(pbBookSize() - 1); });
+  pbFmt('pbGlobalSizeUp').addEventListener('click', function () { pbSetGlobalSize(pbBookSize() + 1); });
   pbFmt('pbGlobalSize').addEventListener('change', function () { pbSetGlobalSize(parseFloat(pbFmt('pbGlobalSize').value)); });
+  pbFmt('pbSizeAuto').addEventListener('click', function () {
+    pbCheckpoint();
+    pbState.sizeAuto = true;
+    pbStoryBoxes(function (it) { it.size = null; });
+    pbPersist(); pbRefreshAll(); pbSyncBookLayout();
+  });
+  // Story boxes take a new width about their own alignment point (a
+  // centered box stays centered), kept inside the page's text area.
+  function pbApplyTextW() {
+    pbState.spreads.forEach(function (sp, s) {
+      sp.items.forEach(function (it) {
+        if (it.type !== 'text' || it.auto || sp[pbPageSide(it)].role !== 'story' || pbStraddles(it)) return;
+        var side = pbPageSide(it), l = pbLive(side), w = pbStoryW(side);
+        var x = it.align === 'right' ? it.x + it.w - w : it.align === 'center' ? it.x + it.w / 2 - w / 2 : it.x;
+        it.w = w;
+        it.x = Math.max(l.x0, Math.min(l.x1 - w, x));
+      });
+    });
+  }
+  // The book-wide sliders: live while dragged, one undo step per drag.
+  function pbWireBookRange(id, apply, fmt) {
+    var el = pbFmt(id), started = false;
+    el.addEventListener('input', function () {
+      if (!started) { pbCheckpoint(); started = true; }
+      apply(parseFloat(el.value));
+      pbFmt(id + 'Out').textContent = fmt(parseFloat(el.value));
+      pbPersist(); pbRefreshAll();
+    });
+    el.addEventListener('change', function () { started = false; pbSyncBookLayout(); });
+  }
+  function pbInches(v) { return (Math.round(v * 1000) / 1000) + ' in'; }
+  pbWireBookRange('pbBookLh', function (v) { pbState.lh = v; pbStoryBoxes(function (it) { it.lh = null; }); }, function (v) { return Math.round(v * 100) + '%'; });
+  pbWireBookRange('pbBookTextW', function (v) { pbState.textW = v / 100; pbApplyTextW(); }, function (v) { return v + '% of the page'; });
+  pbWireBookRange('pbBookMargin', function (v) { pbState.margin = v; }, pbInches);
+  pbWireBookRange('pbBookGutter', function (v) { pbState.gutter = v; }, pbInches);
+  pbFmt('pbLayoutStandard').addEventListener('click', function () {
+    pbCheckpoint();
+    pbState.sizeAuto = true;
+    Object.assign(pbState, PB_STANDARD);
+    pbStoryBoxes(function (it) { it.size = null; it.lh = null; });
+    pbApplyTextW();
+    pbPersist(); pbRefreshAll(); pbSyncBookLayout();
+  });
+  function pbSyncBookLayout() {
+    if (!pbState) return;
+    var auto = pbAutoSize(pbState.trim);
+    pbFmt('pbGlobalSize').value = pbBookSize();
+    pbFmt('pbSizeAuto').classList.toggle('btn-primary', pbState.sizeAuto);
+    pbFmt('pbSizeNote').textContent = pbState.sizeAuto ? 'Auto: ' + auto + ' pt, the standard for this size (' + pbTrim(pbState.trim).label + ' in). It changes with the trim.'
+      : 'Set by hand. Auto would be ' + auto + ' pt for this size.';
+    pbFmt('pbBookLh').value = pbState.lh; pbFmt('pbBookLhOut').textContent = Math.round(pbState.lh * 100) + '%';
+    pbFmt('pbBookTextW').value = Math.round(pbState.textW * 100); pbFmt('pbBookTextWOut').textContent = Math.round(pbState.textW * 100) + '% of the page';
+    pbFmt('pbBookMargin').value = pbState.margin; pbFmt('pbBookMarginOut').textContent = pbInches(pbState.margin);
+    pbFmt('pbBookGutter').value = pbState.gutter; pbFmt('pbBookGutterOut').textContent = pbInches(pbState.gutter);
+  }
   pbFmt('pbSnapOuter').addEventListener('change', function () {
     pbCheckpoint();
     pbState.snapOuter = pbFmt('pbSnapOuter').checked;
@@ -11697,7 +11932,7 @@
     var t = pbTrim(pbState.trim), ctx = document.createElement('canvas').getContext('2d');
     var W = 2 * t.pageW * 72, g = pbGeom(it, s);
     ctx.font = pbCtxFont(it, pbFontSize(it));
-    return pbWrapCanvas(ctx, pbItemText(it) || ' ', g.w * W).length * pbFontSize(it) * it.lh / (t.pageH * 72);
+    return pbWrapCanvas(ctx, pbItemText(it) || ' ', g.w * W).length * pbFontSize(it) * pbLh(it) / (t.pageH * 72);
   }
 
   // ---- Preview and read-through ----
@@ -11717,7 +11952,7 @@
     pbCur = Math.max(0, Math.min(pbCur, pbState.spreads.length - 1));
     var w = Math.max(200, pbPreviewCanvas.parentNode.clientWidth || 272);
     var ctx = pbCanvasFor(pbPreviewCanvas, w, pbSpreadH(w));
-    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, { placeholders: true });
+    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, { placeholders: true, guides: true });
     pbFmt('pbPrevCaption').textContent = pbCaption(pbCur);
     var last = pbState.spreads.length - 1;
     pbFmt('pbPrevFirst').disabled = pbFmt('pbPrevPrev').disabled = pbCur === 0;
@@ -11752,9 +11987,12 @@
   window.addEventListener('resize', function () { if (isPictureBookShown()) pbSchedulePreview(); });
   var pbThumbResize = null;
   window.addEventListener('resize', function () {
-    if (!isPictureBookShown() || pbViewMode !== 'thumbs') return;
+    if (!isPictureBookShown() || pbViewMode === 'spreads') return;
     clearTimeout(pbThumbResize);
-    pbThumbResize = setTimeout(pbRenderFlatplan, 150);
+    pbThumbResize = setTimeout(function () {
+      if (pbViewMode === 'thumbs') pbRenderFlatplan();
+      else pbState.spreads.forEach(function (sp, s) { pbDrawTextThumb(s); });
+    }, 150);
   });
 
   // Full screen: turn the pages as a reader would.
@@ -11777,7 +12015,7 @@
     var t = pbTrim(pbState.trim), aspect = (2 * t.pageW) / t.pageH;
     var w = Math.floor(Math.min(window.innerWidth - 40, (window.innerHeight - 110) * aspect));
     var ctx = pbCanvasFor(pbFull.querySelector('canvas'), w, pbSpreadH(w));
-    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, { placeholders: true, nonPages: 'shade' });
+    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, { placeholders: true, nonPages: 'shade', guides: true });
     pbFull.querySelector('.preview-full-nav span').textContent = pbCaption(pbCur);
     var last = pbState.spreads.length - 1;
     pbFull.querySelectorAll('[data-step]').forEach(function (b) {
@@ -11994,7 +12232,7 @@
     pbAuthorInput.value = pbState.author;
     requestAnimationFrame(function () { fitTitleInput(pbTitleInput); });
     setFontSelect(pbFmt('pbFontSeg'), pbState.font);
-    pbFmt('pbGlobalSize').value = pbState.size;
+    pbSyncBookLayout();
     pbFmt('pbSnapOuter').checked = pbState.snapOuter;
     pbFmt('pbPageNums').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === pbState.pageNums); });
     pbRenderTrimGrid();
@@ -12267,15 +12505,17 @@
       ctx.font = pbCtxFont(it, size);
       var g = pbGeom(it, s);
       var lines = pbWrapCanvas(ctx, text, g.w * Wpt).length;
-      var hEmu = Math.round(lines * size * it.lh * 12700);
+      var hEmu = Math.round(lines * size * pbLh(it) * 12700);
+      var padE = it.bg ? Math.round(size * 0.35 * 12700) : 0;
       var color = pbColor(it.color).replace('#', '');
       var attrs = 'sz="' + Math.round(size * 100) + '"' + (styled && it.bold ? ' b="1"' : '') + (styled && it.italic ? ' i="1"' : '');
       var face = '<a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill><a:latin typeface="' + escapeXml(pptxFontName(pbFontKey(it))) + '"/>';
       shapes += '<p:sp><p:nvSpPr><p:cNvPr id="' + (id++) + '" name="Text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
-        '<p:spPr><a:xfrm' + (g.rot ? ' rot="' + Math.round(g.rot * 60000) + '"' : '') + '><a:off x="' + Math.round(g.x * SWe) + '" y="' + Math.round(g.y * SHe) + '"/>' +
-        '<a:ext cx="' + Math.round(g.w * SWe) + '" cy="' + hEmu + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>' +
-        '<p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>' +
-        pptxParas(text, attrs, face, g.align === 'left' ? 'l' : g.align === 'right' ? 'r' : 'ctr', Math.round(it.lh / 1.2 * 100000)) + '</p:txBody></p:sp>';
+        '<p:spPr><a:xfrm' + (g.rot ? ' rot="' + Math.round(g.rot * 60000) + '"' : '') + '><a:off x="' + (Math.round(g.x * SWe) - padE) + '" y="' + (Math.round(g.y * SHe) - padE) + '"/>' +
+        '<a:ext cx="' + (Math.round(g.w * SWe) + 2 * padE) + '" cy="' + (hEmu + 2 * padE) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+        (it.bg ? '<a:solidFill><a:srgbClr val="' + it.bg.replace('#', '') + '"/></a:solidFill>' : '<a:noFill/>') + '</p:spPr>' +
+        '<p:txBody><a:bodyPr wrap="square" lIns="' + padE + '" tIns="' + padE + '" rIns="' + padE + '" bIns="' + padE + '" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>' +
+        pptxParas(text, attrs, face, g.align === 'left' ? 'l' : g.align === 'right' ? 'r' : 'ctr', Math.round(pbLh(it) / 1.2 * 100000)) + '</p:txBody></p:sp>';
     });
     // Page numbers, as small text boxes.
     pbPageNumbers(s).forEach(function (pn) {
