@@ -221,7 +221,7 @@
     .loading-dots span:nth-child(3) { animation-delay: .3s; }
   }
   @keyframes loadingDot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
-  #bookTitleInput, #pbTitleInput {
+  #bookTitleInput, #pbTitleInput, #cbTitleInput {
     font-family: "Zilla Slab", "Roboto Slab", ui-serif, serif; font-weight: 600; font-size: clamp(24px, 3.2vw, 34px);
     color: var(--ink); background: transparent; border: none; border-bottom: 2px solid transparent;
     padding: 4px 2px 10px; outline: none; width: 100%; max-width: 640px; transition: border-color .15s ease;
@@ -229,17 +229,17 @@
   }
   /* The rules under the book title and author only show on hover (and
      while typing, which is the only cue a touch screen gets). */
-  #bookTitleInput:hover, #pbTitleInput:hover { border-bottom-color: var(--line-strong); }
-  #bookTitleInput:focus, #pbTitleInput:focus { border-bottom-color: var(--accent); }
-  #bookTitleInput::placeholder, #pbTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
-  #authorInput, #pbAuthorInput {
+  #bookTitleInput:hover, #pbTitleInput:hover, #cbTitleInput:hover { border-bottom-color: var(--line-strong); }
+  #bookTitleInput:focus, #pbTitleInput:focus, #cbTitleInput:focus { border-bottom-color: var(--accent); }
+  #bookTitleInput::placeholder, #pbTitleInput::placeholder, #cbTitleInput::placeholder { color: var(--ink-faint); font-weight: 500; }
+  #authorInput, #pbAuthorInput, #cbAuthorInput {
     font-family: "Work Sans", sans-serif; font-size: 14px; color: var(--ink-soft); background: transparent;
     border: none; border-bottom: 1px solid transparent; padding: 2px 2px 6px; outline: none; width: 100%;
     max-width: 320px; transition: border-color .15s ease;
   }
-  #authorInput:hover, #pbAuthorInput:hover { border-bottom-color: var(--line); }
-  #authorInput:focus, #pbAuthorInput:focus { border-bottom-color: var(--accent); }
-  #authorInput::placeholder, #pbAuthorInput::placeholder { color: var(--ink-faint); }
+  #authorInput:hover, #pbAuthorInput:hover, #cbAuthorInput:hover { border-bottom-color: var(--line); }
+  #authorInput:focus, #pbAuthorInput:focus, #cbAuthorInput:focus { border-bottom-color: var(--accent); }
+  #authorInput::placeholder, #pbAuthorInput::placeholder, #cbAuthorInput::placeholder { color: var(--ink-faint); }
 
   button, select, input[type="text"], input[type="number"], textarea {
     font-family: inherit; color: inherit;
@@ -1360,16 +1360,23 @@
   .pb-quickbar .pb-qb-size { font-variant-numeric: tabular-nums; font-size: 12px; min-width: 30px; text-align: center; }
   .pb-quickbar .pb-qb-sep { width: 1px; align-self: stretch; margin: 4px 3px; background: rgba(255, 255, 255, .25); }
 
-  .pb-notes-row { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
-  body.pref-no-art-notes .pb-notes-row { display: none; }
-  .pb-notes-label {
-    flex: 0 0 auto; padding-top: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint);
+  .pb-notes-row { margin-top: 10px; }
+  .pb-notes-row[hidden], body.pref-no-art-notes .pb-notes-row, body.pref-no-art-notes .pb-notes-btn { display: none; }
+  /* Small and quiet; a dot when the spread has notes tucked away. */
+  .pb-notes-btn {
+    appearance: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink-faint); cursor: pointer;
+    font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    transition: color .15s ease, border-color .15s ease, background-color .15s ease;
   }
+  .pb-notes-btn:hover { color: var(--ink-soft); border-color: var(--line-strong); }
+  .pb-notes-btn.is-open { color: var(--accent); border-color: var(--accent); }
+  .pb-notes-btn.has-notes::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   textarea.pb-notes {
-    flex: 1; min-width: 0; resize: none; overflow: hidden; border: 1px solid transparent; border-radius: 6px; background: transparent;
-    font-size: 13px; font-style: italic; color: var(--ink-soft); line-height: 1.5; padding: 3px 6px; outline: none; min-height: 28px;
+    display: block; width: 100%; resize: none; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+    font-size: 13px; font-style: italic; color: var(--ink-soft); line-height: 1.5; padding: 6px 10px; outline: none; min-height: 52px;
   }
-  textarea.pb-notes:hover { border-color: var(--line); }
+  textarea.pb-notes:hover { border-color: var(--line-strong); }
   textarea.pb-notes:focus { border-color: var(--accent); background: var(--surface); }
   textarea.pb-notes::placeholder { color: var(--ink-faint); }
   /* Room between the last spread and Add spread. */
@@ -1480,7 +1487,10 @@
   }
   .pb-mode-text .pb-card-head { margin-bottom: 10px; }
   .pbt-caption { flex: 1; min-width: 0; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pbt-thumb canvas { display: block; outline: 1px solid var(--line-strong); background: #FFFFFF; transition: outline-color .15s ease; }
+  /* The canvas is drawn at the column's width when the card renders; if
+     the column narrows later (the window, the tools panel) its fixed pixel
+     width ran on over the pages beside it. Always fit the column. */
+  .pbt-thumb canvas { display: block; width: 100% !important; height: auto !important; outline: 1px solid var(--line-strong); background: #FFFFFF; transition: outline-color .15s ease; }
   .pbt-thumb:hover canvas { outline: 2px solid var(--accent); }
   .pbt-page { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .pbt-across { grid-column: 1 / -1; }
@@ -1494,11 +1504,6 @@
   .pb-view .pbt-page-label select.pb-role { font-size: 12px; }
   .pbt-page-label .pbt-role-name { letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--ink-soft); font-size: 11.5px; }
   /* Art notes sit under the pages, their label above them when narrow. */
-  @container (max-width: 479px) {
-    .pb-notes-row { flex-direction: column; gap: 2px; }
-    .pb-notes-label { padding-top: 0; }
-    textarea.pb-notes { width: 100%; padding-left: 0; }
-  }
   textarea.pbt-field {
     width: 100%; resize: none; overflow: hidden; min-height: 44px; padding: 8px 10px; border-radius: 6px;
     border: 1px solid var(--line); background: #FFFFFF; color: #1C2934; font-size: 17px; line-height: 1.5; outline: none;
@@ -9589,7 +9594,7 @@
   // curly -- opening after a space, dash or bracket, closing (and
   // apostrophes) otherwise -- and a second hyphen makes an em dash. In
   // every place you write: entries, titles, section titles, the page.
-  var SMART_TARGETS = '.poem-text, textarea.poem-title, input.section-title, .stage-edit-body, .stage-edit-title, #bookTitleInput, .pb-tb-text, .pb-notes, #pbTitleInput';
+  var SMART_TARGETS = '.poem-text, textarea.poem-title, input.section-title, .stage-edit-body, .stage-edit-title, #bookTitleInput, .pb-tb-text, .pb-notes, #pbTitleInput, #cbTitleInput';
   document.addEventListener('beforeinput', function (e) {
     if (!prefs.smartPunctuation || e.inputType !== 'insertText' || !e.data || e.data.length !== 1) return;
     if (!e.target.closest || !e.target.closest(SMART_TARGETS)) return;
@@ -10958,7 +10963,19 @@
     var w = c.parentNode.clientWidth || 150;
     pbDrawSpread(pbCanvasFor(c, w, pbSpreadH(w)), pbState.spreads[s], s, w, { placeholders: true });
   }
+  // Redrawn at the new size (sharp) when its column changes width.
+  var pbThumbRO = window.ResizeObserver ? new ResizeObserver(function (entries) {
+    entries.forEach(function (e) {
+      var w = Math.round(e.contentRect.width), card = e.target.closest('.pb-spread');
+      if (!w || e.target._w === w || !card) return;
+      var first = e.target._w == null;
+      e.target._w = w;
+      if (!first) pbScheduleThumb(+card.dataset.spread);
+    });
+  }) : null;
   var pbThumbTimers = {};
+  // Spreads whose art notes are open (this session only).
+  var pbNotesOpen = new WeakSet();
   function pbScheduleThumb(s) {
     clearTimeout(pbThumbTimers[s]);
     pbThumbTimers[s] = setTimeout(function () { pbDrawTextThumb(s); }, 150);
@@ -11044,6 +11061,7 @@
     thumb.className = 'pbt-thumb';
     thumb.title = 'Lay out this spread in Spread view';
     thumb.appendChild(document.createElement('canvas'));
+    if (pbThumbRO) pbThumbRO.observe(thumb);
     thumb.addEventListener('click', function () {
       pbSetViewMode('spreads');
       pbFollow(s);
@@ -11231,7 +11249,18 @@
     dots.setAttribute('aria-haspopup', 'menu');
     dots.setAttribute('aria-expanded', 'false');
     dots.addEventListener('click', function (e) { e.stopPropagation(); openPbSpreadMenu(dots, s); });
-    actions.append(addPic, dots);
+    // Art notes: a small toggle; the field opens under the spread only
+    // when asked for (the dot says there are notes to see).
+    var notesBtn = document.createElement('button');
+    notesBtn.type = 'button'; notesBtn.className = 'pb-notes-btn';
+    notesBtn.title = 'Notes for the illustrator. They can go in the digital dummy and the PowerPoint’s speaker notes, never on the page.';
+    function syncNotesBtn(open) {
+      notesBtn.textContent = 'Art notes';
+      notesBtn.classList.toggle('has-notes', !!(pbState.spreads[s].notes || '').trim());
+      notesBtn.classList.toggle('is-open', open);
+      notesBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    actions.append(notesBtn, addPic, dots);
     head.appendChild(actions);
     card.appendChild(head);
 
@@ -11244,17 +11273,26 @@
 
     var notes = document.createElement('div');
     notes.className = 'pb-notes-row';
-    notes.innerHTML = '<span class="pb-notes-label">Art notes</span>';
     var ta = document.createElement('textarea');
     ta.className = 'pb-notes';
-    ta.rows = 1;
+    ta.rows = 2;
     ta.placeholder = 'Illustration notes for this spread';
-    ta.title = 'Notes for the illustrator. They can go in the digital dummy, and go in the PowerPoint’s speaker notes; never on the page.';
+    ta.setAttribute('aria-label', 'Art notes for spread ' + (s + 1));
     ta.value = sp.notes;
     ta.spellcheck = prefs.spellcheck;
-    ta.addEventListener('input', function () { pbState.spreads[s].notes = ta.value; autoGrow(ta); pbPersist(); });
+    ta.addEventListener('input', function () { pbState.spreads[s].notes = ta.value; autoGrow(ta); syncNotesBtn(true); pbPersist(); });
     ta.addEventListener('focus', function () { pbFollow(s); });
+    ta.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); setNotesOpen(false); notesBtn.focus(); } });
     notes.appendChild(ta);
+    function setNotesOpen(open) {
+      if (open) pbNotesOpen.add(pbState.spreads[s]); else pbNotesOpen.delete(pbState.spreads[s]);
+      notes.hidden = !open;
+      syncNotesBtn(open);
+      if (open) { autoGrow(ta); ta.focus(); }
+    }
+    notesBtn.addEventListener('click', function () { setNotesOpen(notes.hidden); });
+    notes.hidden = !pbNotesOpen.has(sp);
+    syncNotesBtn(!notes.hidden);
     card.appendChild(notes);
     wrap.appendChild(card);
     return wrap;
@@ -11399,8 +11437,10 @@
   }
 
   // On a spread, a text box is shown as it prints: drag it to move it;
-  // click it to write in it, in a larger pop-up (see pbOpenPopup) --
+  // click once to select it (formatting, handles), click again -- or
+  // double-click -- to write in it, in a larger pop-up (see pbOpenPopup):
   // at true scale the words are usually too small to edit comfortably.
+  // Opening on the first click made every select or nudge pop the editor.
   function pbMakeTextBox(s, it) {
     var g = pbGeom(it, s);
     var box = document.createElement('div');
@@ -11421,13 +11461,15 @@
     box.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || e.target.closest('.pb-h')) return;
       e.preventDefault();
+      var wasSelected = !!(pbSel && pbSel.s === s && pbSel.id === it.id);
       pbDragBox(e, box, s, it, function (moved) {
         if (moved) {
           pbSelect({ s: s, id: it.id });
           pbRefreshSpread(s);
+        } else if (wasSelected || e.detail >= 2) {
+          pbOpenPopup(s, it.id);
         } else {
           pbSelect({ s: s, id: it.id });
-          pbOpenPopup(s, it.id);
         }
       });
     });
