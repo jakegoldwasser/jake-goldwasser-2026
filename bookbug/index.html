@@ -1125,6 +1125,8 @@
     opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
   }
   .bb-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+  .bb-toast.has-action.is-on { pointer-events: auto; white-space: nowrap; display: flex; align-items: center; gap: 14px; padding-right: 8px; }
+  .bb-toast-btn { appearance: none; border: 0; border-radius: 999px; background: #FFFFFF; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
 
   .select-entries-box { max-width: 440px; width: 100%; }
   .select-entries-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -1608,10 +1610,21 @@
   /* A box in Text view: a grip at its right edge to drag it to another
      page, and Merge on the line above it when it has a neighbour there.
      Shown on hover with a mouse; always on touch screens. */
-  .pbt-box { position: relative; }
+  .pbt-box { position: relative; touch-action: pan-y; }
+  .pbt-box textarea.pbt-field { position: relative; z-index: 1; }
+  /* Swipe to remove: the box slides left over an Archive (or Delete) label. */
+  .pbt-swipe-under {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: flex-end; padding: 0 16px;
+    background: var(--warning-soft); color: var(--warning); font-size: 13px; font-weight: 700;
+  }
+  .pbt-box.is-swiping { overflow: hidden; }
+  .pbt-box.is-swiping .pbt-swipe-under { display: flex; }
+  .pbt-box.is-past .pbt-swipe-under { background: var(--warning); color: #FFFFFF; }
+  .pbt-box.is-swiping textarea.pbt-field { background: #FFFFFF; }
+  .pbt-box.is-swiping .pbt-grip, .pbt-box.is-swiping .pbt-join { visibility: hidden; }
   .pbt-box textarea.pbt-field { padding-right: 34px; }
   .pbt-grip {
-    position: absolute; top: 6px; right: 4px; width: 26px; height: 30px; display: flex; align-items: center; justify-content: center;
+    position: absolute; z-index: 2; top: 6px; right: 4px; width: 26px; height: 30px; display: flex; align-items: center; justify-content: center;
     appearance: none; border: 0; border-radius: 5px; background: transparent; color: var(--ink-faint); padding: 0;
     cursor: grab; touch-action: none; opacity: 0; transition: opacity .15s ease, background-color .15s ease;
   }
@@ -7275,12 +7288,20 @@
   }
   // A short note at the foot of the window.
   var toastEl = null, toastTimer = null;
-  function showToast(msg) {
+  // With an action (Undo), a button after the words, and it stays longer.
+  function showToast(msg, actionLabel, action) {
     if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'bb-toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
     toastEl.textContent = msg;
+    toastEl.classList.toggle('has-action', !!action);
+    if (action) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'bb-toast-btn'; b.textContent = actionLabel;
+      b.addEventListener('click', function () { toastEl.classList.remove('is-on'); action(); });
+      toastEl.appendChild(b);
+    }
     toastEl.classList.add('is-on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, 3500);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, action ? 6000 : 3500);
   }
   function openEntryMenu(btn, index) {
     var reopening = entryMenuBtn === btn;
@@ -11890,6 +11911,11 @@
     grip.innerHTML = '<svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></g></svg>';
     grip.addEventListener('pointerdown', function (e) { pbStartTextDrag(e, s, it.id, grip); });
     box.appendChild(grip);
+    var under = document.createElement('div');
+    under.className = 'pbt-swipe-under';
+    under.setAttribute('aria-hidden', 'true');
+    box.insertBefore(under, f);
+    box.addEventListener('pointerdown', function (e) { pbStartSwipe(e, s, it.id, box); });
     if (above && pbCanMerge(above) && pbCanMerge(it)) {
       var join = document.createElement('button');
       join.type = 'button';
@@ -11900,6 +11926,64 @@
       box.appendChild(join);
     }
     return box;
+  }
+
+  // Swiping a Text view box to the left (on a touch screen) removes it:
+  // to the archive if it has words of its own, like Archive in Spread
+  // view, and with Undo in the note that follows. A mostly-up-and-down
+  // swipe is left to scroll the page.
+  function pbStartSwipe(e, s, id, box) {
+    if (e.pointerType === 'mouse' || pbTextDrag || e.target.closest('.pbt-grip, .pbt-join')) return;
+    var x0 = e.clientX, y0 = e.clientY, dx = 0, on = false, pid = e.pointerId;
+    var f = box.querySelector('.pbt-field');
+    function move(ev) {
+      if (ev.pointerId !== pid) return;
+      var mx = ev.clientX - x0, my = ev.clientY - y0;
+      if (!on) {
+        if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+        if (mx > 0 || Math.abs(mx) < Math.abs(my) * 1.5) { stop(); return; }
+        on = true;
+        var it = pbFindItem(s, id);
+        box.querySelector('.pbt-swipe-under').textContent = it && pbItemHasInfo(it) ? 'Archive' : 'Delete';
+        box.classList.add('is-swiping');
+        try { box.setPointerCapture(pid); } catch (err) {}
+      }
+      dx = Math.min(0, mx);
+      f.style.transform = 'translateX(' + dx + 'px)';
+      box.classList.toggle('is-past', -dx > pbSwipeCut(box));
+    }
+    function end(ev) {
+      if (ev.pointerId !== pid) return;
+      stop();
+      if (!on) return;
+      if (ev.type === 'pointerup' && -dx > pbSwipeCut(box)) {
+        f.style.transition = 'transform .18s ease';
+        f.style.transform = 'translateX(-100%)';
+        setTimeout(function () { pbArchiveTextBox(s, id); }, 180);
+      } else {
+        f.style.transition = 'transform .18s ease';
+        f.style.transform = '';
+        setTimeout(function () { f.style.transition = ''; box.classList.remove('is-swiping', 'is-past'); }, 200);
+      }
+    }
+    function stop() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+  function pbSwipeCut(box) { return Math.min(140, box.offsetWidth * 0.35); }
+  function pbArchiveTextBox(s, id) {
+    if (!pbFindItem(s, id)) return;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    pbSel = { s: s, id: id };
+    var had = pbItemHasInfo(pbSelected());
+    pbItemAction('delete');
+    pbRenderSpread(s);
+    showToast(had ? 'Text box archived.' : 'Empty text box deleted.', 'Undo', pbUndo);
   }
 
   // Dragging a Text view box by its grip, with a mouse or a finger: a
