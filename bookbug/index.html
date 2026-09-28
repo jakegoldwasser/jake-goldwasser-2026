@@ -480,6 +480,9 @@
      of the poem. Each line is its own <div>, so this works in every
      browser. Prose entries don't get the class and wrap flush. */
   .poem-text.is-verse > div:not(.ed-image) { padding-left: 1.5em; text-indent: -1.5em; }
+  /* Indented prose paragraphs, as on the page (see tagProseLines). */
+  .is-para-indent > div:not(.ed-image):not(.is-full-out):not(.is-break) { text-indent: var(--para-indent, 2.5em); }
+  .is-para-indent > .is-break { text-align: center; }
 
   /* An image sits in the text as its own centered, uneditable line
      (saved as "[image N]"). The × shows on hover, or always on touch. */
@@ -1068,8 +1071,23 @@
   .home-cover-author { font-size: 10.5px; font-style: italic; color: #6B5A42; }
   .home-card-new .home-cover { background: var(--surface); border-style: dashed; }
   .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
-  .home-card-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .home-card-meta { font-size: 11.5px; color: var(--ink-faint); margin-top: -3px; }
+  /* New book: a big blank white page at the top left, Docs style. */
+  .home-new {
+    align-self: flex-start; display: flex; flex-direction: column; gap: 8px; width: 168px; padding: 0; border: none;
+    background: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left;
+  }
+  .home-new-page {
+    aspect-ratio: 5.5 / 8.5; width: 100%; display: flex; align-items: center; justify-content: center;
+    background: #FFFFFF; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--accent);
+    box-shadow: 0 1px 3px var(--shadow); transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+  }
+  .home-new:hover .home-new-page, .home-new:focus-visible .home-new-page {
+    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--accent);
+  }
+  .home-new:focus-visible { outline: none; }
+  .home-new-label { font-size: 14px; font-weight: 600; }
+  @media (max-width: 700px) { .home-new { width: 128px; } }
+  .home-card-meta { font-size: 11.5px; color: var(--ink-faint); }
   .home-card-more {
     position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%;
     border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); cursor: pointer;
@@ -1265,6 +1283,17 @@
     flex: 1; font-size: 11.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); margin: 0;
   }
   .home-shelf-head .dots-btn { padding: 0 8px 4px; }
+  .home-shelf-grip {
+    flex: none; display: flex; align-items: center; justify-content: center; width: 22px; height: 26px; margin-left: -6px;
+    padding: 0; border: none; border-radius: 5px; background: none; color: var(--shelf-accent, var(--ink-soft));
+    cursor: grab; touch-action: none; opacity: .55; transition: opacity .12s ease, background .12s ease;
+  }
+  .home-shelf-grip[hidden] { display: none; }
+  .home-shelf:hover .home-shelf-grip, .home-shelf-grip:focus-visible { opacity: 1; }
+  .home-shelf-grip:hover { background: rgba(255, 255, 255, 0.5); }
+  .home-shelf.is-dragging { position: relative; z-index: 5; box-shadow: 0 12px 32px var(--shadow); }
+  .home-shelf.is-dragging .home-shelf-grip { cursor: grabbing; opacity: 1; }
+  @media (hover: none) { .home-shelf-grip { opacity: 1; } }
   /* New book dialog: a name, then the kinds as small cards to pick from. */
   .new-book-box { max-width: 600px; width: 100%; max-height: calc(100vh - 40px); overflow-y: auto; }
   .new-book-box h2 { font-family: "Zilla Slab", ui-serif, serif; font-size: 22px; margin: 0 0 14px; }
@@ -1889,10 +1918,14 @@
       <h2 class="home-title">Home</h2>
       <div class="home-head-actions">
         <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
-        <!-- One way to start anything: name it, then pick what kind. -->
-        <button class="btn btn-sm btn-primary" id="newBookBtn" type="button" aria-haspopup="dialog">New book</button>
       </div>
     </div>
+    <!-- One way to start anything, first thing on the page, the way Docs
+         starts with a blank page: name it, then pick what kind. -->
+    <button class="home-new" id="newBookBtn" type="button" aria-haspopup="dialog">
+      <span class="home-new-page" aria-hidden="true"><svg width="46" height="46" viewBox="0 0 46 46"><path d="M23 6v34M6 23h34" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span>
+      <span class="home-new-label">New book</span>
+    </button>
     <div id="homeShelves"></div>
     <div class="home-archived" id="homeArchived" hidden>
       <h3 class="home-archived-title">Archived</h3>
@@ -3179,7 +3212,19 @@
     });
     if (pbLibrary.some(function (c) { return !c.archived; })) out.push('picture');
     if (cbLibrary.some(function (c) { return !c.archived; })) out.push('cartoon');
-    return out;
+    // In the order the person dragged the shelves into; a type they
+    // haven't placed yet keeps its usual place after those.
+    var stored = storedHomeForms(), order = stored && Array.isArray(stored.forms) ? stored.forms : [];
+    var base = TEXT_FORM_KEYS.concat(['picture', 'cartoon']);
+    function rank(f) { var i = order.indexOf(f); return i === -1 ? 100 + base.indexOf(f) : i; }
+    return out.sort(function (a, b) { return rank(a) - rank(b); });
+  }
+  // Saves a new shelf order, keeping any stored types not on Home now
+  // (all archived) after the ones shown.
+  function reorderHomeForms(forms) {
+    var stored = storedHomeForms(), rest = stored && Array.isArray(stored.forms) ? stored.forms.filter(function (f) { return forms.indexOf(f) === -1; }) : [];
+    setHomeForms(forms.concat(rest));
+    scheduleCloudAutosave();
   }
   function setHomeForms(forms, at) {
     try { localStorage.setItem(HOME_FORMS_KEY, JSON.stringify({ forms: forms, at: at || Date.now() })); } catch (e) {}
@@ -4770,9 +4815,10 @@
     // blank lines between -- except the first paragraph of the piece and
     // the one after a scene break (a line of *** or #), set full out. The
     // whole paragraph wraps a little narrower than the column so the
-    // indented first line fits.
+    // indented first line fits. The indent is a half inch, the same as a
+    // Tab (and Docs' and Word's first-line indent).
     var indented = !verse && state.paragraphs === 'indent';
-    var paraIndent = sizePt * 1.5, fullOut = true;
+    var paraIndent = TAB_STOP_PT, fullOut = true;
     var bodyAlign = poem.bodyAlign || state.bodyAlignment;
     // Hanging turnovers only make sense against a left margin.
     var hangPt = verse && bodyAlign === 'left' ? sizePt * 1.5 : 0;
@@ -6995,6 +7041,24 @@
     Object.keys(counts).forEach(function (nm) { if (nm !== last && counts[nm] > most) { best = nm; most = counts[nm]; } });
     return best || last || '';
   }
+  // Indented prose shows in the editor the way it prints: each
+  // paragraph's first line in by the half-inch indent, except the first
+  // paragraph and the one after a scene break (a centered *** or #).
+  function tagProseLines(ed, poem, indentPx) {
+    var verse = bookFormOf(state) === 'collection' && isLineated(poem);
+    var on = !isScriptForm() && !verse && state.paragraphs === 'indent';
+    ed.classList.toggle('is-para-indent', on);
+    ed.style.setProperty('--para-indent', indentPx + 'px');
+    var fullOut = true;
+    Array.prototype.forEach.call(ed.children, function (r) {
+      if (r.nodeType !== 1) return;
+      var t = r.dataset.token ? '' : r.textContent.trim();
+      var brk = on && /^(\*\s*){3}$|^#$/.test(t);
+      r.classList.toggle('is-break', brk);
+      r.classList.toggle('is-full-out', on && !brk && fullOut);
+      if (brk) fullOut = true; else if (t) fullOut = false;
+    });
+  }
   function renderEditor(ed, lines) {
     ed.innerHTML = '';
     (lines && lines.length ? lines : ['']).forEach(function (l) { ed.appendChild(makeEditorLine(l)); });
@@ -7781,6 +7845,8 @@
     editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
     tagScriptLines(editor);
+    function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE); }
+    tagProse();
     editor.style.textAlign = isScriptForm() ? 'left' : poem.bodyAlign || state.bodyAlignment;
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight();
@@ -7790,6 +7856,7 @@
       poem.lines = serializeEditor(editor);
       state.isExample = false;
       tagScriptLines(editor);
+      tagProse();
       updateVerseClass();
       persist();
       updateMeta();
@@ -8102,6 +8169,10 @@
   }
   applyToolsHidden();
   toolsToggleBtn.addEventListener('click', function () {
+    // Showing the tools brings back the column, not the large page
+    // Formatting or Front and Back Matter opens: those fold first, so
+    // the scenes stay where you were.
+    if (toolsHidden) closeStage();
     toolsHidden = !toolsHidden;
     try { localStorage.setItem(TOOLS_HIDDEN_KEY, toolsHidden ? '1' : '0'); } catch (e) {}
     applyToolsHidden();
@@ -9016,7 +9087,8 @@
     body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
       'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
-    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; persist(); });
+    tagProseLines(body, poem, TAB_STOP_PT * scale);
+    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); persist(); });
     body.addEventListener('keydown', function (ev) {
       if (ev.key === 'Tab') { ev.preventDefault(); indentEditorLines(body, ev.shiftKey); }
     });
@@ -9189,14 +9261,14 @@
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
-      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS[bookFormOf(data)].cover);
     card.querySelector('.home-cover-author').textContent = data.author || '';
-    card.querySelector('.home-card-title').textContent = title;
+    card.setAttribute('aria-label', title);
     card.dataset.form = bookFormOf(data);
     var n = countEntries(data.poems || []);
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + nounFor(n, data);
@@ -9300,17 +9372,20 @@
       // A new account: one clear way in. The dialog asks what kind.
       var empty = document.createElement('div');
       empty.className = 'home-empty';
-      empty.innerHTML = '<p class="home-intro">Nothing here yet. Start a book, name it, and choose what kind: poetry, a novel, essays, a screenplay, a play, a picture book or cartoons.</p>' +
-        '<button class="btn btn-primary" type="button">New book</button>';
-      empty.querySelector('button').addEventListener('click', function () { openNewBookDialog(); });
+      empty.innerHTML = '<p class="home-intro">Nothing here yet. Start a book with New book: name it, and choose what kind: poetry, a novel, essays, a screenplay, a play, a picture book or cartoons.</p>';
       shelves.appendChild(empty);
     }
     forms.forEach(function (f) {
       var shelf = document.createElement('section');
       shelf.className = 'home-shelf';
       shelf.dataset.form = f;
-      shelf.innerHTML = '<div class="home-shelf-head"><h3 class="home-shelf-title"></h3><button class="btn-link home-see-all" type="button" hidden></button></div><div class="home-grid"></div>';
+      shelf.innerHTML = '<div class="home-shelf-head"><button class="home-shelf-grip" type="button" hidden><svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></g></svg></button><h3 class="home-shelf-title"></h3><button class="btn-link home-see-all" type="button" hidden></button></div><div class="home-grid"></div>';
       shelf.querySelector('.home-shelf-title').textContent = BOOK_FORMS[f].shelf;
+      var grip = shelf.querySelector('.home-shelf-grip');
+      grip.hidden = forms.length < 2;
+      grip.title = 'Drag to move ' + BOOK_FORMS[f].shelf.toLowerCase() + ' up or down';
+      grip.setAttribute('aria-label', 'Move ' + BOOK_FORMS[f].shelf + ' (arrow keys)');
+      wireShelfDrag(shelf, grip);
       if (homeShelfOpen[f]) shelf.classList.add('is-open');
       shelf.querySelector('.home-see-all').addEventListener('click', function () {
         homeShelfOpen[f] = !homeShelfOpen[f];
@@ -9340,6 +9415,67 @@
     if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">Nothing archived.</div>';
     archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
       archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : cbEntry(entry.id) === entry ? makeCartoonCard(entry) : makeHomeCard(entry));
+    });
+  }
+  // The shelves' order is the person's: drag a shelf by its grip (mouse
+  // or finger -- pointer events, so it works the same on a phone), or
+  // focus the grip and use the up and down arrows.
+  function saveShelfOrder() {
+    reorderHomeForms(Array.prototype.map.call(document.querySelectorAll('#homeShelves .home-shelf'), function (sh) { return sh.dataset.form; }));
+    renderChapbooksList();
+  }
+  function wireShelfDrag(shelf, grip) {
+    var box = document.getElementById('homeShelves'), dragging = false, startY = 0, moved = false;
+    grip.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true; moved = false; startY = e.clientY;
+      shelf.classList.add('is-dragging');
+      // On the window, not the grip: moving the shelf in the page drops
+      // any pointer capture the grip held.
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    });
+    function move(e) {
+      if (!dragging) return;
+      shelf.style.transform = 'translateY(' + (e.clientY - startY) + 'px)';
+      var others = Array.prototype.filter.call(box.querySelectorAll('.home-shelf'), function (sh) { return sh !== shelf; });
+      var before = null;
+      for (var i = 0; i < others.length; i++) {
+        var r = others[i].getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) { before = others[i]; break; }
+      }
+      var next = shelf.nextElementSibling;
+      while (next && !next.classList.contains('home-shelf')) next = next.nextElementSibling;
+      if (before === next) return;
+      // Move it, keeping it under the pointer.
+      var oldTop = shelf.getBoundingClientRect().top;
+      if (before) box.insertBefore(shelf, before);
+      else box.appendChild(shelf);
+      shelf.style.transform = 'none';
+      startY += shelf.getBoundingClientRect().top - oldTop;
+      shelf.style.transform = 'translateY(' + (e.clientY - startY) + 'px)';
+      moved = true;
+    }
+    function end() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (!dragging) return;
+      dragging = false;
+      shelf.classList.remove('is-dragging');
+      shelf.style.transform = '';
+      if (moved) saveShelfOrder();
+    }
+    grip.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      var sib = e.key === 'ArrowUp' ? shelf.previousElementSibling : shelf.nextElementSibling;
+      if (!sib || !sib.classList.contains('home-shelf')) return;
+      if (e.key === 'ArrowUp') box.insertBefore(shelf, sib); else box.insertBefore(sib, shelf);
+      grip.focus();
+      saveShelfOrder();
     });
   }
   // Each shelf shows one row -- the most recent books
@@ -9507,8 +9643,8 @@
       chapbooksPane.appendChild(lab);
     }
     var menuForms = homeForms();
-    TEXT_FORM_KEYS.forEach(function (form) {
-      if (menuForms.indexOf(form) === -1) return;
+    menuForms.forEach(function (form) {
+      if (form === 'picture' || form === 'cartoon') { menuGroup(form); return; }
       groupLabel(form);
       activeBooks().filter(function (c) { return bookFormOf(c.data) === form; })
         .sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
@@ -9525,17 +9661,17 @@
           chapbooksPane.appendChild(row);
         });
     });
-    if (menuForms.indexOf('picture') !== -1) {
-      groupLabel('picture');
-      activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-        chapbooksPane.appendChild(pictureBookMenuRow(entry, false));
-      });
-    }
-    if (menuForms.indexOf('cartoon') !== -1) {
-      groupLabel('cartoon');
-      activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
-        chapbooksPane.appendChild(cartoonMenuRow(entry, false));
-      });
+    function menuGroup(form) {
+      groupLabel(form);
+      if (form === 'picture') {
+        activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+          chapbooksPane.appendChild(pictureBookMenuRow(entry, false));
+        });
+      } else {
+        activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
+          chapbooksPane.appendChild(cartoonMenuRow(entry, false));
+        });
+      }
     }
     chapbooksPane.appendChild(makeDivider());
 
@@ -11722,14 +11858,14 @@
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
-      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Picture book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled picture book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS.picture.cover);
     card.querySelector('.home-cover-author').textContent = data.author || '';
-    card.querySelector('.home-card-title').textContent = title;
+    card.setAttribute('aria-label', title);
     var pages = data.spreads ? pbTotalPagesFor(data.spreads.length) : ((data.rows || []).length * 2 + 2);
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + pages + ' pages';
     card.addEventListener('click', function () { openPictureBook(entry.id); });
@@ -14596,14 +14732,14 @@
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
-      '<div class="home-card-title"></div><div class="home-card-meta"></div>' +
+      '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled cartoon book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     coverTitle.style.fontFamily = CASLON_STACK;
     card.querySelector('.home-cover-author').textContent = data.author || '';
-    card.querySelector('.home-card-title').textContent = title;
+    card.setAttribute('aria-label', title);
     var n = (data.cartoons || []).filter(function (c) { return !cbCartoonIsEmpty(cbNormalizeCartoon(c)); }).length;
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' cartoon' : ' cartoons');
     card.addEventListener('click', function () { openCartoonBook(entry.id); });
