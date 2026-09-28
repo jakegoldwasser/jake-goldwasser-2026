@@ -18,7 +18,7 @@
 <link rel="icon" type="image/png" sizes="48x48" href="../favicon-48.png">
 <link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
 <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-<meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
+<meta name="description" content="Write and lay out books — poetry, novels, essays, screenplays, plays, picture books and cartoons — and export print-ready PDFs.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&family=Cutive&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
@@ -720,6 +720,8 @@
   .seg.view-seg button svg { flex: 0 0 auto; }
   .seg.view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   @media (max-width: 700px) { .seg.view-seg button { padding: 7px 11px; font-size: 13px; } }
+  /* The narrowest phones: words only, so the switch never runs off the side. */
+  @media (max-width: 380px) { .seg.view-seg button { padding: 7px 10px; } .seg.view-seg button svg { display: none; } }
   .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
@@ -1247,6 +1249,13 @@
   .new-book-box h2 { font-family: "Zilla Slab", ui-serif, serif; font-size: 22px; margin: 0 0 14px; }
   .new-book-box .prompt-input { font-size: 16px; }
   .new-book-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  /* Two to a row on a phone, so all seven kinds fit without much scrolling. */
+  @media (max-width: 520px) {
+    .new-book-types { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .new-book-types .home-start-card { padding: 10px 11px; }
+    .new-book-types .home-start-card strong { font-size: 14.5px; }
+    .new-book-types .home-start-card span { font-size: 11.5px; }
+  }
   .new-book-types .home-start-card { padding: 12px 14px; gap: 4px; border-width: 2px; border-color: var(--line-strong); }
   .new-book-types .home-start-card strong { font-size: 16px; }
   .new-book-types .home-start-card span { font-size: 12px; line-height: 1.45; }
@@ -1733,7 +1742,7 @@
   .pb-layout input { margin: 3px 0 0; accent-color: var(--accent); }
   .pb-layout strong { font-size: 13.5px; }
   .pb-layout span { grid-column: 2; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
-  .pb-new-note { font-size: 12px; color: var(--ink-faint); margin: 6px 0 0; line-height: 1.5; }
+  .pb-new-note, .modal-box .pb-new-note { font-size: 12px; color: var(--ink-faint); margin: 6px 0 0; line-height: 1.5; }
 
   @media (max-width: 700px) {
     .pb-view { gap: 16px; }
@@ -1881,7 +1890,7 @@
       <div class="tools-bar">
         <button class="btn tools-toggle" id="pbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="pbSidebar" title="Show or hide Preview, Formatting and Export">
           <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-          <span id="pbToolsToggleLabel">Hide Tools</span>
+          <span id="pbToolsToggleLabel">Hide tools</span>
         </button>
       </div>
       <div class="pb-main">
@@ -2122,7 +2131,7 @@
       <div class="tools-bar">
         <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
           <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-          <span id="cbToolsToggleLabel">Hide Tools</span>
+          <span id="cbToolsToggleLabel">Hide tools</span>
         </button>
       </div>
       <div class="cb-main">
@@ -2261,7 +2270,7 @@
 
   <div class="panel intake-collapsed-bar" id="intakeCollapsedBar" hidden>
     <span id="intakeCollapsedText"></span>
-    <button class="btn btn-sm" id="intakeExpandBtn" type="button">Add source</button>
+    <button class="btn btn-sm" id="intakeExpandBtn" type="button">Bring in more</button>
   </div>
 
   <div class="workspace" id="bookWorkspace">
@@ -2270,7 +2279,7 @@
     <div class="tools-bar">
       <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
         <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-        <span id="toolsToggleLabel">Hide Tools</span>
+        <span id="toolsToggleLabel">Hide tools</span>
       </button>
     </div>
     <div id="entriesColumn">
@@ -2689,7 +2698,7 @@
           </div>
           <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
             <button class="btn btn-primary" id="exportBtn" style="width:100%; justify-content:center;">Export PDF</button>
-            <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export print-ready booklet</button>
+            <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export printable booklet</button>
             <div class="checkline export-check">
               <input type="checkbox" id="cutLinesCheck" checked>
               <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
@@ -2751,7 +2760,7 @@
     <div class="modal-actions" style="flex-wrap:wrap;">
       <button class="btn" id="selectEntriesCancelBtn">Cancel</button>
       <button class="btn btn-primary" id="selectEntriesPdfBtn">Export as PDF</button>
-      <button class="btn btn-primary" id="selectEntriesPrintBtn">Export as printable PDF</button>
+      <button class="btn btn-primary" id="selectEntriesPrintBtn">Export as printable booklet</button>
     </div>
   </div>
 </div>
@@ -3101,9 +3110,8 @@
   function pbUid(prefix) { return (prefix || 'i') + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
   // ---------------------------------------------------------------------
-  // Which book forms this account keeps on Home. Someone making only
-  // collections never sees a picture-book shelf, and vice versa; "Add
-  // book type" on Home adds the other. Synced with the books.
+  // The book types, as Home and the New book dialog name them. Home
+  // shows a shelf only for the types someone has books of (homeForms).
   // ---------------------------------------------------------------------
   var BOOK_FORMS = {
     // `cover`: the typeface a book of this type shows its title in on Home.
@@ -3112,7 +3120,7 @@
     essays: { shelf: 'Essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection', cover: 'baskerville' },
     screenplay: { shelf: 'Screenplays', add: 'Screenplay', plural: 'Screenplays', about: 'Scenes in standard screenplay format: Courier, sluglines, dialogue.', newLabel: 'New screenplay', cover: 'courierprime' },
     play: { shelf: 'Plays', add: 'Stage play', plural: 'Plays', about: 'Acts and scenes, set in standard stage play format.', newLabel: 'New play', cover: 'courierprime' },
-    picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book', cover: 'poppins' },
+    picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and illustrations.', newLabel: 'New picture book', cover: 'poppins' },
     cartoon: { shelf: 'Cartoon books', add: 'Cartoon book', plural: 'Cartoon books', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon book', cover: 'caslon' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
@@ -7874,7 +7882,7 @@
   function applyToolsHidden() {
     document.getElementById('bookWorkspace').classList.toggle('tools-hidden', toolsHidden);
     toolsToggleBtn.setAttribute('aria-pressed', toolsHidden ? 'false' : 'true');
-    document.getElementById('toolsToggleLabel').textContent = toolsHidden ? 'Show Tools' : 'Hide Tools';
+    document.getElementById('toolsToggleLabel').textContent = toolsHidden ? 'Show tools' : 'Hide tools';
   }
   applyToolsHidden();
   toolsToggleBtn.addEventListener('click', function () {
@@ -9003,7 +9011,10 @@
         c.setAttribute('aria-checked', on ? 'true' : 'false');
       });
       if (f === 'picture' && !pbOpts) pbOpts = pbNewBookOptions(extra);
+      var reveal = f === 'picture' && extra.hidden;
       extra.hidden = f !== 'picture';
+      // Its choices open below the cards, often below the fold on a phone.
+      if (reveal) extra.scrollIntoView({ block: 'start', behavior: 'smooth' });
       ok.disabled = !form;
     }
     Object.keys(BOOK_FORMS).forEach(function (f) {
@@ -9054,7 +9065,6 @@
   }
   function renderHome() {
     closeBookMenu();
-    closeShelfMenu();
     var shelves = document.getElementById('homeShelves');
     shelves.innerHTML = '';
     var forms = homeForms();
@@ -9125,35 +9135,6 @@
     clearTimeout(homeFitTimer);
     homeFitTimer = setTimeout(fitHomeShelves, 100);
   });
-  // A shelf's ⋯: take that book type off Home. Its books stay saved and
-  // come back with it.
-  var shelfMenu = document.createElement('div');
-  shelfMenu.className = 'entry-menu';
-  shelfMenu.setAttribute('role', 'menu');
-  shelfMenu.hidden = true;
-  document.body.appendChild(shelfMenu);
-  function closeShelfMenu() { shelfMenu.hidden = true; }
-  function openShelfMenu(btn, form) {
-    shelfMenu.innerHTML = '<button type="button" role="menuitem">Remove from Home</button>';
-    shelfMenu.firstChild.addEventListener('click', async function () {
-      closeShelfMenu();
-      var count = form === 'picture' ? pbLibrary.length : library.filter(function (c) { return bookFormOf(c.data) === form; }).length;
-      if (count) {
-        var ok = await confirmDialog('Take ' + BOOK_FORMS[form].shelf.replace(/^My /, '') + ' off Home? The ' + count + ' you have stay saved, and come back if you add this book type again.');
-        if (!ok) return;
-      }
-      setHomeForms(homeForms().filter(function (f) { return f !== form; }));
-      scheduleCloudAutosave();
-      renderHome();
-      renderChapbooksList();
-    });
-    shelfMenu.hidden = false;
-    var r = btn.getBoundingClientRect();
-    shelfMenu.style.left = Math.max(8, Math.min(window.innerWidth - shelfMenu.offsetWidth - 8, r.right - shelfMenu.offsetWidth)) + 'px';
-    shelfMenu.style.top = (r.bottom + 4) + 'px';
-  }
-  document.addEventListener('click', function (e) { if (!shelfMenu.contains(e.target)) closeShelfMenu(); });
-  window.addEventListener('scroll', closeShelfMenu, true);
   document.getElementById('homeArchivedBtn').addEventListener('click', function () {
     homeArchivedOpen = !homeArchivedOpen;
     renderHome();
@@ -10046,6 +10027,10 @@
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('lineSpacingSeg').closest('.field').hidden = script;
+    // Scripts print one-sided and are bound with brads, never folded.
+    document.getElementById('exportPrintBtn').hidden = script;
+    document.getElementById('cutLinesCheck').closest('.checkline').hidden = script;
+    document.getElementById('selectEntriesPrintBtn').hidden = script;
   }
 
   function updateStats() {
@@ -10198,6 +10183,9 @@
       play: 'ACT ONE\n\nScene 1\n\nA kitchen, just before dawn.\n\nRUTH\nYou can come in.'
     };
     document.getElementById('pasteBox').placeholder = PASTE_EXAMPLES[form] || '### Instructions for Folding a Paper Boat\n\nCrease the sky in half...\n\n### What the Tide Leaves';
+    // Title and author placeholders in the type's own words.
+    document.getElementById('bookTitleInput').placeholder = ({ screenplay: 'Screenplay title', play: 'Play title' })[form] || 'Book title';
+    document.getElementById('authorInput').placeholder = ({ screenplay: 'Writer', play: 'Playwright' })[form] || 'Author name';
     // A script has a title page, not a cover.
     var cover = isScriptForm() ? 'title page' : 'front cover';
     document.querySelector('#coverTargetToggle [data-target="front"]').textContent = Cap(cover);
@@ -13715,7 +13703,7 @@
   function applyPbToolsHidden() {
     pbFmt('pbWorkspace').classList.toggle('tools-hidden', pbToolsHidden);
     pbFmt('pbToolsToggleBtn').setAttribute('aria-pressed', pbToolsHidden ? 'false' : 'true');
-    pbFmt('pbToolsToggleLabel').textContent = pbToolsHidden ? 'Show Tools' : 'Hide Tools';
+    pbFmt('pbToolsToggleLabel').textContent = pbToolsHidden ? 'Show tools' : 'Hide tools';
     if (!pbToolsHidden) pbSchedulePreview();
   }
   pbFmt('pbToolsToggleBtn').addEventListener('click', function () {
@@ -14730,7 +14718,7 @@
   function applyCbToolsHidden() {
     cbFmt('cbWorkspace').classList.toggle('tools-hidden', cbToolsHidden);
     cbFmt('cbToolsToggleBtn').setAttribute('aria-pressed', cbToolsHidden ? 'false' : 'true');
-    cbFmt('cbToolsToggleLabel').textContent = cbToolsHidden ? 'Show Tools' : 'Hide Tools';
+    cbFmt('cbToolsToggleLabel').textContent = cbToolsHidden ? 'Show tools' : 'Hide tools';
   }
   cbFmt('cbToolsToggleBtn').addEventListener('click', function () {
     cbToolsHidden = !cbToolsHidden;
