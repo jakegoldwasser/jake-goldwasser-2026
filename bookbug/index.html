@@ -356,6 +356,16 @@
     .workspace.tools-hidden { grid-template-columns: 1fr; }
     .workspace.tools-hidden .sidebar { display: none; }
   }
+  /* On phones the tools column sits below the whole book, so the bar
+     holds a Formatting button instead that opens that panel and jumps
+     down to it. */
+  .fmt-jump { display: none; }
+  @media (max-width: 860px) {
+    .tools-bar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+    .tools-bar .tools-toggle { display: none; }
+    .fmt-jump { display: inline-flex; align-items: center; gap: 7px; }
+  }
+  .fmt-jump svg { flex: 0 0 auto; }
   .tools-toggle svg { flex: 0 0 auto; }
   .tools-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
@@ -1892,6 +1902,7 @@
 
     <div class="workspace" id="pbWorkspace">
       <div class="tools-bar">
+        <button class="btn fmt-jump" type="button" data-panel="pbFormattingPanel" aria-controls="pbFormattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
         <button class="btn tools-toggle" id="pbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="pbSidebar" title="Show or hide Preview, Formatting and Export">
           <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
           <span id="pbToolsToggleLabel">Hide tools</span>
@@ -2133,6 +2144,7 @@
     </div>
     <div class="workspace" id="cbWorkspace">
       <div class="tools-bar">
+        <button class="btn fmt-jump" type="button" data-panel="cbFormattingPanel" aria-controls="cbFormattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
         <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
           <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
           <span id="cbToolsToggleLabel">Hide tools</span>
@@ -2281,7 +2293,8 @@
     <!-- Directly above the tools column; it stays in the same spot whether
          the column is showing or not. -->
     <div class="tools-bar">
-      <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
+      <button class="btn fmt-jump" type="button" data-panel="formattingPanel" aria-controls="formattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
+        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
         <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
         <span id="toolsToggleLabel">Hide tools</span>
       </button>
@@ -13685,6 +13698,18 @@
     var at = pbState.spreads.length - 1;
     while (at > 1 && (pbState.spreads[at - 1].left.role !== 'story' || pbState.spreads[at - 1].right.role !== 'story')) at--;
     pbInsertSpread(at);
+  });
+
+  // Phones: the Formatting button at the top opens the Formatting panel
+  // (through its own toggle, so everything that listens still hears it)
+  // and scrolls down to it.
+  document.querySelectorAll('.fmt-jump').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var panel = document.getElementById(btn.dataset.panel);
+      var toggle = panel.querySelector('.panel-toggle');
+      if (toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+      panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
   });
 
   // Show / Hide Tools, remembered on this device.
