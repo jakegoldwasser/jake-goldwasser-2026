@@ -1671,6 +1671,10 @@
   .tour-foot button { appearance: none; border: 1px solid rgba(255, 255, 255, .4); background: transparent; color: #FFFFFF; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .tour-foot button.tour-next { background: #FFFFFF; color: var(--ink); border-color: #FFFFFF; }
   .tour-target { outline: 3px solid #C1602A !important; outline-offset: 4px; border-radius: 6px; }
+  /* The view switch clips whatever sits outside it, so a ring round one of
+     its buttons goes inside the button; the switch itself keeps its pill. */
+  .seg button.tour-target { outline-offset: -5px; border-radius: 999px; }
+  .seg.view-seg.tour-target { border-radius: 999px; }
 
   /* ---- Cartoon books ----
      Newsprint: gray-white stock, black ink, and the wordmark's umber
@@ -14770,7 +14774,8 @@
       { sel: '#pbViewSeg', title: 'Three ways to see the book', text: 'Text is for writing: every page’s words at a size you can read. Spread shows each spread as it will print. Thumbnail shows the whole book at a glance.' },
       { sel: '#pbSheet .pbt-cols', title: 'Write page by page', text: 'Type each page’s words here. The first and last pages have a menu for what they are (title page, dedication…), and choosing one sets up its usual text.' },
       { sel: '#pbFormattingPanel', title: 'Formatting and Export', text: 'Here in Text view: the book’s shape, story type, page numbers, and the dummy and PowerPoint exports.' },
-      { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop illustrations straight onto a spread.' }
+      { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop illustrations straight onto a spread.',
+        touch: 'In Spread view, tap text to write in it, drag it to move it, and add illustrations with + Illustration on any spread.' }
     ],
     sample: [
       { sel: '#poemList .is-sample', title: 'A sample to look at', text: 'This sample is set exactly as your book will be: indented paragraphs, a scene break, the chapter title. The preview shows it on the page.',
@@ -14820,7 +14825,8 @@
     tourCard.innerHTML = '<h4></h4><p></p><div class="tour-foot"><span class="tour-count"></span>' +
       '<button type="button" class="tour-skip">Skip</button><button type="button" class="tour-next"></button></div>';
     tourCard.querySelector('h4').textContent = step.title;
-    tourCard.querySelector('p').textContent = step.script && isScriptForm() ? step.script : step.text;
+    tourCard.querySelector('p').textContent = step.script && isScriptForm() ? step.script
+      : step.touch && window.matchMedia('(hover: none)').matches ? step.touch : step.text;
     tourCard.querySelector('.tour-count').textContent = (tourState.i + 1) + ' of ' + steps.length;
     var last = tourState.i === steps.length - 1;
     tourCard.querySelector('.tour-next').textContent = last ? 'Done' : 'Next';
@@ -14829,6 +14835,7 @@
     tourCard.querySelector('.tour-next').addEventListener('click', function () { tourState.i++; showTourStep(); });
     tourCard.hidden = false;
     setTimeout(placeTourCard, 350);
+    setTimeout(placeTourCard, 900);
     placeTourCard();
   }
   function placeTourCard() {
@@ -14844,6 +14851,9 @@
     tourCard.style.left = (left + window.scrollX) + 'px';
   }
   window.addEventListener('resize', placeTourCard);
+  // A long smooth scroll to the next step outlasts the timer above, and a
+  // card placed mid-scroll can land a screen away from what it points at.
+  window.addEventListener('scrollend', placeTourCard);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && tourState) endTour(); });
   // Bringing entries in shows the intro tour has done its job: its first
   // step points at the import panel, which just folded away, so the card
