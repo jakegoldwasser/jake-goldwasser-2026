@@ -4491,6 +4491,18 @@
     // same widths.
     { key: 'courierprime', label: 'Courier', pdfFamily: 'mono', sizeScale: 1, displayStack: "'Courier Prime', 'Courier New', Courier, monospace" }
   ];
+  // Body leading, as a multiple of the type size. Sizes are already
+  // scaled per face (sizeScale) toward an even x-height, so a flat 1.55
+  // em set small-x-height faces like Garamond airy and big-x-height ones
+  // like Baskerville or Poppins cramped. Instead every face gets the same
+  // leading relative to its x-height (recovered from sizeScale, which is
+  // (0.45 / x-height) ^ 0.75): 1.55 em for a 0.45 x-height at spacing
+  // 1.15, scaled by the Line spacing setting. The PDF, the preview and
+  // both editors all use this, so they agree line for line.
+  function bodyLeading(fontKey, spacing) {
+    var xh = 0.45 / Math.pow(getFontChoice(fontKey).sizeScale || 1, 4 / 3);
+    return Math.max(1.2, 1.55 * ((spacing || 1.15) / 1.15) * xh / 0.45);
+  }
   function fontSizePt(pt, fontKey) {
     return Math.round(pt * (getFontChoice(fontKey).sizeScale || 1) * 10) / 10;
   }
@@ -4702,9 +4714,7 @@
     var titleLines = shownTitle ? wrapLine(shownTitle, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
-    // Line spacing 1.15 (the default) is the book's usual 1.55 leading;
-    // the other settings open it up or close it in proportionally.
-    var lineHeight = sizePt * 1.55 * ((state.lineSpacing || 1.15) / 1.15);
+    var lineHeight = sizePt * bodyLeading(state.bodyFontChoice, state.lineSpacing);
     var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
     // A continuation page carries no title or label of its own -- readers
     // expect an entry to simply carry on onto the next page -- so it gets
@@ -7122,34 +7132,11 @@
   window.addEventListener('drop', function (e) { if (hasDraggedFiles(e)) e.preventDefault(); });
 
   // ---------------------------------------------------------------------
-  // Line spacing works like Word / Google Docs: 1.0 is the font's own
-  // natural line height (ascent + descent), not 1em. Baskerville-style
-  // faces run ~1.25em, so a raw CSS 1.15 set their lines tighter than
-  // single spacing, with descenders touching the next line's ascenders.
-  var naturalLineRatios = {};
-  function naturalLineRatio(fontFamily) {
-    if (naturalLineRatios[fontFamily]) return naturalLineRatios[fontFamily];
-    var probe = document.createElement('span');
-    probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;font-size:100px;line-height:normal;';
-    probe.style.fontFamily = fontFamily;
-    probe.textContent = 'Hgjp';
-    document.body.appendChild(probe);
-    var ratio = probe.getBoundingClientRect().height / 100;
-    probe.remove();
-    if (!(ratio >= 0.9 && ratio <= 2)) ratio = 1.2;
-    // Only remember it once web fonts have loaded -- before that this
-    // measured the fallback font.
-    if (!document.fonts || document.fonts.status === 'loaded') naturalLineRatios[fontFamily] = ratio;
-    return ratio;
-  }
-  function editorLineHeight(fontFamily) {
-    return ((state.lineSpacing || 1.15) * naturalLineRatio(fontFamily)).toFixed(3);
-  }
-  if (document.fonts) {
-    document.fonts.addEventListener('loadingdone', function () {
-      naturalLineRatios = {};
-      document.querySelectorAll('.poem-text').forEach(function (ed) { ed.style.lineHeight = editorLineHeight(ed.style.fontFamily); });
-    });
+  // The editor spaces its lines as the page will (see bodyLeading); a
+  // script's page is solid Courier, a little opened up here for typing.
+  function editorLineHeight() {
+    if (isScriptForm()) return '1.3';
+    return bodyLeading(state.bodyFontChoice, state.lineSpacing).toFixed(3);
   }
 
   // "⋯" entry menu -- Duplicate / Archive, shared by every entry.
@@ -7571,7 +7558,7 @@
     tagScriptLines(editor);
     editor.style.textAlign = isScriptForm() ? 'left' : poem.bodyAlign || state.bodyAlignment;
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
-    editor.style.lineHeight = editorLineHeight(editor.style.fontFamily);
+    editor.style.lineHeight = editorLineHeight();
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
     editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
     editor.addEventListener('input', function () {
