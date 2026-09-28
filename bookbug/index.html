@@ -21,7 +21,7 @@
 <meta name="description" content="Turn a Google Doc of entries into a paginated, print-ready PDF book, one entry per page.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&family=Cutive&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Zilla+Slab:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Bodoni+Moda:ital,opsz,wght@0,11,400;0,11,700;1,11,400;1,11,700&family=Jost:ital,wght@0,400;0,700;1,400;1,700&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,700;1,8..60,400;1,8..60,700&family=Cutive&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=BioRhyme+Expanded:wght@400;700;800&display=swap">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
@@ -1182,6 +1182,38 @@
     --paper: #E7DFEA; --surface: #F8F5F9; --surface-2: #EEE7F0; --ink: #24182A; --ink-soft: #5B4865; --ink-faint: #9A89A3;
     --line: #DCD0E0; --line-strong: #B9A6C1; --accent: #6E4A7E; --accent-soft: #E6D9EC; --shadow: rgba(36, 24, 42, 0.14);
   }
+  /* ---- Scripts: the editor sets each line where it goes on the page.
+     Courier's characters are all 1/10 in at 12 pt, so ch units place
+     the columns exactly as SCRIPT_SPECS does (22ch = 2.2 in). ---- */
+  .poem-text.is-script > [data-sel="heading"],
+  .poem-text.is-script > [data-sel="character"],
+  .poem-text.script-screenplay > [data-sel="transition"] { text-transform: uppercase; }
+  .poem-text.script-screenplay > [data-sel="heading"] { font-weight: 700; }
+  .poem-text.script-screenplay > [data-sel="character"] { padding-left: 22ch; }
+  .poem-text.script-screenplay > [data-sel="paren"] { padding-left: 16ch; max-width: 39ch; }
+  .poem-text.script-screenplay > [data-sel="dialogue"] { padding-left: 10ch; max-width: 45ch; }
+  .poem-text.script-screenplay > [data-sel="transition"] { text-align: right; }
+  .poem-text.is-script > [data-sel="centered"] { text-align: center; }
+  .poem-text.script-play > [data-sel="character"] { text-align: center; }
+  .poem-text.script-play > [data-sel="direction"],
+  .poem-text.script-play > [data-sel="paren"] { padding-left: 20ch; font-style: italic; }
+  body.form-screenplay .poem-title { text-transform: uppercase; }
+  /* Scripts: goldenrod revision pages for screenplays; a verdigris
+     playbill for plays. */
+  body.form-screenplay:not(.view-home):not(.view-pb):not(.view-cb) {
+    --paper: #EFE3BF; --surface: #FBF6E6; --surface-2: #F4EACC; --ink: #2B2410; --ink-soft: #62572F; --ink-faint: #A29466;
+    --line: #E3D4A6; --line-strong: #C9B57A; --accent: #9A7410; --accent-soft: #EFE0B0; --shadow: rgba(43, 36, 16, 0.14);
+  }
+  body.form-play:not(.view-home):not(.view-pb):not(.view-cb) {
+    --paper: #D5E5E1; --surface: #F1F7F5; --surface-2: #E1EDEA; --ink: #14282A; --ink-soft: #3F5E5C; --ink-faint: #7D9895;
+    --line: #C3D7D2; --line-strong: #93B3AD; --accent: #2E6B66; --accent-soft: #CBE1DC; --shadow: rgba(20, 40, 42, 0.14);
+  }
+  .home-shelf[data-form="screenplay"] { --shelf-paper: #EFE3BF; --shelf-accent: #9A7410; --shelf-ink: #2B2410; }
+  .home-shelf[data-form="play"] { --shelf-paper: #D5E5E1; --shelf-accent: #2E6B66; --shelf-ink: #14282A; }
+  .home-start-card[data-form="screenplay"]::before { background: #9A7410; }
+  .home-start-card[data-form="play"]::before { background: #2E6B66; }
+  .home-archived .home-card[data-form="screenplay"] .home-cover { border-top-color: #9A7410; }
+  .home-archived .home-card[data-form="play"] .home-cover { border-top-color: #2E6B66; }
   /* Poetry: a light green wash from the wordmark's green chip. */
   body.form-collection:not(.view-home):not(.view-pb):not(.view-cb) {
     --paper: #E2EBD3; --surface: #F6F9F0; --surface-2: #EAF0DF; --ink: #1E2616; --ink-soft: #4F5E3C; --ink-faint: #8C9A78;
@@ -1786,7 +1818,7 @@
           <!-- Grouped by book type: the type you're in comes first and the
                others are a click away (see the script). -->
           <div class="prefs-group" data-prefs-form="collection">
-            <div class="prefs-group-title">Poetry, novels &amp; essays</div>
+            <div class="prefs-group-title">Poetry, prose &amp; scripts</div>
             <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
@@ -2356,6 +2388,7 @@
               <button data-val="helvetica" style="font-family:Arial, Helvetica, sans-serif;">Helvetica</button>
               <button data-val="sourceserif" style="font-family:'Source Serif 4', Georgia, serif;">Source Serif</button>
               <button data-val="courier" style="font-family:Cutive, 'American Typewriter', Georgia, serif;">American Typewriter</button>
+              <button data-val="courierprime" style="font-family:'Courier Prime', 'Courier New', Courier, monospace;">Courier</button>
             </div>
           </div>
           <div class="field">
@@ -2390,6 +2423,7 @@
               <button data-val="helvetica" style="font-family:Arial, Helvetica, sans-serif;">Helvetica</button>
               <button data-val="sourceserif" style="font-family:'Source Serif 4', Georgia, serif;">Source Serif</button>
               <button data-val="courier" style="font-family:Cutive, 'American Typewriter', Georgia, serif;">American Typewriter</button>
+              <button data-val="courierprime" style="font-family:'Courier Prime', 'Courier New', Courier, monospace;">Courier</button>
             </div>
           </div>
           <div class="field">
@@ -2417,7 +2451,7 @@
               <button data-val="2">2.0</button>
             </div>
           </div>
-          <div class="field">
+          <div class="field" id="paragraphField">
             <label>Paragraphs</label>
             <div class="seg seg-3" id="paragraphSeg"><button data-val="indent">Indented</button><button data-val="space">Spaced</button></div>
             <p class="field-note" style="margin:4px 0 0;">For prose. Indented is how books set it: no blank lines, and a line of *** makes a scene break. Poems keep their lines.</p>
@@ -2431,6 +2465,7 @@
             <div class="seg" id="pageNumberStyleSeg">
               <button data-val="center" class="active">Center</button>
               <button data-val="corners">Outer corners</button>
+              <button data-val="topright">Top right</button>
             </div>
           </div>
           </div>
@@ -2867,8 +2902,21 @@
         paragraphs: 'indent', includeToc: false, pageNumberStyle: 'corners' } },
     essays: { one: 'essay', many: 'essays', section: 'section',
       defaults: { trimKey: 'digest', bodyFontChoice: 'garamond', titleFontChoice: 'zillaslab',
-        paragraphs: 'indent', includeToc: true, pageNumberStyle: 'corners' } }
+        paragraphs: 'indent', includeToc: true, pageNumberStyle: 'corners' } },
+    // Scripts follow the industry page (see SCRIPT_SPECS): US Letter,
+    // Courier 12, page numbers top right, a plain title page, no
+    // contents, and acts as headings rather than pages of their own.
+    screenplay: { one: 'scene', many: 'scenes', section: 'act',
+      defaults: SCRIPT_DEFAULTS({ titleAlignment: 'left' }) },
+    play: { one: 'scene', many: 'scenes', section: 'act',
+      defaults: SCRIPT_DEFAULTS({ titleAlignment: 'center' }) }
   };
+  function SCRIPT_DEFAULTS(extra) {
+    return Object.assign({ trimKey: 'letter', bodyFontChoice: 'courierprime', titleFontChoice: 'courierprime',
+      bodyAlignment: 'left', bodySizeMode: 'medium', paragraphs: 'space', includeToc: false, pageNumberStyle: 'topright',
+      sectionOwnPage: false, sectionFontChoice: 'courierprime', coverFontChoice: 'courierprime', coverAuthorFontChoice: 'courierprime',
+      coverSizeMode: 'small', coverTitlePos: 'middle', coverAuthorPos: 'middle', backShowAuthor: false, backShowYear: false }, extra);
+  }
   // The book types that share the collection editor, in Home's order.
   var TEXT_FORM_KEYS = Object.keys(TEXT_FORMS);
   function bookFormOf(data) { return data && TEXT_FORMS[data.form] ? data.form : 'collection'; }
@@ -2905,12 +2953,57 @@
     'Donec sed odio dui. Duis mollis, est non commodo luctus, nisi erat porttitor ligula, eget lacinia odio sem nec elit. Fusce dapibus, tellus ac cursus commodo, tortor mauris condimentum nibh, ut fermentum massa justo sit amet risus.',
     'Sed posuere consectetur est at lobortis. Etiam porta sem malesuada magna mollis euismod.'
   ];
+  // A script's sample shows how to type one: a line in capitals over a
+  // speech names who speaks, (directions) sit in parentheses, and in a
+  // screenplay the scene heading is the scene's title.
+  var SCRIPT_SAMPLE_LINES = {
+    screenplay: [
+      'Rain on the window. MAYA (30s, paint on her sleeves) slides into a booth across from THEO, who is building a tower out of creamers.',
+      '',
+      'MAYA',
+      'You started without me.',
+      '',
+      'THEO',
+      '(not looking up)',
+      'I started the tower. Dinner waits for no one. Architecture waits for everyone.',
+      '',
+      'She knocks the tower over with one finger.',
+      '',
+      'CUT TO:'
+    ],
+    play: [
+      'A kitchen, just before dawn. A kettle on the stove. RUTH, seventies, sits at the table in her coat.',
+      '',
+      'DANIEL steps in from the hall, holding his shoes.',
+      '',
+      'RUTH',
+      'You can come in. I know you’re there.',
+      '',
+      'DANIEL',
+      '(whispering)',
+      'It’s four in the morning.',
+      '',
+      'RUTH',
+      'Four-fifteen. The kettle knows.',
+      '',
+      'Blackout.'
+    ]
+  };
+  var SCRIPT_SAMPLE_TITLES = { screenplay: 'INT. DINER - NIGHT', play: '' };
+  function sampleLinesFor(key) { return SCRIPT_SAMPLE_LINES[key] || SAMPLE_LINES; }
   function makeSampleEntry(form) {
-    var title = form === 'essays' ? 'Sample Essay' : 'Sample Chapter';
-    return { id: makeId(), title: title, lines: SAMPLE_LINES.slice(), sample: true, sampleTitle: title };
+    var title = form === 'essays' ? 'Sample Essay' : SCRIPT_SAMPLE_TITLES[form] != null ? SCRIPT_SAMPLE_TITLES[form] : 'Sample Chapter';
+    return { id: makeId(), title: title, lines: sampleLinesFor(form).slice(), sample: true, sampleTitle: title, sampleKey: form };
+  }
+  // What an import replaces rather than follows: a new book's untouched
+  // sample, and (once that's gone) empty untitled sections, like a new
+  // play's Act One, when nothing else is left.
+  function withoutStarterContent(poems) {
+    var kept = poems.filter(function (p) { return !isUntouchedSample(p); });
+    return kept.every(function (p) { return isSection(p) && !(p.title || '').trim(); }) ? [] : kept;
   }
   function isUntouchedSample(p) {
-    return !!(p && p.sample && p.title === p.sampleTitle && JSON.stringify(p.lines) === JSON.stringify(SAMPLE_LINES));
+    return !!(p && p.sample && p.title === p.sampleTitle && JSON.stringify(p.lines) === JSON.stringify(sampleLinesFor(p.sampleKey)));
   }
 
   // A brand-new, empty book -- used by "New book" and after sign-in when
@@ -3017,6 +3110,8 @@
     collection: { shelf: 'Poetry collections', add: 'Poetry collection', plural: 'Poetry collections', about: 'Poems, each starting on a page of its own.', newLabel: 'New poetry collection', cover: 'futura' },
     novel: { shelf: 'Novels', add: 'Novel', plural: 'Novels', about: 'Chapters and parts, set as running prose with indented paragraphs.', newLabel: 'New novel', cover: 'garamond' },
     essays: { shelf: 'Essay collections', add: 'Essay collection', plural: 'Essay collections', about: 'Essays in prose, each starting on a new page, with a contents page.', newLabel: 'New essay collection', cover: 'baskerville' },
+    screenplay: { shelf: 'Screenplays', add: 'Screenplay', plural: 'Screenplays', about: 'Scenes in standard screenplay format: Courier, sluglines, dialogue.', newLabel: 'New screenplay', cover: 'courierprime' },
+    play: { shelf: 'Plays', add: 'Stage play', plural: 'Plays', about: 'Acts and scenes, set in standard stage play format.', newLabel: 'New play', cover: 'courierprime' },
     picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and pictures.', newLabel: 'New picture book', cover: 'poppins' },
     cartoon: { shelf: 'Cartoon books', add: 'Cartoon book', plural: 'Cartoon books', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon book', cover: 'caslon' }
   };
@@ -3558,16 +3653,39 @@
   function makeSection(title) { return { id: makeId(), kind: 'section', title: title || '' }; }
   // A blank title's stand-in: in a novel, "Chapter N" by position (so it
   // renumbers as chapters move); elsewhere nothing ("Untitled" in lists).
+  // In a play, a blank scene title is "Scene N", counting from 1 again
+  // in each act, the way plays number them.
   function entryTitle(poem, st) {
     st = st || state;
     if ((poem.title || '').trim()) return poem.title;
-    if (isSection(poem) || bookFormOf(st) !== 'novel') return '';
+    var form = bookFormOf(st);
+    if (isSection(poem) || (form !== 'novel' && form !== 'play')) return '';
     var n = 0, list = st.poems || [];
     for (var i = 0; i < list.length; i++) {
-      if (!isSection(list[i])) n++;
-      if (list[i] === poem || list[i].id === poem.id) return 'Chapter ' + n;
+      if (isSection(list[i])) { if (form === 'play') n = 0; continue; }
+      n++;
+      if (list[i] === poem || list[i].id === poem.id) return (form === 'play' ? 'Scene ' : 'Chapter ') + n;
     }
     return '';
+  }
+  var NUMBER_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+  function numberWord(n) { return NUMBER_WORDS[n] || String(n); }
+  // A section's title as the book shows it. A blank one in a novel is
+  // "Part One" and in a script "Act One", by position, like a blank
+  // chapter; elsewhere it's "Untitled section".
+  function sectionLabel(sec, st) {
+    st = st || state;
+    if ((sec.title || '').trim()) return sec.title.trim();
+    var form = bookFormOf(st);
+    var word = form === 'novel' ? 'Part' : (form === 'screenplay' || form === 'play') ? 'Act' : null;
+    if (!word) return 'Untitled ' + formNouns(st).section;
+    var n = 0, list = st.poems || [];
+    for (var i = 0; i < list.length; i++) {
+      if (!isSection(list[i])) continue;
+      n++;
+      if (list[i] === sec || list[i].id === sec.id) break;
+    }
+    return word + ' ' + numberWord(n);
   }
   function entryLabel(poem, st) {
     return entryTitle(poem, st) || (bookFormOf(st || state) === 'novel' ? 'Untitled chapter' : 'Untitled');
@@ -4281,6 +4399,23 @@
     return parseDocText(raw);
   }
 
+  // A script pasted or imported without ### markers still comes in as
+  // scenes: in a screenplay each INT./EXT. heading starts one (and is its
+  // title); in a play each "Scene 2" line does; an "ACT TWO" line starts
+  // an act in either.
+  function markScriptHeadings(raw, form) {
+    if (/^#{1,6}\s/m.test(raw)) return raw;
+    var lines = raw.split('\n');
+    return lines.map(function (l, i) {
+      var t = l.trim(), prevBlank = i === 0 || !lines[i - 1].trim(), nextBlank = i + 1 >= lines.length || !lines[i + 1].trim();
+      if (!prevBlank || !t) return l;
+      var mark = null;
+      if (/^ACT\s+([A-Z]+|\d+)\.?$/.test(t)) mark = '## ';
+      else if (form === 'screenplay' && SCENE_HEADING_RE.test(t)) mark = '### ';
+      else if (form === 'play' && /^scene\s+([0-9]+|[a-z]+)\.?$/i.test(t)) mark = '### ';
+      return mark ? mark + t + (nextBlank ? '' : '\n') : l;
+    }).join('\n');
+  }
   function parseDocText(raw) {
     raw = String(raw || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     // A soft line break within one Google Docs paragraph (Shift+Enter)
@@ -4288,6 +4423,7 @@
     // backslash before the newline, not a bare \n -- normalize both to
     // a real line break so poem lines don't get run together.
     raw = raw.replace(/<br\s*\/?>/gi, '\n').replace(/\\\n/g, '\n');
+    if (isScriptForm()) raw = markScriptHeadings(raw, bookFormOf(state));
     var blocks = raw.split('\n\n');
     var entryLevel = pickEntryHeadingLevel(blocks);
     var items = walkDocBlocks(blocks, entryLevel);
@@ -4339,7 +4475,13 @@
     { key: 'futura', label: 'Futura', pdfFamily: 'sans', sizeScale: 0.98, displayStack: "'Jost', Futura, Arial, sans-serif" },
     { key: 'ptsans', label: 'PT Sans', pdfFamily: 'sans', sizeScale: 0.92, displayStack: "'PT Sans', Arial, sans-serif" },
     { key: 'poppins', label: 'Poppins', pdfFamily: 'sans', sizeScale: 0.86, displayStack: "'Poppins', Arial, sans-serif" },
-    { key: 'helvetica', label: 'Helvetica', pdfFamily: 'sans', sizeScale: 0.90, displayStack: "Arial, Helvetica, sans-serif" }
+    { key: 'helvetica', label: 'Helvetica', pdfFamily: 'sans', sizeScale: 0.90, displayStack: "Arial, Helvetica, sans-serif" },
+    // Scripts are typed in Courier 12: ten characters to the inch, which
+    // is what makes a page of script about a minute of screen time. The
+    // PDF uses the viewer's built-in Courier (every character 0.6 em, so
+    // measuring is exact); Courier Prime draws it on screen, with the
+    // same widths.
+    { key: 'courierprime', label: 'Courier', pdfFamily: 'mono', sizeScale: 1, displayStack: "'Courier Prime', 'Courier New', Courier, monospace" }
   ];
   function fontSizePt(pt, fontKey) {
     return Math.round(pt * (getFontChoice(fontKey).sizeScale || 1) * 10) / 10;
@@ -4381,6 +4523,7 @@
   // ---------------------------------------------------------------------
   var measureCtx = document.createElement('canvas').getContext('2d');
   function measureStack(pdfFamily) {
+    if (pdfFamily === 'mono') return "'Courier New', Courier, monospace";
     return pdfFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
   }
   function styleFor(weight, italic) { return weight >= 600 ? 'bold' : (italic ? 'italic' : 'regular'); }
@@ -4393,6 +4536,7 @@
       for (var i = 0; i < winBytes.length; i++) total += table[winBytes[i]] || 0;
       return total * sizePt / 1000;
     }
+    if (getFontChoice(fontChoice).pdfFamily === 'mono') return toWinAnsiBytes(text).length * 0.6 * sizePt;
     measureCtx.font = (italic ? 'italic ' : '') + (weight || 400) + ' ' + sizePt + 'px ' + measureStack(getFontChoice(fontChoice).pdfFamily);
     return measureCtx.measureText(text).width;
   }
@@ -4550,7 +4694,9 @@
     var titleLines = shownTitle ? wrapLine(shownTitle, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
 
-    var lineHeight = sizePt * 1.55;
+    // Line spacing 1.15 (the default) is the book's usual 1.55 leading;
+    // the other settings open it up or close it in proportionally.
+    var lineHeight = sizePt * 1.55 * ((state.lineSpacing || 1.15) / 1.15);
     var firstCap = Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight));
     // A continuation page carries no title or label of its own -- readers
     // expect an entry to simply carry on onto the next page -- so it gets
@@ -4643,6 +4789,251 @@
       titleLines: titleLines, titleH: titleH, pages: pages,
       wasWrapped: wasWrapped, isVerse: verse
     };
+  }
+
+  // ---------------------------------------------------------------------
+  // Scripts: screenplays and stage plays. The writer types plain text the
+  // way Fountain (the plain-text screenplay format) has it -- a line in
+  // capitals with a speech right under it names the character, a line in
+  // (parentheses) inside a speech is a parenthetical, INT. or EXT. starts
+  // a scene heading, a capitals line ending in TO: is a transition,
+  // >THE END< is centered, and ! @ . > at the start of a line force
+  // action, character, scene heading or transition -- and each element is
+  // set where the industry puts it (SCRIPT_SPECS). A screenplay's scenes
+  // run on from one to the next; a play's each start a new page, headed by
+  // its act and scene.
+  // ---------------------------------------------------------------------
+  var SCRIPT_FORM_KEYS = ['screenplay', 'play'];
+  function isScriptForm(st) { return SCRIPT_FORM_KEYS.indexOf(bookFormOf(st || state)) !== -1; }
+  var SCENE_HEADING_RE = /^(INT|EXT|EST|INT\.?\/EXT|I\/E)[.\s]/i;
+  // Capitals throughout, not counting a (V.O.) or (cont'd) after the name.
+  function isCapsLine(t) {
+    var core = t.replace(/\([^)]*\)/g, '');
+    return /[A-Z]/.test(core) && !/[a-z]/.test(core);
+  }
+  // One { type, text } per line; `text` keeps its **bold**/*italic*
+  // markers but loses a force mark.
+  function scriptElements(lines, form) {
+    var play = form === 'play';
+    var plain = lines.map(function (l) { return IMAGE_LINE_RE.test(l || '') ? '[image]' : stripFormatMarkers(l || '').trim(); });
+    function blank(i) { return i < 0 || i >= plain.length || plain[i] === ''; }
+    var out = [], inSpeech = false;
+    lines.forEach(function (raw, i) {
+      raw = raw || '';
+      var t = plain[i];
+      if (!t) { inSpeech = false; out.push({ type: 'blank', text: '' }); return; }
+      if (IMAGE_LINE_RE.test(raw)) { inSpeech = false; out.push({ type: 'image', text: raw }); return; }
+      if (/^={3,}$/.test(t)) { inSpeech = false; out.push({ type: 'pagebreak', text: '' }); return; }
+      var first = t.charAt(0), prevBlank = blank(i - 1), nextBlank = blank(i + 1), type, forced = false;
+      if (inSpeech) type = /^\(.*\)$/.test(t) ? 'paren' : 'dialogue';
+      else if (/^>.*<$/.test(t)) { type = 'centered'; forced = true; }
+      else if (first === '!') { type = play ? 'direction' : 'action'; forced = true; }
+      else if (first === '@' && !nextBlank) { type = 'character'; forced = true; }
+      else if (!play && first === '.' && /^\.[A-Za-z0-9]/.test(t)) { type = 'heading'; forced = true; }
+      else if (!play && first === '>') { type = 'transition'; forced = true; }
+      else if (!play && prevBlank && SCENE_HEADING_RE.test(t)) type = 'heading';
+      else if (!play && prevBlank && nextBlank && isCapsLine(t) && /(TO:|FADE OUT\.|TO BLACK\.)$/.test(t)) type = 'transition';
+      else if (prevBlank && !nextBlank && isCapsLine(t)) type = 'character';
+      else type = play ? 'direction' : 'action';
+      var text = raw.trim();
+      if (forced) text = text.replace(/^[!@.>]\s*/, '');
+      if (type === 'centered') text = text.replace(/\s*<$/, '');
+      if (type === 'character') inSpeech = true;
+      out.push({ type: type, text: text });
+    });
+    return out;
+  }
+  // Where each element sits, in inches from the left margin (1.5 in from
+  // the page edge), and how wide it may run. Screenplay: the Hollywood
+  // spec page (dialogue 2.5-6 in from the edge, parentheticals 3.1 in,
+  // the character cue 3.7 in, transitions flush right). Play: the
+  // manuscript format publishers ask for (names centered in capitals,
+  // speeches the full measure, stage directions indented and in italics).
+  var SCRIPT_SPECS = {
+    screenplay: {
+      heading: { x: 0, w: 6, caps: true }, action: { x: 0, w: 6 }, direction: { x: 0, w: 6 },
+      character: { x: 2.2, w: 3.8, caps: true }, paren: { x: 1.6, w: 2.3 }, dialogue: { x: 1, w: 3.5 },
+      transition: { x: 0, w: 6, caps: true, right: true }, centered: { x: 0, w: 6, center: true }
+    },
+    play: {
+      heading: { x: 0, w: 6, caps: true, center: true }, action: { x: 2, w: 4, italic: true }, direction: { x: 2, w: 4, italic: true },
+      character: { x: 0, w: 6, caps: true, center: true }, paren: { x: 2, w: 4, italic: true }, dialogue: { x: 0, w: 6 },
+      transition: { x: 2, w: 4, italic: true }, centered: { x: 0, w: 6, center: true }
+    }
+  };
+  function scriptCaps(text) {
+    // Capitals for the words, not the ++underline++/**bold** markers.
+    return text.toUpperCase();
+  }
+  // Sets one element into rendered lines ({ text, indent, center }).
+  function setScriptElement(type, text, form, sizePt, font, contentWidthPt) {
+    var spec = SCRIPT_SPECS[form][type] || SCRIPT_SPECS[form].action;
+    var x = Math.min(spec.x * 72, contentWidthPt * 0.6), w = Math.min(spec.w * 72, contentWidthPt - x);
+    if (spec.caps) text = scriptCaps(text);
+    return wrapFormatted(text, w, sizePt, font, 0).map(function (piece) {
+      var t = spec.italic && stripFormatMarkers(piece.text).trim() ? '*' + piece.text + '*' : piece.text;
+      var indent = spec.right ? x + Math.max(0, w - measure(stripFormatMarkers(piece.text), sizePt, font, 400)) : x;
+      return { blank: false, text: t, indent: indent, center: !!spec.center };
+    });
+  }
+  // A scene's text as units to lay out: a speech (the character cue with
+  // its parentheticals and dialogue) stays together or breaks with
+  // (MORE) and (CONT'D); a heading or cue keeps with what follows it; an
+  // action paragraph may break between lines.
+  function scriptUnits(lines, form, sizePt, font, contentWidthPt, state) {
+    var els = scriptElements(lines || [], form), units = [];
+    function set(e) { return setScriptElement(e.type, e.text, form, sizePt, font, contentWidthPt); }
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i];
+      if (e.type === 'blank') { if (units.length && units[units.length - 1].type !== 'blank') units.push({ type: 'blank' }); continue; }
+      if (e.type === 'pagebreak') { units.push({ type: 'pagebreak' }); continue; }
+      if (e.type === 'image') {
+        var key = imageKeyForLine(e.text, state);
+        if (!key) continue;
+        var im = state.images[key], iw = Math.min(contentWidthPt, im.w * 72 / 150), ih = iw * im.h / im.w, maxH = sizePt * 30;
+        if (ih > maxH) { ih = maxH; iw = ih * im.w / im.h; }
+        units.push({ type: 'image', lines: [{ image: key, place: 'top', w: iw, h: ih, rows: Math.ceil((ih + sizePt * 0.5) / sizePt) }] });
+        continue;
+      }
+      if (e.type === 'character') {
+        var cue = set(e), speech = { type: 'speech', lines: cue.slice(), cueLines: cue.length };
+        while (i + 1 < els.length && (els[i + 1].type === 'dialogue' || els[i + 1].type === 'paren')) {
+          i++;
+          speech.lines = speech.lines.concat(set(els[i]));
+        }
+        var cueText = stripFormatMarkers(scriptCaps(e.text)).replace(/\s*\((CONT['’]D|CONTINUED)\)\s*$/, '');
+        speech.more = setScriptElement('character', '(MORE)', form, sizePt, font, contentWidthPt)[0];
+        speech.contd = setScriptElement('character', cueText + ' (CONT’D)', form, sizePt, font, contentWidthPt)[0];
+        units.push(speech);
+        continue;
+      }
+      units.push({ type: e.type, lines: set(e), keepNext: e.type === 'heading', split: e.type === 'action' || e.type === 'direction' });
+    }
+    while (units.length && units[units.length - 1].type === 'blank') units.pop();
+    while (units.length && units[0].type === 'blank') units.shift();
+    return units;
+  }
+  // Pours units onto pages of `cap` rows (`firstCap` on the first).
+  // Scene markers ({ mark: index }) note the page each scene starts on
+  // and how many rows it fills (a screenplay scene's length in eighths).
+  function flowScript(units, firstCap, cap) {
+    var pages = [], cur = [], used = 0, capNow = firstCap, marks = {}, rowsBy = {}, pending = [], scene = null;
+    function newPage() { pages.push(cur); cur = []; used = 0; capNow = cap; }
+    function count(rows) { if (scene != null) rowsBy[scene] = (rowsBy[scene] || 0) + rows; }
+    function push(rl) {
+      var rows = rl.rows || 1;
+      // No blank line at the top of a page (or spilling past its foot).
+      if (rl.blank) { if (used && used + rows <= capNow) { cur.push(rl); used += rows; count(rows); } return; }
+      if (used + rows > capNow && cur.length) newPage();
+      pending.forEach(function (m) { marks[m] = pages.length; });
+      pending = [];
+      cur.push(rl); used += rows; count(rows);
+    }
+    function nextReal(k) {
+      for (var j = k + 1; j < units.length; j++) if (units[j].lines) return units[j];
+      return null;
+    }
+    units.forEach(function (u, k) {
+      if (u.mark != null) { pending.push(u.mark); scene = u.mark; rowsBy[u.mark] = 0; return; }
+      if (u.type === 'blank') { push({ blank: true }); return; }
+      if (u.type === 'pagebreak') { if (used) newPage(); return; }
+      var n = u.lines.reduce(function (a, rl) { return a + (rl.rows || 1); }, 0), need = n, room = capNow - used;
+      // A heading keeps with as much of what follows as that could leave
+      // behind at the foot of the page: two lines of a paragraph long
+      // enough to break, a speech's cue and first lines (plus its MORE),
+      // or else the whole of the next element.
+      if (u.keepNext) {
+        var nx = nextReal(k);
+        if (nx) need += 1 + (nx.split && nx.lines.length >= 4 ? 2 : nx.type === 'speech' && nx.lines.length > nx.cueLines + 3 ? nx.cueLines + 3 : nx.lines.length);
+      }
+      if (need <= room || !used) { u.lines.forEach(push); return; }
+      if (u.type === 'speech') {
+        // Leave a row for (MORE), and carry at least two lines over.
+        var take = Math.min(room - 1, u.lines.length - 2);
+        if (take >= u.cueLines + 2) {
+          u.lines.slice(0, take).forEach(push);
+          push(u.more);
+          newPage();
+          push(u.contd);
+          u.lines.slice(take).forEach(push);
+          return;
+        }
+      } else if (u.split && u.lines.length >= 4) {
+        var t = Math.min(room, u.lines.length - 2);
+        if (t >= 2) { u.lines.slice(0, t).forEach(push); newPage(); u.lines.slice(t).forEach(push); return; }
+      }
+      newPage();
+      u.lines.forEach(push);
+    });
+    if (cur.length || !pages.length) pages.push(cur);
+    pending.forEach(function (m) { marks[m] = pages.length - 1; });
+    return { pages: pages, marks: marks, rowsBy: rowsBy };
+  }
+  // Every item's layout for a script, in the same shape layoutPoem gives
+  // (so the PDF, preview and page counts all read it the same way). A
+  // screenplay's run of scenes is poured as one flow held by its first
+  // scene; the others have no pages of their own and point to where they
+  // begin (`host`, `hostPage`).
+  function layoutScript(state, form, sizePt, contentWidthPt, contentHeightPt, sectionLayout) {
+    var font = state.bodyFontChoice, lineHeight = sizePt;
+    var cap = Math.max(1, Math.floor(contentHeightPt / lineHeight));
+    var secStyle = sectionStyle(state);
+    var layouts = new Array(state.poems.length), pendingAct = null, run = null;
+    function base(extra) {
+      return Object.assign({ pages: [], titleLines: [], titleH: 0, sizePt: sizePt, lineHeight: lineHeight, titleSizePt: sizePt,
+        wasWrapped: false, isVerse: false, script: form }, extra);
+    }
+    function actUnits(label) {
+      return [{ type: 'centered', lines: setScriptElement('centered', '++' + scriptCaps(label) + '++', form, sizePt, font, contentWidthPt), keepNext: true }, { type: 'blank' }];
+    }
+    function flushRun() {
+      if (!run) return;
+      var flow = flowScript(run.units, cap, cap);
+      run.scenes.forEach(function (i) {
+        var at = flow.marks[i] || 0, rows = flow.rowsBy[i] || 0;
+        layouts[i] = i === run.host ? base({ pages: flow.pages, hostPage: 0, sceneRows: rows }) : base({ host: run.host, hostPage: at, sceneRows: rows });
+      });
+      run = null;
+    }
+    state.poems.forEach(function (poem, i) {
+      if (isSection(poem)) {
+        if (form === 'screenplay') flushRun();
+        layouts[i] = sectionLayout(poem);
+        pendingAct = secStyle.ownPage ? null : sectionLabel(poem, state);
+        return;
+      }
+      if (form === 'play') {
+        var titleLines = [];
+        if (pendingAct) titleLines.push(scriptCaps(pendingAct), '');
+        pendingAct = null;
+        var t = entryTitle(poem, state);
+        if (t) wrapLine(t, contentWidthPt, sizePt, state.titleFontChoice, 600).forEach(function (l) { titleLines.push(l); });
+        var titleH = titleLines.length ? titleLines.length * sizePt * 1.28 + lineHeight * 2 : 0;
+        var flow = flowScript(scriptUnits(poem.lines, form, sizePt, font, contentWidthPt, state), Math.max(1, Math.floor((contentHeightPt - titleH) / lineHeight)), cap);
+        layouts[i] = base({ pages: flow.pages, titleLines: titleLines, titleH: titleH });
+        return;
+      }
+      if (!run) {
+        run = { host: i, units: [], scenes: [] };
+        if (pendingAct) run.units = run.units.concat(actUnits(pendingAct));
+        pendingAct = null;
+      } else run.units.push({ type: 'blank' });
+      run.scenes.push(i);
+      run.units.push({ mark: i });
+      if ((poem.title || '').trim()) {
+        run.units.push({ type: 'heading', lines: setScriptElement('heading', poem.title.trim(), form, sizePt, font, contentWidthPt), keepNext: true });
+        run.units.push({ type: 'blank' });
+      }
+      run.units = run.units.concat(scriptUnits(poem.lines, form, sizePt, font, contentWidthPt, state));
+    });
+    flushRun();
+    return layouts;
+  }
+  // A screenplay scene's length the way schedules count it: in eighths
+  // of a page (never less than 1/8).
+  function eighthsLabel(rows, perPage) {
+    var e = Math.max(1, Math.round(rows / perPage * 8)), whole = Math.floor(e / 8), rest = e % 8;
+    return (whole ? whole + (rest ? ' ' : '') : '') + (rest ? rest + '/8' : '') + (e <= 8 && whole <= 1 && !rest ? ' page' : ' pages');
   }
 
   // A single size is chosen for the whole booklet -- titles and body text
@@ -4833,14 +5224,20 @@
     var items = [];
     var title = (s.bookTitle || 'Untitled book').trim();
     var author = st.showAuthor ? (s.author || '').trim() : '';
+    // A script's title page: the title in capitals, then "Written by"
+    // (a screenplay) or "by" (a play) over the author, all in the
+    // script's own type and ink.
+    var form = bookFormOf(s), script = isScriptForm(s);
+    if (form === 'screenplay') title = title.toUpperCase();
     var lines = wrapLine(title, plan.contentWidth, st.sizePt, st.font, 600).slice(0, 4);
-    var authorSize = fontSizePt(13, st.authorFont);
+    var authorSize = script ? fontSizePt(12, st.authorFont) : fontSizePt(13, st.authorFont);
     var textParts = [linesPart(lines, st.titlePos, st.sizePt * 1.25,
       { font: st.font, weight: 700, size: st.sizePt, align: st.align, rgb: INK_RGB, key: 'coverBold' }, left, right, items)];
     if (author) {
       var authorLines = wrapLine(author, plan.contentWidth, authorSize, st.authorFont, 400).slice(0, 2);
+      if (script) authorLines = ['', form === 'screenplay' ? 'Written by' : 'by', ''].concat(authorLines);
       textParts.push(linesPart(authorLines, st.authorPos, authorSize * 1.25,
-        { font: st.authorFont, size: authorSize, align: st.authorAlign, rgb: MUTED_RGB, key: 'authorReg' }, left, right, items));
+        { font: st.authorFont, size: authorSize, align: st.authorAlign, rgb: script ? INK_RGB : MUTED_RGB, key: 'authorReg' }, left, right, items));
     }
     var img = coverImageBox(s, st.image, st.imageSize, plan.contentWidth, plan.PAGE_H * 0.45);
     var parts = textParts;
@@ -4909,11 +5306,25 @@
     });
   }
 
+  // The number a page shows. A script counts from its first page of
+  // script (the title page isn't counted), leaves that first page
+  // unnumbered, and writes the number with a period: "2."
+  function pageNumberLabel(n, plan, st) {
+    if ((st || state).pageNumberStyle !== 'topright') return String(n);
+    var k = n - plan.frontPages;
+    return k > 1 && n < plan.totalPages ? k + '.' : '';
+  }
   function planBooklet(state) {
     var trim = getTrim(state.trimKey);
     var PAGE_W = trim.w * 72, PAGE_H = trim.h * 72;
     var marginSide = 0.85 * 72, marginTop = 1.0 * 72, marginBottom = 0.9 * 72;
-    var contentWidth = PAGE_W - marginSide * 2;
+    var marginLeft = marginSide, marginRight = marginSide;
+    // A script has a wider left margin for the binding brads, and an inch
+    // everywhere else: 54 lines of Courier 12 to the page. Its title
+    // page stays centered on the sheet (marginSide is their average).
+    var script = isScriptForm(state) ? bookFormOf(state) : null;
+    if (script) { marginLeft = 1.5 * 72; marginRight = 1.0 * 72; marginSide = (marginLeft + marginRight) / 2; marginTop = marginBottom = 72; }
+    var contentWidth = PAGE_W - marginLeft - marginRight;
     var contentHeight = PAGE_H - marginTop - marginBottom;
 
     var globalSize = chooseGlobalSize(state.poems, contentWidth, contentHeight, state);
@@ -4922,15 +5333,16 @@
     // it's a TOC/editor-only marker (pages: []) that every page-walking
     // loop below naturally skips.
     var secStyle = sectionStyle(state);
-    var layouts = state.poems.map(function (poem) {
-      if (isSection(poem)) {
-        var secTitle = (poem.title || '').trim() || 'Untitled section';
-        return {
-          isSection: true, pages: secStyle.ownPage ? [[]] : [],
-          titleLines: secStyle.ownPage ? wrapLine(secTitle, contentWidth, secStyle.sizePt, secStyle.font, 600).slice(0, 3) : [],
-          titleH: 0, sizePt: globalSize, lineHeight: 0, titleSizePt: secStyle.sizePt, wasWrapped: false
-        };
-      }
+    function sectionLayout(poem) {
+      var secTitle = sectionLabel(poem, state);
+      return {
+        isSection: true, pages: secStyle.ownPage ? [[]] : [],
+        titleLines: secStyle.ownPage ? wrapLine(secTitle, contentWidth, secStyle.sizePt, secStyle.font, 600).slice(0, 3) : [],
+        titleH: 0, sizePt: globalSize, lineHeight: 0, titleSizePt: secStyle.sizePt, wasWrapped: false
+      };
+    }
+    var layouts = script ? layoutScript(state, script, globalSize, contentWidth, contentHeight, sectionLayout) : state.poems.map(function (poem) {
+      if (isSection(poem)) return sectionLayout(poem);
       return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
@@ -4958,11 +5370,15 @@
       l.startPage = running;
       running += l.pages.length;
     });
+    // A screenplay scene without pages of its own starts partway into
+    // the flow its run's first scene holds.
+    layouts.forEach(function (l) { if (l.host != null) l.startPage = layouts[l.host].startPage + l.hostPage; });
     // +1 for the back cover, which is always present.
     var totalPages = frontPages + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0) + 1;
 
     return {
       trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
+      marginLeft: marginLeft, marginRight: marginRight, script: script, frontPages: frontPages,
       contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
       tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
       linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
@@ -5020,7 +5436,8 @@
   // inline **bold**/*italic* markup.
   var BASE14_STYLES = {
     serif: { regular: 'Times-Roman', bold: 'Times-Bold', italic: 'Times-Italic' },
-    sans: { regular: 'Helvetica', bold: 'Helvetica-Bold', italic: 'Helvetica-Oblique' }
+    sans: { regular: 'Helvetica', bold: 'Helvetica-Bold', italic: 'Helvetica-Oblique' },
+    mono: { regular: 'Courier', bold: 'Courier-Bold', italic: 'Courier-Oblique' }
   };
   function planFonts(state) {
     var byDedupeKey = {}, ordered = [], counter = 0;
@@ -5174,8 +5591,8 @@
     var plan = planBooklet(state);
     var titleKeys = fontPlan.titleKeys;
     var bodyKeys = fontPlan.bodyKeys;
-    var contentLeft = plan.marginSide;
-    var contentRight = plan.PAGE_W - plan.marginSide;
+    var contentLeft = plan.marginLeft;
+    var contentRight = plan.PAGE_W - plan.marginRight;
     var contentTop = plan.PAGE_H - plan.marginTop;
     var footerY = 36, cornerY = 30;
     var contents = [];
@@ -5184,7 +5601,13 @@
 
     function pageNumberOp(bytes, n) {
       if (!n || !state.showPageNumbers) return;
-      var s = String(n);
+      var s = pageNumberLabel(n, plan, state);
+      if (!s) return;
+      if (state.pageNumberStyle === 'topright') {
+        // A script's: its own size and ink, half an inch from the top, flush with the right margin.
+        drawText(bytes, bodyKeys.reg, plan.globalSize, contentRight - measure(s, plan.globalSize, state.bodyFontChoice, 400), plan.PAGE_H - 36 - plan.globalSize * 0.8, s, INK_RGB);
+        return;
+      }
       var w = measure(s, 9.5, state.bodyFontChoice, 400);
       if (state.pageNumberStyle === 'corners') {
         var isRecto = (n % 2) === 1;
@@ -5228,7 +5651,7 @@
           var bold = row.isSec && ts.sectionBold;
           var key = bold ? tocKeys.bold : tocKeys.reg, wt = bold ? 700 : 400;
           var indent = row.isSec ? 0 : plan.toc.entryIndent;
-          var label = row.isSec ? ((poem.title || '').trim() || 'Untitled section') : entryLabel(poem).trim();
+          var label = row.isSec ? sectionLabel(poem) : entryLabel(poem).trim();
           var lineY = y - c * plan.tocLineHeight - plan.tocFontSize;
           if (!ts.pageNumbers) {
             var plainText = ellipsize(label, plan.contentWidth - indent, plan.tocFontSize, ts.font, wt);
@@ -5274,7 +5697,8 @@
         return;
       }
       var effAlign = poem.titleAlign || state.titleAlignment;
-      var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
+      // A script places each element itself (indents, centering).
+      var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       layout.pages.forEach(function (pageLines, pageIdx) {
         var bytes = [];
         var y = contentTop;
@@ -5707,7 +6131,7 @@
     if (!entryCount) { setStatus('Couldn’t find any ' + formNouns().many + ' in that document.', true); return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
-    state.poems = wasExample ? poems : state.poems.concat(poems);
+    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     state.intakeCollapsed = true;
@@ -5715,7 +6139,7 @@
     state.sourceAdded = true;
     if (!state.bookTitle) state.bookTitle = title;
     var msg = (wasExample ? 'Imported ' : 'Added ') + nounFor(entryCount, state);
-    if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
+    if (sectionCount) msg += ' in ' + sectionCount + ' ' + formNouns().section + (sectionCount === 1 ? '' : 's');
     setStatus(msg + ' from “' + title + '”.');
     persist();
     renderAll();
@@ -6113,14 +6537,14 @@
     if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any ' + formNouns().many + ' — check the ### title markers.'; return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
-    state.poems = wasExample ? poems : state.poems.concat(poems);
+    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     state.intakeCollapsed = true;
     state.intakeSourceLabel = 'pasted text';
     state.sourceAdded = true;
     var msg = (wasExample ? 'Parsed ' : 'Added ') + nounFor(entryCount, state);
-    if (sectionCount) msg += ' in ' + sectionCount + (sectionCount === 1 ? ' section' : ' sections');
+    if (sectionCount) msg += ' in ' + sectionCount + ' ' + formNouns().section + (sectionCount === 1 ? '' : 's');
     pasteStatus.textContent = msg + '.';
     persist();
     renderAll();
@@ -6323,6 +6747,20 @@
     sel.addRange(r);
   }
 
+  // In a script, each line of the editor is marked with the element it
+  // is (data-sel), so it sits in the editor where it will on the page:
+  // cues in capitals, dialogue in its narrower column, and so on.
+  function tagScriptLines(ed) {
+    var form = bookFormOf(state), script = isScriptForm();
+    ed.classList.toggle('is-script', script);
+    ed.classList.toggle('script-screenplay', form === 'screenplay');
+    ed.classList.toggle('script-play', form === 'play');
+    var rows = Array.prototype.filter.call(ed.children, function (c) { return c.nodeType === 1; });
+    if (!script) { rows.forEach(function (r) { if (r.dataset.sel) delete r.dataset.sel; }); return; }
+    var lines = rows.map(function (r) { return r.dataset.token ? '[image 1]' : r.textContent; });
+    var els = scriptElements(lines, form);
+    rows.forEach(function (r, i) { var t = els[i] ? els[i].type : 'action'; if (r.dataset.sel !== t) r.dataset.sel = t; });
+  }
   function renderEditor(ed, lines) {
     ed.innerHTML = '';
     (lines && lines.length ? lines : ['']).forEach(function (l) { ed.appendChild(makeEditorLine(l)); });
@@ -7093,7 +7531,7 @@
     // but this stays explicit so text selection here is never swallowed
     // by a drag gesture even if that changes back.
     titleInput.draggable = false;
-    titleInput.placeholder = entryLabel(poem);
+    titleInput.placeholder = bookFormOf(state) === 'screenplay' ? 'INT. PLACE - DAY' : entryLabel(poem);
     titleInput.value = poem.title;
     titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
@@ -7122,7 +7560,8 @@
     editor.setAttribute('aria-multiline', 'true');
     editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
-    editor.style.textAlign = poem.bodyAlign || state.bodyAlignment;
+    tagScriptLines(editor);
+    editor.style.textAlign = isScriptForm() ? 'left' : poem.bodyAlign || state.bodyAlignment;
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight(editor.style.fontFamily);
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
@@ -7130,6 +7569,7 @@
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
       state.isExample = false;
+      tagScriptLines(editor);
       updateVerseClass();
       persist();
       updateMeta();
@@ -7186,7 +7626,7 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     });
     function updateVerseClass() {
-      editor.classList.toggle('is-verse', isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
+      editor.classList.toggle('is-verse', !isScriptForm() && isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
     }
     updateVerseClass();
 
@@ -7203,6 +7643,11 @@
     function updateMeta(planOverride) {
       var lineCount = poem.lines.filter(function (l) { return l.trim() !== '' && !imageKeyForLine(l, state); }).length;
       var layout = planOverride && planOverride.layouts[index] ? planOverride.layouts[index] : getLayoutFor(poem);
+      if (layout && layout.script === 'screenplay') {
+        meta.textContent = eighthsLabel(layout.sceneRows || 0, Math.floor((planOverride || planBooklet(state)).contentHeight / layout.lineHeight));
+        warnEl.hidden = true;
+        return;
+      }
       var pages = layout ? layout.pages.length : 1;
       meta.textContent = lineCount + ' line' + (lineCount === 1 ? '' : 's') + ' · ' + pages + ' page' + (pages === 1 ? '' : 's');
       warnEl.hidden = !(layout && layout.wasWrapped);
@@ -7546,12 +7991,12 @@
 
     var label = document.createElement('div');
     label.className = 'section-row-label';
-    label.textContent = 'Section';
+    label.textContent = Cap(formNouns().section);
 
     var titleInput = document.createElement('input');
     titleInput.className = 'section-title';
     titleInput.draggable = false;
-    titleInput.placeholder = 'Untitled section';
+    titleInput.placeholder = sectionLabel(section);
     titleInput.value = section.title;
     titleInput.setAttribute('aria-label', 'Section title');
     titleInput.style.fontFamily = displayStackFor(sectionStyle(state).font);
@@ -7710,16 +8155,16 @@
       row.draggable = true;
       var open = !!expandedSectionIds[section.id];
       row.innerHTML = '<div class="poem-handle"><div class="poem-grip">⋮⋮</div></div>' +
-        '<div class="section-row-label">Section</div>' +
+        '<div class="section-row-label">' + Cap(formNouns().section) + '</div>' +
         '<div class="section-block-count"></div>' +
-        '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move section up">↑</button>' +
-        '<button class="section-move-btn" type="button" data-dir="1" aria-label="Move section down">↓</button>';
+        '<button class="section-move-btn" type="button" data-dir="-1" aria-label="Move up">↑</button>' +
+        '<button class="section-move-btn" type="button" data-dir="1" aria-label="Move down">↓</button>';
       // Renaming works here too, same as the heading's row in the other
       // views -- edits save as you type, without re-rendering the list.
       var title = document.createElement('input');
       title.className = 'section-title';
       title.draggable = false;
-      title.placeholder = 'Untitled section';
+      title.placeholder = sectionLabel(section);
       title.value = section.title || '';
       title.setAttribute('aria-label', 'Section title');
       title.style.fontFamily = displayStackFor(sectionStyle(state).font);
@@ -7867,7 +8312,7 @@
       return;
     }
     var label = isSection(target)
-      ? 'the “' + (target.title || 'Untitled section') + '” section'
+      ? 'the “' + sectionLabel(target) + '” ' + formNouns().section
       : '“' + entryLabel(target) + '”';
     var ok = await confirmDialog('Are you sure you want to send ' + label + ' to the archive?');
     if (!ok) return;
@@ -7991,8 +8436,16 @@
 
   // Mirrors pageNumberOp() in the real PDF export -- recto/verso corners
   // or a centered footer -- so toggling the setting is visible here too.
-  function pageNumberOverlayHtml(pageNum, scale) {
+  function pageNumberOverlayHtml(pageNum, scale, plan) {
     if (!pageNum || !state.showPageNumbers) return '';
+    plan = plan || planBooklet(state);
+    var label = pageNumberLabel(pageNum, plan, state);
+    if (!label) return '';
+    if (state.pageNumberStyle === 'topright') {
+      return '<div style="position:absolute; top:' + ((36 - plan.globalSize * 0.2) * scale).toFixed(1) + 'px; right:' + (plan.marginRight * scale).toFixed(1) +
+        'px; font-size:' + (plan.globalSize * scale).toFixed(1) + 'px; line-height:1; color:#241A1F;">' + escapeHtml(label) + '</div>';
+    }
+    pageNum = label;
     var sizePx = (9.5 * scale).toFixed(1);
     var bottom = (10 * scale).toFixed(1);
     var side = (12 * scale).toFixed(1);
@@ -8037,7 +8490,7 @@
       var item = state.poems[row.index];
       var indent = row.isSec ? '0' : (plan.toc.entryIndent * scale).toFixed(1) + 'px';
       var weight = row.isSec && ts.sectionBold ? '700' : '400';
-      var label = escapeHtml(row.isSec ? (item.title || 'Untitled section') : entryLabel(item));
+      var label = escapeHtml(row.isSec ? sectionLabel(item) : entryLabel(item));
       var open = '<div class="toc-row" data-poem-index="' + row.index + '" style="';
       if (!ts.pageNumbers) {
         html += open + 'padding-left:' + indent + '; font-weight:' + weight + '; text-align:' + ts.listAlign +
@@ -8089,6 +8542,12 @@
     }
   }
   function previewShowPoem(index) {
+    // A screenplay scene shows the page of the flow it begins on.
+    var hostLayout = planBooklet(state).layouts[index];
+    if (hostLayout && hostLayout.host != null) {
+      previewShow(function (it) { return it.type === 'poem' && it.index === hostLayout.host && it.pageIndex === hostLayout.hostPage; });
+      return;
+    }
     // A section without its own page shows the first page after it.
     var items = buildPreviewItems(state);
     var exact = items.some(function (it) { return it.type === 'poem' && it.index === index; });
@@ -8124,7 +8583,8 @@
     }
     renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), stageMode ? stagePageWidth() : SIDEBAR_PREVIEW_WIDTH_PX, items[previewIndex]);
     if (stageMode) updateStageTitle(items[previewIndex]);
-    var editable = stageMode === 'format' && items[previewIndex] && items[previewIndex].type === 'poem';
+    // Script pages mix elements (and, in a screenplay, scenes), so they're edited in the list, not on the page.
+    var editable = stageMode === 'format' && items[previewIndex] && items[previewIndex].type === 'poem' && !isScriptForm();
     document.getElementById('previewPage').style.cursor = stageMode ? (editable ? 'text' : 'default') : '';
     syncStageTextSeg(items[previewIndex]);
     document.getElementById('previewFirstBtn').disabled = atStart;
@@ -8156,7 +8616,7 @@
 
     if (item.type === 'cover') {
       renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
-      caption.textContent = 'Front cover';
+      caption.textContent = isScriptForm() ? 'Title page' : 'Front cover';
     } else if (item.type === 'toc') {
       renderTocPreview(box, plan, scale, item.tocPageIndex);
       var tocTotal = plan.tocPageCount || 1;
@@ -8167,26 +8627,26 @@
       caption.textContent = 'Back cover';
     } else if (plan.layouts[item.index] && plan.layouts[item.index].isSection) {
       renderItemsPreview(box, layoutSectionPage(state, plan, plan.layouts[item.index]), plan, scale);
-      var secTitle = (state.poems[item.index].title || '').trim() || 'Untitled section';
-      caption.textContent = 'Section: ' + secTitle;
+      caption.textContent = Cap(formNouns().section) + ': ' + sectionLabel(state.poems[item.index]);
     } else {
       var poem = state.poems[item.index];
       var layout = plan.layouts[item.index];
       var pageIndex = item.pageIndex || 0;
       var isFirstPoemPage = pageIndex === 0;
-      box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginSide * scale) + 'px ' + (plan.marginBottom * scale) + 'px';
+      box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginRight * scale) + 'px ' + (plan.marginBottom * scale) + 'px ' + (plan.marginLeft * scale) + 'px';
 
       var titleStack = displayStackFor(state.titleFontChoice);
       var bodyStack = displayStackFor(state.bodyFontChoice);
       var effAlign = poem.titleAlign || state.titleAlignment;
-      var effBodyAlign = poem.bodyAlign || state.bodyAlignment;
+      var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       var html = '';
       if (isFirstPoemPage && layout.titleLines.length) {
         html += '<div data-page-title style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
-          '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; margin-bottom:' + (26 * scale).toFixed(2) + 'px;">' +
-          layout.titleLines.map(escapeHtml).join('<br>') + '</div>';
+          '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; height:' + (layout.titleH * scale).toFixed(2) + 'px; box-sizing:border-box;">' +
+          layout.titleLines.map(function (l) { return l ? escapeHtml(l) : '&nbsp;'; }).join('<br>') + '</div>';
       }
-      html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:1.55; text-align:' + effBodyAlign + ';">';
+      // One row per line at the layout's own leading (6 to the inch in a script).
+      html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + effBodyAlign + ';">';
       (layout.pages[pageIndex] || []).forEach(function (rl) {
         if (rl.spacer) {
           html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px;"></div>';
@@ -8198,15 +8658,20 @@
           return;
         }
         var indentStyle = rl.center ? ' style="text-align:center"' : rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
-        html += '<div' + indentStyle + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
+        html += '<div' + indentStyle + (layout.script ? ' class="pv-line"' : '') + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
-      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale);
+      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale, plan);
 
+      if (layout.script === 'screenplay') {
+        // Scenes run on, so the page is what counts: script page n of N.
+        var scriptPages = plan.totalPages - plan.frontPages - 1;
+        caption.textContent = 'Page ' + (layout.startPage + pageIndex - plan.frontPages) + ' of ' + scriptPages;
+        return;
+      }
       var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
       var entryNo = countEntries(state.poems.slice(0, item.index + 1));
-      var one = TEXT_FORMS[bookFormOf(state)].one;
-      caption.textContent = one.charAt(0).toUpperCase() + one.slice(1) + ' ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
+      caption.textContent = Cap(formNouns().one) + ' ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
     }
 
   }
@@ -8262,7 +8727,7 @@
     if (!stageMode) { openFullPreview(); return; }
     if (stageEdit) return;
     var item = buildPreviewItems(state)[previewIndex];
-    if (item && item.type === 'poem') startStageEdit(item, e);
+    if (item && item.type === 'poem' && !isScriptForm()) startStageEdit(item, e);
   });
 
   // ---- Editing on the page (large Formatting view) ----
@@ -8286,7 +8751,7 @@
       sec.type = 'text';
       sec.className = 'stage-edit-title';
       sec.value = poem.title || '';
-      sec.placeholder = 'Untitled section';
+      sec.placeholder = sectionLabel(poem);
       sec.setAttribute('aria-label', 'Section title');
       sec.style.cssText = 'margin-top:' + ((plan.PAGE_H * 0.38 - plan.marginTop) * scale - st.sizePt * scale).toFixed(1) + 'px; font-family:' +
         displayStackFor(st.font) + '; font-size:' + (st.sizePt * scale).toFixed(2) + 'px; text-align:' + st.align + ';';
@@ -8313,7 +8778,7 @@
     body.setAttribute('aria-multiline', 'true');
     body.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
-      'px; line-height:1.55; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
+      'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; persist(); });
     body.addEventListener('keydown', function (ev) {
@@ -8881,6 +9346,8 @@
     state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
     state.chapbookId = entry.id;
     state.isExample = false;
+    // Start the preview on this book's first page, not wherever the last one was.
+    previewIndex = 0;
     markOpened(entry.id);
     saveStateCache();
     renderAll();
@@ -8968,7 +9435,10 @@
     addHomeForm(form);
     flushPendingSave();
     state = blankChapbookState(form);
-    if (form === 'novel' || form === 'essays') state.poems.push(makeSampleEntry(form));
+    previewIndex = 0;
+    // A play opens on Act One; its blank title reads "ACT ONE" by position.
+    if (form === 'play') state.poems.push(makeSection(''));
+    if (form !== 'collection') state.poems.push(makeSampleEntry(form));
     if (googleUserName) state.author = googleUserName;
     saveStateCache();
     renderAll();
@@ -9113,7 +9583,7 @@
       }
       return;
     }
-    title.textContent = 'Front and Back Matter · ' + ({ front: 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
+    title.textContent = 'Front and Back Matter · ' + ({ front: isScriptForm() ? 'Title page' : 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
     var note = '';
     if (item && item.type === 'cover' && !state.includeTitlePage) note = 'not included in the book';
     if (item && item.type === 'toc' && !state.includeToc) note = 'not included in the book';
@@ -9572,6 +10042,10 @@
     document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
     document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
+    // A script's spacing and paragraphs are fixed by its format.
+    var script = isScriptForm();
+    document.getElementById('paragraphField').hidden = script;
+    document.getElementById('lineSpacingSeg').closest('.field').hidden = script;
   }
 
   function updateStats() {
@@ -9719,6 +10193,15 @@
     tocShow.querySelector('[value="sections"]').textContent = Cap(f.section) + 's only';
     tocShow.querySelector('[value="entries"]').textContent = Cap(f.many) + ' only';
     document.getElementById('archiveToggleBtn').title = 'View archived ' + f.many;
+    var PASTE_EXAMPLES = {
+      screenplay: 'INT. DINER - NIGHT\n\nRain on the window.\n\nMAYA\nYou started without me.',
+      play: 'ACT ONE\n\nScene 1\n\nA kitchen, just before dawn.\n\nRUTH\nYou can come in.'
+    };
+    document.getElementById('pasteBox').placeholder = PASTE_EXAMPLES[form] || '### Instructions for Folding a Paper Boat\n\nCrease the sky in half...\n\n### What the Tide Leaves';
+    // A script has a title page, not a cover.
+    var cover = isScriptForm() ? 'title page' : 'front cover';
+    document.querySelector('#coverTargetToggle [data-target="front"]').textContent = Cap(cover);
+    document.querySelector('label[for="titlePageCheck"]').textContent = 'Include ' + cover;
     TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
@@ -9888,13 +10371,51 @@
 
   // imageRels collects { key, relId } for every image placed, so
   // buildDocx can add the matching media files and relationships.
-  function buildDocxDocumentXml(poems, images, imageRels) {
+  // A script in Word: Courier 12 on Letter with the script margins, each
+  // element indented where SCRIPT_SPECS puts it (twips: 1440 an inch).
+  // Word does the page breaks; a play's scenes and every act start a page.
+  function buildScriptDocxXml(st) {
+    var form = bookFormOf(st), specs = SCRIPT_SPECS[form], body = '', first = true;
+    function para(text, spec, extra) {
+      var ind = '<w:ind w:left="' + Math.round(spec.x * 1440) + '" w:right="' + Math.round((6 - spec.x - spec.w) * 1440) + '"/>';
+      var jc = spec.right ? '<w:jc w:val="right"/>' : spec.center ? '<w:jc w:val="center"/>' : '';
+      if (spec.caps) text = scriptCaps(text);
+      if (spec.italic) text = '*' + text + '*';
+      body += '<w:p><w:pPr>' + (extra || '') + '<w:spacing w:before="0" w:after="0"/>' + ind + jc + '</w:pPr>' + docxRunsXml(text) + '</w:p>';
+    }
+    function breakBefore() { var b = first ? '' : '<w:pageBreakBefore/>'; first = false; return b; }
+    var sceneBreak = form === 'play';
+    st.poems.forEach(function (p) {
+      if (isSection(p)) {
+        para('++' + sectionLabel(p, st) + '++', { x: 0, w: 6, caps: true, center: true }, breakBefore());
+        body += '<w:p/>';
+        first = true; // the scene after an act heading shares its page
+        return;
+      }
+      var t = entryTitle(p, st);
+      var pre = sceneBreak ? breakBefore() : '';
+      if (!sceneBreak && !first) body += '<w:p/>';
+      first = false;
+      if (t) { para(t, form === 'play' ? { x: 0, w: 6, center: true } : specs.heading, pre); body += '<w:p/>'; pre = ''; }
+      scriptElements(p.lines || [], form).forEach(function (e, i) {
+        if (e.type === 'blank') { body += '<w:p/>'; return; }
+        if (e.type === 'pagebreak') { body += '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'; return; }
+        if (e.type === 'image') return;
+        para(e.text, specs[e.type] || specs.action, i === 0 ? pre : '');
+      });
+    });
+    body += '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="2160" w:header="720"/></w:sectPr>';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
+      ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' + body + '</w:body></w:document>';
+  }
+  function buildDocxDocumentXml(poems, images, imageRels, exportDocState) {
     var body = '';
     poems.forEach(function (poem, i) {
       var titlePr = i > 0 ? '<w:pPr><w:pageBreakBefore/><w:jc w:val="center"/></w:pPr>' : '<w:pPr><w:jc w:val="center"/></w:pPr>';
       if (isSection(poem)) {
         body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">' +
-          escapeXml(poem.title || 'Untitled section') + '</w:t></w:r></w:p>';
+          escapeXml(sectionLabel(poem, exportDocState)) + '</w:t></w:r></w:p>';
         return;
       }
       body += '<w:p>' + titlePr + '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t xml:space="preserve">' +
@@ -9926,7 +10447,8 @@
     var encoder = new TextEncoder();
     var images = exportState.images || {};
     var imageRels = [];
-    var documentXml = buildDocxDocumentXml(exportState.poems, images, imageRels);
+    var script = isScriptForm(exportState);
+    var documentXml = script ? buildScriptDocxXml(exportState) : buildDocxDocumentXml(exportState.poems, images, imageRels, exportState);
     var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -9948,7 +10470,7 @@
       '</Relationships>';
     var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="' + (script ? 'Courier New' : 'Times New Roman') + '" w:hAnsi="' + (script ? 'Courier New' : 'Times New Roman') + '"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
       '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
       '</w:styles>';
     return makeZip([
@@ -10023,7 +10545,7 @@
       cb.dataset.index = i;
       cb.checked = true;
       var span = document.createElement('span');
-      span.textContent = isSection(poem) ? ('§ ' + (poem.title || 'Untitled section')) : entryLabel(poem);
+      span.textContent = isSection(poem) ? ('§ ' + sectionLabel(poem)) : entryLabel(poem);
       if (isSection(poem)) span.style.fontWeight = '700';
       label.appendChild(cb);
       label.appendChild(span);
@@ -14276,7 +14798,8 @@
       { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop illustrations straight onto a spread.' }
     ],
     sample: [
-      { sel: '#poemList .is-sample', title: 'A sample to look at', text: 'This sample is set exactly as your book will be: indented paragraphs, a scene break, the chapter title. The preview shows it on the page.' },
+      { sel: '#poemList .is-sample', title: 'A sample to look at', text: 'This sample is set exactly as your book will be: indented paragraphs, a scene break, the chapter title. The preview shows it on the page.',
+        script: 'This sample shows how to type a script: a name in capitals on its own line, the speech right under it, (directions) in parentheses. Each line is set where it goes on the page, and the preview shows the finished page.' },
       { sel: '#poemList .is-sample .dots-btn', title: 'Archive it when you’re done', text: 'Open its ⋯ menu and choose Archive. It moves to the archive at the bottom of the list, where you can bring it back any time.' }
     ],
     collection: [
@@ -14322,7 +14845,7 @@
     tourCard.innerHTML = '<h4></h4><p></p><div class="tour-foot"><span class="tour-count"></span>' +
       '<button type="button" class="tour-skip">Skip</button><button type="button" class="tour-next"></button></div>';
     tourCard.querySelector('h4').textContent = step.title;
-    tourCard.querySelector('p').textContent = step.text;
+    tourCard.querySelector('p').textContent = step.script && isScriptForm() ? step.script : step.text;
     tourCard.querySelector('.tour-count').textContent = (tourState.i + 1) + ' of ' + steps.length;
     var last = tourState.i === steps.length - 1;
     tourCard.querySelector('.tour-next').textContent = last ? 'Done' : 'Next';
