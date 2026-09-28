@@ -936,18 +936,26 @@
      the solid green option buttons, so it reads as "which panel", not as
      one more setting. */
   .text-target-toggle {
-    display: flex; gap: 3px; padding: 3px; margin: 2px 0 14px; border-radius: 9px;
+    display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; margin: 2px 0 14px; border-radius: 9px;
     background: var(--surface-2); border: 1px solid var(--line);
   }
   .text-target-toggle button {
-    flex: 1; appearance: none; border: none; background: transparent; border-radius: 7px; cursor: pointer;
+    flex: 1 1 auto; appearance: none; border: none; background: transparent; border-radius: 7px; cursor: pointer;
     padding: 8px 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
   }
+  /* A play's four (with Characters) sit two by two. */
+  .text-target-toggle.is-four button { flex: 1 1 40%; }
   .text-target-toggle button:hover { color: var(--ink); }
   .text-target-toggle button.active {
     background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px var(--shadow), 0 0 0 1px var(--line-strong);
   }
   .text-target-pane[hidden] { display: none; }
+  .cast-editor { display: flex; flex-direction: column; gap: 8px; }
+  .cast-row { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; align-items: center; }
+  .cast-row label { font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: none; margin: 0; }
+  .cast-row input[type="text"] { grid-column: 1 / -1; width: 100%; }
+  .cast-row.is-off input[type="text"] { opacity: .5; }
+  .cast-empty { font-size: 13px; color: var(--ink-soft); margin: 0; }
   .format-target { margin: 0 0 16px; height: 46px; }
   .format-target-seg, .format-target-name {
     display: flex; height: 100%; border: 2px solid var(--accent); border-radius: 8px; overflow: hidden;
@@ -1209,6 +1217,9 @@
   .poem-text.script-play > [data-sel="character"] { text-align: center; }
   .poem-text.script-play > [data-sel="direction"],
   .poem-text.script-play > [data-sel="paren"] { padding-left: 20ch; font-style: italic; }
+  /* An empty line waits where what's typed on it will go (see playEnter). */
+  .poem-text.script-play > [data-as="direction"] { padding-left: 20ch; }
+  .poem-text.script-play > [data-as="character"] { text-align: center; }
   body.form-screenplay .poem-title { text-transform: uppercase; }
   /* Scripts: goldenrod revision pages for screenplays; a verdigris
      playbill for plays. */
@@ -2512,6 +2523,7 @@
           <div class="panel-body" id="coversBody" hidden>
           <div class="text-target-toggle" id="coverTargetToggle" role="tablist">
             <button type="button" role="tab" data-target="front">Front cover</button>
+            <button type="button" role="tab" data-target="cast" hidden>Characters</button>
             <button type="button" role="tab" data-target="toc">Contents</button>
             <button type="button" role="tab" data-target="back">Back cover</button>
           </div>
@@ -2578,6 +2590,20 @@
             <div class="seg seg-3" id="coverImageAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
           </div>
           </div>
+          </div>
+          <div class="cover-pane" data-pane="cast" hidden>
+          <div class="checkline">
+            <input type="checkbox" id="castCheck" checked>
+            <label for="castCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include character list</label>
+          </div>
+          <div class="subhead">Heading</div>
+          <div class="field">
+            <label for="castHeadingInput">Text</label>
+            <input type="text" id="castHeadingInput" class="toc-heading-input" placeholder="No heading">
+          </div>
+          <div class="subhead">Characters</div>
+          <p class="field-note" style="margin:-4px 0 10px;">Everyone with a line, in the order they first speak. Add a few words about each; untick anyone to leave them off.</p>
+          <div id="castEditor" class="cast-editor"></div>
           </div>
           <div class="cover-pane" data-pane="toc" hidden>
           <div class="checkline">
@@ -5083,9 +5109,77 @@
   // fall right after it, that's an even/verso position, so one blank
   // verso page is inserted first -- pages 2 (blank) and 3 (TOC) then form
   // the book's first true spread, TOC on the recto side.
-  function needsTocSpacer(state, tocPageCount) {
-    var coverCount = state.includeTitlePage ? 1 : 0;
+  function needsTocSpacer(state, tocPageCount, castPageCount) {
+    var coverCount = (state.includeTitlePage ? 1 : 0) + (castPageCount || 0);
     return tocPageCount > 0 && (coverCount + 1) % 2 === 0;
+  }
+
+  // A play's character list: everyone with a line, in the order they
+  // first speak, each with the few words the playwright gives them
+  // (castNotes, by name). It follows the title page, headed CHARACTERS,
+  // one to a paragraph -- "RUTH, sixties, a retired nurse." -- the way
+  // the manuscript format sets it. Anyone ticked off (castHidden) stays
+  // off the page.
+  function scriptCueName(text) {
+    return stripFormatMarkers(text || '').replace(/\([^)]*\)/g, '').replace(/^@/, '').trim().toUpperCase();
+  }
+  function castList(s) {
+    if (bookFormOf(s) !== 'play') return [];
+    var seen = {}, out = [], notes = s.castNotes || {}, hidden = s.castHidden || {};
+    s.poems.forEach(function (p) {
+      if (isSection(p)) return;
+      scriptElements(p.lines || [], 'play').forEach(function (el) {
+        if (el.type !== 'character') return;
+        var nm = scriptCueName(el.text);
+        if (!nm || seen[nm]) return;
+        seen[nm] = true;
+        out.push({ name: nm, note: notes[nm] || '', hidden: !!hidden[nm] });
+      });
+    });
+    return out;
+  }
+  function castIncluded(s) { return bookFormOf(s) === 'play' && s.includeCast !== false; }
+  function castHeading(s) { return scriptCaps(s.castHeading == null ? 'Characters' : s.castHeading.trim()); }
+  // The list's lines ({ text, indent } or null for the blank between
+  // characters), poured onto pages; the first page's heading takes three
+  // lines. `force` lays it out even when it's left out of the book.
+  function castPagePlan(s, contentWidth, contentHeight, sizePt, force) {
+    if (!force && !castIncluded(s)) return [];
+    var list = castList(s).filter(function (c) { return !c.hidden; });
+    if (!list.length && !force) return [];
+    var font = s.bodyFontChoice, hang = 36, lines = [];
+    list.forEach(function (c, i) {
+      if (i) lines.push(null);
+      var note = c.note.trim();
+      wrapLine(c.name + (note ? ', ' + note : ''), contentWidth - hang, sizePt, font, 400).forEach(function (t, k) {
+        lines.push({ text: t, indent: k ? hang : 0 });
+      });
+    });
+    var perPage = Math.max(4, Math.floor(contentHeight / sizePt));
+    var pages = [], cur = [], cap = perPage - (castHeading(s) ? 3 : 0);
+    lines.forEach(function (l) {
+      if (cur.length >= cap) { pages.push(cur); cur = []; cap = perPage; }
+      if (!l && !cur.length) return;
+      cur.push(l);
+    });
+    pages.push(cur);
+    return pages;
+  }
+  // One page of the list as layout items (see layoutFrontCover).
+  function layoutCastPage(s, plan, lines, first) {
+    var size = plan.globalSize, font = s.bodyFontChoice, items = [];
+    var left = plan.marginLeft, right = plan.PAGE_W - plan.marginRight, top = plan.PAGE_H - plan.marginTop, row = 0;
+    function baseline(r) { return top - (r + 1) * size + size * 0.28; }
+    var heading = castHeading(s);
+    if (first && heading) {
+      var w = measure(heading, size, font, 400);
+      items.push({ text: heading, font: font, weight: 400, size: size, x: (left + right) / 2 - w / 2, y: baseline(0), rgb: INK_RGB, key: 'bodyReg' });
+      row = 3;
+    }
+    lines.forEach(function (l, i) {
+      if (l) items.push({ text: l.text, font: font, weight: 400, size: size, x: left + l.indent, y: baseline(row + i), rgb: INK_RGB, key: 'bodyReg' });
+    });
+    return items;
   }
 
   // ---------------------------------------------------------------------
@@ -5397,9 +5491,10 @@
       tocPageCount = 1;
       while (remaining > 0) { tocPageCount++; remaining -= linesPerTocPageN; }
     }
-    var tocSpacer = needsTocSpacer(state, tocPageCount) ? 1 : 0;
+    var castPages = castPagePlan(state, contentWidth, contentHeight, globalSize);
+    var tocSpacer = needsTocSpacer(state, tocPageCount, castPages.length) ? 1 : 0;
 
-    var frontPages = (state.includeTitlePage ? 1 : 0) + tocSpacer + tocPageCount;
+    var frontPages = (state.includeTitlePage ? 1 : 0) + castPages.length + tocSpacer + tocPageCount;
     var running = frontPages + 1;
     layouts.forEach(function (l) {
       l.startPage = running;
@@ -5415,7 +5510,7 @@
       trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
       marginLeft: marginLeft, marginRight: marginRight, script: script, frontPages: frontPages,
       contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
-      tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
+      castPages: castPages, tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
       linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
       totalPages: totalPages
     };
@@ -5653,7 +5748,7 @@
       }
     }
 
-    var itemKeys = { coverBold: fontPlan.coverKeys.bold, bodyItal: bodyKeys.ital, backReg: fontPlan.backKeys.reg, authorReg: fontPlan.authorKeys.reg, sectionBold: fontPlan.sectionKeys.bold };
+    var itemKeys = { coverBold: fontPlan.coverKeys.bold, bodyItal: bodyKeys.ital, backReg: fontPlan.backKeys.reg, authorReg: fontPlan.authorKeys.reg, sectionBold: fontPlan.sectionKeys.bold, bodyReg: bodyKeys.reg };
 
     // ---- Front cover ----
     if (state.includeTitlePage) {
@@ -5661,6 +5756,13 @@
       drawLayoutItems(coverBytes, layoutFrontCover(state, plan), itemKeys, imagesUsed);
       contents.push(coverBytes);
     }
+
+    // ---- Character list (a play's) ----
+    plan.castPages.forEach(function (lines, k) {
+      var castBytes = [];
+      drawLayoutItems(castBytes, layoutCastPage(state, plan, lines, k === 0), itemKeys, imagesUsed);
+      contents.push(castBytes);
+    });
 
     // ---- Blank spacer so the table of contents lands on a recto ----
     if (plan.tocSpacer) contents.push([]);
@@ -5731,7 +5833,7 @@
         }
         return;
       }
-      var effAlign = poem.titleAlign || state.titleAlignment;
+      var effAlign = titleAlignFor(poem, state);
       // A script places each element itself (indents, centering).
       var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       layout.pages.forEach(function (pageLines, pageIdx) {
@@ -6793,8 +6895,105 @@
     var rows = Array.prototype.filter.call(ed.children, function (c) { return c.nodeType === 1; });
     if (!script) { rows.forEach(function (r) { if (r.dataset.sel) delete r.dataset.sel; }); return; }
     var lines = rows.map(function (r) { return r.dataset.token ? '[image 1]' : r.textContent; });
-    var els = scriptElements(lines, form);
-    rows.forEach(function (r, i) { var t = els[i] ? els[i].type : 'action'; if (r.dataset.sel !== t) r.dataset.sel = t; });
+    var els = scriptElements(lines, form), types = [];
+    rows.forEach(function (r, i) {
+      var t = els[i] ? els[i].type : 'action', want = r.dataset.want, as = '';
+      if (form === 'play') {
+        var next = rows[i + 1], nextEmpty = !next || (!next.dataset.token && !next.textContent.trim());
+        // A line Enter set up (see playEnter) keeps that job while it's
+        // empty; a name typed on a character line reads as one until its
+        // speech starts below it. A split copies the mark: keep the first.
+        if (want && (i && rows[i - 1].dataset.want === want || (t !== 'blank' && !(want === 'character' && nextEmpty)))) { delete r.dataset.want; want = null; }
+        if (want === 'character' && t !== 'blank') t = 'character';
+        if (t === 'blank' && !r.dataset.token) {
+          var before = i ? types[i - 1] : 'blank';
+          as = want || (before === 'direction' ? 'direction' : '');
+        }
+      } else if (want) delete r.dataset.want;
+      types.push(t);
+      if (r.dataset.sel !== t) r.dataset.sel = t;
+      if (as) { if (r.dataset.as !== as) r.dataset.as = as; } else if (r.dataset.as) delete r.dataset.as;
+    });
+  }
+  // A stage play's Enter on an empty line steps it along the usual
+  // order of a script: under a speech, the next Enter starts a stage
+  // direction; the next moves that line to a character name; the next
+  // fills in whoever most likely speaks now. Enter after a name puts it
+  // in capitals and starts the speech. Returns true if it took the key.
+  function playEnter(ed, e) {
+    if (bookFormOf(state) !== 'play' || e.shiftKey || e.isComposing) return false;
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return false;
+    var row = sel.anchorNode;
+    while (row && row.parentNode !== ed) row = row.parentNode;
+    if (!row || row.nodeType !== 1 || row.dataset.token) return false;
+    tagScriptLines(ed);
+    function newLineAfter(ref, want) {
+      var line = document.createElement('div');
+      line.appendChild(document.createElement('br'));
+      if (want) line.dataset.want = want;
+      ref.parentNode.insertBefore(line, ref.nextSibling);
+      placeCaretIn(line);
+      return line;
+    }
+    if (row.textContent.replace(/[\u200b\u00a0]/g, ' ').trim()) {
+      if (row.dataset.want !== 'character') return false;
+      var rest = document.createRange();
+      rest.setStart(sel.anchorNode, sel.anchorOffset);
+      rest.setEnd(row, row.childNodes.length);
+      if (rest.toString().trim()) return false;
+      e.preventDefault();
+      var walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      for (var n = walker.nextNode(); n; n = walker.nextNode()) n.data = n.data.toUpperCase();
+      newLineAfter(row);
+    } else {
+      e.preventDefault();
+      var prev = row.previousElementSibling;
+      var prevBlank = !prev || (!prev.dataset.token && !prev.textContent.trim());
+      var as = row.dataset.as;
+      if (as === 'character') {
+        var name = likelyNextSpeaker(ed, row);
+        if (!name) return true;
+        row.textContent = name;
+        var r = document.createRange();
+        r.setStart(row.firstChild, name.length);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      } else {
+        var step = as === 'direction' ? 'character' : 'direction';
+        if (prevBlank) { row.dataset.want = step; placeCaretIn(row); }
+        else newLineAfter(row, step);
+      }
+    }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+  // Who most likely speaks next in a play: whoever spoke before the last
+  // speaker (talk goes back and forth), reading back into earlier scenes
+  // if need be; failing that, the book's most frequent speaker.
+  function likelyNextSpeaker(ed, row) {
+    function cuesIn(lines) {
+      return scriptElements(lines, 'play').filter(function (el) { return el.type === 'character'; }).map(function (el) { return scriptCueName(el.text); }).filter(Boolean);
+    }
+    var card = ed.closest('[data-poem-id]'), id = card && card.dataset.poemId;
+    var at = state.poems.findIndex(function (p) { return p.id === id; });
+    var seq = [], counts = {};
+    state.poems.forEach(function (p, i) {
+      if (isSection(p) || p.id === id) return;
+      var names = cuesIn(p.lines || []);
+      names.forEach(function (nm) { counts[nm] = (counts[nm] || 0) + 1; });
+      if (at < 0 || i < at) seq = seq.concat(names);
+    });
+    var rows = Array.prototype.filter.call(ed.children, function (c) { return c.nodeType === 1; });
+    var here = cuesIn(rows.slice(0, rows.indexOf(row)).map(function (r) { return r.dataset.token ? '[image 1]' : r.textContent; }));
+    here.forEach(function (nm) { counts[nm] = (counts[nm] || 0) + 1; });
+    seq = seq.concat(here);
+    var last = seq[seq.length - 1];
+    for (var j = seq.length - 2; j >= 0; j--) if (seq[j] !== last) return seq[j];
+    var best = '', most = 0;
+    Object.keys(counts).forEach(function (nm) { if (nm !== last && counts[nm] > most) { best = nm; most = counts[nm]; } });
+    return best || last || '';
   }
   function renderEditor(ed, lines) {
     ed.innerHTML = '';
@@ -7499,10 +7698,19 @@
     return wrap;
   }
 
+  // Where an entry's title sits. A script's is fixed by its format: a
+  // screenplay's slugline flush left, a play's act and scene headings
+  // centered, as the manuscript format has them.
+  function titleAlignFor(poem, st) {
+    var form = bookFormOf(st || state);
+    if (form === 'screenplay') return 'left';
+    if (form === 'play') return 'center';
+    return poem.titleAlign || (st || state).titleAlignment;
+  }
   function makeTitleAlignControl(poem, titleInput) {
     return makeAlignControl('Title', function () { return poem.titleAlign; }, function (v) {
       poem.titleAlign = v;
-      titleInput.style.textAlign = v || state.titleAlignment;
+      titleInput.style.textAlign = titleAlignFor(poem);
     });
   }
 
@@ -7545,7 +7753,7 @@
     titleInput.draggable = false;
     titleInput.placeholder = bookFormOf(state) === 'screenplay' ? 'INT. PLACE - DAY' : entryLabel(poem);
     titleInput.value = poem.title;
-    titleInput.style.textAlign = poem.titleAlign || state.titleAlignment;
+    titleInput.style.textAlign = titleAlignFor(poem);
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
     // In the editor the title reads as the top of the text, just larger;
     // true printed proportions show in the preview.
@@ -7594,6 +7802,7 @@
         e.preventDefault();
         indentEditorLines(editor, e.shiftKey);
       }
+      if (e.key === 'Enter') playEnter(editor, e);
     });
     // Pasted text comes in plain (no stray fonts or colors from other
     // apps); a pasted image becomes an image line.
@@ -7709,8 +7918,11 @@
     var formatRow = makeFormatToolbar(editor);
     var aligns = document.createElement('div');
     aligns.className = 'format-aligns';
-    aligns.appendChild(makeTitleAlignControl(poem, titleInput));
-    aligns.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
+    // A script's alignment is set by its format, not chosen.
+    if (!isScriptForm()) {
+      aligns.appendChild(makeTitleAlignControl(poem, titleInput));
+      aligns.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
+    }
     formatRow.appendChild(aligns);
     body.appendChild(formatRow);
     card.appendChild(handle);
@@ -8430,10 +8642,18 @@
   // the first poem.
   function buildPreviewItems(state) {
     var items = [];
-    if (state.includeTitlePage) items.push({ type: 'cover' });
-    var tocCount = planBooklet(state).tocPageCount;
-    for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
     var plan = planBooklet(state);
+    // With Front and Back Matter open on a page that's left out of the
+    // book, that page still shows (marked as left out), so you can see
+    // what you're setting up rather than whatever page came before.
+    var ghostOf = stageMode === 'matter' ? matterTarget : null;
+    if (state.includeTitlePage) items.push({ type: 'cover' });
+    else if (ghostOf === 'front') items.push({ type: 'cover', ghost: true });
+    plan.castPages.forEach(function (lines, k) { items.push({ type: 'cast', castPageIndex: k }); });
+    if (!plan.castPages.length && ghostOf === 'cast' && bookFormOf(state) === 'play') items.push({ type: 'cast', castPageIndex: 0, ghost: true });
+    var tocCount = plan.tocPageCount;
+    for (var t = 0; t < tocCount; t++) items.push({ type: 'toc', tocPageIndex: t });
+    if (!tocCount && ghostOf === 'toc') items.push({ type: 'toc', tocPageIndex: 0, ghost: true });
     state.poems.forEach(function (poem, i) {
       // A section contributes its own title page, or none when that's
       // turned off (see planBooklet) -- unlike an entry, whose layout
@@ -8517,8 +8737,7 @@
     }
     html += '</div>';
     box.innerHTML = html;
-    var tocStartPage = (state.includeTitlePage ? 1 : 0) + plan.tocSpacer + 1 + tocPageIndex;
-    box.innerHTML += pageNumberOverlayHtml(tocStartPage, scale);
+    if (plan.tocPageCount) box.innerHTML += pageNumberOverlayHtml(plan.frontPages - plan.tocPageCount + 1 + tocPageIndex, scale);
   }
 
   // Draws a layout item list (see layoutFrontCover) at preview scale.
@@ -8568,7 +8787,7 @@
     });
   }
   function previewShowMatter(target) {
-    var type = target === 'toc' ? 'toc' : target === 'back' ? 'back' : 'cover';
+    var type = target === 'toc' || target === 'back' || target === 'cast' ? target : 'cover';
     previewShow(function (it) { return it.type === type; });
   }
   ['focusin', 'click'].forEach(function (type) {
@@ -8629,6 +8848,11 @@
     if (item.type === 'cover') {
       renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
       caption.textContent = isScriptForm() ? 'Title page' : 'Front cover';
+    } else if (item.type === 'cast') {
+      var castLines = item.ghost ? castPagePlan(state, plan.contentWidth, plan.contentHeight, plan.globalSize, true)[0] : plan.castPages[item.castPageIndex];
+      renderItemsPreview(box, layoutCastPage(state, plan, castLines || [], item.castPageIndex === 0), plan, scale);
+      var castTotal = plan.castPages.length || 1;
+      caption.textContent = 'Character list' + (castTotal > 1 ? ' (' + (item.castPageIndex + 1) + ' of ' + castTotal + ')' : '');
     } else if (item.type === 'toc') {
       renderTocPreview(box, plan, scale, item.tocPageIndex);
       var tocTotal = plan.tocPageCount || 1;
@@ -8649,7 +8873,7 @@
 
       var titleStack = displayStackFor(state.titleFontChoice);
       var bodyStack = displayStackFor(state.bodyFontChoice);
-      var effAlign = poem.titleAlign || state.titleAlignment;
+      var effAlign = titleAlignFor(poem, state);
       var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       var html = '';
       if (isFirstPoemPage && layout.titleLines.length) {
@@ -8779,7 +9003,7 @@
     title.placeholder = entryLabel(poem);
     title.setAttribute('aria-label', Cap(formNouns().one) + ' title');
     title.style.cssText = 'font-family:' + displayStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
-      'px; line-height:1.28; text-align:' + (poem.titleAlign || state.titleAlignment) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
+      'px; line-height:1.28; text-align:' + titleAlignFor(poem) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
     title.addEventListener('input', function () { poem.title = title.value.replace(/\n/g, ' '); state.isExample = false; persist(); autoGrow(title); });
     title.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); body.focus(); } });
     var body = document.createElement('div');
@@ -9522,6 +9746,7 @@
     document.querySelectorAll('.cover-pane').forEach(function (pane) { pane.hidden = pane.dataset.pane !== target; });
     try { localStorage.setItem(COVER_TARGET_KEY, target); } catch (e) {}
     matterTarget = target;
+    if (target === 'cast') renderCastEditor();
     updateMatterStage();
     if (matterIsOpen()) previewShowMatter(target);
   }
@@ -9568,10 +9793,13 @@
       }
       return;
     }
-    title.textContent = 'Front and Back Matter · ' + ({ front: isScriptForm() ? 'Title page' : 'Front cover', toc: 'Contents', back: 'Back cover' })[matterTarget];
+    title.textContent = 'Front and Back Matter · ' + ({ front: isScriptForm() ? 'Title page' : 'Front cover', cast: 'Character list', toc: 'Contents', back: 'Back cover' })[matterTarget];
     var note = '';
-    if (item && item.type === 'cover' && !state.includeTitlePage) note = 'not included in the book';
-    if (item && item.type === 'toc' && !state.includeToc) note = 'not included in the book';
+    if (item && item.ghost) {
+      if (item.type === 'cast' && castIncluded(state)) note = 'no characters yet';
+      else if (item.type === 'toc' && state.includeToc) note = 'nothing to list yet';
+      else note = 'not included in the book';
+    }
     if (note) {
       var n = document.createElement('span');
       n.className = 'matter-note';
@@ -9653,7 +9881,7 @@
   var savedCoverTarget = 'front';
   try {
     var storedCover = localStorage.getItem(COVER_TARGET_KEY);
-    if (storedCover === 'back' || storedCover === 'toc') savedCoverTarget = storedCover;
+    if (storedCover === 'back' || storedCover === 'toc' || storedCover === 'cast') savedCoverTarget = storedCover;
   } catch (e) {}
   showCoverTarget(savedCoverTarget);
 
@@ -9908,6 +10136,70 @@
   document.getElementById('titlePageCheck').addEventListener('change', function (e) {
     state.includeTitlePage = e.target.checked; persist(); updateStats();
   });
+  document.getElementById('castCheck').addEventListener('change', function (e) {
+    state.includeCast = e.target.checked; persist(); updateStats();
+  });
+  document.getElementById('castHeadingInput').addEventListener('input', function (e) {
+    state.castHeading = e.target.value; persist(); updateStats();
+  });
+  // One row per character: a tick to keep them on the list and a line
+  // for their description. Rebuilt only when the names change, so it
+  // never pulls the field you're typing in out from under you.
+  var castEditorKey = null;
+  function renderCastEditor() {
+    var box = document.getElementById('castEditor');
+    var list = castList(state), key = JSON.stringify(list.map(function (c) { return c.name; }));
+    if (key === castEditorKey && box.childNodes.length) {
+      list.forEach(function (c, i) {
+        var row = box.children[i], input = row && row.querySelector('input[type="text"]');
+        if (!input) return;
+        row.querySelector('input[type="checkbox"]').checked = !c.hidden;
+        row.classList.toggle('is-off', c.hidden);
+        if (document.activeElement !== input) input.value = c.note;
+      });
+      return;
+    }
+    castEditorKey = key;
+    box.innerHTML = '';
+    if (!list.length) {
+      var empty = document.createElement('p');
+      empty.className = 'cast-empty';
+      empty.textContent = 'No characters yet. A name in capitals on its own line, with a speech right under it, adds one.';
+      box.appendChild(empty);
+      return;
+    }
+    list.forEach(function (c, i) {
+      var row = document.createElement('div');
+      row.className = 'cast-row' + (c.hidden ? ' is-off' : '');
+      var check = document.createElement('input');
+      check.type = 'checkbox';
+      check.id = 'castOn' + i;
+      check.checked = !c.hidden;
+      var label = document.createElement('label');
+      label.htmlFor = check.id;
+      label.textContent = c.name;
+      var note = document.createElement('input');
+      note.type = 'text';
+      note.value = c.note;
+      note.placeholder = 'Age, who they are…';
+      note.setAttribute('aria-label', 'About ' + c.name);
+      check.addEventListener('change', function () {
+        state.castHidden = Object.assign({}, state.castHidden);
+        if (check.checked) delete state.castHidden[c.name]; else state.castHidden[c.name] = true;
+        row.classList.toggle('is-off', !check.checked);
+        persist(); updateStats();
+      });
+      note.addEventListener('input', function () {
+        state.castNotes = Object.assign({}, state.castNotes);
+        if (note.value.trim()) state.castNotes[c.name] = note.value; else delete state.castNotes[c.name];
+        persist(); updateStats();
+      });
+      row.appendChild(check);
+      row.appendChild(label);
+      row.appendChild(note);
+      box.appendChild(row);
+    });
+  }
   document.getElementById('tocCheck').addEventListener('change', function (e) {
     state.includeToc = e.target.checked; persist(); updateStats();
   });
@@ -10024,12 +10316,18 @@
     if (document.activeElement !== backText) backText.value = back.text;
     renderCoverImageControls();
     document.getElementById('tocCheck').checked = !!state.includeToc;
+    document.getElementById('castCheck').checked = state.includeCast !== false;
+    var castHeadingInput = document.getElementById('castHeadingInput');
+    if (document.activeElement !== castHeadingInput) castHeadingInput.value = state.castHeading == null ? 'Characters' : state.castHeading;
+    renderCastEditor();
     document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
     document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
     // A script's spacing and paragraphs are fixed by its format.
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
+    document.getElementById('titleAlignSeg').closest('.field').hidden = script;
+    document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
     document.getElementById('lineSpacingSeg').closest('.field').hidden = script;
     // Scripts print one-sided and are bound with brads, never folded.
     document.getElementById('exportPrintBtn').hidden = script;
@@ -10193,6 +10491,10 @@
     // A script has a title page, not a cover.
     var cover = isScriptForm() ? 'title page' : 'front cover';
     document.querySelector('#coverTargetToggle [data-target="front"]').textContent = Cap(cover);
+    // Only a play has a character list.
+    document.querySelector('#coverTargetToggle [data-target="cast"]').hidden = form !== 'play';
+    document.getElementById('coverTargetToggle').classList.toggle('is-four', form === 'play');
+    if (form !== 'play' && matterTarget === 'cast') showCoverTarget('front');
     document.querySelector('label[for="titlePageCheck"]').textContent = 'Include ' + cover;
     TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
