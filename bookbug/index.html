@@ -705,7 +705,21 @@
   .drop-line::after { right: -4px; }
   .drop-line[hidden] { display: none; }
   /* Section / Title / Entry View -- the highlighted one is the view you're in. */
-  .view-seg button { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
+  /* The view switch is how you move around the book, so it reads as the
+     main control on the panel: an ink-ruled pill, the current view
+     inverted (ink band, paper type), not a small settings toggle. */
+  .seg.view-seg { border: 2px solid var(--ink); border-radius: 999px; background: var(--surface); }
+  .seg.view-seg button {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px;
+    font-size: 14px; font-weight: 700; white-space: nowrap; color: var(--ink); background: transparent;
+    border-right: 2px solid var(--ink); transition: background .15s ease, color .15s ease;
+  }
+  .seg.view-seg button:last-child { border-right: none; }
+  .seg.view-seg button:hover:not(.active):not(:disabled) { background: var(--accent-soft); }
+  .seg.view-seg button.active { background: var(--ink); color: var(--surface); }
+  .seg.view-seg button svg { flex: 0 0 auto; }
+  .seg.view-seg button:disabled { color: var(--ink-faint); cursor: default; }
+  @media (max-width: 700px) { .seg.view-seg button { padding: 7px 11px; font-size: 13px; } }
   .view-seg button:disabled { color: var(--ink-faint); cursor: default; }
   /* "Sections only": each row stands for a heading plus all its entries. */
   .section-block-row { cursor: grab; }
@@ -759,6 +773,26 @@
   }
 
   .preview-panel { flex: 0 0 auto; }
+  /* The preview is a way into full-screen reading, so it says so: a
+     labeled button beside the heading, and on hover the page lifts with
+     an accent frame and a "Read full screen" tag. */
+  .preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .preview-head .panel-title { margin: 0; }
+  .preview-open-btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; }
+  .preview-open-btn svg { flex: 0 0 auto; }
+  .preview-stage { position: relative; }
+  #previewPage, .pb-preview-canvas, .cb-preview-canvas { transition: transform .18s ease, outline-color .18s ease, box-shadow .18s ease; }
+  .preview-panel .preview-stage:hover #previewPage:not(.is-editing), .preview-panel .preview-stage:hover .pb-preview-canvas, .preview-panel .preview-stage:hover .cb-preview-canvas {
+    transform: translateY(-2px); outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .preview-panel .preview-stage::after {
+    content: 'Read full screen'; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    padding: 5px 12px; border-radius: 999px; background: var(--ink); color: var(--surface);
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; pointer-events: none;
+    opacity: 0; transition: opacity .18s ease;
+  }
+  .preview-panel .preview-stage:hover::after { opacity: 1; }
+  @media (hover: none) { .preview-panel .preview-stage::after { display: none; } }
   .preview-stage { display: flex; justify-content: center; padding: 4px 0 2px; }
   body.matter-open #entriesColumn > :not(#matterStage) { display: none !important; }
   body.matter-open #previewPanel { display: none; }
@@ -947,6 +981,9 @@
   /* Section headings in the Formatting panel: serif and larger, with an
      accent rule, so they read as a level above the small uppercase
      field labels (Typeface, Alignment...) rather than blending in. */
+  /* A brief highlight on the controls a click just brought up. */
+  @keyframes subheadFlash { from { background: var(--accent-soft); } to { background: transparent; } }
+  .subhead.is-flash { animation: subheadFlash 1.2s ease-out; }
   .subhead {
     font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; letter-spacing: -0.005em;
     color: var(--ink); margin: 10px 0 8px; padding-top: 18px; border-top: 1.5px solid var(--line-strong);
@@ -1045,6 +1082,7 @@
     padding: 9px 10px; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer;
   }
   .chapbooks-new:hover { background: var(--accent-soft); }
+  .chapbooks-group { padding: 6px 12px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
   .chapbooks-divider { border-top: 1px solid var(--line); margin: 4px 2px; }
   .chapbooks-empty { padding: 10px; font-size: 12.5px; color: var(--ink-faint); }
   .chapbook-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
@@ -1199,6 +1237,8 @@
   .home-start-card[data-form="essays"]::before { background: #6E4A7E; }
   .home-start-card[data-form="picture"]::before { background: #4F6E88; }
   .home-intro { margin: 0; color: var(--ink-soft); font-size: 14px; }
+  .home-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; max-width: 560px; padding: 28px 0; }
+  .home-empty .home-intro { font-size: 16px; line-height: 1.55; }
 
   /* Picture books are wide and squarish, not a tall trade page. */
   .home-card-pb .home-cover { aspect-ratio: 1 / 1; }
@@ -1648,6 +1688,7 @@
   }
 
   /* New picture book dialog. */
+  .new-book-extra { border-top: 3px solid var(--ink); margin-top: 18px; padding-top: 4px; }
   .pb-new-box { max-width: 620px; width: 100%; max-height: calc(100vh - 40px); overflow-y: auto; }
   .pb-new-box h2 { font-family: "Zilla Slab", ui-serif, serif; font-size: 22px; margin: 0 0 14px; }
   .pb-new-box .subhead:first-of-type { margin-top: 0; }
@@ -1747,7 +1788,7 @@
           <div class="prefs-group" data-prefs-form="collection">
             <div class="prefs-group-title">Poetry, novels &amp; essays</div>
             <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
-            <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show entry numbers</span></label>
+            <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
             <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
           </div>
           <div class="prefs-group" data-prefs-form="picture">
@@ -1818,9 +1859,9 @@
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
               <div class="poems-count pb-count" id="pbCount"></div>
               <div class="seg view-seg" id="pbViewSeg" role="group" aria-label="Show">
-                <button type="button" data-view="text" class="active" title="The words for every page, at a size you can read">Text</button>
-                <button type="button" data-view="spreads" title="Each spread as it will print: place text and pictures">Spread</button>
-                <button type="button" data-view="thumbs" title="The whole book small, for pacing and page turns">Thumbnail</button>
+                <button type="button" data-view="text" class="active" title="The words for every page, at a size you can read"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 6h12M1 10h8"/></svg>Text</button>
+                <button type="button" data-view="spreads" title="Each spread as it will print: place text and illustrations"><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M1 1.5h6.5L8 2l.5-.5H15v9H8.5L8 11l-.5-.5H1z"/><path d="M8 2v9"/></svg>Spread</button>
+                <button type="button" data-view="thumbs" title="The whole book small, for pacing and page turns"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="1" y="1" width="4.5" height="4.5"/><rect x="7.5" y="1" width="4.5" height="4.5"/><rect x="1" y="7.5" width="4.5" height="4.5"/><rect x="7.5" y="7.5" width="4.5" height="4.5"/></svg>Thumbnail</button>
               </div>
             </div>
           </div>
@@ -1843,8 +1884,8 @@
 
       <div class="sidebar" id="pbSidebar">
         <div class="panel preview-panel">
-          <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
-          <div class="preview-stage"><canvas class="pb-preview-canvas" id="pbPreview" title="Read through, full screen"></canvas></div>
+          <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="pbPreviewOpenBtn" type="button" title="Read the book spread by spread, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
+          <div class="preview-stage"><canvas class="pb-preview-canvas" id="pbPreview" title="Click to read full screen"></canvas></div>
           <div class="preview-nav">
             <button type="button" id="pbPrevFirst" aria-label="First spread"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
             <button type="button" id="pbPrevPrev" aria-label="Previous spread">‹</button>
@@ -1859,7 +1900,7 @@
           </button>
           <div class="panel-body" id="pbFormattingBody" hidden>
             <div id="pbFmtNone">
-              <p class="pb-fmt-hint">Click a text box or picture on a spread to format it. Double-click an empty spot on a page to add a text box there.</p>
+              <p class="pb-fmt-hint">Click a text box or illustration on a spread to format it. Double-click an empty spot on a page to add a text box there.</p>
             </div>
             <div id="pbFmtText" hidden>
               <div class="subhead">Text box</div>
@@ -1923,7 +1964,7 @@
               </div>
             </div>
             <div id="pbFmtImage" hidden>
-              <div class="subhead">Picture</div>
+              <div class="subhead">Illustration</div>
               <div class="field">
                 <label>Covers</label>
                 <div class="seg seg-3" id="pbImgArea"><button type="button" data-val="left">Left page</button><button type="button" data-val="spread">Whole spread</button><button type="button" data-val="right">Right page</button></div>
@@ -2027,7 +2068,7 @@
               <button class="btn" id="pbExportPrintBtn" type="button" style="width:100%; justify-content:center;">Export printable dummy</button>
               <p class="pb-export-note">Prints double-sided on US Letter, landscape. Fold the stack in half and staple along the fold.</p>
               <button class="btn" id="pbExportPptxBtn" type="button" style="width:100%; justify-content:center;">Export as .pptx</button>
-              <p class="pb-export-note">One slide per spread: the art as a picture, the words as text you can edit.</p>
+              <p class="pb-export-note">One slide per spread: the illustration as an image, the words as text you can edit.</p>
               <div class="export-status" id="pbExportStatus"></div>
             </div>
           </div>
@@ -2076,8 +2117,8 @@
       </div>
       <div class="sidebar" id="cbSidebar">
         <div class="panel preview-panel">
-          <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
-          <div class="preview-stage"><canvas class="cb-preview-canvas" id="cbPreview" title="Open larger"></canvas></div>
+          <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="cbPreviewOpenBtn" type="button" title="Read the book page by page, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
+          <div class="preview-stage"><canvas class="cb-preview-canvas" id="cbPreview" title="Click to read full screen"></canvas></div>
           <div class="preview-nav">
             <button type="button" id="cbPrevFirst" aria-label="First page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
             <button type="button" id="cbPrevPrev" aria-label="Previous page">‹</button>
@@ -2143,7 +2184,7 @@
   <div class="panel" id="intakePanel">
     <div class="intake-head">
       <div>
-        <div class="panel-title">Bring in your entries</div>
+        <div class="panel-title">Bring in your <span data-noun="many">entries</span></div>
         <div class="panel-sub">Import from Google Drive or a link, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
       </div>
       <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Minimize</button>
@@ -2165,7 +2206,7 @@
 
     <div class="tabpane" data-pane="link" id="linkPane">
       <div class="hint-box">
-        Paste a link to a web page or a Google Doc with your entries. Bookbug works out the titles, sections, stanzas, bold, italics and indents — you can fix anything afterward. A Google Doc shared as “Anyone with the link” comes straight in; otherwise you’ll pick it in Google’s own picker.
+        Paste a link to a web page or a Google Doc with your <span data-noun="many">entries</span>. Bookbug works out the titles, sections, stanzas, bold, italics and indents — you can fix anything afterward. A Google Doc shared as “Anyone with the link” comes straight in; otherwise you’ll pick it in Google’s own picker.
       </div>
       <form class="search-row" id="linkForm">
         <input type="url" id="linkInput" placeholder="https://…" autocomplete="off" required>
@@ -2176,11 +2217,11 @@
 
     <div class="tabpane" data-pane="paste" id="pastePane">
       <div class="hint-box">
-        Paste plain text below. Mark each entry's title by starting its line with <code>### </code> — this is exactly what a Google Docs Heading paragraph turns into when brought in from Drive, so anything you'd import will already match. Separate entries with a blank line. Blank lines inside an entry become stanza breaks.
+        Paste plain text below. Mark each <span data-noun="one">entry</span>’s title by starting its line with <code>### </code> — this is exactly what a Google Docs Heading paragraph turns into when brought in from Drive, so anything you'd import will already match. Separate entries with a blank line. Blank lines inside an entry become stanza breaks.
       </div>
       <textarea class="raw-paste" id="pasteBox" placeholder="### Instructions for Folding a Paper Boat&#10;&#10;Crease the sky in half...&#10;&#10;### What the Tide Leaves"></textarea>
       <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-        <button class="btn btn-primary" id="parsePasteBtn">Parse into entries</button>
+        <button class="btn btn-primary" id="parsePasteBtn">Parse into <span data-noun="many">entries</span></button>
         <span class="status-line" id="pasteStatus" style="margin:0;"></span>
       </div>
     </div>
@@ -2191,7 +2232,7 @@
     <button class="btn btn-sm" id="intakeExpandBtn" type="button">Add source</button>
   </div>
 
-  <div class="workspace">
+  <div class="workspace" id="bookWorkspace">
     <!-- Directly above the tools column; it stays in the same spot whether
          the column is showing or not. -->
     <div class="tools-bar">
@@ -2222,9 +2263,9 @@
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
             <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
-              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections">Section View</button>
-              <button type="button" data-view="titles" title="One row per entry; click a title to open it">Title View</button>
-              <button type="button" data-view="entries" title="Every entry open in full">Entry View</button>
+              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 10h12"/><path d="M4 6h6" stroke-width="1.2"/></svg><span class="vs-label">Section View</span></button>
+              <button type="button" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
+              <button type="button" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
             </div>
           </div>
         </div>
@@ -2234,7 +2275,7 @@
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
           <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
           <!-- Down here beside the archive it opens, not up in the header. -->
-          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;" title="View archived entries">Archive</button>
+          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;" title="View the archive">Archive</button>
         </div>
       </div>
 
@@ -2252,14 +2293,14 @@
            large view (#matterStage) while that's open, so there's never a
            second copy of the same page on screen. -->
       <div class="panel preview-panel" id="previewPanel">
-        <div class="panel-title" style="margin-bottom: 2px;">Preview</div>
+        <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="previewOpenBtn" type="button" title="Read the book page by page, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
         <div id="previewBlock">
-          <div class="preview-stage"><div class="preview-page" id="previewPage"></div></div>
+          <div class="preview-stage"><div class="preview-page" id="previewPage" title="Click to read full screen"></div></div>
           <div class="preview-nav">
             <button type="button" id="previewFirstBtn" aria-label="Preview first page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
-            <button type="button" id="previewPrevBtn" aria-label="Preview previous entry">‹</button>
+            <button type="button" id="previewPrevBtn" aria-label="Previous page">‹</button>
             <span id="previewCaption"></span>
-            <button type="button" id="previewNextBtn" aria-label="Preview next entry">›</button>
+            <button type="button" id="previewNextBtn" aria-label="Next page">›</button>
             <button type="button" id="previewLastBtn" aria-label="Preview last page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5v9M3 2.5 7.5 7 3 11.5"/></svg></button>
           </div>
         </div>
@@ -2276,7 +2317,7 @@
                big switch), or a section title. Both fill the same fixed
                height, so the controls under them never jump. -->
           <div class="format-target">
-            <div class="format-target-seg" id="formatTargetSeg" role="group" aria-label="Format the entry's">
+            <div class="format-target-seg" id="formatTargetSeg" role="group" aria-label="Format the">
               <button type="button" data-key="titles">Title</button>
               <button type="button" data-key="entries">Body</button>
             </div>
@@ -2418,7 +2459,7 @@
             <input type="checkbox" id="titlePageCheck" checked>
             <label for="titlePageCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Include front cover</label>
           </div>
-          <div class="subhead">Book title</div>
+          <div class="subhead" id="coverTitleHead">Book title</div>
           <div class="field">
             <label>Typeface</label>
             <div class="seg seg-fonts" id="coverFontSeg" data-font-seg></div>
@@ -2435,7 +2476,7 @@
             <label>Alignment</label>
             <div class="seg seg-3" id="coverAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
           </div>
-          <div class="subhead">Author name</div>
+          <div class="subhead" id="coverAuthorHead">Author name</div>
           <div class="checkline">
             <input type="checkbox" id="coverAuthorCheck" checked>
             <label for="coverAuthorCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show author name</label>
@@ -2527,7 +2568,7 @@
           </div>
           <div class="checkline" data-toc-sections>
             <input type="checkbox" id="tocIndentCheck" checked>
-            <label for="tocIndentCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Indent entries under their section</label>
+            <label for="tocIndentCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Indent <span data-noun="many">entries</span> under their <span data-noun="section">section</span></label>
           </div>
           <div class="checkline" data-toc-sections>
             <input type="checkbox" id="tocSectionBoldCheck" checked>
@@ -2597,7 +2638,7 @@
 
         <!-- Shown only while the large view is up, right under the panel
              that opened it (the other panels step aside then). -->
-        <button type="button" class="btn matter-back" id="matterBackBtn">← Back to entries</button>
+        <button type="button" class="btn matter-back" id="matterBackBtn">← Back to <span data-noun="many">entries</span></button>
         <div class="panel collapsible-panel" id="exportPanel">
           <button type="button" class="panel-toggle" id="exportToggle" aria-expanded="false" aria-controls="exportBody">
             <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
@@ -2818,7 +2859,7 @@
   // starts from the conventions of its kind and names its parts its own
   // way. (Picture books are their own editor.)
   var TEXT_FORMS = {
-    collection: { one: 'entry', many: 'entries', section: 'section', defaults: {} },
+    collection: { one: 'poem', many: 'poems', section: 'section', defaults: {} },
     novel: { one: 'chapter', many: 'chapters', section: 'part',
       // A trade novel: 5.5 x 8.5, Garamond, indented paragraphs, chapter
       // titles centered, folios in the outer corners, no contents page.
@@ -2828,7 +2869,13 @@
       defaults: { trimKey: 'digest', bodyFontChoice: 'garamond', titleFontChoice: 'zillaslab',
         paragraphs: 'indent', includeToc: true, pageNumberStyle: 'corners' } }
   };
+  // The book types that share the collection editor, in Home's order.
+  var TEXT_FORM_KEYS = Object.keys(TEXT_FORMS);
   function bookFormOf(data) { return data && TEXT_FORMS[data.form] ? data.form : 'collection'; }
+  // This book's words for its parts (poem/chapter/essay/scene, and
+  // section/part/act), for UI text.
+  function formNouns(data) { return TEXT_FORMS[bookFormOf(data || state)]; }
+  function Cap(w) { return w.charAt(0).toUpperCase() + w.slice(1); }
   function nounFor(n, data) {
     var f = TEXT_FORMS[bookFormOf(data)];
     return n + ' ' + (n === 1 ? f.one : f.many);
@@ -2981,7 +3028,7 @@
   // counting archived ones) -- a type with none isn't there at all.
   function homeForms() {
     var out = [];
-    ['collection', 'novel', 'essays'].forEach(function (f) {
+    TEXT_FORM_KEYS.forEach(function (f) {
       if (library.some(function (c) { return !c.archived && bookFormOf(c.data) === f; })) out.push(f);
     });
     if (pbLibrary.some(function (c) { return !c.archived; })) out.push('picture');
@@ -5657,7 +5704,7 @@
   function addImportedPoems(poems, title, setStatus) {
     setStatus = setStatus || setDriveStatus;
     var entryCount = countEntries(poems);
-    if (!entryCount) { setStatus('Couldn’t find any entries in that document.', true); return; }
+    if (!entryCount) { setStatus('Couldn’t find any ' + formNouns().many + ' in that document.', true); return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
@@ -5672,13 +5719,14 @@
     setStatus(msg + ' from “' + title + '”.');
     persist();
     renderAll();
+    endIntroTour();
   }
 
   function renderPickerEntryPoint() {
     var pane = document.getElementById('drivePane');
     if (!pane) return;
     pane.innerHTML =
-      '<div class="hint-box">Pick a Google Doc from your Drive to bring its entries in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
+      '<div class="hint-box">Pick a Google Doc from your Drive to bring its ' + formNouns().many + ' in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
       '<button class="btn btn-primary" id="connectDriveBtn" type="button">Choose a Google Doc…</button>' +
       '<div id="driveStatus" class="status-line"></div>';
     document.getElementById('connectDriveBtn').addEventListener('click', openDrivePicker);
@@ -6040,7 +6088,7 @@
       var data = await res.json().catch(function () { return {}; });
       // A backend without link fetching answers with the saved library instead.
       if (res.ok && typeof data.text !== 'string') setLinkStatus('Importing from links isn’t switched on yet.', true);
-      else if (res.ok) { setLinkStatus('Working out the entries…'); await importLinkPayload(data, url); }
+      else if (res.ok) { setLinkStatus('Working out the ' + formNouns().many + '…'); await importLinkPayload(data, url); }
       else if (googleDocIdFromLink(url) && /^(google_private|http_40[134])$/.test(data.error || '')) {
         setLinkStatus('That doc isn’t shared publicly — pick it in Google’s picker to bring it in.');
         openDrivePicker(googleDocIdFromLink(url));
@@ -6062,7 +6110,7 @@
     if (!text.trim()) { pasteStatus.textContent = 'Paste some text first.'; return; }
     var poems = await parseDocWithImages(text);
     var entryCount = countEntries(poems);
-    if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any entries — check the ### title markers.'; return; }
+    if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any ' + formNouns().many + ' — check the ### title markers.'; return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
     state.poems = wasExample ? poems : state.poems.concat(poems);
@@ -6076,6 +6124,7 @@
     pasteStatus.textContent = msg + '.';
     persist();
     renderAll();
+    endIntroTour();
   });
 
   // ---------------------------------------------------------------------
@@ -6524,7 +6573,7 @@
     imgBtn.type = 'button';
     imgBtn.className = 'format-btn format-btn-image';
     imgBtn.innerHTML = ICON_IMAGE;
-    imgBtn.title = 'Add an image (or drag one onto the entry)';
+    imgBtn.title = 'Add an image (or drag one onto the ' + formNouns().one + ')';
     imgBtn.setAttribute('aria-label', 'Add an image');
     imgBtn.addEventListener('pointerdown', function () { savedCaret = editorCaretInfo(ed); });
     imgBtn.addEventListener('click', function () { fileInput.click(); });
@@ -6719,7 +6768,7 @@
     box.innerHTML = '<p style="margin-top:0;"></p><div class="move-list"></div><div class="modal-actions"><button class="btn" type="button">Cancel</button></div>';
     box.querySelector('p').textContent = 'Move “' + entryLabel(poem) + '” to:';
     var list = box.querySelector('.move-list');
-    ['collection', 'novel', 'essays'].forEach(function (form) {
+    TEXT_FORM_KEYS.forEach(function (form) {
       var books = moveTargets().filter(function (c) { return bookFormOf(c.data) === form; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; });
       if (!books.length) return;
       var h = document.createElement('div');
@@ -6763,7 +6812,7 @@
     btn.setAttribute('aria-expanded', 'true');
     var poem = state.poems[index], moveBtn = entryMenu.querySelector('[data-action="move"]');
     moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
-    moveBtn.textContent = 'Move ' + (poem ? TEXT_FORMS[bookFormOf(state)].one : 'entry') + ' to another book…';
+    moveBtn.textContent = 'Move ' + (poem ? formNouns().one : formNouns().section) + ' to another book…';
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -6780,7 +6829,7 @@
     btn.textContent = '⋯';
     btn.title = 'More';
     btn.draggable = false;
-    btn.setAttribute('aria-label', 'Entry options');
+    btn.setAttribute('aria-label', Cap(formNouns().one) + ' options');
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', 'false');
     btn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
@@ -7071,7 +7120,7 @@
     editor.spellcheck = prefs.spellcheck;
     editor.setAttribute('role', 'textbox');
     editor.setAttribute('aria-multiline', 'true');
-    editor.setAttribute('aria-label', 'Entry text');
+    editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
     editor.style.textAlign = poem.bodyAlign || state.bodyAlignment;
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
@@ -7378,7 +7427,7 @@
   try { toolsHidden = localStorage.getItem(TOOLS_HIDDEN_KEY) === '1'; } catch (e) {}
   var toolsToggleBtn = document.getElementById('toolsToggleBtn');
   function applyToolsHidden() {
-    document.querySelector('.workspace').classList.toggle('tools-hidden', toolsHidden);
+    document.getElementById('bookWorkspace').classList.toggle('tools-hidden', toolsHidden);
     toolsToggleBtn.setAttribute('aria-pressed', toolsHidden ? 'false' : 'true');
     document.getElementById('toolsToggleLabel').textContent = toolsHidden ? 'Show Tools' : 'Hide Tools';
   }
@@ -7523,8 +7572,8 @@
     row.appendChild(titleInput);
     // One step at a time: up pulls the entry above into this section,
     // down hands this section's first entry to the one before it.
-    [['-1', '↑', 'Move this section title up one place (the entry above joins this section)'],
-     ['1', '↓', 'Move this section title down one place (its first entry joins the section before)']].forEach(function (d) {
+    [['-1', '↑', 'Move this ' + formNouns().section + ' title up one place (the ' + formNouns().one + ' above joins this ' + formNouns().section + ')'],
+     ['1', '↓', 'Move this ' + formNouns().section + ' title down one place (its first ' + formNouns().one + ' joins the ' + formNouns().section + ' before)']].forEach(function (d) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'section-move-btn' + (d[0] === '-1' ? ' is-first' : '');
@@ -7643,7 +7692,7 @@
     state.poems.forEach(function (p, i) { if (!isSection(p)) entryNumAt[i] = ++num; });
     var hint = document.createElement('p');
     hint.className = 'sections-only-hint';
-    hint.textContent = 'Click a section to see its entries; drag it, or use its arrows, to move it with all of them. Click the title text to rename it.';
+    hint.textContent = 'Click a ' + formNouns().section + ' to see its ' + formNouns().many + '; drag it, or use its arrows, to move it with all of them. Click the title text to rename it.';
     poemList.appendChild(hint);
     if (parts.lead.length) {
       var leadRow = document.createElement('div');
@@ -7729,7 +7778,7 @@
         if (block.length === 1) {
           var none = document.createElement('div');
           none.className = 'section-block-empty';
-          none.textContent = 'No entries in this section yet.';
+          none.textContent = 'No ' + formNouns().many + ' in this ' + formNouns().section + ' yet.';
           wrap.appendChild(none);
         }
         poemList.appendChild(wrap);
@@ -7849,7 +7898,7 @@
     archiveList.innerHTML = '';
     var archived = state.archivedPoems || [];
     if (!archived.length) {
-      archiveList.innerHTML = '<div class="status-line">No archived entries.</div>';
+      archiveList.innerHTML = '<div class="status-line">Nothing archived.</div>';
       return;
     }
     archived.forEach(function (poem, i) {
@@ -7886,7 +7935,7 @@
   emptyArchiveBtn.addEventListener('click', async function () {
     var archived = state.archivedPoems || [];
     if (!archived.length) return;
-    var ok = await confirmDialog('Permanently delete all ' + archived.length + ' archived entries? This can’t be undone.');
+    var ok = await confirmDialog('Permanently delete all ' + archived.length + ' archived items? This can’t be undone.');
     if (!ok) return;
     state.archivedPoems = [];
     persist();
@@ -8208,6 +8257,7 @@
   }
   // Sidebar preview: click for full screen. Large Formatting view: click
   // an entry (or section) page to edit it right there, instead.
+  document.getElementById('previewOpenBtn').addEventListener('click', openFullPreview);
   document.getElementById('previewPage').addEventListener('click', function (e) {
     if (!stageMode) { openFullPreview(); return; }
     if (stageEdit) return;
@@ -8250,7 +8300,7 @@
     title.className = 'stage-edit-title';
     title.value = poem.title || '';
     title.placeholder = entryLabel(poem);
-    title.setAttribute('aria-label', 'Entry title');
+    title.setAttribute('aria-label', Cap(formNouns().one) + ' title');
     title.style.cssText = 'font-family:' + displayStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
       'px; line-height:1.28; text-align:' + (poem.titleAlign || state.titleAlignment) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
     title.addEventListener('input', function () { poem.title = title.value.replace(/\n/g, ' '); state.isExample = false; persist(); autoGrow(title); });
@@ -8261,7 +8311,7 @@
     body.spellcheck = prefs.spellcheck;
     body.setAttribute('role', 'textbox');
     body.setAttribute('aria-multiline', 'true');
-    body.setAttribute('aria-label', 'Entry text');
+    body.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
       'px; line-height:1.55; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
@@ -8457,21 +8507,13 @@
     moreBtn.addEventListener('click', function (e) { e.stopPropagation(); openBookMenu(moreBtn, entry); });
     return card;
   }
-  // One shelf per book type on Home (see homeForms), each led by its
-  // own New card; a brand-new account picks what it's making first.
-  function makeNewCard(label, onClick, extraClass) {
-    var newCard = document.createElement('button');
-    newCard.type = 'button';
-    newCard.className = 'home-card home-card-new' + (extraClass ? ' ' + extraClass : '');
-    newCard.innerHTML = '<div class="home-cover"><span class="home-new-plus">+</span></div><div class="home-card-title"></div>';
-    newCard.querySelector('.home-card-title').textContent = label;
-    newCard.addEventListener('click', onClick);
-    return newCard;
-  }
-  // New book: name it and choose what kind, rather than landing straight
-  // in an empty editor. `form` preselects a kind (a shelf's own button).
-  // Cancel backs out without adding anything to Home.
-  function openNewBookDialog(form) {
+  // New book: the one way to start anything, from Home's New book button
+  // or the Home menu. Name it and choose what kind in one dialog; a
+  // picture book's length, shape and front matter appear right here when
+  // it's the kind chosen, so nothing is asked twice. Cancel backs out
+  // without adding anything to Home.
+  function openNewBookDialog() {
+    var form = null;
     var ov = document.createElement('div');
     ov.className = 'modal-overlay open';
     var box = document.createElement('div');
@@ -8480,12 +8522,14 @@
     box.setAttribute('aria-modal', 'true');
     box.setAttribute('aria-label', 'New book');
     box.innerHTML = '<h2>New book</h2>' +
-      '<div class="subhead">Title</div><input type="text" class="prompt-input" placeholder="Untitled — you can name it later">' +
-      '<div class="subhead">What kind of book?</div><div class="new-book-types" role="radiogroup"></div>' +
+      '<div class="subhead">Title</div><input type="text" class="prompt-input" placeholder="Untitled \u2014 you can name it later">' +
+      '<div class="subhead">What kind of book?</div><div class="new-book-types" role="radiogroup" aria-label="Kind of book"></div>' +
+      '<div class="new-book-extra" hidden></div>' +
       '<div class="modal-actions" style="margin-top:18px;"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="ok">Create</button></div>';
     ov.appendChild(box);
     document.body.appendChild(ov);
     var nameInput = box.querySelector('input'), ok = box.querySelector('[data-act="ok"]'), types = box.querySelector('.new-book-types');
+    var extra = box.querySelector('.new-book-extra'), pbOpts = null;
     function pick(f) {
       form = f;
       types.querySelectorAll('.home-start-card').forEach(function (c) {
@@ -8493,6 +8537,8 @@
         c.classList.toggle('is-active', on);
         c.setAttribute('aria-checked', on ? 'true' : 'false');
       });
+      if (f === 'picture' && !pbOpts) pbOpts = pbNewBookOptions(extra);
+      extra.hidden = f !== 'picture';
       ok.disabled = !form;
     }
     Object.keys(BOOK_FORMS).forEach(function (f) {
@@ -8505,17 +8551,19 @@
       b.querySelector('strong').textContent = BOOK_FORMS[f].add;
       b.querySelector('span').textContent = BOOK_FORMS[f].about;
       b.addEventListener('click', function () { pick(f); });
-      b.addEventListener('dblclick', function () { pick(f); create(); });
+      // Double-click is a shortcut to Create, except for a picture book,
+      // whose own choices appear below.
+      b.addEventListener('dblclick', function () { pick(f); if (f !== 'picture') create(); });
       types.appendChild(b);
     });
-    pick(form && BOOK_FORMS[form] ? form : null);
+    pick(null);
     function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
     function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
     function create() {
       if (!form) { types.querySelector('.home-start-card').focus(); return; }
-      var name = nameInput.value.trim(), f = form;
+      var name = nameInput.value.trim(), f = form, opts = pbOpts && pbOpts();
       close();
-      createBookOfForm(f, name);
+      createBookOfForm(f, name, opts);
     }
     document.addEventListener('keydown', onKey, true);
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
@@ -8524,12 +8572,14 @@
     nameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); create(); } });
     setTimeout(function () { nameInput.focus(); }, 0);
   }
-  document.getElementById('newBookBtn').addEventListener('click', function () { openNewBookDialog(null); });
-  function startBookOfForm(form) { openNewBookDialog(form); }
-  function createBookOfForm(form, name) {
-    if (form === 'picture') { addHomeForm(form); openNewPictureBookDialog(name); return; }
+  document.getElementById('newBookBtn').addEventListener('click', function () { openNewBookDialog(); });
+  function createBookOfForm(form, name, pbOpts) {
     addHomeForm(form);
-    if (form === 'cartoon') {
+    if (form === 'picture') {
+      pbOpts = pbOpts || { pages: 32, layout: 'classic', trim: '8.5x8.5' };
+      startPictureBook(pbNewBook(pbOpts.pages, pbOpts.layout, pbOpts.trim, googleUserName || ''));
+      if (name) { pbTitleInput.value = name; pbTitleInput.dispatchEvent(new Event('input')); }
+    } else if (form === 'cartoon') {
       startNewCartoonBook();
       if (name) { cbTitleInput.value = name; cbTitleInput.dispatchEvent(new Event('input')); }
     } else {
@@ -8544,23 +8594,13 @@
     shelves.innerHTML = '';
     var forms = homeForms();
     if (!forms.length) {
-      var intro = document.createElement('p');
-      intro.className = 'home-intro';
-      intro.textContent = 'What are you making? You can start another kind any time.';
-      var start = document.createElement('div');
-      start.className = 'home-start';
-      Object.keys(BOOK_FORMS).forEach(function (f) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'home-start-card';
-        b.dataset.form = f;
-        b.innerHTML = '<strong></strong><span></span>';
-        b.querySelector('strong').textContent = BOOK_FORMS[f].add;
-        b.querySelector('span').textContent = BOOK_FORMS[f].about;
-        b.addEventListener('click', function () { startBookOfForm(f); });
-        start.appendChild(b);
-      });
-      shelves.append(intro, start);
+      // A new account: one clear way in. The dialog asks what kind.
+      var empty = document.createElement('div');
+      empty.className = 'home-empty';
+      empty.innerHTML = '<p class="home-intro">Nothing here yet. Start a book, name it, and choose what kind: poetry, a novel, essays, a screenplay, a play, a picture book or cartoons.</p>' +
+        '<button class="btn btn-primary" type="button">New book</button>';
+      empty.querySelector('button').addEventListener('click', function () { openNewBookDialog(); });
+      shelves.appendChild(empty);
     }
     forms.forEach(function (f) {
       var shelf = document.createElement('section');
@@ -8578,7 +8618,6 @@
       if (f === 'picture') renderPictureBookShelf(grid);
       else if (f === 'cartoon') renderCartoonShelf(grid);
       else {
-        grid.appendChild(makeNewCard(BOOK_FORMS[f].newLabel, function () { startNewBook(f); }));
         activeBooks().filter(function (c) { return bookFormOf(c.data) === f; })
           .sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
             grid.appendChild(makeHomeCard(entry));
@@ -8587,8 +8626,6 @@
       shelves.appendChild(shelf);
     });
     fitHomeShelves();
-    var missing = Object.keys(BOOK_FORMS).filter(function (f) { return forms.indexOf(f) === -1; });
-    document.getElementById('newBookBtn').hidden = !forms.length;
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks());
@@ -8602,7 +8639,7 @@
       archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : cbEntry(entry.id) === entry ? makeCartoonCard(entry) : makeHomeCard(entry));
     });
   }
-  // Each shelf shows one row -- its New card and the most recent books
+  // Each shelf shows one row -- the most recent books
   // that fit -- with "See all" when there are more (a row's worth is
   // however many columns the window has room for).
   var homeShelfOpen = {};
@@ -8610,7 +8647,7 @@
     document.querySelectorAll('#homeShelves .home-shelf').forEach(function (shelf) {
       var grid = shelf.querySelector('.home-grid'), btn = shelf.querySelector('.home-see-all');
       var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
-      var books = grid.children.length - 1;
+      var books = grid.children.length;
       var hidden = grid.children.length - cols;
       Array.prototype.forEach.call(grid.children, function (c, i) { c.classList.toggle('is-over', i >= cols); });
       btn.hidden = hidden <= 0 && !shelf.classList.contains('is-open');
@@ -8780,21 +8817,29 @@
       return;
     }
 
-    // The same book types as Home's shelves (collections, if none chosen yet).
+    // One New book at the top (the dialog asks what kind), then the
+    // same book types as Home's shelves, each under its name.
+    var addBook = document.createElement('button');
+    addBook.className = 'chapbooks-new';
+    addBook.type = 'button';
+    addBook.textContent = '+ New book';
+    addBook.addEventListener('click', function () { closeChapbooksDropdown(); openNewBookDialog(); });
+    chapbooksPane.appendChild(addBook);
+    function groupLabel(form) {
+      chapbooksPane.appendChild(makeDivider());
+      var lab = document.createElement('div');
+      lab.className = 'chapbooks-group';
+      lab.textContent = BOOK_FORMS[form].shelf;
+      chapbooksPane.appendChild(lab);
+    }
     var menuForms = homeForms();
-    if (!menuForms.length) menuForms = ['collection'];
-    ['collection', 'novel', 'essays'].forEach(function (form) {
+    TEXT_FORM_KEYS.forEach(function (form) {
       if (menuForms.indexOf(form) === -1) return;
-      var newBtn = document.createElement('button');
-      newBtn.className = 'chapbooks-new';
-      newBtn.type = 'button';
-      newBtn.textContent = '+ ' + BOOK_FORMS[form].newLabel;
-      newBtn.addEventListener('click', function () { startNewBook(form); });
-      chapbooksPane.appendChild(newBtn);
+      groupLabel(form);
       activeBooks().filter(function (c) { return bookFormOf(c.data) === form; })
         .sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
           var row = document.createElement('div');
-          row.className = 'chapbook-row' + (entry.id === state.chapbookId && !isPictureBookShown() ? ' current' : '');
+          row.className = 'chapbook-row' + (entry.id === state.chapbookId && !isPictureBookShown() && !isCartoonShown() ? ' current' : '');
           row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span><button class="chapbook-restore" type="button" title="Archive">⤓</button>';
           row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
           row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
@@ -8805,39 +8850,20 @@
           });
           chapbooksPane.appendChild(row);
         });
-      chapbooksPane.appendChild(makeDivider());
     });
-
     if (menuForms.indexOf('picture') !== -1) {
-      var newPbBtn = document.createElement('button');
-      newPbBtn.className = 'chapbooks-new';
-      newPbBtn.type = 'button';
-      newPbBtn.textContent = '+ ' + BOOK_FORMS.picture.newLabel;
-      newPbBtn.addEventListener('click', openNewPictureBookDialog);
-      chapbooksPane.appendChild(newPbBtn);
+      groupLabel('picture');
       activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
         chapbooksPane.appendChild(pictureBookMenuRow(entry, false));
       });
-      chapbooksPane.appendChild(makeDivider());
     }
     if (menuForms.indexOf('cartoon') !== -1) {
-      var newCbBtn = document.createElement('button');
-      newCbBtn.className = 'chapbooks-new';
-      newCbBtn.type = 'button';
-      newCbBtn.textContent = '+ ' + BOOK_FORMS.cartoon.newLabel;
-      newCbBtn.addEventListener('click', startNewCartoonBook);
-      chapbooksPane.appendChild(newCbBtn);
+      groupLabel('cartoon');
       activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
         chapbooksPane.appendChild(cartoonMenuRow(entry, false));
       });
-      chapbooksPane.appendChild(makeDivider());
     }
-    var addBook = document.createElement('button');
-    addBook.className = 'chapbooks-trash-link';
-    addBook.type = 'button';
-    addBook.textContent = '+ New book…';
-    addBook.addEventListener('click', function () { closeChapbooksDropdown(); openNewBookDialog(null); });
-    chapbooksPane.appendChild(addBook);
+    chapbooksPane.appendChild(makeDivider());
 
     var archivedCount = archivedBooks().length + archivedPictureBooks().length + archivedCartoonBooks().length;
     var archivedLink = document.createElement('button');
@@ -9060,7 +9086,7 @@
   function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
   function computeStageMode() {
     if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') || document.body.classList.contains('view-cb') ||
-        document.querySelector('.workspace').classList.contains('tools-hidden')) return null;
+        document.getElementById('bookWorkspace').classList.contains('tools-hidden')) return null;
     var f = panelOpen('formattingBody'), m = panelOpen('coversBody');
     if (f && m) return lastStagePanel;
     return m ? 'matter' : f ? 'format' : null;
@@ -9121,7 +9147,7 @@
   }
   // Where the entries were scrolled when the stage opened, taken at the
   // click, before the panel's own scroll adjustment.
-  var entriesScrollY = 0, scrollYAtToggle = null, editorPreviewIndex = 0;
+  var entriesScrollY = 0, scrollYAtToggle = null, editorPreviewIndex = 0, stageKeepScroll = false;
   function updateMatterStage() {
     var mode = computeStageMode();
     var wasOpen = !!stageMode;
@@ -9151,7 +9177,8 @@
     // On opening, line the stage up with the top of the window so the
     // whole page is in view (the tools column is sticky and stays put).
     var top = document.getElementById('matterStage').getBoundingClientRect().top;
-    if (!wasOpen && Math.abs(top - 8) > 1) window.scrollBy({ top: top - 8, behavior: 'instant' });
+    // Not when the book title opened it: that's where you're typing.
+    if (!wasOpen && !stageKeepScroll && Math.abs(top - 8) > 1) window.scrollBy({ top: top - 8, behavior: 'instant' });
   }
   window.addEventListener('resize', function () { if (stageMode) renderPreview(); });
   if (wideLayout.addEventListener) wideLayout.addEventListener('change', updateMatterStage);
@@ -9452,6 +9479,26 @@
   document.getElementById('authorInput').addEventListener('input', function (e) {
     state.author = e.target.value; persist();
   });
+  // Clicking the book title (or the author name) brings up its
+  // formatting: Front and Back Matter, on the front cover, scrolled to
+  // that part's controls, with the cover shown large beside them. Only
+  // where the tools sit beside the page; on a phone they're far below
+  // and jumping there would take the field you're typing in away.
+  function showCoverFormattingFor(headId) {
+    if (!wideLayout.matches) return;
+    stageKeepScroll = true;
+    if (toolsHidden) toolsToggleBtn.click();
+    if (document.getElementById('coversBody').hidden) document.getElementById('coversToggle').click();
+    if (matterTarget !== 'front') showCoverTarget('front');
+    else if (stageMode !== 'matter') { lastStagePanel = 'matter'; updateMatterStage(); }
+    stageKeepScroll = false;
+    var head = document.getElementById(headId);
+    var scroller = head.closest('.sidebar-scroll');
+    if (scroller) scroller.scrollTop += head.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 8;
+    head.classList.remove('is-flash'); void head.offsetWidth; head.classList.add('is-flash');
+  }
+  document.getElementById('bookTitleInput').addEventListener('click', function () { showCoverFormattingFor('coverTitleHead'); });
+  document.getElementById('authorInput').addEventListener('click', function () { showCoverFormattingFor('coverAuthorHead'); });
 
   function syncSidebarFromState() {
     document.getElementById('bookTitleInput').value = state.bookTitle || '';
@@ -9543,7 +9590,7 @@
     // under the entries. There it fills the space beside the (often
     // taller) tools column instead of leaving an empty gap above a
     // full-width panel.
-    var workspace = document.querySelector('.workspace');
+    var workspace = document.getElementById('bookWorkspace');
     var entriesColumn = document.getElementById('entriesColumn');
     var intakePanel = document.getElementById('intakePanel');
     var intakeBar = document.getElementById('intakeCollapsedBar');
@@ -9653,21 +9700,26 @@
   // essays; sections or parts), and puts the page in its colorway.
   function applyFormWording() {
     var form = bookFormOf(state), f = TEXT_FORMS[form];
-    var Cap = function (w) { return w.charAt(0).toUpperCase() + w.slice(1); };
     document.getElementById('addPoemBtn').textContent = '+ Add ' + f.one;
     document.getElementById('addSectionBtn').textContent = '+ Add ' + f.section;
     var seg = document.getElementById('entriesViewSeg');
-    seg.querySelector('[data-view="sections"]').textContent = Cap(f.section) + ' View';
+    seg.querySelector('[data-view="sections"] .vs-label').textContent = Cap(f.section) + ' View';
     seg.querySelector('[data-view="sections"]').title = 'Just the ' + f.section + ' titles, to rename or reorder whole ' + f.section + 's';
     seg.querySelector('[data-view="titles"]').title = 'One row per ' + f.one + '; click a title to open it';
-    seg.querySelector('[data-view="entries"]').textContent = Cap(f.one) + ' View';
+    seg.querySelector('[data-view="entries"] .vs-label').textContent = Cap(f.one) + ' View';
     seg.querySelector('[data-view="entries"]').title = 'Every ' + f.one + ' open in full';
     document.querySelector('#intakePanel .panel-title').textContent = 'Bring in your ' + f.many;
     document.querySelector('#archivePanel .panel-title').textContent = 'Archived ' + f.many;
     document.getElementById('exportSelectBtn').textContent = 'Export select ' + f.many + '…';
     document.getElementById('statPoemsLabel').textContent = Cap(f.many);
     document.getElementById('selectEntriesPrompt').textContent = 'Choose which ' + f.many + ' to include:';
-    ['collection', 'novel', 'essays'].forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
+    document.querySelectorAll('[data-noun]').forEach(function (el) { el.textContent = f[el.dataset.noun]; });
+    var tocShow = document.getElementById('tocShowSelect');
+    tocShow.querySelector('[value="all"]').textContent = Cap(f.section) + 's and ' + f.many;
+    tocShow.querySelector('[value="sections"]').textContent = Cap(f.section) + 's only';
+    tocShow.querySelector('[value="entries"]').textContent = Cap(f.many) + ' only';
+    document.getElementById('archiveToggleBtn').title = 'View archived ' + f.many;
+    TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
     applyFormWording();
@@ -10387,7 +10439,7 @@
       smaller.getContext('2d').drawImage(c, 0, 0, smaller.width, smaller.height);
       c = smaller;
     }
-    throw new Error('That picture is too big to store.');
+    throw new Error('That illustration is too big to store.');
   }
   async function pbImportFile(file) {
     var img = await pbBlobToImage(file);
@@ -10509,7 +10561,7 @@
   async function pbCleanImage(it, mode) {
     var srcId = it.orig || it.img;
     var src = await pbLoadImage(srcId);
-    if (!src) throw new Error('This picture isn’t on this device yet.');
+    if (!src) throw new Error('This illustration isn’t on this device yet.');
     var c = pbFlattenPaper(pbCanvasFrom(src, PB_IMG_MAX_DIM), mode === 'transparent');
     if (mode === 'ink') c = pbInkify(c);
     var enc = await pbEncode(c, mode === 'transparent');
@@ -10874,12 +10926,6 @@
   }
   function renderPictureBookShelf(grid) {
     grid.innerHTML = '';
-    var newCard = document.createElement('button');
-    newCard.type = 'button';
-    newCard.className = 'home-card home-card-new home-card-pb';
-    newCard.innerHTML = '<div class="home-cover"><span class="home-new-plus">+</span></div><div class="home-card-title">New picture book</div>';
-    newCard.addEventListener('click', openNewPictureBookDialog);
-    grid.appendChild(newCard);
     activePictureBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
       grid.appendChild(makePictureBookCard(entry));
     });
@@ -11100,7 +11146,7 @@
     var el = pbImgEls[it.img];
     if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; b.appendChild(im); }
     var lab = document.createElement('span');
-    lab.textContent = 'Picture · ' + (it.fit === 'free' ? 'placed freely' : (it.fit === 'bleed' ? 'full bleed' : 'centered') + ', ' +
+    lab.textContent = 'Illustration · ' + (it.fit === 'free' ? 'placed freely' : (it.fit === 'bleed' ? 'full bleed' : 'centered') + ', ' +
       (it.area === 'spread' ? 'whole spread' : it.area + ' page'));
     b.appendChild(lab);
     b.addEventListener('click', function () {
@@ -11294,8 +11340,8 @@
     var actions = document.createElement('div');
     actions.className = 'pb-head-actions';
     var addPic = document.createElement('button');
-    addPic.type = 'button'; addPic.className = 'pb-add-btn'; addPic.textContent = '+ Picture';
-    addPic.title = 'Add a picture (or drop one onto the spread)';
+    addPic.type = 'button'; addPic.className = 'pb-add-btn'; addPic.textContent = '+ Illustration';
+    addPic.title = 'Add an illustration (or drop an image file onto the spread)';
     addPic.addEventListener('click', function () { pbPickFile(function (file) { pbAddPicture(s, file, null); }); });
     var dots = document.createElement('button');
     dots.type = 'button'; dots.className = 'dots-btn'; dots.textContent = '⋯';
@@ -11310,7 +11356,7 @@
     notesBtn.type = 'button'; notesBtn.className = 'pb-notes-btn';
     notesBtn.title = 'Notes for the illustrator. They can go in the digital dummy and the PowerPoint’s speaker notes, never on the page.';
     function syncNotesBtn(open) {
-      notesBtn.textContent = 'Art notes';
+      notesBtn.textContent = 'Illustration notes';
       notesBtn.classList.toggle('has-notes', !!(pbState.spreads[s].notes || '').trim());
       notesBtn.classList.toggle('is-open', open);
       notesBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -11332,7 +11378,7 @@
     ta.className = 'pb-notes';
     ta.rows = 2;
     ta.placeholder = 'Illustration notes for this spread';
-    ta.setAttribute('aria-label', 'Art notes for spread ' + (s + 1));
+    ta.setAttribute('aria-label', 'Illustration notes for spread ' + (s + 1));
     ta.value = sp.notes;
     ta.spellcheck = prefs.spellcheck;
     ta.addEventListener('input', function () { pbState.spreads[s].notes = ta.value; autoGrow(ta); syncNotesBtn(true); pbPersist(); });
@@ -11373,7 +11419,7 @@
     if (!sp.items.length && (pages.left || pages.right) && s === pbCur) {
       var hint = document.createElement('div');
       hint.className = 'pb-empty-hint';
-      hint.textContent = 'Double-click to add text · drop a picture here';
+      hint.textContent = 'Double-click to add text · drop an illustration here';
       stage.appendChild(hint);
     }
     pbPageNumbers(s).forEach(function (pn) {
@@ -11850,7 +11896,7 @@
     var m = document.createElement('div');
     m.className = 'pb-img-missing';
     m.style.inset = '0';
-    m.textContent = 'Picture loading… (or not on this device yet)';
+    m.textContent = 'Illustration loading… (or not on this device yet)';
     return m;
   }
   // Click selects a picture. Dragging moves a free one, or, in full
@@ -12156,7 +12202,7 @@
       pbSel = null;
       pbSelect({ s: s, id: it.id });
     } catch (err) {
-      await confirmDialog('Couldn’t add that picture: ' + (err && err.message ? err.message : 'unknown error'));
+      await confirmDialog('Couldn’t add that illustration: ' + (err && err.message ? err.message : 'unknown error'));
     }
   }
 
@@ -12242,7 +12288,7 @@
       if (it.fit !== 'free') pbQuickbar.appendChild(pbQb('Reset', 'Back to filling the page, centered', false, function () { pbSetItem({ ox: 0, oy: 0, zoom: 1 }); }));
       pbQuickbar.appendChild(pbQbSep());
       [['bleed', 'Bleed'], ['center', 'Centered'], ['free', 'Free']].forEach(function (f) {
-        pbQuickbar.appendChild(pbQb(f[1], f[0] === 'bleed' ? 'Fill to the edges; drag to choose what shows' : f[0] === 'center' ? 'Whole picture, centered' : 'Place it anywhere, any size and angle', it.fit === f[0], function () { pbSetFit(it, f[0]); }));
+        pbQuickbar.appendChild(pbQb(f[1], f[0] === 'bleed' ? 'Fill to the edges; drag to choose what shows' : f[0] === 'center' ? 'Whole illustration, centered' : 'Place it anywhere, any size and angle', it.fit === f[0], function () { pbSetFit(it, f[0]); }));
       });
       var cleanBtn = pbQb('Clean up ▾', 'Tidy a scanned or photographed drawing', !!it.clean, function (e) {
         e.stopPropagation();
@@ -12255,7 +12301,7 @@
         pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
         pbCleanMenu.style.top = (r.bottom + 6) + 'px';
       });
-      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Archive', 'Send this picture to the archive', false, function () { pbItemAction('delete'); }));
+      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Archive', 'Send this illustration to the archive', false, function () { pbItemAction('delete'); }));
     }
     pbPositionQuickbar();
   }
@@ -12331,7 +12377,7 @@
           pbCheckpoint();
           it.img = id; it.orig = null; it.clean = null;
           pbPersist(); pbRefreshSpread(s); pbSyncFormatting();
-        } catch (err) { confirmDialog('Couldn’t use that picture: ' + (err && err.message ? err.message : 'unknown error')); }
+        } catch (err) { confirmDialog('Couldn’t use that illustration: ' + (err && err.message ? err.message : 'unknown error')); }
       });
       return;
     }
@@ -12548,7 +12594,7 @@
       pbFmt('pbImgArea').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', it.fit !== 'free' && b.dataset.val === it.area); b.disabled = it.fit === 'free'; });
       pbFmt('pbImgFit').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === it.fit); });
       pbFmt('pbImgFitNote').textContent = it.fit === 'bleed' ? 'Fills its page(s) to the edges. Drag to move it anywhere; zoom in to show less. It snaps back to centered.'
-        : it.fit === 'center' ? 'The whole picture, fitted to its page(s). Drag to move it; it snaps back to centered.' : 'Drag it anywhere. The corner handle resizes it and the top handle turns it.';
+        : it.fit === 'center' ? 'The whole illustration, fitted to its page(s). Drag to move it; it snaps back to centered.' : 'Drag it anywhere. The corner handle resizes it and the top handle turns it.';
       pbFmt('pbImgScaleField').hidden = it.fit === 'free';
       pbFmt('pbImgScaleField').querySelector('label').textContent = it.fit === 'bleed' ? 'Zoom' : 'Size';
       var pct = Math.round((it.fit === 'bleed' ? (it.zoom || 1) : it.scale) * 100);
@@ -12683,7 +12729,7 @@
       pbPersist();
       if (pbSel) pbRefreshSpread(pbSel.s);
     } catch (err) {
-      await confirmDialog(err && err.message ? err.message : 'Couldn’t clean up that picture.');
+      await confirmDialog(err && err.message ? err.message : 'Couldn’t clean up that illustration.');
     }
     btn.disabled = false; btn.textContent = label;
     pbSyncFormatting();
@@ -12917,6 +12963,7 @@
     document.documentElement.classList.remove('preview-full-open');
   }
   pbPreviewCanvas.addEventListener('click', openPbPreviewFull);
+  document.getElementById('pbPreviewOpenBtn').addEventListener('click', openPbPreviewFull);
   pbFull.querySelector('.preview-full-close').addEventListener('click', closePbPreviewFull);
   pbFull.addEventListener('click', function (e) { if (e.target === pbFull) closePbPreviewFull(); });
   pbFull.querySelectorAll('[data-step]').forEach(function (b) {
@@ -13087,7 +13134,7 @@
       item.appendChild(c);
       var txt = document.createElement('div');
       txt.className = 'pb-archive-text';
-      var what = sp.itemOnly ? (sp.items[0] && sp.items[0].type === 'image' ? 'A picture' : 'A text box') + ' from spread ' + (sp.archivedFrom || '') + ': ' : '';
+      var what = sp.itemOnly ? (sp.items[0] && sp.items[0].type === 'image' ? 'An illustration' : 'A text box') + ' from spread ' + (sp.archivedFrom || '') + ': ' : '';
       txt.textContent = what + (sp.items.filter(function (it) { return it.type === 'text'; }).map(pbItemText).join(' / ') || sp.notes || (sp.itemOnly ? '' : '(no text)'));
       item.appendChild(txt);
       var restore = document.createElement('button');
@@ -13183,26 +13230,18 @@
   }
 
   // ---- New picture book: length, shape, and front/back matter ----
-  function openNewPictureBookDialog(name) {
-    var ov = document.createElement('div');
-    ov.className = 'modal-overlay open';
-    var box = document.createElement('div');
-    box.className = 'modal-box pb-new-box';
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-modal', 'true');
-    box.setAttribute('aria-label', 'New picture book');
+  // Filled into the New book dialog when Picture book is the kind chosen.
+  // Returns a function that reads the choices back.
+  function pbNewBookOptions(container) {
     var pages = 32, trim = '8.5x8.5', layout = 'classic';
-    box.innerHTML = '<h2>New picture book</h2>' +
+    container.innerHTML =
       '<div class="subhead">How many pages?</div>' +
-      '<div class="seg seg-4" id="pbNewPages"></div>' +
+      '<div class="seg seg-4 pb-new-pages"></div>' +
       '<p class="pb-new-note">32 is the standard. You can add or remove spreads any time.</p>' +
-      '<div class="subhead">Shape and size</div><div class="pb-trim-grid" id="pbNewTrim"></div>' +
-      '<div class="subhead">Front and back matter</div><div class="pb-layouts" id="pbNewLayouts"></div>' +
-      '<p class="pb-new-note">With separate endpapers (usual for hardcovers), the endpapers are extra paper and every page is yours. A self-ended book prints its endpapers on its own first and last pages, so 8 of its pages go to them (a 32-page book keeps 12 spreads for the story).</p>' +
-      '<div class="modal-actions" style="margin-top:18px;"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="ok">Create</button></div>';
-    ov.appendChild(box);
-    document.body.appendChild(ov);
-    var pagesSeg = box.querySelector('#pbNewPages');
+      '<div class="subhead">Shape and size</div><div class="pb-trim-grid pb-new-trim"></div>' +
+      '<div class="subhead">Front and back matter</div><div class="pb-layouts pb-new-layouts"></div>' +
+      '<p class="pb-new-note">With separate endpapers (usual for hardcovers), the endpapers are extra paper and every page is yours. A self-ended book prints its endpapers on its own first and last pages, so 8 of its pages go to them (a 32-page book keeps 12 spreads for the story).</p>';
+    var pagesSeg = container.querySelector('.pb-new-pages');
     [28, 32, 36, 40].forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = p + ' pages'; b.dataset.val = p;
@@ -13214,7 +13253,7 @@
       });
       pagesSeg.appendChild(b);
     });
-    var trimGrid = box.querySelector('#pbNewTrim');
+    var trimGrid = container.querySelector('.pb-new-trim');
     PB_TRIMS.forEach(function (t) {
       var b = document.createElement('button');
       b.type = 'button';
@@ -13227,7 +13266,7 @@
       });
       trimGrid.appendChild(b);
     });
-    var layoutsBox = box.querySelector('#pbNewLayouts');
+    var layoutsBox = container.querySelector('.pb-new-layouts');
     function renderLayouts() {
       layoutsBox.innerHTML = '';
       PB_LAYOUTS.forEach(function (l) {
@@ -13242,17 +13281,7 @@
       });
     }
     renderLayouts();
-    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
-    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
-    document.addEventListener('keydown', onKey, true);
-    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
-    box.querySelector('[data-act="cancel"]').addEventListener('click', close);
-    box.querySelector('[data-act="ok"]').addEventListener('click', function () {
-      close();
-      startPictureBook(pbNewBook(pages, layout, trim, googleUserName || ''));
-      if (name) { pbTitleInput.value = name; pbTitleInput.dispatchEvent(new Event('input')); }
-    });
-    box.querySelector('[data-act="ok"]').focus();
+    return function () { return { pages: pages, trim: trim, layout: layout }; };
   }
 
   // ---------------------------------------------------------------------
@@ -13566,7 +13595,7 @@
         filename = pbSlug() + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
         mime = 'application/pdf';
       }
-      var note = missing ? ' Some pictures aren’t on this device yet, so they’re left out.' : '';
+      var note = missing ? ' Some illustrations aren’t on this device yet, so they’re left out.' : '';
       var dl = null;
       try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
       if (dl) { await dl.save({ filename: filename, data: bytes }); setPbExportStatus('Saved ' + filename + '.' + note); }
@@ -13759,7 +13788,6 @@
   }
   function renderCartoonShelf(grid) {
     grid.innerHTML = '';
-    grid.appendChild(makeNewCard(BOOK_FORMS.cartoon.newLabel, startNewCartoonBook, 'home-card-cb'));
     activeCartoonBooks().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
       grid.appendChild(makeCartoonCard(entry));
     });
@@ -14145,7 +14173,9 @@
     cbFull.querySelectorAll('.preview-full-nav span')[1].textContent = cbFmt('cbPrevCaption').textContent;
   }
   function cbCloseFull() { cbFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
-  cbPreviewCanvas.addEventListener('click', function () { cbFull.hidden = false; document.documentElement.classList.add('preview-full-open'); cbRenderFull(); });
+  function openCbPreviewFull() { cbFull.hidden = false; document.documentElement.classList.add('preview-full-open'); cbRenderFull(); }
+  cbPreviewCanvas.addEventListener('click', openCbPreviewFull);
+  document.getElementById('cbPreviewOpenBtn').addEventListener('click', openCbPreviewFull);
   cbFull.querySelector('.preview-full-close').addEventListener('click', cbCloseFull);
   cbFull.addEventListener('click', function (e) { if (e.target === cbFull) cbCloseFull(); });
   cbFull.querySelectorAll('[data-d]').forEach(function (b) {
@@ -14243,15 +14273,15 @@
       { sel: '#pbViewSeg', title: 'Three ways to see the book', text: 'Text is for writing: every page’s words at a size you can read. Spread shows each spread as it will print. Thumbnail shows the whole book at a glance.' },
       { sel: '#pbSheet .pbt-cols', title: 'Write page by page', text: 'Type each page’s words here. The first and last pages have a menu for what they are (title page, dedication…), and choosing one sets up its usual text.' },
       { sel: '#pbFormattingPanel', title: 'Formatting and Export', text: 'Here in Text view: the book’s shape, story type, page numbers, and the dummy and PowerPoint exports.' },
-      { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop pictures straight onto a spread.' }
+      { sel: '#pbViewSeg [data-view="spreads"]', title: 'Lay it out', text: 'In Spread view, double-click a page to add text, drag to move it, click to write in it, and drop illustrations straight onto a spread.' }
     ],
     sample: [
       { sel: '#poemList .is-sample', title: 'A sample to look at', text: 'This sample is set exactly as your book will be: indented paragraphs, a scene break, the chapter title. The preview shows it on the page.' },
       { sel: '#poemList .is-sample .dots-btn', title: 'Archive it when you’re done', text: 'Open its ⋯ menu and choose Archive. It moves to the archive at the bottom of the list, where you can bring it back any time.' }
     ],
     collection: [
-      { sel: '#intakePanel', title: 'Bring in your entries', text: 'From Google Drive, a link, or pasted text. You can fix titles and line breaks afterward.' },
-      { sel: '#entriesViewSeg', title: 'Switch views', text: 'See just section titles, one row per entry, or every entry open in full.' },
+      { sel: '#intakePanel', title: 'Bring in your writing', text: 'From Google Drive, a link, or pasted text. You can fix titles and line breaks afterward.' },
+      { sel: '#entriesViewSeg', title: 'Switch views', text: 'See just the section titles, one row per title, or everything open in full.' },
       { sel: '#toolsSidebar', title: 'Preview, Formatting, Export', text: 'The book as it will print, how it looks, and the PDF and Word files.' }
     ]
   };
@@ -14317,6 +14347,13 @@
   }
   window.addEventListener('resize', placeTourCard);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && tourState) endTour(); });
+  // Bringing entries in shows the intro tour has done its job: its first
+  // step points at the import panel, which just folded away, so the card
+  // would otherwise float over the new entries pointing at nothing.
+  function endIntroTour() {
+    if (tourState && tourState.name === 'collection') { markTourSeen('collection'); endTour(); }
+    else if (!tourState) markTourSeen('collection');
+  }
   function maybeStartTour(name) {
     if (name === 'collection' && toursSeen().collection) name = 'sample';
     if (name === 'sample' && !document.querySelector('#poemList .is-sample')) return;
@@ -14325,6 +14362,9 @@
       if (tourState || toursSeen()[name]) return;
       if (name === 'picture' ? !isPictureBookShown() : (isHomeShown() || isPictureBookShown())) return;
       if (name === 'sample' && !document.querySelector('#poemList .is-sample')) return;
+      // The intro is for an empty book; one that already has entries in
+      // it (brought in, or opened from Home) doesn't need it.
+      if (name === 'collection' && state.poems.some(function (p) { return !isSection(p) && !isUntouchedSample(p) && !entryIsEmpty(p); })) return;
       tourState = { name: name, i: 0 };
       showTourStep();
     }, 500);
