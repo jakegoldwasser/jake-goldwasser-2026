@@ -1646,22 +1646,28 @@
   .pb-view .pbt-page-label select.pb-role { font-size: 12px; }
   .pbt-page-label .pbt-role-name { letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--ink-soft); font-size: 11.5px; }
   /* Art notes sit under the pages, their label above them when narrow. */
-  textarea.pbt-field {
+  .pbt-field {
     display: block; width: 100%; resize: none; overflow: hidden; min-height: 40px; padding: 8px 12px; border-radius: 0;
+    position: relative; white-space: pre-wrap; overflow-wrap: break-word; cursor: text;
     border: 0; border-bottom: 1px dashed var(--line); background: transparent; color: #1C2934; font-size: 17px; line-height: 1.4; outline: none;
     transition: background-color .15s ease, box-shadow .15s ease;
   }
-  textarea.pbt-field:hover { background: #F7F9FA; }
+  .pbt-field:hover { background: #F7F9FA; }
   /* Selected or being typed in: an accent bar down the left edge. */
   /* The one being typed in; or, while no field has the caret, the one
      selected -- never both, so only one page ever shows the bar. */
-  textarea.pbt-field:focus, #pbSheet:not(:has(textarea.pbt-field:focus)) textarea.pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
-  textarea.pbt-field::placeholder { color: var(--ink-faint); font-style: italic; }
+  .pbt-field:focus, #pbSheet:not(:has(.pbt-field:focus)) .pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
+  /* The fields are rich text (a bold or italic word shows as it prints),
+     so the placeholder is drawn in: absolutely placed, it sits where the
+     first line starts without adding a line of its own. */
+  .pbt-field.is-empty::before, .pb-pop-text.is-empty::before {
+    content: attr(data-placeholder); position: absolute; pointer-events: none; color: var(--ink-faint); font-style: italic; font-weight: 400;
+  }
   /* A box in Text view: a grip at its right edge to drag it to another
      page, and Merge on the line above it when it has a neighbour there.
      Shown on hover with a mouse; always on touch screens. */
   .pbt-box { position: relative; touch-action: pan-y; }
-  .pbt-box textarea.pbt-field { position: relative; z-index: 1; }
+  .pbt-box .pbt-field { position: relative; z-index: 1; }
   /* Swipe to remove: the box slides left over an Archive (or Delete) label. */
   .pbt-swipe-under {
     position: absolute; inset: 0; display: none; align-items: center; justify-content: flex-end; padding: 0 16px;
@@ -1670,9 +1676,9 @@
   .pbt-box.is-swiping { overflow: hidden; }
   .pbt-box.is-swiping .pbt-swipe-under { display: flex; }
   .pbt-box.is-past .pbt-swipe-under { background: var(--warning); color: #FFFFFF; }
-  .pbt-box.is-swiping textarea.pbt-field { background: #FFFFFF; }
+  .pbt-box.is-swiping .pbt-field { background: #FFFFFF; }
   .pbt-box.is-swiping .pbt-grip, .pbt-box.is-swiping .pbt-join { visibility: hidden; }
-  .pbt-box textarea.pbt-field { padding-right: 34px; }
+  .pbt-box .pbt-field { padding-right: 34px; }
   .pbt-grip {
     position: absolute; z-index: 2; top: 6px; right: 4px; width: 26px; height: 30px; display: flex; align-items: center; justify-content: center;
     appearance: none; border: 0; border-radius: 5px; background: transparent; color: var(--ink-faint); padding: 0;
@@ -1689,7 +1695,7 @@
   .pbt-join:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   @media (hover: none) { .pbt-grip, .pbt-join { opacity: 1; } }
   .pbt-box.is-dragging { opacity: .45; }
-  .pbt-box.is-arrived textarea.pbt-field { animation: pbt-arrive 1.2s ease; }
+  .pbt-box.is-arrived .pbt-field { animation: pbt-arrive 1.2s ease; }
   @keyframes pbt-arrive { from { background: var(--accent-soft); } to { background: transparent; } }
   body.pbt-dragging, body.pbt-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
   .pbt-page.is-drop-target { outline: 3px solid var(--accent); outline-offset: 2px; background: var(--accent-soft); }
@@ -1754,7 +1760,7 @@
   .pb-pop-tools .pb-qb-sep { width: 1px; align-self: stretch; margin: 4px 3px; background: var(--line-strong); }
   .pb-pop-text {
     width: 100%; resize: none; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: #FFFFFF; color: #1C2934;
-    padding: 10px 12px; outline: none; min-height: 80px;
+    padding: 10px 12px; outline: none; min-height: 80px; position: relative; white-space: pre-wrap; overflow-wrap: break-word; cursor: text;
   }
   .pb-pop-text:focus { border-color: var(--accent); }
   /* The words stay put on the page; you write them in the pop-up. */
@@ -2916,8 +2922,13 @@
   var modalCancelBtn = document.getElementById('modalCancelBtn');
   var modalResolve = null;
 
-  function confirmDialog(message) {
+  // `okLabel`: a destructive action names itself ("Delete") on a red
+  // button instead of a plain OK.
+  function confirmDialog(message, okLabel) {
     modalMessage.textContent = message;
+    modalOkBtn.textContent = okLabel || 'OK';
+    modalOkBtn.classList.toggle('btn-danger', !!okLabel);
+    modalOkBtn.classList.toggle('btn-primary', !okLabel);
     modalOverlay.classList.add('open');
     return new Promise(function (resolve) { modalResolve = resolve; });
   }
@@ -11933,8 +11944,7 @@
   var pbMeasureCtx2 = document.createElement('canvas').getContext('2d');
   function pbTextHeightFrac(it, wFrac, size) {
     var t = pbTrim(pbState.trim);
-    pbMeasureCtx2.font = pbCtxFont(it, size);
-    var lines = pbWrapCanvas(pbMeasureCtx2, pbItemText(it) || ' ', wFrac * 2 * t.pageW * 72).length;
+    var lines = pbWrapRich(pbMeasureCtx2, it, pbItemText(it) || ' ', size, wFrac * 2 * t.pageW * 72).length;
     return lines * size * pbLh(it) / (t.pageH * 72);
   }
   var pbGeomCache = new WeakMap();
@@ -12065,12 +12075,76 @@
     });
     return out;
   }
-  // The same lines, for a box on screen at its set size and width.
+  // Wrapping text with bold or italic words in it: the same rules as
+  // pbWrapCanvas (and the same lines), but each word is measured in its
+  // own style. Returns lines of segments { t, b, i } with their width.
+  function pbRunFont(it, px, b, i) {
+    var styled = pbHasStyles(pbFontKey(it));
+    return (styled && (i || it.italic) ? 'italic ' : '') + (styled && (b || it.bold) ? '700 ' : '400 ') + px + 'px ' + displayStackFor(pbFontKey(it));
+  }
+  function pbWrapRich(ctx, it, text, px, maxW) {
+    var out = [];
+    function w(tok) { ctx.font = pbRunFont(it, px, tok.b, tok.i); return ctx.measureText(tok.t).width; }
+    function width(line) {
+      var end = line.length;
+      while (end && /^\s+$/.test(line[end - 1].t)) end--;
+      var sum = 0;
+      for (var k = 0; k < end; k++) sum += line[k].w;
+      return sum;
+    }
+    function trimEnd(line) { while (line.length && /^\s+$/.test(line[line.length - 1].t)) line.pop(); return line; }
+    String(text).split('\n').forEach(function (para) {
+      var toks = [];
+      parseInlineRuns(para).forEach(function (run) {
+        run.text.split(/(\s+)/).forEach(function (t) { if (t) toks.push({ t: t, b: !!run.bold, i: !!run.italic }); });
+      });
+      if (!toks.length) { out.push([]); return; }
+      toks.forEach(function (tk) { tk.w = w(tk); });
+      var lines = [], line = [], broke = false;
+      toks.forEach(function (tk) {
+        var space = /^\s+$/.test(tk.t);
+        if (!line.length) { if (!space) line.push(tk); return; }
+        if (space || width(line.concat([tk])) <= maxW) { line.push(tk); return; }
+        lines.push(trimEnd(line));
+        line = [tk];
+        // A single word wider than the box breaks where it must.
+        while (line.length === 1 && line[0].w > maxW && line[0].t.length > 1) {
+          var word = line[0], cut = word.t.length - 1;
+          while (cut > 1 && w({ t: word.t.slice(0, cut), b: word.b, i: word.i }) > maxW) cut--;
+          var head = { t: word.t.slice(0, cut), b: word.b, i: word.i }, tail = { t: word.t.slice(cut), b: word.b, i: word.i };
+          head.w = w(head); tail.w = w(tail);
+          lines.push([head]); line = [tail]; broke = true;
+        }
+      });
+      lines.push(trimEnd(line));
+      // No orphans: a lone last word takes the word before it along.
+      var n = lines.length;
+      if (n > 1 && !broke && lines[n - 1].filter(function (x) { return !/^\s+$/.test(x.t); }).length === 1) {
+        var prev = lines[n - 2], words = prev.filter(function (x) { return !/^\s+$/.test(x.t); }).length;
+        if (words >= 3) {
+          var cutAt = prev.length - 1;
+          while (cutAt > 0 && !/^\s+$/.test(prev[cutAt - 1].t)) cutAt--;
+          var moved = prev.slice(cutAt).concat([{ t: ' ', b: false, i: false, w: w({ t: ' ' }) }], lines[n - 1]);
+          if (width(moved) <= maxW) { lines[n - 2] = trimEnd(prev.slice(0, cutAt)); lines[n - 1] = moved; }
+        }
+      }
+      out.push.apply(out, lines);
+    });
+    return out.map(function (line) { return { segs: line, w: width(line) }; });
+  }
+  // The same lines, for a box on screen at its set size and width (HTML,
+  // with the bold and italic words marked).
   function pbSetLines(it, g) {
     var t = pbTrim(pbState.trim), text = pbItemText(it);
     if (!text) return '';
-    pbMeasureCtx2.font = pbCtxFont(it, g.size);
-    return pbWrapCanvas(pbMeasureCtx2, text, g.w * 2 * t.pageW * 72).join('\n');
+    return pbWrapRich(pbMeasureCtx2, it, text, g.size, g.w * 2 * t.pageW * 72).map(function (line) {
+      return line.segs.map(function (sg) {
+        var h = escapeHtml(sg.t);
+        if (sg.i) h = '<i>' + h + '</i>';
+        if (sg.b) h = '<b>' + h + '</b>';
+        return h;
+      }).join('');
+    }).join('\n');
   }
   function pbImgRect(it, W, H, el) {
     var iw = el.naturalWidth || el.width, ih = el.naturalHeight || el.height;
@@ -12130,8 +12204,7 @@
         var g = pbGeom(it, s);
         var px = g.size * k, lineH = px * pbLh(it), bw = g.w * W;
         ctx.save();
-        ctx.font = pbCtxFont(it, px);
-        var lines = pbWrapCanvas(ctx, text, bw);
+        var lines = pbWrapRich(ctx, it, text, px, bw);
         var bh = lines.length * lineH;
         ctx.translate(g.x * W + bw / 2, g.y * H + bh / 2);
         ctx.rotate(g.rot * Math.PI / 180);
@@ -12142,9 +12215,17 @@
         }
         ctx.fillStyle = pbColor(it.color);
         ctx.textBaseline = 'middle';
-        ctx.textAlign = g.align === 'left' ? 'left' : g.align === 'right' ? 'right' : 'center';
-        var lx = g.align === 'left' ? -bw / 2 : g.align === 'right' ? bw / 2 : 0;
-        lines.forEach(function (ln, i) { ctx.fillText(ln, lx, -bh / 2 + i * lineH + lineH / 2); });
+        ctx.textAlign = 'left';
+        // Word by word, each in its own style, the line placed as a whole.
+        lines.forEach(function (ln, i) {
+          var x = g.align === 'left' ? -bw / 2 : g.align === 'right' ? bw / 2 - ln.w : -ln.w / 2;
+          var y = -bh / 2 + i * lineH + lineH / 2;
+          ln.segs.forEach(function (sg) {
+            ctx.font = pbRunFont(it, px, sg.b, sg.i);
+            ctx.fillText(sg.t, x, y);
+            x += sg.w;
+          });
+        });
         ctx.restore();
       }
     });
@@ -12296,7 +12377,7 @@
   function pbRefreshBound() {
     pbSheet.querySelectorAll('.pb-tb[data-bind]').forEach(function (box) {
       var it = pbFindItem(+box.closest('.pb-spread').dataset.spread, box.dataset.id);
-      if (it) box.querySelector('.pb-tb-text').textContent = pbSetLines(it, pbGeom(it, +box.closest('.pb-spread').dataset.spread));
+      if (it) box.querySelector('.pb-tb-text').innerHTML = pbSetLines(it, pbGeom(it, +box.closest('.pb-spread').dataset.spread));
     });
     pbSheet.querySelectorAll('.pbt-field[data-bind]').forEach(function (f) {
       var it = pbFindItem(+f.closest('.pb-spread').dataset.spread, f.dataset.id);
@@ -12398,7 +12479,7 @@
   }) : null;
   if (document.fonts && document.fonts.addEventListener) {
     document.fonts.addEventListener('loadingdone', function () {
-      if (pbSheet) pbSheet.querySelectorAll('textarea.pbt-field').forEach(autoGrow);
+      if (pbSheet) pbSheet.querySelectorAll('.pbt-field').forEach(autoGrow);
       // Line breaks measured before a typeface arrived were measured in
       // its fallback: measure again, and reset the spreads on screen.
       pbGeomCache = new WeakMap();
@@ -12418,10 +12499,103 @@
     clearTimeout(pbThumbTimers[s]);
     pbThumbTimers[s] = setTimeout(function () { pbDrawTextThumb(s); }, 150);
   }
+  // A picture-book text field that shows a bold or italic word as it
+  // prints: rich text, holding the same **bold** / *italic* markers the
+  // book editor uses. It keeps a textarea's interface (value,
+  // placeholder, setSelectionRange) so the code around it is unchanged.
+  // Select a word and press B or I (or Cmd/Ctrl+B, I); with nothing
+  // selected, B and I style the whole box as before.
+  function pbRenderRich(el, text) {
+    el.innerHTML = '';
+    String(text || '').split('\n').forEach(function (line) {
+      var d = document.createElement('div');
+      parseInlineRuns(line).forEach(function (run) {
+        if (!run.text) return;
+        var n = document.createTextNode(run.text);
+        if (run.italic) { var i = document.createElement('i'); i.appendChild(n); n = i; }
+        if (run.bold) { var b = document.createElement('b'); b.appendChild(n); n = b; }
+        d.appendChild(n);
+      });
+      if (!d.firstChild) d.appendChild(document.createElement('br'));
+      el.appendChild(d);
+    });
+  }
+  // A plain-text offset (lines joined by \n) as a DOM point in the field.
+  function pbRichPoint(el, off) {
+    var rows = Array.prototype.filter.call(el.childNodes, function (n) { return n.nodeType === 1; });
+    if (!rows.length) return { node: el, offset: 0 };
+    for (var r = 0; r < rows.length; r++) {
+      var len = rows[r].textContent.length;
+      if (off <= len || r === rows.length - 1) {
+        var walker = document.createTreeWalker(rows[r], NodeFilter.SHOW_TEXT), t;
+        off = Math.min(off, len);
+        while ((t = walker.nextNode())) {
+          if (off <= t.data.length) return { node: t, offset: off };
+          off -= t.data.length;
+        }
+        return { node: rows[r], offset: 0 };
+      }
+      off -= len + 1;
+    }
+    return { node: el, offset: 0 };
+  }
+  function pbRichField(cls) {
+    var f = document.createElement('div');
+    f.className = cls;
+    f.contentEditable = 'true';
+    f.setAttribute('role', 'textbox');
+    f.setAttribute('aria-multiline', 'true');
+    function sync() { f.classList.toggle('is-empty', !f.textContent); }
+    Object.defineProperty(f, 'value', {
+      get: function () { return serializeEditor(f).join('\n'); },
+      set: function (v) { pbRenderRich(f, v); sync(); }
+    });
+    Object.defineProperty(f, 'placeholder', {
+      get: function () { return f.dataset.placeholder || ''; },
+      set: function (v) { f.dataset.placeholder = v; f.setAttribute('aria-placeholder', v); }
+    });
+    f.setSelectionRange = function (a, b) {
+      var sel = window.getSelection(), p0 = pbRichPoint(f, a), p1 = pbRichPoint(f, b == null ? a : b), rng = document.createRange();
+      rng.setStart(p0.node, p0.offset);
+      rng.setEnd(p1.node, p1.offset);
+      sel.removeAllRanges();
+      sel.addRange(rng);
+    };
+    f.addEventListener('input', sync);
+    // Pasted text comes in plain, like the book editor.
+    f.addEventListener('paste', function (e) {
+      var text = e.clipboardData && e.clipboardData.getData('text/plain');
+      if (text == null) return;
+      e.preventDefault();
+      document.execCommand('insertText', false, text.replace(/\r\n?/g, '\n'));
+    });
+    f.addEventListener('keydown', function (e) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || !/^[bi]$/i.test(e.key)) return;
+      e.preventDefault();
+      var item = f._pbItem && f._pbItem();
+      if (item) pbToggleStyle(e.key.toLowerCase() === 'b' ? 'bold' : 'italic', item);
+    });
+    return f;
+  }
+  // B or I: the selected words if some are selected in a field (not for
+  // the title, author or byline, which mirror plain book fields), else
+  // the whole box.
+  function pbToggleStyle(kind, it) {
+    if (!it) return;
+    var styled = pbHasStyles(pbFontKey(it));
+    var fld = document.activeElement, sel = window.getSelection();
+    var inField = fld && fld.isContentEditable && fld.matches && fld.matches('.pbt-field, .pb-pop-text') &&
+      sel && sel.rangeCount && !sel.isCollapsed && fld.contains(sel.anchorNode);
+    if (inField) {
+      if (!styled || (it.bind && it.bind !== 'copyright')) return;
+      document.execCommand(kind);
+      return;
+    }
+    if (styled) pbSetItem(kind === 'bold' ? { bold: !it.bold } : { italic: !it.italic });
+  }
   function pbMakeField(s, it, side) {
-    var f = document.createElement('textarea');
-    f.className = 'pbt-field';
-    f.rows = 1;
+    var f = pbRichField('pbt-field');
+    f._pbItem = function () { return f.dataset.id ? pbFindItem(s, f.dataset.id) : null; };
     f.spellcheck = prefs.spellcheck;
     if (pbFieldRO) pbFieldRO.observe(f);
     var sp = pbState.spreads[s];
@@ -12434,6 +12608,7 @@
     } else {
       f.placeholder = 'Words for p. ' + pbSpreadPages(s, pbState.spreads.length)[side];
       f.style.fontFamily = displayStackFor(pbState.font);
+      f.value = '';
     }
     f.addEventListener('focus', function () {
       pbFollow(s);
@@ -12767,7 +12942,7 @@
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     var ghost = document.createElement('div');
     ghost.className = 'pbt-ghost';
-    ghost.textContent = (pbItemText(it).trim().split('\n')[0] || 'Empty text box').slice(0, 48);
+    ghost.textContent = (stripFormatMarkers(pbItemText(it)).trim().split('\n')[0] || 'Empty text box').slice(0, 48);
     document.body.appendChild(ghost);
     var src = grip.closest('.pbt-box');
     src.classList.add('is-dragging');
@@ -13122,7 +13297,7 @@
     var ed = document.createElement('div');
     ed.className = 'pb-tb-text';
     ed.dataset.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Type here';
-    ed.textContent = pbSetLines(it, g);
+    ed.innerHTML = pbSetLines(it, g);
     pbStyleText(ed, it, g);
     box.appendChild(ed);
     box.addEventListener('pointerdown', function (e) {
@@ -13237,6 +13412,8 @@
   // boxes write through to the book's own title and author; editing a
   // copyright line makes it ordinary text.
   function pbSetText(it, value) {
+    // Title, author and byline mirror plain fields: no inline styling.
+    if (it.bind && it.bind !== 'copyright') value = stripFormatMarkers(value);
     // A byline stays tied to the author while it reads "by …".
     if (it.bind === 'byline') {
       var m = /^\s*by\s+(.*)$/i.exec(value);
@@ -13263,9 +13440,11 @@
   pbPop.setAttribute('aria-label', 'Edit text');
   pbPop.innerHTML = '<div class="pb-pop-bar"><span class="pb-pop-where"></span><span class="pb-pop-tools"></span>' +
     '<button type="button" class="btn btn-sm btn-primary pb-pop-done">Done</button></div>' +
-    '<textarea class="pb-pop-text" rows="3"></textarea>';
+    '';
+  var pbPopText = pbRichField('pb-pop-text');
+  pbPopText._pbItem = function () { return pbPopItem(); };
+  pbPop.appendChild(pbPopText);
   document.body.appendChild(pbPop);
-  var pbPopText = pbPop.querySelector('.pb-pop-text');
   var pbPopFor = null;
   function pbPopItem() { return pbPopFor ? pbFindItem(pbPopFor.s, pbPopFor.id) : null; }
   function pbStylePopup() {
@@ -13282,8 +13461,8 @@
     var tools = pbPop.querySelector('.pb-pop-tools');
     tools.innerHTML = '';
     tools.append(
-      pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbSetItem({ bold: !it.bold }); }, !styled),
-      pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbSetItem({ italic: !it.italic }); }, !styled),
+      pbQb('<b>B</b>', styled ? 'Bold (select words first to bold just those)' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
+      pbQb('<i>I</i>', styled ? 'Italic (select words first to italicize just those)' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
       pbQbSep(),
       pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
       (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it) + ' pt'; return sz; })(),
@@ -13811,8 +13990,8 @@
     if (it.type === 'text') {
       var styled = pbHasStyles(pbFontKey(it));
       pbQuickbar.append(
-        pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbSetItem({ bold: !it.bold }); }, !styled),
-        pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbSetItem({ italic: !it.italic }); }, !styled),
+        pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
+        pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
         pbQbSep(),
         pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
         (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it); return sz; })(),
@@ -14022,7 +14201,8 @@
       (s < n - 1 ? '<button type="button" role="menuitem" data-action="after">Add spread after</button>' : '<button type="button" role="menuitem" data-action="before">Add spread before</button>') +
       (middle ? '<button type="button" role="menuitem" data-action="duplicate">Duplicate</button>' : '') +
       '<button type="button" role="menuitem" data-action="clear">Clear the spread</button>' +
-      (middle ? '<button type="button" role="menuitem" data-action="archive">Archive</button>' : '');
+      (middle ? '<button type="button" role="menuitem" data-action="archive">Archive</button>' +
+        '<button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>' : '');
     pbSpreadMenuIndex = s;
     pbSpreadMenuBtn = btn;
     btn.setAttribute('aria-expanded', 'true');
@@ -14041,6 +14221,7 @@
     closePbSpreadMenu();
     if (action === 'after') pbInsertSpread(s + 1);
     else if (action === 'before') pbInsertSpread(s);
+    else if (action === 'delete') pbDeleteSpread(s);
     else if (action === 'duplicate') {
       pbCheckpoint();
       var copy = pbNormalizeSpread(JSON.parse(JSON.stringify(pbState.spreads[s])));
@@ -14186,8 +14367,10 @@
     pbFormattingClosedByHand = pbFmt('pbFormattingBody').hidden;
   });
   wireSeg('pbBoxFontSeg', function (val) { pbSetItem({ font: val }); });
-  pbFmt('pbBoxBold').addEventListener('click', function () { var it = pbSelected(); if (it) pbSetItem({ bold: !it.bold }); });
-  pbFmt('pbBoxItalic').addEventListener('click', function () { var it = pbSelected(); if (it) pbSetItem({ italic: !it.italic }); });
+  // Pressing these mustn't take the caret (and its selection) out of the field.
+  ['pbBoxBold', 'pbBoxItalic'].forEach(function (id) { pbFmt(id).addEventListener('mousedown', function (e) { e.preventDefault(); }); });
+  pbFmt('pbBoxBold').addEventListener('click', function () { pbToggleStyle('bold', pbSelected()); });
+  pbFmt('pbBoxItalic').addEventListener('click', function () { pbToggleStyle('italic', pbSelected()); });
   pbFmt('pbBoxSizeDown').addEventListener('click', function () { var it = pbSelected(); if (it) pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); });
   pbFmt('pbBoxSizeUp').addEventListener('click', function () { var it = pbSelected(); if (it) pbSetItem({ size: Math.min(200, pbFontSize(it) + 1) }); });
   pbFmt('pbBoxSize').addEventListener('change', function () {
@@ -14666,6 +14849,24 @@
 
   // ---- Archived spreads ----
   function pbSpreadIsEmpty(sp) { return !sp.items.length && !(sp.notes || '').trim(); }
+  // Deleting a spread outright, skipping the archive. An empty one just
+  // goes; one with anything on it asks first.
+  async function pbDeleteSpread(s) {
+    var n = pbState.spreads.length;
+    if (s <= 0 || s >= n - 1) return;
+    var sp = pbState.spreads[s];
+    if (!pbSpreadIsEmpty(sp)) {
+      var pages = pbSpreadPages(s, n);
+      var ok = await confirmDialog('Delete pages ' + pages.left + '–' + pages.right + ' and everything on them? This skips the archive, so the spread can’t be restored later.', 'Delete');
+      if (!ok || pbState.spreads[s] !== sp) return;
+    }
+    pbCheckpoint();
+    pbState.spreads.splice(s, 1);
+    pbSel = null;
+    pbPersist();
+    pbRenderView();
+    pbFollow(Math.min(s, pbState.spreads.length - 1));
+  }
   function pbArchiveSpread(s) {
     var n = pbState.spreads.length;
     if (s <= 0 || s >= n - 1) return;
@@ -15026,11 +15227,16 @@
       '</Relationships>';
   }
   function pptxFontName(key) { return displayStackFor(key).split(',')[0].replace(/['"]/g, '').trim(); }
-  function pptxParas(text, attrs, face, algn, lnPct) {
+  // `runStyle(run)`, when given, reads **bold** / *italic* markers in the
+  // text and returns each run's extra attributes (a word bolded alone).
+  function pptxParas(text, attrs, face, algn, lnPct, runStyle) {
     var pPr = '<a:pPr algn="' + algn + '"><a:lnSpc><a:spcPct val="' + lnPct + '"/></a:lnSpc></a:pPr>';
     return String(text || '').split('\n').map(function (line) {
       if (!line) return '<a:p>' + pPr + '<a:endParaRPr lang="en-US" ' + attrs + '/></a:p>';
-      return '<a:p>' + pPr + '<a:r><a:rPr lang="en-US" ' + attrs + ' dirty="0">' + face + '</a:rPr><a:t>' + escapeXml(line) + '</a:t></a:r></a:p>';
+      var runs = runStyle ? parseInlineRuns(line).filter(function (r) { return r.text; }) : [{ text: line }];
+      return '<a:p>' + pPr + runs.map(function (r) {
+        return '<a:r><a:rPr lang="en-US" ' + attrs + (runStyle ? runStyle(r) : '') + ' dirty="0">' + face + '</a:rPr><a:t>' + escapeXml(r.text) + '</a:t></a:r>';
+      }).join('') + '</a:p>';
     }).join('');
   }
   function pptxSlide(sp, s, SWe, SHe, hasArt) {
@@ -15046,19 +15252,19 @@
       var text = pbItemText(it);
       if (!text.trim()) return;
       var g = pbGeom(it, s), size = g.size, styled = pbHasStyles(pbFontKey(it));
-      ctx.font = pbCtxFont(it, size);
-      var lines = pbWrapCanvas(ctx, text, g.w * Wpt).length;
+      var lines = pbWrapRich(ctx, it, text, size, g.w * Wpt).length;
       var hEmu = Math.round(lines * size * pbLh(it) * 12700);
       var padE = it.bg ? Math.round(size * 0.35 * 12700) : 0;
       var color = pbColor(it.color).replace('#', '');
-      var attrs = 'sz="' + Math.round(size * 100) + '"' + (styled && it.bold ? ' b="1"' : '') + (styled && it.italic ? ' i="1"' : '');
+      var attrs = 'sz="' + Math.round(size * 100) + '"';
+      var runStyle = function (run) { return (styled && (it.bold || run.bold) ? ' b="1"' : '') + (styled && (it.italic || run.italic) ? ' i="1"' : ''); };
       var face = '<a:solidFill><a:srgbClr val="' + color + '"/></a:solidFill><a:latin typeface="' + escapeXml(pptxFontName(pbFontKey(it))) + '"/>';
       shapes += '<p:sp><p:nvSpPr><p:cNvPr id="' + (id++) + '" name="Text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>' +
         '<p:spPr><a:xfrm' + (g.rot ? ' rot="' + Math.round(g.rot * 60000) + '"' : '') + '><a:off x="' + (Math.round(g.x * SWe) - padE) + '" y="' + (Math.round(g.y * SHe) - padE) + '"/>' +
         '<a:ext cx="' + (Math.round(g.w * SWe) + 2 * padE) + '" cy="' + (hEmu + 2 * padE) + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
         (it.bg ? '<a:solidFill><a:srgbClr val="' + it.bg.replace('#', '') + '"/></a:solidFill>' : '<a:noFill/>') + '</p:spPr>' +
         '<p:txBody><a:bodyPr wrap="square" lIns="' + padE + '" tIns="' + padE + '" rIns="' + padE + '" bIns="' + padE + '" anchor="t"><a:noAutofit/></a:bodyPr><a:lstStyle/>' +
-        pptxParas(text, attrs, face, g.align === 'left' ? 'l' : g.align === 'right' ? 'r' : 'ctr', Math.round(pbLh(it) / 1.2 * 100000)) + '</p:txBody></p:sp>';
+        pptxParas(text, attrs, face, g.align === 'left' ? 'l' : g.align === 'right' ? 'r' : 'ctr', Math.round(pbLh(it) / 1.2 * 100000), runStyle) + '</p:txBody></p:sp>';
     });
     // Page numbers, as small text boxes.
     pbPageNumbers(s).forEach(function (pn) {
