@@ -321,6 +321,7 @@
   }
 
   .status-line { font-size: 12.5px; color: var(--ink-soft); min-height: 18px; margin-top: 8px; }
+  .drive-choices { display: flex; flex-wrap: wrap; gap: 8px; }
   .status-line.error { color: var(--danger); }
 
   .hint-box {
@@ -6377,10 +6378,26 @@
     var pane = document.getElementById('drivePane');
     if (!pane) return;
     pane.innerHTML =
-      '<div class="hint-box">Pick a Google Doc from your Drive to bring its ' + formNouns().many + ' in — you’ll choose the file yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
+      '<div class="hint-box">Pick a Google Doc, or a whole folder of PDFs and Docs, from your Drive to bring its ' + formNouns().many + ' in — you choose them yourself in Google’s own picker, and nothing else in your Drive is touched.</div>' +
+      '<div class="drive-choices">' +
       '<button class="btn btn-primary" id="connectDriveBtn" type="button">Choose a Google Doc…</button>' +
+      '<button class="btn" id="driveFolderBtn" type="button">Choose a folder or several files…</button>' +
+      '<button class="btn" id="localFilesBtn" type="button">PDFs on your computer…</button>' +
+      '<input type="file" id="localFilesInput" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" multiple hidden>' +
+      '</div>' +
+      '<div class="field-note" style="margin-top:8px;">A folder brings in every PDF, Google Doc and text file in it, in order by file name — each one’s ' + formNouns().many + ' added one after another.</div>' +
       '<div id="driveStatus" class="status-line"></div>';
     document.getElementById('connectDriveBtn').addEventListener('click', openDrivePicker);
+    document.getElementById('driveFolderBtn').addEventListener('click', openDriveFilesPicker);
+    var localInput = document.getElementById('localFilesInput');
+    document.getElementById('localFilesBtn').addEventListener('click', function () { localInput.click(); });
+    localInput.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(localInput.files || []);
+      localInput.value = '';
+      if (files.length) importFileBatch(files.map(function (f) {
+        return { name: f.name, mimeType: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'text/plain'), read: function () { return f.arrayBuffer(); } };
+      }), files.length === 1 ? fileTitle(files[0].name) : files.length + ' files');
+    });
   }
 
   function ensureDriveTokenClient() {
@@ -6453,18 +6470,9 @@
       if (pane) pane.innerHTML = '<div class="hint-box">Google Drive import isn’t available in this view — use the Paste text tab instead.</div>';
       return;
     }
-    var accountEmail = signedInEmail();
-    if (!accountEmail) { setDriveStatus('Sign in with Google first — imports come from the account you’re signed in with.', true); return; }
-    setDriveStatus('Connecting to Google Drive…');
     try {
-      var token = await requestDriveAccessToken();
-      var tokenEmail = await driveTokenEmail(token);
-      if (tokenEmail.toLowerCase() !== accountEmail.toLowerCase()) {
-        dropDriveToken(token);
-        setDriveStatus('That was ' + (tokenEmail || 'a different Google account') + '. You can only import from ' +
-          accountEmail + ', the account you’re signed in with — try again and choose it.', true);
-        return;
-      }
+      var token = await checkedDriveToken();
+      if (!token) return;
       var ok = await loadDrivePicker();
       if (!ok) { setDriveStatus('Couldn’t load the Google Drive picker.', true); return; }
       var view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/vnd.google-apps.document');
@@ -6486,6 +6494,218 @@
     } catch (err) {
       setDriveStatus('Couldn’t connect to Google Drive.', true);
     }
+  }
+
+  // A Drive token for the account Bookbug is signed in with, or null
+  // (having said why in the status line).
+  async function checkedDriveToken() {
+    var accountEmail = signedInEmail();
+    if (!accountEmail) { setDriveStatus('Sign in with Google first — imports come from the account you’re signed in with.', true); return null; }
+    setDriveStatus('Connecting to Google Drive…');
+    var token = await requestDriveAccessToken();
+    var tokenEmail = await driveTokenEmail(token);
+    if (tokenEmail.toLowerCase() !== accountEmail.toLowerCase()) {
+      dropDriveToken(token);
+      setDriveStatus('That was ' + (tokenEmail || 'a different Google account') + '. You can only import from ' +
+        accountEmail + ', the account you’re signed in with — try again and choose it.', true);
+      return null;
+    }
+    return token;
+  }
+
+  // ---------------------------------------------------------------------
+  // Many files at once: a Drive folder (or several files picked in it),
+  // or PDFs from the computer. Each file is read on its own -- a PDF's
+  // text pulled out with pdf.js, a Google Doc through Drive's markdown
+  // export, a text file as is -- and its entries added in file-name
+  // order, so "01 Morning.pdf" comes before "02 Noon.pdf".
+  // ---------------------------------------------------------------------
+  var DRIVE_FOLDER_MIME = 'application/vnd.google-apps.folder';
+  var DRIVE_DOC_MIME = 'application/vnd.google-apps.document';
+  var BATCH_MIMES = ['application/pdf', DRIVE_DOC_MIME, 'text/plain', 'text/markdown'];
+  async function openDriveFilesPicker() {
+    if (!window.google || !google.accounts || !google.accounts.oauth2 || !window.gapi) { setDriveStatus('Google Drive import isn’t available in this view.', true); return; }
+    try {
+      var token = await checkedDriveToken();
+      if (!token) return;
+      if (!(await loadDrivePicker())) { setDriveStatus('Couldn’t load the Google Drive picker.', true); return; }
+      var view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setMimeTypes(BATCH_MIMES.concat([DRIVE_FOLDER_MIME]).join(','))
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMode(google.picker.DocsViewMode.LIST);
+      new google.picker.PickerBuilder()
+        .addView(view)
+        .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+        .setTitle('Choose a folder, or the files in it')
+        .setOAuthToken(token)
+        .setDeveloperKey(GOOGLE_API_KEY)
+        .setAppId(GOOGLE_CLIENT_ID.split('-')[0])
+        .setCallback(onDriveFilesPicked)
+        .setSize(Math.min(1051, window.innerWidth - 40), Math.min(650, window.innerHeight - 40))
+        .build()
+        .setVisible(true);
+      setDriveStatus('');
+    } catch (err) {
+      setDriveStatus('Couldn’t connect to Google Drive.', true);
+    }
+  }
+  async function onDriveFilesPicked(data) {
+    if (data.action !== google.picker.Action.PICKED) return;
+    var picked = data.docs || [], files = [], label = null;
+    try {
+      for (var i = 0; i < picked.length; i++) {
+        var d = picked[i];
+        if (d.mimeType !== DRIVE_FOLDER_MIME) { files.push(d); continue; }
+        label = label || d.name;
+        setDriveStatus('Looking in “' + d.name + '”…');
+        var res = await fetch('https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id,name,mimeType)&q=' +
+          encodeURIComponent("'" + d.id + "' in parents and trashed = false"), { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+        if (!res.ok) throw new Error('list_' + res.status);
+        files = files.concat((await res.json()).files || []);
+      }
+    } catch (err) {
+      setDriveStatus('Couldn’t open that folder.', true);
+      return;
+    }
+    files = files.filter(function (f) { return BATCH_MIMES.indexOf(f.mimeType) !== -1; });
+    if (!files.length) {
+      // Google only lets Bookbug see files you pick yourself, so a folder
+      // may come back looking empty.
+      setDriveStatus(label ? 'Google didn’t let Bookbug see inside “' + label + '”. Choose a folder or several files again, open the folder, and select the files in it (Shift-click selects a run of them).' : 'None of those are PDFs, Google Docs or text files.', true);
+      return;
+    }
+    importFileBatch(files.map(function (f) {
+      return { name: f.name, mimeType: f.mimeType, read: function () {
+        var url = 'https://www.googleapis.com/drive/v3/files/' + f.id + (f.mimeType === DRIVE_DOC_MIME ? '/export?mimeType=text%2Fmarkdown' : '?alt=media');
+        return fetch(url, { headers: { Authorization: 'Bearer ' + driveAccessToken } }).then(function (r) {
+          if (!r.ok) throw new Error('http_' + r.status);
+          return r.arrayBuffer();
+        });
+      } };
+    }), label || (files.length === 1 ? fileTitle(files[0].name) : files.length + ' files'));
+  }
+  // "03_The Heron.pdf" -> "The Heron": the name without its extension or
+  // any ordering number in front.
+  function fileTitle(name) {
+    return String(name || '').replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_]+/g, ' ').replace(/^\s*\d+\s*[-.)–—]?\s+(?=\S)/, '').trim() || 'Untitled';
+  }
+  async function importFileBatch(files, label) {
+    files.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }); });
+    var poems = [], failed = [];
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      setDriveStatus('Reading ' + (files.length > 1 ? (i + 1) + ' of ' + files.length + ': ' : '') + '“' + f.name + '”…');
+      try {
+        var buf = await f.read(), text;
+        if (f.mimeType === 'application/pdf') text = await pdfToDocText(buf);
+        else {
+          text = new TextDecoder().decode(buf);
+          if (f.mimeType !== DRIVE_DOC_MIME) text = plainTextToDoc(text);
+        }
+        if (!text.trim()) { failed.push(f.name); continue; }
+        poems = poems.concat(await parseDocWithImages(withFileTitle(text, f.name)));
+      } catch (err) {
+        failed.push(f.name);
+      }
+    }
+    if (!poems.length) { setDriveStatus(failed.length ? 'Couldn’t read ' + (failed.length === 1 ? '“' + failed[0] + '”' : 'those files') + '. (A scanned PDF is a picture of the page, with no text to read.)' : 'Nothing to bring in.', true); return; }
+    addImportedPoems(poems, label);
+    if (failed.length) {
+      var el = document.getElementById('driveStatus');
+      if (el) el.textContent += ' Couldn’t read ' + failed.map(function (n) { return '“' + n + '”'; }).join(', ') + '.';
+    }
+  }
+  // Every file's text starts with a title: its own (a heading, or a short
+  // first line standing alone), or else the file's name.
+  function withFileTitle(text, name) {
+    if (/^#{1,6}\s/m.test(text)) return text;
+    var body = text.replace(/^\s*\n/, ''), m = /^\t*([^\n]{1,70})\n\n+/.exec(body);
+    if (m && !/[,;:]$/.test(m[1].trim()) && body.slice(m[0].length).trim()) return '### ' + m[1].trim() + '\n\n' + body.slice(m[0].length);
+    return '### ' + fileTitle(name) + '\n\n' + body;
+  }
+
+  // PDF text, via pdf.js (loaded the first time it's needed). A PDF only
+  // knows where each run of text sits, so the lines are put back together
+  // from their positions: a bigger gap than the usual line spacing is a
+  // stanza break, a line set larger than the text is a title, a line
+  // further in than the rest is indented, and a lone number at the top or
+  // foot of a page is a page number and dropped.
+  var PDFJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var pdfjsReady = null;
+  function loadPdfJs() {
+    if (!pdfjsReady) pdfjsReady = new Promise(function (resolve, reject) {
+      if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
+      var sc = document.createElement('script');
+      sc.src = PDFJS_SRC;
+      sc.onload = function () {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_SRC.replace('pdf.min.js', 'pdf.worker.min.js');
+        resolve(window.pdfjsLib);
+      };
+      sc.onerror = function () { pdfjsReady = null; reject(new Error('pdfjs')); };
+      document.head.appendChild(sc);
+    });
+    return pdfjsReady;
+  }
+  async function pdfToDocText(buf) {
+    var lib = await loadPdfJs();
+    var pdf = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
+    var lines = [];
+    for (var pn = 1; pn <= pdf.numPages; pn++) {
+      var page = await pdf.getPage(pn), tc = await page.getTextContent(), rows = [];
+      tc.items.forEach(function (it) {
+        if (!it.str || !it.str.trim()) return;
+        var size = Math.hypot(it.transform[2], it.transform[3]) || it.height || 12, x = it.transform[4], y = it.transform[5];
+        var row = rows.filter(function (r) { return Math.abs(r.y - y) < size * 0.45; })[0];
+        if (!row) { row = { y: y, items: [] }; rows.push(row); }
+        row.items.push({ str: it.str, x: x, w: it.width || 0, size: size });
+      });
+      rows.sort(function (a, b) { return b.y - a.y; });
+      rows.forEach(function (r, ri) {
+        r.items.sort(function (a, b) { return a.x - b.x; });
+        var text = '', end = null, size = 0;
+        r.items.forEach(function (it) {
+          if (end != null && it.x - end > it.size * 0.18 && !/\s$/.test(text) && !/^\s/.test(it.str)) text += ' ';
+          text += it.str;
+          end = it.x + it.w;
+          size = Math.max(size, it.size);
+        });
+        text = text.replace(/\s+/g, ' ').trim();
+        if ((ri === 0 || ri === rows.length - 1) && /^[-–—]?\s*\d{1,4}\s*[-–—]?$/.test(text)) return;
+        lines.push({ text: text, x: r.items[0].x, size: size, y: r.y, page: pn });
+      });
+    }
+    if (!lines.length) return '';
+    var bySize = {};
+    lines.forEach(function (l) { var k = Math.round(l.size * 2) / 2; bySize[k] = (bySize[k] || 0) + l.text.length; });
+    var body = +Object.keys(bySize).sort(function (a, b) { return bySize[b] - bySize[a]; })[0];
+    function isBody(l) { return Math.abs(l.size - body) < body * 0.1; }
+    var diffs = [];
+    for (var i = 1; i < lines.length; i++) {
+      if (lines[i].page === lines[i - 1].page && isBody(lines[i]) && isBody(lines[i - 1])) diffs.push(lines[i - 1].y - lines[i].y);
+    }
+    diffs.sort(function (a, b) { return a - b; });
+    // The usual line spacing: low in the range, since stanza gaps are
+    // spacings too and a short poem may have as many of them as lines.
+    var leading = diffs.length ? diffs[Math.floor(diffs.length / 4)] : body * 1.3;
+    // Indents only count when most lines share one left edge (not a
+    // centered poem, whose every line starts somewhere different).
+    var bodyLines = lines.filter(isBody), minX = Math.min.apply(null, bodyLines.map(function (l) { return l.x; }));
+    var flush = bodyLines.filter(function (l) { return l.x - minX < 2; }).length >= bodyLines.length * 0.5;
+    var out = [], prev = null;
+    lines.forEach(function (l) {
+      var heading = l.size > body * 1.12 && l.text.length <= 90;
+      if (prev) {
+        var gap = prev.page !== l.page ? Infinity : prev.y - l.y;
+        if (heading && prev.heading && gap < l.size * 2.2) { out[out.length - 1] += ' ' + l.text; prev = l; l.heading = true; return; }
+        if (heading || prev.heading || gap > leading * 1.45) out.push('');
+      }
+      var off = l.x - minX;
+      out.push(heading ? '### ' + l.text : (flush && off > body * 0.9 ? new Array(Math.max(1, Math.round(off / 36)) + 1).join('\t') : '') + l.text);
+      l.heading = heading;
+      prev = l;
+    });
+    return out.join('\n');
   }
 
   function onDrivePickerResult(data) {
