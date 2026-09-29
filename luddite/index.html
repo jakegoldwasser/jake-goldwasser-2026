@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Luddite</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --ink: #1f1d1a;
+    --muted: #7a746a;
+    --rule: #e2ddd3;
+    --accent: #1f1d1a;
+    --accent-ink: #f7f4ee;
+    --lock: #b3261e;
+    --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #171614;
+      --ink: #e9e5dc;
+      --muted: #8f897e;
+      --rule: #2e2c28;
+      --accent: #e9e5dc;
+      --accent-ink: #171614;
+      --lock: #ef8a80;
+      --card: #201e1b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.5 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  [hidden] { display: none !important; }
+
+  /* Every non-writing state is one centered card. */
+  .screen {
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .card { max-width: 440px; width: 100%; text-align: center; }
+  .wordmark {
+    font-family: Literata, Georgia, serif;
+    font-size: 44px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .fine { color: var(--muted); font-size: 13px; margin: 20px 0 0; }
+  .btn {
+    font: 500 15px Inter, system-ui, sans-serif;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: 0;
+    border-radius: 999px;
+    padding: 12px 26px;
+    cursor: pointer;
+  }
+  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
+  .btn.small { padding: 6px 14px; font-size: 13px; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .linkish { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }
+  #gsiBtn { display: flex; justify-content: center; min-height: 44px; }
+  .warn { color: var(--lock); }
+
+  /* Writing */
+  #writeScreen { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--paper); }
+  #pad {
+    flex: 1;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 12vh 24px 30vh;
+    border: 0;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: var(--ink);
+    font: 20px/1.7 Literata, Georgia, serif;
+    caret-color: var(--ink);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  #pad::placeholder { color: var(--muted); opacity: 0.6; }
+  .bar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    color: var(--muted);
+    font-size: 12px;
+    opacity: 0.35;
+    transition: opacity 0.2s;
+  }
+  .bar:hover { opacity: 1; }
+  .bar .left { display: flex; gap: 16px; }
+  #leaves.has { color: var(--lock); opacity: 1; }
+
+  /* Locked */
+  #lockScreen { position: fixed; inset: 0; background: var(--paper); z-index: 10; }
+  #lockScreen h2 { font: 400 32px Literata, Georgia, serif; margin: 0 0 8px; color: var(--lock); }
+
+  /* Approvals */
+  #adminScreen { align-items: flex-start; }
+  #adminScreen .card { max-width: 720px; text-align: left; }
+  .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .admin-head h2 { font: 400 28px Literata, Georgia, serif; margin: 0; }
+  .user { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+  .user .who { flex: 1; min-width: 200px; }
+  .user .who b { font-weight: 500; display: block; }
+  .user .who span { color: var(--muted); font-size: 13px; word-break: break-all; }
+  .pill { font-size: 12px; padding: 2px 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule); color: var(--muted); }
+  .pill.approved { color: var(--ink); }
+  .pill.pending { color: var(--lock); }
+  .empty { color: var(--muted); padding: 16px 0; border-top: 1px solid var(--rule); }
+</style>
+</head>
+<body>
+
+<!-- Signing in -->
+<section class="screen" id="signInScreen" hidden>
+  <div class="card">
+    <h1 class="wordmark">Luddite</h1>
+    <p class="sub">A page, a cursor, and nothing else.</p>
+    <div id="gsiBtn"></div>
+    <p class="fine" id="signInNote"></p>
+  </div>
+</section>
+
+<!-- Waiting for approval -->
+<section class="screen" id="pendingScreen" hidden>
+  <div class="card">
+    <h1 class="wordmark">Luddite</h1>
+    <p class="sub">You&rsquo;re on the list. Once you&rsquo;re approved, this page will let you in.</p>
+    <div class="row">
+      <button class="btn ghost" id="recheckBtn">Check again</button>
+    </div>
+    <p class="fine"><span class="who-email"></span> &middot; <button class="linkish" data-signout>Sign out</button></p>
+  </div>
+</section>
+
+<!-- Ready to write -->
+<section class="screen" id="readyScreen" hidden>
+  <div class="card">
+    <h1 class="wordmark">Luddite</h1>
+    <p class="sub">Writing opens full screen. Leaving it &mdash; another tab, another app, or Esc &mdash; locks the page. Copying and pasting are off.</p>
+    <div class="row">
+      <button class="btn" id="startBtn">Start writing</button>
+      <button class="btn ghost" id="downloadBtn" hidden>Download .txt</button>
+    </div>
+    <p class="fine warn" id="noFullscreen" hidden>This browser can&rsquo;t go full screen, so Luddite won&rsquo;t work here. Try Chrome, Edge, Firefox or Safari on a computer.</p>
+    <p class="fine" id="lastSession" hidden></p>
+    <p class="fine">
+      <span class="who-email"></span>
+      &middot; <button class="linkish" id="newPageBtn" hidden>Clear the page</button><span id="newPageSep" hidden> &middot; </span>
+      <button class="linkish" id="adminLink" hidden>Approvals</button><span id="adminSep" hidden> &middot; </span>
+      <button class="linkish" data-signout>Sign out</button>
+    </p>
+  </div>
+</section>
+
+<!-- Writing -->
+<section id="writeScreen" hidden>
+  <textarea id="pad" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="sentences"
+    data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
+    aria-label="Your writing" placeholder="Begin."></textarea>
+  <div class="bar">
+    <div class="left">
+      <span id="count">0 words</span>
+      <span id="leaves"></span>
+    </div>
+    <button class="linkish" id="doneBtn">Done</button>
+  </div>
+</section>
+
+<!-- Locked -->
+<section class="screen" id="lockScreen" hidden>
+  <div class="card">
+    <h2>Locked</h2>
+    <p class="sub" id="lockWhy"></p>
+    <button class="btn" id="resumeBtn">Go back to full screen</button>
+    <p class="fine" id="lockCount"></p>
+  </div>
+</section>
+
+<!-- Approvals (admins only) -->
+<section class="screen" id="adminScreen" hidden>
+  <div class="card">
+    <div class="admin-head">
+      <h2>Approvals</h2>
+      <div class="row">
+        <button class="btn small" id="approveAllBtn">Approve all pending</button>
+        <button class="btn small ghost" id="adminBackBtn">Back</button>
+      </div>
+    </div>
+    <p class="fine" id="adminNote" style="margin:0 0 12px"></p>
+    <div id="userList"></div>
+  </div>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  // Same Google OAuth client and Lambda as the site's other tools; the
+  // Lambda's /luddite/* routes (cloud-sync-backend/index.mjs) keep the
+  // roster of who may write here.
+  var GOOGLE_CLIENT_ID = '142825546280-1pnvaf2hku3tdbp7oqo9qp7lsuahd6ou.apps.googleusercontent.com';
+  var API = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws';
+  // Mirrors ADMIN_EMAILS on the backend. Only used as a fallback while the
+  // backend doesn't have the Luddite routes yet (see checkStatus).
+  var ADMIN_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
+  var AUTH_KEY = 'luddite.auth.v1';
+
+  var authToken = null;
+  var me = { email: '', name: '', admin: false, status: '' };
+
+  function $(id) { return document.getElementById(id); }
+  var screens = ['signInScreen', 'pendingScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'adminScreen'];
+  function show(id) {
+    screens.forEach(function (s) { $(s).hidden = s !== id; });
+  }
+
+  function store(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) {} }
+  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+  function decodeJwtPayload(token) {
+    try {
+      var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(decodeURIComponent(escape(atob(part))));
+    } catch (e) { return {}; }
+  }
+
+  // ---------------------------------------------------------------------
+  // Sign-in and approval
+  // ---------------------------------------------------------------------
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = { Authorization: 'Bearer ' + authToken };
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    return fetch(API + path, { method: opts.method || 'GET', headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  }
+
+  function handleCredential(resp) {
+    authToken = resp.credential;
+    checkStatus();
+  }
+
+  async function checkStatus() {
+    var claims = decodeJwtPayload(authToken);
+    try {
+      var res = await api('/luddite/status');
+      if (res.status === 401) { signOut(); return; }
+      var data = res.ok ? await res.json() : {};
+      if (data.session) { authToken = data.session; store(AUTH_KEY, data.session); }
+      else if (res.ok) store(AUTH_KEY, authToken);
+      if (data.luddite) {
+        me = data.luddite;
+      } else if (res.ok && ADMIN_EMAILS.indexOf(String(claims.email || '').toLowerCase()) !== -1) {
+        // Backend predates the Luddite routes: let the admins in on the
+        // (Google-verified) token alone, without the approval list.
+        me = { email: claims.email, name: claims.name || '', admin: true, status: 'approved', legacy: true };
+      } else {
+        me = { email: claims.email || '', name: '', admin: false, status: 'pending' };
+      }
+    } catch (e) {
+      $('signInNote').textContent = 'Couldn’t reach the server. Check your connection and try again.';
+      show('signInScreen');
+      return;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.who-email'), function (el) { el.textContent = me.email; });
+    if (me.status === 'approved') showReady();
+    else show('pendingScreen');
+  }
+
+  function signOut() {
+    authToken = null;
+    store(AUTH_KEY, null);
+    me = { email: '', name: '', admin: false, status: '' };
+    try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+    showSignIn();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-signout]'), function (b) { b.addEventListener('click', signOut); });
+
+  function showSignIn() {
+    show('signInScreen');
+    (function wait(n) {
+      if (window.google && google.accounts && google.accounts.id) {
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredential, use_fedcm_for_prompt: true, itp_support: true });
+        google.accounts.id.renderButton($('gsiBtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with' });
+        return;
+      }
+      if (n > 0) setTimeout(function () { wait(n - 1); }, 200);
+      else $('signInNote').textContent = 'Google sign-in didn’t load. Reload the page to try again.';
+    })(50);
+  }
+
+  $('recheckBtn').addEventListener('click', checkStatus);
+
+  // ---------------------------------------------------------------------
+  // Ready screen
+  // ---------------------------------------------------------------------
+  function textKey() { return 'luddite.text.' + (me.email || 'anon'); }
+  function leavesKey() { return 'luddite.leaves.' + (me.email || 'anon'); }
+
+  function showReady() {
+    var text = load(textKey()) || '';
+    var has = text.trim().length > 0;
+    $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
+    $('downloadBtn').hidden = !has;
+    $('newPageBtn').hidden = $('newPageSep').hidden = !has;
+    $('adminLink').hidden = $('adminSep').hidden = !(me.admin && !me.legacy);
+    var fsOk = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    $('noFullscreen').hidden = fsOk;
+    $('startBtn').disabled = !fsOk;
+    var leaves = Number(load(leavesKey()) || 0);
+    $('lastSession').hidden = !has;
+    $('lastSession').textContent = wordCount(text) + ' words so far' + (leaves ? ' · left the page ' + leaves + (leaves === 1 ? ' time' : ' times') : '');
+    show('readyScreen');
+  }
+
+  $('downloadBtn').addEventListener('click', function () {
+    var blob = new Blob([load(textKey()) || ''], { type: 'text/plain' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'luddite-' + new Date().toISOString().slice(0, 10) + '.txt';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  $('newPageBtn').addEventListener('click', function () {
+    if (!confirm('Clear the page? This can’t be undone. Download it first if you want to keep it.')) return;
+    store(textKey(), null);
+    store(leavesKey(), null);
+    showReady();
+  });
+
+  // ---------------------------------------------------------------------
+  // Writing: full screen, and locked the moment focus leaves
+  // ---------------------------------------------------------------------
+  var pad = $('pad');
+  var writing = false;   // in a writing session (full screen or locked)
+  var locked = false;
+  var leavingOnPurpose = false;
+
+  function wordCount(s) { var m = s.trim().match(/\S+/g); return m ? m.length : 0; }
+  function updateCount() {
+    var n = wordCount(pad.value);
+    $('count').textContent = n + (n === 1 ? ' word' : ' words');
+  }
+  function updateLeaves() {
+    var n = Number(load(leavesKey()) || 0);
+    $('leaves').textContent = n ? 'left ' + n + '×' : '';
+    $('leaves').classList.toggle('has', n > 0);
+  }
+
+  function requestFs() {
+    var el = document.documentElement;
+    var p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
+    return Promise.resolve(p).then(function () {
+      // Chromium only: in full screen, send Esc, Cmd/Ctrl+W/T/N and the
+      // like to the page instead of the browser, so they can be swallowed
+      // below. Esc then has to be held down to leave full screen.
+      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
+    });
+  }
+  function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+
+  function enterWriting() {
+    requestFs().then(function () {
+      writing = true;
+      locked = false;
+      pad.value = load(textKey()) || '';
+      shadow = pad.value;
+      updateCount();
+      updateLeaves();
+      show('writeScreen');
+      pad.focus();
+      pad.setSelectionRange(pad.value.length, pad.value.length);
+    }).catch(function () {
+      alert('Luddite needs full screen to work. Allow it and try again.');
+    });
+  }
+  $('startBtn').addEventListener('click', enterWriting);
+
+  function lock(reason) {
+    if (!writing || locked || leavingOnPurpose) return;
+    locked = true;
+    save();
+    var n = Number(load(leavesKey()) || 0) + 1;
+    store(leavesKey(), String(n));
+    var t = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    $('lockWhy').textContent = reason + ' at ' + t + '.';
+    $('lockCount').textContent = 'Left the page ' + n + (n === 1 ? ' time' : ' times') + ' this piece.';
+    pad.blur();
+    show('lockScreen');
+  }
+
+  $('resumeBtn').addEventListener('click', function () {
+    requestFs().then(function () {
+      locked = false;
+      updateLeaves();
+      show('writeScreen');
+      pad.focus();
+    }).catch(function () {});
+  });
+
+  $('doneBtn').addEventListener('click', function () {
+    leavingOnPurpose = true;
+    save();
+    writing = false;
+    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
+    var exit = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen && document.webkitExitFullscreen());
+    Promise.resolve(exit).catch(function () {}).then(function () {
+      leavingOnPurpose = false;
+      showReady();
+    });
+  });
+
+  document.addEventListener('fullscreenchange', function () { if (!isFs()) lock('You left full screen'); });
+  document.addEventListener('webkitfullscreenchange', function () { if (!isFs()) lock('You left full screen'); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) lock('You switched tabs'); });
+  window.addEventListener('blur', function () { lock('You switched to another window'); });
+
+  // ---------------------------------------------------------------------
+  // No copy, cut, paste, drag-and-drop, or inserted text
+  // ---------------------------------------------------------------------
+  function stop(e) { e.preventDefault(); e.stopPropagation(); }
+  ['copy', 'cut', 'paste', 'drop', 'dragstart', 'dragover', 'contextmenu'].forEach(function (type) {
+    document.addEventListener(type, function (e) { if (writing) stop(e); }, true);
+  });
+
+  // Shortcuts that would copy, paste, print, save, open or close things.
+  var BLOCKED_KEYS = { c: 1, v: 1, x: 1, p: 1, s: 1, o: 1, n: 1, t: 1, w: 1, q: 1, l: 1, r: 1, f: 1, g: 1, h: 1, j: 1, k: 1, d: 1, u: 1, e: 1, m: 1 };
+  document.addEventListener('keydown', function (e) {
+    if (!writing) return;
+    var k = (e.key || '').toLowerCase();
+    if ((e.metaKey || e.ctrlKey) && BLOCKED_KEYS[k]) return stop(e);
+    if (e.shiftKey && k === 'insert') return stop(e);
+    if (/^f\d+$/.test(k) || k === 'contextmenu') return stop(e);
+    if (k === 'escape') return stop(e);
+  }, true);
+
+  // Only let text in one keystroke at a time. Anything that inserts a
+  // chunk -- paste, drop, autocorrect, dictation, a browser extension --
+  // is refused. `shadow` is the last text we know was typed; if the box
+  // ever holds something else without having come through here (an
+  // extension setting its value directly), it's put back.
+  var shadow = '';
+  var ALLOWED_INPUT = /^(insertText|insertCompositionText|insertLineBreak|insertParagraph|delete\w*|historyUndo|historyRedo)$/;
+  var MAX_INSERT = 8; // one grapheme, even a long emoji sequence
+  var lastBeforeInputOk = false;
+  pad.addEventListener('beforeinput', function (e) {
+    var ok = ALLOWED_INPUT.test(e.inputType) &&
+      !(e.inputType === 'insertText' && e.data && e.data.length > MAX_INSERT);
+    lastBeforeInputOk = ok;
+    if (!ok) e.preventDefault();
+  });
+  pad.addEventListener('input', function (e) {
+    var grew = pad.value.length - shadow.length;
+    if (!lastBeforeInputOk && grew > MAX_INSERT && !e.isComposing) { revert(); return; }
+    lastBeforeInputOk = false;
+    shadow = pad.value;
+    updateCount();
+    scheduleSave();
+  });
+  var composing = false;
+  pad.addEventListener('compositionstart', function () { composing = true; });
+  pad.addEventListener('compositionend', function () { composing = false; shadow = pad.value; scheduleSave(); });
+  function revert() {
+    var pos = Math.min(pad.selectionStart, shadow.length);
+    pad.value = shadow;
+    pad.setSelectionRange(pos, pos);
+    updateCount();
+  }
+  setInterval(function () {
+    if (writing && !composing && pad.value !== shadow) revert();
+  }, 400);
+
+  var saveTimer = null;
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
+  function save() { clearTimeout(saveTimer); if (writing) store(textKey(), shadow); }
+  window.addEventListener('pagehide', save);
+  window.addEventListener('beforeunload', function (e) {
+    save();
+    if (writing) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ---------------------------------------------------------------------
+  // Approvals (admins)
+  // ---------------------------------------------------------------------
+  var users = [];
+
+  $('adminLink').addEventListener('click', function () { show('adminScreen'); loadUsers(); });
+  $('adminBackBtn').addEventListener('click', showReady);
+  $('approveAllBtn').addEventListener('click', function () { setStatus({ all: true, status: 'approved' }); });
+
+  async function loadUsers() {
+    $('adminNote').textContent = 'Loading…';
+    try {
+      var res = await api('/luddite/users');
+      if (!res.ok) throw new Error(res.status);
+      users = (await res.json()).users || [];
+      renderUsers();
+    } catch (e) {
+      $('adminNote').textContent = 'Couldn’t load the list.';
+    }
+  }
+
+  async function setStatus(body) {
+    $('adminNote').textContent = 'Saving…';
+    try {
+      var res = await api('/luddite/users', { method: 'PUT', body: body });
+      if (!res.ok) throw new Error(res.status);
+      users = (await res.json()).users || [];
+      renderUsers();
+    } catch (e) {
+      $('adminNote').textContent = 'Couldn’t save that change.';
+    }
+  }
+
+  function renderUsers() {
+    var order = { pending: 0, approved: 1 };
+    users.sort(function (a, b) { return (order[a.status] - order[b.status]) || (b.requestedAt - a.requestedAt); });
+    var pending = users.filter(function (u) { return u.status === 'pending'; }).length;
+    $('adminNote').textContent = pending + ' waiting · ' + (users.length - pending) + ' approved. You and your other address are always allowed in.';
+    $('approveAllBtn').disabled = pending === 0;
+    var list = $('userList');
+    list.innerHTML = '';
+    if (!users.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nobody has asked to join yet. Anyone who signs in shows up here.';
+      list.appendChild(empty);
+      return;
+    }
+    users.forEach(function (u) {
+      var row = document.createElement('div');
+      row.className = 'user';
+      var who = document.createElement('div');
+      who.className = 'who';
+      var b = document.createElement('b'); b.textContent = u.name || u.email;
+      var s = document.createElement('span'); s.textContent = u.email + ' · asked ' + new Date(u.requestedAt).toLocaleDateString();
+      who.appendChild(b); who.appendChild(s);
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + u.status;
+      pill.textContent = u.status === 'approved' ? 'Approved' : 'Waiting';
+      var act = document.createElement('button');
+      act.className = 'btn small' + (u.status === 'approved' ? ' ghost' : '');
+      act.textContent = u.status === 'approved' ? 'Revoke' : 'Approve';
+      act.addEventListener('click', function () { setStatus({ subs: [u.sub], status: u.status === 'approved' ? 'pending' : 'approved' }); });
+      var rm = document.createElement('button');
+      rm.className = 'linkish';
+      rm.textContent = 'Remove';
+      rm.addEventListener('click', function () { setStatus({ subs: [u.sub], status: 'removed' }); });
+      row.appendChild(who); row.appendChild(pill); row.appendChild(act); row.appendChild(rm);
+      list.appendChild(row);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Start
+  // ---------------------------------------------------------------------
+  var saved = load(AUTH_KEY);
+  // Both a Google ID token and the backend's "s1.<payload>.<sig>" session
+  // keep their claims in the middle segment.
+  var exp = saved ? decodeJwtPayload(saved).exp : 0;
+  if (saved && exp && exp * 1000 > Date.now()) { authToken = saved; checkStatus(); }
+  else showSignIn();
+})();
+</script>
+</body>
+</html>

@@ -6,7 +6,8 @@ import { isIP } from 'node:net';
 // This is the AWS Lambda behind Bookbug's "sign in with Google to save to
 // the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
 // bookbug/index.html) -- see README.md for deploying; there's no build
-// step, just this one file.
+// step, just this one file. It also keeps Luddite's sign-in/approval
+// list (see handleLuddite).
 //
 // Storage is one DynamoDB item per Google user (keyed by their stable
 // Google "sub" id), holding a single JSON blob namespaced per app:
@@ -379,8 +380,114 @@ export async function fetchPage(raw) {
   return { url: url.href, contentType: type.split(';')[0].trim(), googleDoc: !!exportUrl, text };
 }
 
+// ---------------------------------------------------------------------
+// Luddite (/luddite/ on the site): a locked-down writing scratchpad that
+// only approved people may use. Anyone can sign in with Google, which
+// files them as "pending"; an admin (ADMIN_EMAILS) approves them from
+// the page's Approvals view. Admins are always approved.
+//
+// The whole roster is one item in the same table, keyed LUDDITE_KEY
+// (Google "sub" ids are all digits, so it can't collide with a user),
+// shaped { [sub]: { email, name, status, requestedAt, decidedAt } }.
+// One item keeps this to GetItem/PutItem, the only calls the function's
+// role already has -- no Scan permission or second table needed.
+// ---------------------------------------------------------------------
+const LUDDITE_KEY = 'luddite:roster';
+const ADMIN_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
+
+function isAdmin(info) {
+  return ADMIN_EMAILS.includes(String(info.email || '').toLowerCase());
+}
+
+async function getRoster() {
+  const result = await ddb.send(new GetItemCommand({
+    TableName: TABLE_NAME,
+    Key: { userId: { S: LUDDITE_KEY } }
+  }));
+  return result.Item ? JSON.parse(result.Item.state.S) : {};
+}
+
+async function putRoster(roster) {
+  await ddb.send(new PutItemCommand({
+    TableName: TABLE_NAME,
+    Item: {
+      userId: { S: LUDDITE_KEY },
+      state: { S: JSON.stringify(roster) },
+      updatedAt: { N: String(Date.now()) }
+    }
+  }));
+}
+
+function readJsonBody(event) {
+  try {
+    const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+    return JSON.parse(raw || '{}');
+  } catch (e) {
+    return null;
+  }
+}
+
+async function handleLuddite(event, method, path, info) {
+  const admin = isAdmin(info);
+
+  // GET /luddite/status -- may this person write? First visit files them
+  // as pending so they show up in the admin's list.
+  if (path === '/luddite/status' && method === 'GET') {
+    let status = 'approved';
+    if (!admin) {
+      const roster = await getRoster();
+      let entry = roster[info.sub];
+      if (!entry) {
+        entry = { email: info.email || '', name: info.name || '', status: 'pending', requestedAt: Date.now() };
+        roster[info.sub] = entry;
+        await putRoster(roster);
+      } else if (entry.email !== (info.email || entry.email) || entry.name !== (info.name || entry.name)) {
+        entry.email = info.email || entry.email;
+        entry.name = info.name || entry.name;
+        await putRoster(roster);
+      }
+      status = entry.status;
+    }
+    const session = issueSession(info);
+    return respond(200, { luddite: { status, admin, email: info.email || '', name: info.name || '' }, session });
+  }
+
+  if (!admin) return respond(403, { error: 'Admins only' });
+
+  // GET /luddite/users -- the full roster, for the Approvals view.
+  if (path === '/luddite/users' && method === 'GET') {
+    const roster = await getRoster();
+    const users = Object.keys(roster).map((sub) => ({ sub, ...roster[sub] }));
+    return respond(200, { users });
+  }
+
+  // PUT /luddite/users -- { subs: [...] | all: true, status: 'approved' | 'pending' | 'removed' }.
+  // "all" means every pending request. "removed" deletes the entry (they'd
+  // re-appear as pending if they signed in again).
+  if (path === '/luddite/users' && method === 'PUT') {
+    const body = readJsonBody(event);
+    if (!body) return respond(400, { error: 'Invalid JSON body' });
+    const status = body.status;
+    if (!['approved', 'pending', 'removed'].includes(status)) return respond(400, { error: 'Bad status' });
+    const roster = await getRoster();
+    const subs = body.all
+      ? Object.keys(roster).filter((sub) => roster[sub].status === 'pending')
+      : (Array.isArray(body.subs) ? body.subs.filter((sub) => roster[sub]) : []);
+    for (const sub of subs) {
+      if (status === 'removed') delete roster[sub];
+      else { roster[sub].status = status; roster[sub].decidedAt = Date.now(); }
+    }
+    await putRoster(roster);
+    const users = Object.keys(roster).map((sub) => ({ sub, ...roster[sub] }));
+    return respond(200, { changed: subs.length, users });
+  }
+
+  return respond(404, { error: 'Not found' });
+}
+
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
+  const path = event.rawPath || '/';
 
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
@@ -390,6 +497,15 @@ export const handler = async (event) => {
   // Google ID token (sign-in, or a tool that hasn't adopted sessions yet).
   const info = token.startsWith('s1.') ? verifySession(token) : await verifyGoogleToken(token);
   if (!info) return respond(401, { error: 'Invalid or expired token' });
+
+  // Session tokens only exist for verified Google accounts; a raw Google
+  // token must say so itself before its email can count for anything.
+  if (path.startsWith('/luddite/')) {
+    if (!token.startsWith('s1.') && info.email_verified !== 'true' && info.email_verified !== true) {
+      return respond(403, { error: 'Unverified email' });
+    }
+    return handleLuddite(event, method, path, info);
+  }
 
   const userId = info.sub;
 
