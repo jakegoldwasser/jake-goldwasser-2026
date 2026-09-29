@@ -1103,6 +1103,15 @@
   .home-card.is-archived .home-cover { opacity: 0.7; }
   .home-head-actions { display: flex; gap: 8px; }
   .home-archived { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+  /* An archive's header: its name and count, then Empty archive (while
+     open) and its own Show / Hide, pushed to the right. */
+  .archive-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .archive-head .panel-title, .archive-head .home-archived-title { margin: 0; }
+  .archive-actions { display: flex; gap: 8px; margin-left: auto; }
+  .archive-panel > [id$="ArchiveList"], #archiveList { margin-top: 14px; }
+  .archive-panel > [hidden] { display: none; }
+  .archive-toggle { min-width: 4.5em; justify-content: center; }
+  #homeArchivedGrid[hidden] { display: none; }
   .home-archived[hidden] { display: none; }
   .home-archived-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
   .home-archived .chapbooks-empty { padding: 0; }
@@ -1917,7 +1926,6 @@
     <div class="home-head">
       <h2 class="home-title">Home</h2>
       <div class="home-head-actions">
-        <button class="btn btn-sm" id="homeArchivedBtn" type="button">Archived</button>
       </div>
     </div>
     <!-- One way to start anything, first thing on the page, the way Docs
@@ -1928,8 +1936,13 @@
     </button>
     <div id="homeShelves"></div>
     <div class="home-archived" id="homeArchived" hidden>
-      <h3 class="home-archived-title">Archived</h3>
-      <div class="home-grid" id="homeArchivedGrid"></div>
+      <div class="archive-head">
+        <h3 class="home-archived-title" id="homeArchivedTitle">Archived</h3>
+        <div class="archive-actions">
+          <button class="btn btn-sm archive-toggle" id="homeArchivedBtn" type="button" aria-expanded="false" aria-controls="homeArchivedGrid">Show</button>
+        </div>
+      </div>
+      <div class="home-grid" id="homeArchivedGrid" hidden></div>
     </div>
   </div>
 
@@ -1969,16 +1982,18 @@
           <div class="pb-flatplan" id="pbFlatplan" hidden></div>
           <div class="pb-sheet-foot" id="pbSheetFoot">
             <button class="btn add-poem-btn" id="pbAddSpreadBtn" type="button">+ Add spread</button>
-            <button class="btn btn-sm" id="pbArchiveToggleBtn" type="button" style="margin-left:auto;" title="View archived spreads">Archive</button>
           </div>
           <input type="file" id="pbFileInput" accept="image/*" hidden>
         </div>
-        <div class="panel" id="pbArchivePanel" hidden>
-          <div class="poems-head">
-            <div class="panel-title" style="margin:0;">Archived spreads</div>
-            <button class="btn btn-sm btn-danger" id="pbEmptyArchiveBtn" type="button">Empty archive</button>
+        <div class="panel archive-panel" id="pbArchivePanel" hidden>
+          <div class="archive-head">
+            <div class="panel-title archive-title" id="pbArchiveTitle">Archived spreads</div>
+            <div class="archive-actions">
+              <button class="btn btn-sm btn-danger" id="pbEmptyArchiveBtn" type="button" hidden>Empty archive</button>
+              <button class="btn btn-sm archive-toggle" id="pbArchiveToggleBtn" type="button" aria-expanded="false" aria-controls="pbArchiveList">Show</button>
+            </div>
           </div>
-          <div id="pbArchiveList"></div>
+          <div id="pbArchiveList" hidden></div>
         </div>
       </div>
 
@@ -2204,16 +2219,18 @@
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
             <button class="btn add-poem-btn" id="cbAddBtn" type="button">+ Add cartoon</button>
-            <button class="btn btn-sm" id="cbArchiveToggleBtn" type="button" style="margin-left:auto;">Archive</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
-        <div class="panel" id="cbArchivePanel" hidden>
-          <div class="poems-head">
-            <div class="panel-title" style="margin:0;">Archived cartoons</div>
-            <button class="btn btn-sm btn-danger" id="cbEmptyArchiveBtn" type="button">Empty archive</button>
+        <div class="panel archive-panel" id="cbArchivePanel" hidden>
+          <div class="archive-head">
+            <div class="panel-title archive-title" id="cbArchiveTitle">Archived cartoons</div>
+            <div class="archive-actions">
+              <button class="btn btn-sm btn-danger" id="cbEmptyArchiveBtn" type="button" hidden>Empty archive</button>
+              <button class="btn btn-sm archive-toggle" id="cbArchiveToggleBtn" type="button" aria-expanded="false" aria-controls="cbArchiveList">Show</button>
+            </div>
           </div>
-          <div id="cbArchiveList"></div>
+          <div id="cbArchiveList" hidden></div>
         </div>
       </div>
       <div class="sidebar" id="cbSidebar">
@@ -2376,17 +2393,20 @@
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
           <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
-          <!-- Down here beside the archive it opens, not up in the header. -->
-          <button class="btn btn-sm" id="archiveToggleBtn" type="button" style="margin-left:auto;" title="View the archive">Archive</button>
         </div>
       </div>
 
-      <div class="panel" id="archivePanel" hidden style="margin-top:16px;">
-        <div class="poems-head">
-          <div class="panel-title" style="margin:0;">Archived entries</div>
-          <button class="btn btn-sm btn-danger" id="emptyArchiveBtn" type="button">Empty archive</button>
-        </div>
-        <div id="archiveList"></div>
+      <!-- Only there once something's been archived; its own Show / Hide
+           opens it. -->
+      <div class="panel archive-panel" id="archivePanel" hidden style="margin-top:16px;">
+        <div class="archive-head">
+            <div class="panel-title archive-title" id="archiveTitle">Archived entries</div>
+            <div class="archive-actions">
+              <button class="btn btn-sm btn-danger" id="emptyArchiveBtn" type="button" hidden>Empty archive</button>
+              <button class="btn btn-sm archive-toggle" id="archiveToggleBtn" type="button" aria-expanded="false" aria-controls="archiveList">Show</button>
+            </div>
+          </div>
+        <div id="archiveList" hidden></div>
       </div>
     </div>
 
@@ -8169,10 +8189,11 @@
   }
   applyToolsHidden();
   toolsToggleBtn.addEventListener('click', function () {
-    // Showing the tools brings back the column, not the large page
-    // Formatting or Front and Back Matter opens: those fold first, so
-    // the scenes stay where you were.
-    if (toolsHidden) closeStage();
+    // Hiding the tools folds Formatting and Front and Back Matter too, so
+    // showing them again brings back the plain column (Preview on top)
+    // rather than jumping straight into the large page view an open
+    // panel calls up.
+    if (!toolsHidden) closeStagePanels();
     toolsHidden = !toolsHidden;
     try { localStorage.setItem(TOOLS_HIDDEN_KEY, toolsHidden ? '1' : '0'); } catch (e) {}
     applyToolsHidden();
@@ -8574,6 +8595,19 @@
   // outright; it's only gone for good once restored-then-removed
   // individually, or the whole archive is emptied.
   // ---------------------------------------------------------------------
+  // Every archive (a book's, a picture book's, a cartoon book's, Home's)
+  // is its own panel, there only while it holds something, opened and
+  // closed by the Show / Hide on the panel itself -- never by a button
+  // elsewhere that says "Archive" without archiving anything.
+  function syncArchivePanel(o) {
+    o.panel.hidden = !o.count;
+    o.title.textContent = o.label + (o.count ? ' (' + o.count + ')' : '');
+    o.list.hidden = !o.open;
+    if (o.empty) o.empty.hidden = !o.open;
+    o.toggle.textContent = o.open ? 'Hide' : 'Show';
+    o.toggle.setAttribute('aria-expanded', o.open ? 'true' : 'false');
+  }
+  var archiveOpen = false;
   var archiveToggleBtn = document.getElementById('archiveToggleBtn');
   var archivePanel = document.getElementById('archivePanel');
   var archiveList = document.getElementById('archiveList');
@@ -8581,17 +8615,17 @@
 
   function updateArchiveButton() {
     var n = (state.archivedPoems || []).length;
-    archiveToggleBtn.textContent = archivePanel.hidden
-      ? 'Archive' + (n ? ' (' + n + ')' : '')
-      : 'Hide archive';
+    if (!n) archiveOpen = false;
+    syncArchivePanel({ panel: archivePanel, title: document.getElementById('archiveTitle'), label: 'Archived ' + formNouns().many,
+      count: n, open: archiveOpen, list: archiveList, empty: emptyArchiveBtn, toggle: archiveToggleBtn });
   }
 
   archiveToggleBtn.addEventListener('click', function () {
-    archivePanel.hidden = !archivePanel.hidden;
+    archiveOpen = !archiveOpen;
     updateArchiveButton();
-    if (!archivePanel.hidden) {
+    if (archiveOpen) {
       renderArchiveList();
-      archivePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      archivePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   });
 
@@ -9407,10 +9441,10 @@
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks());
-    document.getElementById('homeArchivedBtn').textContent = 'Archived' + (archived.length ? ' (' + archived.length + ')' : '');
-    document.getElementById('homeArchivedBtn').hidden = !archived.length && !homeArchivedOpen;
-    document.getElementById('homeArchived').hidden = !homeArchivedOpen;
     var archivedGrid = document.getElementById('homeArchivedGrid');
+    if (!archived.length) homeArchivedOpen = false;
+    syncArchivePanel({ panel: document.getElementById('homeArchived'), title: document.getElementById('homeArchivedTitle'), label: 'Archived',
+      count: archived.length, open: homeArchivedOpen, list: archivedGrid, toggle: document.getElementById('homeArchivedBtn') });
     archivedGrid.innerHTML = '';
     if (homeArchivedOpen && !archived.length) archivedGrid.innerHTML = '<div class="chapbooks-empty">Nothing archived.</div>';
     archived.sort(function (a, b) { return b.updatedAt - a.updatedAt; }).forEach(function (entry) {
@@ -9502,7 +9536,7 @@
   document.getElementById('homeArchivedBtn').addEventListener('click', function () {
     homeArchivedOpen = !homeArchivedOpen;
     renderHome();
-    if (homeArchivedOpen) document.getElementById('homeArchived').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (homeArchivedOpen) document.getElementById('homeArchived').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
   // "⋯" book menu -- on the home grid and beside the open book's title:
@@ -10003,7 +10037,8 @@
   if (wideLayout.addEventListener) wideLayout.addEventListener('change', updateMatterStage);
   // The way back: the stage's own button, or Esc (unless the full-screen
   // preview is up -- Esc closes that first).
-  function closeStage() {
+  function closeStage() { closeStagePanels(); }
+  function closeStagePanels() {
     ['formattingToggle', 'coversToggle'].forEach(function (id) {
       var t = document.getElementById(id);
       if (t.getAttribute('aria-expanded') === 'true') t.click();
@@ -10368,9 +10403,9 @@
   // where the tools sit beside the page; on a phone they're far below
   // and jumping there would take the field you're typing in away.
   function showCoverFormattingFor(headId) {
-    if (!wideLayout.matches) return;
+    // Not when the tools are hidden: that's a choice to write without them.
+    if (!wideLayout.matches || toolsHidden) return;
     stageKeepScroll = true;
-    if (toolsHidden) toolsToggleBtn.click();
     if (document.getElementById('coversBody').hidden) document.getElementById('coversToggle').click();
     if (matterTarget !== 'front') showCoverTarget('front');
     else if (stageMode !== 'matter') { lastStagePanel = 'matter'; updateMatterStage(); }
@@ -10606,16 +10641,17 @@
     seg.querySelector('[data-view="entries"] .vs-label').textContent = Cap(f.one) + ' View';
     seg.querySelector('[data-view="entries"]').title = 'Every ' + f.one + ' open in full';
     document.querySelector('#intakePanel .panel-title').textContent = 'Bring in your ' + f.many;
-    document.querySelector('#archivePanel .panel-title').textContent = 'Archived ' + f.many;
     document.getElementById('exportSelectBtn').textContent = 'Export select ' + f.many + '…';
     document.getElementById('statPoemsLabel').textContent = Cap(f.many);
     document.getElementById('selectEntriesPrompt').textContent = 'Choose which ' + f.many + ' to include:';
     document.querySelectorAll('[data-noun]').forEach(function (el) { el.textContent = f[el.dataset.noun]; });
+    // Written once when the Drive tab is built; keep it in this book's words.
+    var driveHint = document.querySelector('#drivePane .hint-box');
+    if (driveHint) driveHint.textContent = driveHint.textContent.replace(/bring its \S+ in/, 'bring its ' + f.many + ' in');
     var tocShow = document.getElementById('tocShowSelect');
     tocShow.querySelector('[value="all"]').textContent = Cap(f.section) + 's and ' + f.many;
     tocShow.querySelector('[value="sections"]').textContent = Cap(f.section) + 's only';
     tocShow.querySelector('[value="entries"]').textContent = Cap(f.many) + ' only';
-    document.getElementById('archiveToggleBtn').title = 'View archived ' + f.many;
     var PASTE_EXAMPLES = {
       screenplay: 'INT. DINER - NIGHT\n\nRain on the window.\n\nMAYA\nYou started without me.',
       play: 'ACT ONE\n\nScene 1\n\nA kitchen, just before dawn.\n\nRUTH\nYou can come in.'
@@ -10636,6 +10672,8 @@
   }
   function renderAll() {
     applyFormWording();
+    updateArchiveButton();
+    if (archiveOpen) renderArchiveList();
     syncSidebarFromState();
     renderPoems();
     updateStats();
@@ -14065,8 +14103,9 @@
   }
   function updatePbArchiveButton() {
     var n = pbState.archived.length;
-    pbFmt('pbArchiveToggleBtn').textContent = (pbArchiveOpen ? 'Hide archive' : 'Archive') + (n ? ' (' + n + ')' : '');
-    pbFmt('pbArchivePanel').hidden = !pbArchiveOpen;
+    if (!n) pbArchiveOpen = false;
+    syncArchivePanel({ panel: pbFmt('pbArchivePanel'), title: pbFmt('pbArchiveTitle'), label: 'Archived spreads', count: n,
+      open: pbArchiveOpen, list: pbFmt('pbArchiveList'), empty: pbFmt('pbEmptyArchiveBtn'), toggle: pbFmt('pbArchiveToggleBtn') });
   }
   function renderPbArchive() {
     updatePbArchiveButton();
@@ -14800,7 +14839,6 @@
     cbFmt('cbCount').textContent = n + (n === 1 ? ' cartoon' : ' cartoons');
     cbFmt('cbStatCount').textContent = n;
     cbFmt('cbStatPages').textContent = cbPages().length;
-    cbFmt('cbArchiveToggleBtn').textContent = (cbArchiveOpen ? 'Hide archive' : 'Archive') + (cbState.archived.length ? ' (' + cbState.archived.length + ')' : '');
   }
   var cbFileInput = cbFmt('cbFileInput'), cbFileTarget = null;
   function cbPick(target) {
@@ -14996,7 +15034,9 @@
 
   // ---- Archived cartoons ----
   function cbRenderArchive() {
-    cbFmt('cbArchivePanel').hidden = !cbArchiveOpen;
+    if (!cbState.archived.length) cbArchiveOpen = false;
+    syncArchivePanel({ panel: cbFmt('cbArchivePanel'), title: cbFmt('cbArchiveTitle'), label: 'Archived cartoons', count: cbState.archived.length,
+      open: cbArchiveOpen, list: cbFmt('cbArchiveList'), empty: cbFmt('cbEmptyArchiveBtn'), toggle: cbFmt('cbArchiveToggleBtn') });
     var list = cbFmt('cbArchiveList');
     list.innerHTML = '';
     cbFmt('cbEmptyArchiveBtn').disabled = !cbState.archived.length;
@@ -15026,7 +15066,11 @@
       list.appendChild(item);
     });
   }
-  cbFmt('cbArchiveToggleBtn').addEventListener('click', function () { cbArchiveOpen = !cbArchiveOpen; cbUpdateStats(); cbRenderArchive(); });
+  cbFmt('cbArchiveToggleBtn').addEventListener('click', function () {
+    cbArchiveOpen = !cbArchiveOpen;
+    cbRenderArchive();
+    if (cbArchiveOpen) cbFmt('cbArchivePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
   cbFmt('cbEmptyArchiveBtn').addEventListener('click', async function () {
     var n = cbState.archived.length;
     if (!n) return;
