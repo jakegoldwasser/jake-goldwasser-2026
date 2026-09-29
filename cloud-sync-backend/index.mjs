@@ -220,41 +220,163 @@ function googleDocExportUrl(u) {
   return m ? 'https://docs.google.com/document/d/' + m[1] + '/export?format=md' : null;
 }
 
-async function fetchPage(raw) {
-  let url = await assertPublicUrl(raw);
-  const exportUrl = googleDocExportUrl(url);
-  if (exportUrl) url = new URL(exportUrl);
-  for (let hop = 0; hop <= 4; hop++) {
-    const res = await fetch(url, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(8000),
-      headers: { 'User-Agent': 'Bookbug/1.0 (+https://jake-goldwasser.com/bookbug/)', Accept: 'text/html,text/markdown,text/plain;q=0.9' }
-    });
+// PDFs come back as base64 for Bookbug to read in the browser (pdf.js).
+// Kept under 4 MB so the base64 fits a Lambda response (6 MB).
+const PDF_MAX_BYTES = 4 * 1024 * 1024;
+const UA = 'Bookbug/1.0 (+https://jake-goldwasser.com/bookbug/)';
+
+// Follows redirects by hand (each hop re-checked as public). Landing on
+// Google's sign-in page means the thing isn't shared publicly -- say so,
+// rather than handing back the sign-in page as if it were the content.
+// Google's download host can take several seconds before it answers, so
+// the wait is generous (the Lambda's own timeout is the real ceiling).
+async function fetchFollowing(start, accept) {
+  let url = start;
+  for (let hop = 0; hop <= 5; hop++) {
+    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(20000), headers: { 'User-Agent': UA, Accept: accept } });
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       const next = new URL(res.headers.get('location'), url);
-      if (exportUrl && next.hostname === 'accounts.google.com') throw new Error('google_private');
+      if (next.hostname === 'accounts.google.com') throw new Error('google_private');
       url = await assertPublicUrl(next.href);
       continue;
     }
-    if (!res.ok) throw new Error('http_' + res.status);
-    const type = res.headers.get('content-type') || '';
-    if (!FETCH_TYPES.test(type)) throw new Error('unsupported_type');
-    const reader = res.body.getReader();
-    const chunks = [];
-    let size = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      if (size > FETCH_MAX_BYTES) { reader.cancel(); throw new Error('too_large'); }
-      chunks.push(value);
-    }
-    const charset = (/charset=([\w-]+)/i.exec(type) || [])[1] || 'utf-8';
-    let text;
-    try { text = new TextDecoder(charset).decode(Buffer.concat(chunks)); } catch (e) { text = Buffer.concat(chunks).toString('utf8'); }
-    return { url: url.href, contentType: type.split(';')[0].trim(), googleDoc: !!exportUrl, text };
+    return { res, url };
   }
   throw new Error('too_many_redirects');
+}
+
+async function readBody(res, max) {
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) { reader.cancel(); throw new Error('too_large'); }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+function decodeText(buf, type) {
+  const charset = (/charset=([\w-]+)/i.exec(type || '') || [])[1] || 'utf-8';
+  try { return new TextDecoder(charset).decode(buf); } catch (e) { return buf.toString('utf8'); }
+}
+const isPdf = (buf) => buf.length > 4 && buf.subarray(0, 5).toString('latin1') === '%PDF-';
+
+// ---- Public Google Drive folders and files ----
+// A folder shared as "anyone with the link" is listed through Drive's
+// embeddable folder view (plain HTML, no sign-in); each file is fetched
+// through its public download link. Subfolders are listed but not opened.
+const DRIVE_ID = /^[A-Za-z0-9_-]{10,}$/;
+function driveFolderId(u) {
+  if (u.hostname !== 'drive.google.com') return null;
+  const m = /\/folders\/([A-Za-z0-9_-]{10,})/.exec(u.pathname);
+  if (m) return m[1];
+  if (u.pathname === '/embeddedfolderview' && DRIVE_ID.test(u.searchParams.get('id') || '')) return u.searchParams.get('id');
+  return null;
+}
+function driveFileId(u) {
+  if (u.hostname !== 'drive.google.com' && u.hostname !== 'drive.usercontent.google.com') return null;
+  const m = /\/file\/d\/([A-Za-z0-9_-]{10,})/.exec(u.pathname);
+  if (m) return m[1];
+  const id = u.searchParams.get('id');
+  return (u.pathname === '/open' || u.pathname === '/uc' || u.pathname === '/download') && DRIVE_ID.test(id || '') ? id : null;
+}
+function htmlDecode(s) {
+  return String(s).replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n)).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+export function parseDriveFolderView(html) {
+  const files = [];
+  const re = /<div class="flip-entry" id="entry-([A-Za-z0-9_-]+)"[\s\S]*?<a href="([^"]*)"[\s\S]*?<div class="flip-entry-list-icon"><img src="([^"]*)"[\s\S]*?<div class="flip-entry-title">([^<]*)<\/div>/g;
+  let m;
+  while ((m = re.exec(html))) {
+    const [, id, href, icon, rawName] = m;
+    const name = htmlDecode(rawName).trim();
+    let kind = 'other';
+    if (/\/folders\//.test(href)) kind = 'folder';
+    else if (/docs\.google\.com\/document\//.test(href)) kind = 'doc';
+    else if (/\/type\/application\/pdf/.test(icon) || /\.pdf$/i.test(name)) kind = 'pdf';
+    else if (/\/type\/text\//.test(icon) || /\.(txt|md|markdown)$/i.test(name)) kind = 'text';
+    files.push({ id, name, kind });
+  }
+  const title = /<title>([^<]*)<\/title>/.exec(html);
+  return { name: title ? htmlDecode(title[1]).replace(/\s*-\s*Google Drive\s*$/, '').trim() : '', files };
+}
+async function listDriveFolder(id) {
+  const start = new URL('https://drive.google.com/embeddedfolderview?id=' + encodeURIComponent(id));
+  const { res } = await fetchFollowing(start, 'text/html');
+  if (res.status === 404 || res.status === 403 || res.status === 401) throw new Error('google_private');
+  if (!res.ok) throw new Error('http_' + res.status);
+  const html = decodeText(await readBody(res, FETCH_MAX_BYTES), res.headers.get('content-type'));
+  const folder = parseDriveFolderView(html);
+  return { url: 'https://drive.google.com/drive/folders/' + id, folder: true, name: folder.name, files: folder.files };
+}
+// Google puts big files behind a "can't scan this for viruses" page whose
+// form carries the real download address; that page is followed once.
+function virusScanFormUrl(html) {
+  const form = /<form[^>]+id="download-form"[^>]+action="([^"]+)"[\s\S]*?<\/form>/.exec(html);
+  if (!form) return null;
+  const u = new URL(htmlDecode(form[1]));
+  const inputs = /<input[^>]+type="hidden"[^>]*>/g;
+  let m;
+  while ((m = inputs.exec(form[0]))) {
+    const name = /name="([^"]+)"/.exec(m[0]), value = /value="([^"]*)"/.exec(m[0]);
+    if (name) u.searchParams.set(htmlDecode(name[1]), value ? htmlDecode(value[1]) : '');
+  }
+  return u;
+}
+export async function fetchDriveFile(id) {
+  if (!DRIVE_ID.test(id)) throw new Error('bad_url');
+  let target = new URL('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(id));
+  for (let pass = 0; pass < 2; pass++) {
+    const { res, url } = await fetchFollowing(target, '*/*');
+    if (res.status === 404 || res.status === 403 || res.status === 401) throw new Error('google_private');
+    if (!res.ok) throw new Error('http_' + res.status);
+    const type = res.headers.get('content-type') || '';
+    const disp = res.headers.get('content-disposition') || '';
+    const nameMatch = /filename\*=UTF-8''([^;]+)/i.exec(disp) || /filename="([^"]+)"/i.exec(disp);
+    const name = nameMatch ? decodeURIComponent(nameMatch[1]) : '';
+    const buf = await readBody(res, PDF_MAX_BYTES);
+    if (isPdf(buf)) return { url: url.href, contentType: 'application/pdf', name, data: buf.toString('base64') };
+    if (/text\/html/i.test(type)) {
+      const html = decodeText(buf, type);
+      const next = pass === 0 && virusScanFormUrl(html);
+      if (next) { target = await assertPublicUrl(next.href); continue; }
+      if (/accounts\.google\.com\/(v3\/signin|ServiceLogin)/.test(html)) throw new Error('google_private');
+      throw new Error('unsupported_type');
+    }
+    if (/^text\//i.test(type)) return { url: url.href, contentType: type.split(';')[0].trim(), name, text: decodeText(buf, type) };
+    throw new Error('unsupported_type');
+  }
+  throw new Error('unsupported_type');
+}
+
+export async function fetchPage(raw) {
+  let url = await assertPublicUrl(raw);
+  const folderId = driveFolderId(url);
+  if (folderId) return listDriveFolder(folderId);
+  const fileId = driveFileId(url);
+  if (fileId) return fetchDriveFile(fileId);
+  const exportUrl = googleDocExportUrl(url);
+  if (exportUrl) url = new URL(exportUrl);
+  const got = await fetchFollowing(url, 'text/html,text/markdown,text/plain;q=0.9,application/pdf;q=0.8');
+  const res = got.res;
+  url = got.url;
+  if (!res.ok) throw new Error('http_' + res.status);
+  const type = res.headers.get('content-type') || '';
+  // A PDF link (or a download that turns out to be one).
+  if (/application\/(pdf|octet-stream)/i.test(type)) {
+    const buf = await readBody(res, PDF_MAX_BYTES);
+    if (!isPdf(buf)) throw new Error('unsupported_type');
+    return { url: url.href, contentType: 'application/pdf', name: decodeURIComponent(url.pathname.split('/').pop() || ''), data: buf.toString('base64') };
+  }
+  if (!FETCH_TYPES.test(type)) throw new Error('unsupported_type');
+  const text = decodeText(await readBody(res, FETCH_MAX_BYTES), type);
+  // A sign-in page served in place of the content (no redirect) is private too.
+  if (/^accounts\.google\.com$/.test(url.hostname) || (/google\.com$/.test(url.hostname) && /<title>[^<]*Sign[- ]in/i.test(text))) throw new Error('google_private');
+  return { url: url.href, contentType: type.split(';')[0].trim(), googleDoc: !!exportUrl, text };
 }
 
 export const handler = async (event) => {
@@ -270,6 +392,17 @@ export const handler = async (event) => {
   if (!info) return respond(401, { error: 'Invalid or expired token' });
 
   const userId = info.sub;
+
+  // GET ?drivefile=<id>: one file from a public Drive folder (see
+  // listDriveFolder), as { contentType, name, data (base64 PDF) | text }.
+  if (method === 'GET' && event.queryStringParameters?.drivefile) {
+    try {
+      return respond(200, await fetchDriveFile(event.queryStringParameters.drivefile));
+    } catch (e) {
+      const code = String(e.message || '');
+      return respond(422, { error: /^(bad_url|blocked_host|google_private|unsupported_type|too_large|too_many_redirects|http_\d+)$/.test(code) ? code : 'fetch_failed' });
+    }
+  }
 
   if (method === 'GET' && event.queryStringParameters?.fetch) {
     try {

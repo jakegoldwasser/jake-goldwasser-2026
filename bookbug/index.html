@@ -2367,7 +2367,7 @@
 
     <div class="tabpane" data-pane="link" id="linkPane">
       <div class="hint-box">
-        Paste a link to a web page or a Google Doc with your <span data-noun="many">entries</span>. Bookbug works out the titles, sections, stanzas, bold, italics and indents — you can fix anything afterward. A Google Doc shared as “Anyone with the link” comes straight in; otherwise you’ll pick it in Google’s own picker.
+        Paste a link to a web page, a PDF, a Google Doc, or a Google Drive folder with your <span data-noun="many">entries</span>. Bookbug works out the titles, sections, stanzas, bold, italics and indents — you can fix anything afterward. A folder brings in every PDF, Google Doc and text file in it, in order by file name. Anything in Drive needs to be shared as “Anyone with the link”; otherwise use Import from Google Drive to pick it yourself.
       </div>
       <form class="search-row" id="linkForm">
         <input type="url" id="linkInput" placeholder="https://…" autocomplete="off" required>
@@ -6632,12 +6632,15 @@
   function fileTitle(name) {
     return String(name || '').replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_]+/g, ' ').replace(/^\s*\d+\s*[-.)–—]?\s+(?=\S)/, '').trim() || 'Untitled';
   }
-  async function importFileBatch(files, label) {
+  // `setStatus`: where progress shows (the Drive tab's by default; a
+  // public folder link reports in the link tab).
+  async function importFileBatch(files, label, setStatus) {
+    setStatus = setStatus || setDriveStatus;
     files.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }); });
     var poems = [], failed = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i];
-      setDriveStatus('Reading ' + (files.length > 1 ? (i + 1) + ' of ' + files.length + ': ' : '') + '“' + f.name + '”…');
+      setStatus('Reading ' + (files.length > 1 ? (i + 1) + ' of ' + files.length + ': ' : '') + '“' + f.name + '”…');
       try {
         var buf = await f.read(), text;
         if (f.mimeType === 'application/pdf') text = await pdfToDocText(buf);
@@ -6648,13 +6651,13 @@
         if (!text.trim()) { failed.push(f.name); continue; }
         poems = poems.concat(await parseDocWithImages(withFileTitle(text, f.name)));
       } catch (err) {
-        failed.push(f.name);
+        failed.push(f.name + (err && err.message === 'too_large' ? ' (over 4 MB)' : ''));
       }
     }
-    if (!poems.length) { setDriveStatus(failed.length ? 'Couldn’t read ' + (failed.length === 1 ? '“' + failed[0] + '”' : 'those files') + '. (A scanned PDF is a picture of the page, with no text to read.)' : 'Nothing to bring in.', true); return; }
-    addImportedPoems(poems, label);
+    if (!poems.length) { setStatus(failed.length ? 'Couldn’t read ' + (failed.length === 1 ? '“' + failed[0] + '”' : 'those files') + '. (A scanned PDF is a picture of the page, with no text to read.)' : 'Nothing to bring in.', true); return; }
+    addImportedPoems(poems, label, setStatus);
     if (failed.length) {
-      var el = document.getElementById('driveStatus');
+      var el = document.getElementById(setStatus === setLinkStatus ? 'linkStatus' : 'driveStatus');
       if (el) el.textContent += ' Couldn’t read ' + failed.map(function (n) { return '“' + n + '”'; }).join(', ') + '.';
     }
   }
@@ -6788,11 +6791,50 @@
     el.textContent = msg || '';
     el.classList.toggle('error', !!isError);
   }
+  function base64ToBuffer(b64) {
+    var bin = atob(b64), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  }
+  // A public Drive folder link: the backend lists it; each PDF, Google Doc
+  // and text file in it is then fetched one at a time (so no single answer
+  // outgrows the backend's limit) and read like a folder picked in Drive.
+  async function importDriveFolderLink(folder) {
+    var usable = folder.files.filter(function (f) { return f.kind === 'pdf' || f.kind === 'doc' || f.kind === 'text'; });
+    var subfolders = folder.files.filter(function (f) { return f.kind === 'folder'; }).length;
+    if (!usable.length) {
+      setLinkStatus('There are no PDFs, Google Docs or text files in that folder' + (subfolders ? ' (folders inside it aren’t opened — link to one of them instead)' : '') + '.', true);
+      return;
+    }
+    function viaBackend(query) {
+      return fetch(CLOUD_API_URL + '?' + query, { headers: { Authorization: 'Bearer ' + cloudAuthToken } })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'fetch_failed'); return d; }); });
+    }
+    var files = usable.map(function (f) {
+      return {
+        name: f.name,
+        mimeType: f.kind === 'pdf' ? 'application/pdf' : f.kind === 'doc' ? DRIVE_DOC_MIME : 'text/plain',
+        read: function () {
+          var q = f.kind === 'doc' ? 'fetch=' + encodeURIComponent('https://docs.google.com/document/d/' + f.id + '/edit') : 'drivefile=' + encodeURIComponent(f.id);
+          return viaBackend(q).then(function (d) {
+            if (typeof d.data === 'string') return base64ToBuffer(d.data);
+            return new TextEncoder().encode(d.text || '').buffer;
+          });
+        }
+      };
+    });
+    await importFileBatch(files, folder.name || 'the Drive folder', setLinkStatus);
+    if (subfolders) {
+      var el = document.getElementById('linkStatus');
+      if (el) el.textContent += ' Folders inside it weren’t opened.';
+    }
+  }
   var LINK_ERRORS = {
     bad_url: 'That doesn’t look like a web link — it should start with https://',
     blocked_host: 'That address isn’t on the public web.',
-    unsupported_type: 'That link isn’t a web page or a text document. (PDFs and Word files aren’t supported yet — paste the text instead.)',
-    too_large: 'That page is too big to import.',
+    unsupported_type: 'That link isn’t a web page, PDF or text document. (Word files aren’t supported yet — paste the text instead.)',
+    google_private: 'That isn’t shared publicly. In Google Drive, set it to “Anyone with the link,” or use Import from Google Drive to pick it yourself.',
+    too_large: 'That’s too big to import (PDFs up to 4 MB).',
     http_403: 'That site doesn’t allow importing. Copy the text and use Paste text instead.',
     http_404: 'Nothing was found at that link.'
   };
@@ -6986,7 +7028,7 @@
     if (!title) { try { title = new URL(payload.url || url).hostname.replace(/^www\./, ''); } catch (e) { title = 'the link'; } }
     addImportedPoems(await parseDocWithImages(text), title, setLinkStatus);
   }
-  if (location.hostname === 'localhost') window.__bookbugImportLinkPayload = importLinkPayload;
+  if (location.hostname === 'localhost') { window.__bookbugImportLinkPayload = importLinkPayload; window.__bookbugImportDriveFolderLink = function (f) { return importDriveFolderLink(f); }; }
 
   document.getElementById('linkForm').addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -6999,8 +7041,14 @@
     try {
       var res = await fetch(CLOUD_API_URL + '?fetch=' + encodeURIComponent(url), { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       var data = await res.json().catch(function () { return {}; });
+      if (res.ok && data.folder) await importDriveFolderLink(data);
+      else if (res.ok && typeof data.data === 'string') {
+        // A PDF: read here, like one from Drive or the computer.
+        await importFileBatch([{ name: data.name || 'document.pdf', mimeType: 'application/pdf', read: function () { return Promise.resolve(base64ToBuffer(data.data)); } }],
+          fileTitle(data.name || '') !== 'Untitled' ? fileTitle(data.name) : 'the link', setLinkStatus);
+      }
       // A backend without link fetching answers with the saved library instead.
-      if (res.ok && typeof data.text !== 'string') setLinkStatus('Importing from links isn’t switched on yet.', true);
+      else if (res.ok && typeof data.text !== 'string') setLinkStatus('Importing from links isn’t switched on yet.', true);
       else if (res.ok) { setLinkStatus('Working out the ' + formNouns().many + '…'); await importLinkPayload(data, url); }
       else if (googleDocIdFromLink(url) && /^(google_private|http_40[134])$/.test(data.error || '')) {
         setLinkStatus('That doc isn’t shared publicly — pick it in Google’s picker to bring it in.');

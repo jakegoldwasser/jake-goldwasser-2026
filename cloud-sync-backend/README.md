@@ -59,3 +59,11 @@ link" (fetched through its markdown export). Bookbug turns that into entries in 
 browser. Guarded against reaching private networks: http(s) on standard ports only,
 every redirect hop's host must resolve to public addresses, at most 4 redirects, text
 types only, 3 MB, 8 seconds. It uses GET so the Function URL's CORS (GET, PUT) needs no change.
+
+Also through `?fetch=`: a public PDF link comes back as `{ contentType: 'application/pdf', name, data }`
+(base64, at most 4 MB), and a Google Drive folder shared as "anyone with the link" comes back as
+`{ folder: true, name, files: [{ id, name, kind }] }` (listed via Drive's embeddable folder view;
+`kind` is pdf, doc, text, folder or other). `GET ?drivefile=<id>` then fetches one of those files
+through Drive's public download link (following Google's "can't scan for viruses" page for large
+files). Anything that lands on Google's sign-in page answers `google_private`. The function's
+timeout is 30 s, since Drive's download host can take several seconds to answer.
