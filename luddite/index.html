@@ -279,7 +279,8 @@
 
     <h3>Your rooms</h3>
     <form class="row" id="newRoomForm">
-      <input class="field grow" id="newRoomTitle" maxlength="80" placeholder="Name a new room, e.g. Period 3 essay" aria-label="New room name">
+      <input class="field grow" id="newRoomTitle" maxlength="80" placeholder="Name a new room" aria-label="New room name">
+      <button class="btn small ghost" type="button" id="shuffleNameBtn" title="Suggest another name" aria-label="Suggest another name">&#8635;</button>
       <button class="btn small" type="submit">Open a room</button>
     </form>
     <div id="roomList" style="margin-top:14px"></div>
@@ -844,8 +845,37 @@
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
+    if (!$('newRoomTitle').value || $('newRoomTitle').value === suggestedName) suggestName();
     poll(loadRooms, POLL_DASH_MS);
   }
+
+  // ---- Room name suggestions ----
+  // Short, easy to spell, and chosen so no pairing can come out rude:
+  // colors, weather and gentle qualities; animals, plants and small
+  // everyday things.
+  var NAME_ADJECTIVES = ['Blue', 'Green', 'Red', 'Golden', 'Silver', 'Copper', 'Coral', 'Olive', 'Violet', 'Scarlet',
+    'Calm', 'Quiet', 'Bright', 'Brave', 'Swift', 'Gentle', 'Merry', 'Sunny', 'Misty', 'Snowy', 'Breezy', 'Sandy',
+    'Mossy', 'Frosty', 'Tiny', 'Giant', 'Lucky', 'Jolly', 'Clever', 'Noble', 'Wise', 'Bold', 'Early', 'Sleepy',
+    'Humble', 'Patient', 'Hidden', 'Wooden', 'Paper', 'Velvet', 'Cotton', 'Maple', 'Cedar', 'Autumn', 'Spring',
+    'Winter', 'Summer', 'Polar', 'Starry', 'Rainy'];
+  var NAME_NOUNS = ['trout', 'otter', 'heron', 'robin', 'finch', 'badger', 'rabbit', 'owl', 'fox', 'wren', 'moose',
+    'seal', 'whale', 'crane', 'swan', 'lark', 'newt', 'frog', 'goose', 'llama', 'panda', 'koala', 'tiger', 'zebra',
+    'camel', 'bison', 'falcon', 'hawk', 'raven', 'dove', 'puffin', 'walrus', 'beetle', 'cricket', 'acorn', 'pebble',
+    'meadow', 'river', 'canyon', 'lantern', 'kettle', 'pencil', 'compass', 'anchor', 'button', 'ribbon', 'candle',
+    'comet', 'planet', 'island', 'forest', 'garden', 'willow', 'clover', 'tulip', 'daisy', 'fern', 'cactus', 'pine', 'teapot'];
+  var suggestedName = '';
+  var roomTitles = [];
+  function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+  function suggestName() {
+    var name = '';
+    for (var i = 0; i < 20; i++) {
+      name = pick(NAME_ADJECTIVES) + ' ' + pick(NAME_NOUNS);
+      if (name !== suggestedName && roomTitles.indexOf(name.toLowerCase()) === -1) break;
+    }
+    suggestedName = name;
+    $('newRoomTitle').value = name;
+  }
+  $('shuffleNameBtn').addEventListener('click', function () { suggestName(); $('newRoomTitle').focus(); });
   $('dashLink').addEventListener('click', showDash);
   $('backToDash').addEventListener('click', showDash);
 
@@ -858,6 +888,7 @@
   async function loadRooms() {
     var data = await api('/luddite/rooms');
     if (!changed(data)) return;
+    roomTitles = data.rooms.map(function (r) { return r.title.toLowerCase(); });
     renderDrive($('driveBox'), data.drive);
     var list = $('roomList');
     list.innerHTML = '';
@@ -882,8 +913,9 @@
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     try {
-      var data = await api('/luddite/rooms', { title: $('newRoomTitle').value });
-      $('newRoomTitle').value = '';
+      var data = await api('/luddite/rooms', { title: $('newRoomTitle').value || suggestedName });
+      roomTitles.push(data.room.title.toLowerCase());
+      suggestName(); // a fresh one waiting for next time
       openRoom(data.room.code);
     } catch (err) {}
   });
