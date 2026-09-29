@@ -105,15 +105,77 @@ function migrateLegacyState(state) {
   return state || {};
 }
 
+// ---- Merging a save into what's stored ----
+// A save used to replace the app's whole namespace with the sender's copy.
+// That lost work: a tab or device left open since yesterday still holds
+// yesterday's books, and the next thing it saved (any book, or just which
+// book was open) wrote all of them back over newer edits made elsewhere.
+// Now each save is folded into what's stored, book by book: where both
+// sides have a book, whichever copy changed last wins (a deletion
+// tombstone counts from when it was deleted, an archive/unarchive from
+// archiveChangedAt) -- the same rule Bookbug's own mergeLibraries uses
+// when it pulls. Books only one side has are kept.
+const BOOK_LISTS = [['chapbooks', 'trash'], ['pictureBooks', 'pictureBookTrash'], ['cartoonBooks', 'cartoonBookTrash']];
+
+function bookStamp(e) {
+  return Math.max(Number(e.deletedAt) || 0, Number(e.updatedAt) || 0, Number(e.archiveChangedAt) || 0);
+}
+
+export function mergeLibraryPair(storedLib, storedTrash, incomingLib, incomingTrash) {
+  const winners = new Map();
+  function consider(entry, inTrash) {
+    if (!entry || !entry.id) return;
+    const cur = winners.get(entry.id);
+    // Ties go to the incoming copy (considered second), as a plain save would.
+    if (!cur || bookStamp(entry) >= bookStamp(cur.entry)) winners.set(entry.id, { entry, inTrash });
+  }
+  (storedLib || []).forEach(e => consider(e, false));
+  (storedTrash || []).forEach(e => consider(e, true));
+  (incomingLib || []).forEach(e => consider(e, false));
+  (incomingTrash || []).forEach(e => consider(e, true));
+  const lib = [], trash = [];
+  // Keep the sender's order, then anything only the stored copy had.
+  const order = [];
+  const seen = new Set();
+  [incomingLib, incomingTrash, storedLib, storedTrash].forEach(list => (list || []).forEach(e => {
+    if (e && e.id && !seen.has(e.id)) { seen.add(e.id); order.push(e.id); }
+  }));
+  order.forEach(id => { const w = winners.get(id); (w.inTrash ? trash : lib).push(w.entry); });
+  return { lib, trash };
+}
+
+function newerStamped(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return (Number(b.at) || 0) >= (Number(a.at) || 0) ? b : a;
+}
+
+export function mergeBookbugSave(stored, incoming) {
+  if (!stored || typeof stored !== 'object') return incoming;
+  if (!incoming || typeof incoming !== 'object') return stored;
+  const out = Object.assign({}, stored, incoming);
+  BOOK_LISTS.forEach(([libKey, trashKey]) => {
+    if (!Array.isArray(stored[libKey]) && !Array.isArray(stored[trashKey])) return;
+    if (!Array.isArray(incoming[libKey]) && !Array.isArray(incoming[trashKey])) { out[libKey] = stored[libKey]; out[trashKey] = stored[trashKey]; return; }
+    const m = mergeLibraryPair(stored[libKey], stored[trashKey], incoming[libKey], incoming[trashKey]);
+    out[libKey] = m.lib;
+    out[trashKey] = m.trash;
+  });
+  out.lastOpened = newerStamped(stored.lastOpened, incoming.lastOpened);
+  out.homeForms = newerStamped(stored.homeForms, incoming.homeForms);
+  return out;
+}
+
 async function getStoredState(userId) {
   const result = await ddb.send(new GetItemCommand({
     TableName: TABLE_NAME,
     Key: { userId: { S: userId } }
   }));
-  if (!result.Item) return { state: {}, updatedAt: 0 };
+  if (!result.Item) return { state: {}, updatedAt: 0, exists: false };
   return {
     state: migrateLegacyState(JSON.parse(result.Item.state.S)),
-    updatedAt: Number(result.Item.updatedAt?.N || 0)
+    updatedAt: Number(result.Item.updatedAt?.N || 0),
+    exists: true
   };
 }
 
@@ -278,18 +340,30 @@ export const handler = async (event) => {
       return respond(400, { error: 'Missing "app" field -- each tool must identify itself so its save only touches its own namespace' });
     }
 
-    const { state } = await getStoredState(userId);
-    state[app] = payload.data;
-
-    await ddb.send(new PutItemCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        userId: { S: userId },
-        state: { S: JSON.stringify(state) },
-        updatedAt: { N: String(Date.now()) }
+    // Read, merge, write -- only if nobody else wrote in between (two
+    // devices saving at once); on a clash, read again and redo the merge.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { state, updatedAt, exists } = await getStoredState(userId);
+      state[app] = app === 'chapbookbuilder' ? mergeBookbugSave(state[app], payload.data) : payload.data;
+      const now = Math.max(Date.now(), updatedAt + 1);
+      try {
+        await ddb.send(new PutItemCommand({
+          TableName: TABLE_NAME,
+          Item: {
+            userId: { S: userId },
+            state: { S: JSON.stringify(state) },
+            updatedAt: { N: String(now) }
+          },
+          ...(updatedAt
+            ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
+            : { ConditionExpression: exists ? 'attribute_not_exists(updatedAt)' : 'attribute_not_exists(userId)' })
+        }));
+        return respond(200, { ok: true });
+      } catch (e) {
+        if (e.name !== 'ConditionalCheckFailedException') throw e;
       }
-    }));
-    return respond(200, { ok: true });
+    }
+    return respond(409, { error: 'Busy -- try again' });
   }
 
   return respond(405, { error: 'Method not allowed' });
