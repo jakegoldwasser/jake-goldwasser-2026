@@ -6,8 +6,8 @@ import { isIP } from 'node:net';
 // This is the AWS Lambda behind Bookbug's "sign in with Google to save to
 // the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
 // bookbug/index.html) -- see README.md for deploying; there's no build
-// step, just this one file. It also keeps Luddite's sign-in/approval
-// list (see handleLuddite).
+// step, just this one file. It also runs Luddite's rooms, waiting rooms
+// and Drive submissions (see handleLuddite).
 //
 // Storage is one DynamoDB item per Google user (keyed by their stable
 // Google "sub" id), holding a single JSON blob namespaced per app:
@@ -381,41 +381,37 @@ export async function fetchPage(raw) {
 }
 
 // ---------------------------------------------------------------------
-// Luddite (/luddite/ on the site): a locked-down writing scratchpad that
-// only approved people may use. Anyone can sign in with Google, which
-// files them as "pending"; an admin (ADMIN_EMAILS) approves them from
-// the page's Approvals view. Admins are always approved.
+// Luddite (/luddite/ on the site): a locked-down writing room.
 //
-// The whole roster is one item in the same table, keyed LUDDITE_KEY
-// (Google "sub" ids are all digits, so it can't collide with a user),
-// shaped { [sub]: { email, name, status, requestedAt, decidedAt } }.
-// One item keeps this to GetItem/PutItem, the only calls the function's
-// role already has -- no Scan permission or second table needed.
+// OWNER_EMAILS run the site and choose who counts as a teacher. A teacher
+// opens rooms; each room has its own join code, waiting room and
+// submission box. Students sign in with Google, enter a code, wait to be
+// admitted, write, and submit -- the submission becomes a Google Doc in
+// that room's teacher's Google Drive (see the Drive section below).
+//
+// Items in the shared table (real users are keyed by a numeric Google
+// "sub", so these string keys can't collide with them):
+//   luddite:teachers        { emails: { [email]: { addedAt } } }
+//   luddite:teacher:<sub>   { rooms: [code, ...] }  newest first
+//   luddite:room:<code>     { code, title, teacher: { sub, email, name },
+//                             open, createdAt, students: { [sub]: {...} },
+//                             submissions: [...] }
+//   luddite:drive:<sub>     { refreshToken, email, rootId, roomFolders }
+// A room is written by all of its students at once (joins, "left the
+// page" reports, word counts), so every write is read-modify-write under
+// an optimistic lock -- a `ver` number checked by a conditional PutItem --
+// which needs no permission beyond the GetItem/PutItem the role has.
 // ---------------------------------------------------------------------
-const LUDDITE_KEY = 'luddite:roster';
-const ADMIN_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
+const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
+// The OAuth client's secret, for turning a teacher's one-time Drive
+// consent into a lasting refresh token (Configuration -> Environment
+// variables in the Lambda console). Without it, Drive can't be connected.
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const MAX_SUBMISSION_CHARS = 400000;
 
-function isAdmin(info) {
-  return ADMIN_EMAILS.includes(String(info.email || '').toLowerCase());
-}
-
-async function getRoster() {
-  const result = await ddb.send(new GetItemCommand({
-    TableName: TABLE_NAME,
-    Key: { userId: { S: LUDDITE_KEY } }
-  }));
-  return result.Item ? JSON.parse(result.Item.state.S) : {};
-}
-
-async function putRoster(roster) {
-  await ddb.send(new PutItemCommand({
-    TableName: TABLE_NAME,
-    Item: {
-      userId: { S: LUDDITE_KEY },
-      state: { S: JSON.stringify(roster) },
-      updatedAt: { N: String(Date.now()) }
-    }
-  }));
+class HttpError extends Error {
+  constructor(status, code) { super(code); this.status = status; }
 }
 
 function readJsonBody(event) {
@@ -427,62 +423,399 @@ function readJsonBody(event) {
   }
 }
 
+async function readItem(key) {
+  const result = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: { userId: { S: key } } }));
+  if (!result.Item) return { state: null, ver: 0 };
+  return { state: JSON.parse(result.Item.state.S), ver: Number(result.Item.ver?.N || 0) };
+}
+
+// Runs fn(state) on the item's current contents (null if it doesn't exist
+// yet) and saves what fn returns, retrying from a fresh read if anyone
+// else saved in between. fn must be free of side effects, since it may
+// run more than once; it can throw an HttpError to give up, or return
+// undefined to leave the item as it is.
+async function mutate(key, fn) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { state, ver } = await readItem(key);
+    const next = fn(state);
+    if (next === undefined) return state;
+    const put = {
+      TableName: TABLE_NAME,
+      Item: {
+        userId: { S: key },
+        state: { S: JSON.stringify(next) },
+        ver: { N: String(ver + 1) },
+        updatedAt: { N: String(Date.now()) }
+      },
+      ConditionExpression: 'attribute_not_exists(userId)'
+    };
+    if (ver) {
+      put.ConditionExpression = 'ver = :ver';
+      put.ExpressionAttributeValues = { ':ver': { N: String(ver) } };
+    }
+    try {
+      await ddb.send(new PutItemCommand(put));
+      return next;
+    } catch (e) {
+      if (e.name !== 'ConditionalCheckFailedException') throw e;
+      await new Promise((r) => setTimeout(r, 20 + Math.random() * 80 * (attempt + 1)));
+    }
+  }
+  throw new HttpError(503, 'busy');
+}
+
+const lower = (s) => String(s || '').trim().toLowerCase();
+
+async function roleOf(info) {
+  const email = lower(info.email);
+  if (OWNER_EMAILS.includes(email)) return 'owner';
+  const { state } = await readItem('luddite:teachers');
+  return state && state.emails && state.emails[email] ? 'teacher' : 'student';
+}
+
+function newRoomCode() {
+  let code = '';
+  for (let i = 0; i < 5; i++) code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
+  return code;
+}
+
+function cleanCode(code) {
+  const c = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length !== 5) throw new HttpError(404, 'no_room');
+  return c;
+}
+
+async function getRoom(code) {
+  const { state } = await readItem('luddite:room:' + code);
+  if (!state) throw new HttpError(404, 'no_room');
+  return state;
+}
+
+function ownsRoom(room, info, role) {
+  return room.teacher.sub === info.sub || role === 'owner';
+}
+
+// A room as its teacher sees it on the dashboard list.
+function roomSummary(room) {
+  const students = Object.values(room.students || {});
+  return {
+    code: room.code, title: room.title, open: room.open, createdAt: room.createdAt,
+    waiting: students.filter((s) => s.status === 'waiting').length,
+    admitted: students.filter((s) => s.status === 'admitted').length,
+    submissions: (room.submissions || []).length
+  };
+}
+
+// A room as one student sees it: only their own place in it.
+function studentView(room, sub) {
+  const me = room.students[sub] || null;
+  return {
+    code: room.code, title: room.title, open: room.open,
+    teacherName: room.teacher.name || room.teacher.email,
+    status: me ? me.status : 'none',
+    leaves: me ? me.leaves || 0 : 0,
+    submittedAt: me ? me.submittedAt || 0 : 0
+  };
+}
+
+// ---- Drive ----
+// A teacher connects Drive once from the dashboard: the page gets a
+// one-time code from Google (scope drive.file, which only reaches files
+// Luddite itself creates) and sends it here, where it's swapped for a
+// refresh token kept in luddite:drive:<sub>. Each submission is then
+// written into "Luddite submissions / <room title> (<code>)" in their Drive
+// as a Google Doc, whether or not the teacher is online.
+const driveTokens = new Map(); // teacher sub -> { token, exp }, per warm container
+
+async function googleToken(params) {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, ...params })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new HttpError(res.status === 400 ? 409 : 502, data.error === 'invalid_grant' ? 'drive_revoked' : 'drive_failed');
+    err.detail = data.error;
+    throw err;
+  }
+  return data;
+}
+
+async function connectDrive(info, code) {
+  if (!GOOGLE_CLIENT_SECRET) throw new HttpError(503, 'drive_not_configured');
+  const data = await googleToken({ code, grant_type: 'authorization_code', redirect_uri: 'postmessage' });
+  if (!String(data.scope || '').includes('https://www.googleapis.com/auth/drive.file')) throw new HttpError(409, 'drive_not_granted');
+  let email = '';
+  try { email = JSON.parse(Buffer.from(data.id_token.split('.')[1], 'base64url').toString('utf8')).email || ''; } catch (e) {}
+  await mutate('luddite:drive:' + info.sub, (d) => {
+    const refreshToken = data.refresh_token || (d && d.email === email ? d.refreshToken : '');
+    if (!refreshToken) throw new HttpError(409, 'drive_no_refresh');
+    // Another Google account means other folders; start fresh.
+    const keep = d && d.email === email;
+    return { refreshToken, email, rootId: keep ? d.rootId : null, roomFolders: keep ? d.roomFolders : {}, connectedAt: Date.now() };
+  });
+  driveTokens.delete(info.sub);
+  if (data.access_token) driveTokens.set(info.sub, { token: data.access_token, exp: Date.now() + (data.expires_in - 60) * 1000 });
+  return { connected: true, email };
+}
+
+async function driveAccessToken(teacherSub, drive) {
+  const cached = driveTokens.get(teacherSub);
+  if (cached && cached.exp > Date.now()) return cached.token;
+  const data = await googleToken({ refresh_token: drive.refreshToken, grant_type: 'refresh_token' });
+  driveTokens.set(teacherSub, { token: data.access_token, exp: Date.now() + (data.expires_in - 60) * 1000 });
+  return data.access_token;
+}
+
+async function driveCall(token, url, init) {
+  const res = await fetch(url, { ...init, headers: { Authorization: 'Bearer ' + token, ...(init.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new HttpError(res.status === 404 ? 404 : 502, res.status === 404 ? 'drive_folder_missing' : 'drive_failed');
+    err.detail = data.error && data.error.message;
+    throw err;
+  }
+  return data;
+}
+
+function createFolder(token, name, parentId) {
+  return driveCall(token, 'https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : undefined })
+  }).then((f) => f.id);
+}
+
+// The room's folder id, creating "Luddite submissions" and the room's
+// folder the first time (or again, if the teacher deleted them).
+async function roomFolder(teacherSub, token, room, fresh) {
+  let { state: drive } = await readItem('luddite:drive:' + teacherSub);
+  if (!fresh && drive.roomFolders && drive.roomFolders[room.code]) return drive.roomFolders[room.code];
+  const rootId = (!fresh && drive.rootId) || await createFolder(token, 'Luddite submissions');
+  const folderId = await createFolder(token, room.title + ' (' + room.code + ')', rootId);
+  await mutate('luddite:drive:' + teacherSub, (d) => ({ ...d, rootId, roomFolders: { ...(d.roomFolders || {}), [room.code]: folderId } }));
+  return folderId;
+}
+
+async function saveToDrive(room, doc) {
+  const { state: drive } = await readItem('luddite:drive:' + room.teacher.sub);
+  if (!drive || !drive.refreshToken) throw new HttpError(409, 'teacher_no_drive');
+  const token = await driveAccessToken(room.teacher.sub, drive);
+  const upload = async (folderId) => {
+    const boundary = 'luddite' + Math.random().toString(36).slice(2);
+    const meta = { name: doc.name, mimeType: 'application/vnd.google-apps.document', parents: [folderId], description: doc.description };
+    const body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) +
+      '\r\n--' + boundary + '\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n' + doc.text + '\r\n--' + boundary + '--';
+    return driveCall(token, 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
+      body
+    });
+  };
+  try {
+    return await upload(await roomFolder(room.teacher.sub, token, room, false));
+  } catch (e) {
+    if (e.message !== 'drive_folder_missing') throw e;
+    return upload(await roomFolder(room.teacher.sub, token, room, true));
+  }
+}
+
+// ---- Routes ----
 async function handleLuddite(event, method, path, info) {
-  const admin = isAdmin(info);
+  try {
+    return await routeLuddite(event, method, path, info);
+  } catch (e) {
+    if (e instanceof HttpError) return respond(e.status, { error: e.message, detail: e.detail });
+    throw e;
+  }
+}
 
-  // GET /luddite/status -- may this person write? First visit files them
-  // as pending so they show up in the admin's list.
+async function routeLuddite(event, method, path, info) {
+  const q = event.queryStringParameters || {};
+  const body = method === 'PUT' ? readJsonBody(event) : {};
+  if (!body) return respond(400, { error: 'Invalid JSON body' });
+  const role = await roleOf(info);
+  const isTeacher = role === 'owner' || role === 'teacher';
+  const me = { sub: info.sub, email: info.email || '', name: info.name || '' };
+
+  // GET /luddite/status -- who is this, and what can they do?
   if (path === '/luddite/status' && method === 'GET') {
-    let status = 'approved';
-    if (!admin) {
-      const roster = await getRoster();
-      let entry = roster[info.sub];
-      if (!entry) {
-        entry = { email: info.email || '', name: info.name || '', status: 'pending', requestedAt: Date.now() };
-        roster[info.sub] = entry;
-        await putRoster(roster);
-      } else if (entry.email !== (info.email || entry.email) || entry.name !== (info.name || entry.name)) {
-        entry.email = info.email || entry.email;
-        entry.name = info.name || entry.name;
-        await putRoster(roster);
-      }
-      status = entry.status;
-    }
     const session = issueSession(info);
-    return respond(200, { luddite: { status, admin, email: info.email || '', name: info.name || '' }, session });
+    return respond(200, { luddite: { role, email: me.email, name: me.name }, session });
   }
 
-  if (!admin) return respond(403, { error: 'Admins only' });
+  // ---- Students (anyone signed in) ----
 
-  // GET /luddite/users -- the full roster, for the Approvals view.
-  if (path === '/luddite/users' && method === 'GET') {
-    const roster = await getRoster();
-    const users = Object.keys(roster).map((sub) => ({ sub, ...roster[sub] }));
-    return respond(200, { users });
+  // PUT /luddite/join { code } -- ask into a room's waiting room.
+  if (path === '/luddite/join' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await mutate('luddite:room:' + code, (r) => {
+      if (!r) throw new HttpError(404, 'no_room');
+      const s = r.students[me.sub];
+      if (s) {
+        if (s.email === me.email && s.name === me.name) return undefined;
+        return { ...r, students: { ...r.students, [me.sub]: { ...s, email: me.email, name: me.name } } };
+      }
+      if (!r.open) throw new HttpError(403, 'room_closed');
+      return { ...r, students: { ...r.students, [me.sub]: { email: me.email, name: me.name, status: 'waiting', requestedAt: Date.now(), leaves: 0, words: 0 } } };
+    });
+    return respond(200, { room: studentView(room, me.sub) });
   }
 
-  // PUT /luddite/users -- { subs: [...] | all: true, status: 'approved' | 'pending' | 'removed' }.
-  // "all" means every pending request. "removed" deletes the entry (they'd
-  // re-appear as pending if they signed in again).
-  if (path === '/luddite/users' && method === 'PUT') {
-    const body = readJsonBody(event);
-    if (!body) return respond(400, { error: 'Invalid JSON body' });
-    const status = body.status;
-    if (!['approved', 'pending', 'removed'].includes(status)) return respond(400, { error: 'Bad status' });
-    const roster = await getRoster();
-    const subs = body.all
-      ? Object.keys(roster).filter((sub) => roster[sub].status === 'pending')
-      : (Array.isArray(body.subs) ? body.subs.filter((sub) => roster[sub]) : []);
-    for (const sub of subs) {
-      if (status === 'removed') delete roster[sub];
-      else { roster[sub].status = status; roster[sub].decidedAt = Date.now(); }
+  // GET /luddite/room?code= -- a student's place in the room (polled while
+  // waiting), or the whole room for its teacher (polled on the dashboard).
+  if (path === '/luddite/room' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    if (isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub) });
+    return respond(200, { room: studentView(room, me.sub) });
+  }
+
+  // PUT /luddite/event { code, type: 'left' | 'writing' | 'idle', words }
+  // -- live status for the teacher: leaving the page, and word counts.
+  if (path === '/luddite/event' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await mutate('luddite:room:' + code, (r) => {
+      const s = r && r.students[me.sub];
+      if (!s || s.status !== 'admitted') return undefined;
+      const next = { ...s, lastSeen: Date.now() };
+      // `away` means locked out right now, until they go back to writing.
+      if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false });
+      if (body.type === 'writing' || body.type === 'idle') Object.assign(next, { away: false, writing: body.type === 'writing' });
+      if (Number.isFinite(body.words)) next.words = Math.max(0, Math.floor(body.words));
+      return { ...r, students: { ...r.students, [me.sub]: next } };
+    });
+    if (!room) throw new HttpError(404, 'no_room');
+    return respond(200, { room: studentView(room, me.sub) });
+  }
+
+  // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
+  if (path === '/luddite/submit' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await getRoom(code);
+    const s = room.students[me.sub];
+    if (!s || s.status !== 'admitted') throw new HttpError(403, 'not_admitted');
+    const text = String(body.text || '');
+    if (!text.trim()) throw new HttpError(400, 'empty');
+    if (text.length > MAX_SUBMISSION_CHARS) throw new HttpError(413, 'too_long');
+    const words = (text.trim().match(/\S+/g) || []).length;
+    const label = String(body.label || '').replace(/[\r\n\/\\]/g, ' ').slice(0, 60) || new Date().toISOString().slice(0, 16);
+    const who = me.name || me.email;
+    const file = await saveToDrive(room, {
+      name: who + ' — ' + label,
+      description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), room ' + room.title + ' (' + code + '). ' +
+        words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
+      text
+    });
+    const submission = { id: file.id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at: Date.now(), link: file.webViewLink };
+    const saved = await mutate('luddite:room:' + code, (r) => ({
+      ...r,
+      submissions: [submission, ...(r.submissions || [])],
+      students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words } }
+    }));
+    return respond(200, { room: studentView(saved, me.sub) });
+  }
+
+  if (!isTeacher) return respond(403, { error: 'teachers_only' });
+
+  // ---- Teachers ----
+
+  // GET /luddite/rooms -- this teacher's rooms, newest first.
+  if (path === '/luddite/rooms' && method === 'GET') {
+    const { state } = await readItem('luddite:teacher:' + me.sub);
+    const codes = (state && state.rooms) || [];
+    const rooms = (await Promise.all(codes.map((c) => readItem('luddite:room:' + c)))).map((r) => r.state).filter(Boolean);
+    return respond(200, { rooms: rooms.map(roomSummary), drive: await driveStatus(me.sub) });
+  }
+
+  // PUT /luddite/rooms { title } -- open a new room with a fresh code.
+  if (path === '/luddite/rooms' && method === 'PUT') {
+    const title = String(body.title || '').trim().slice(0, 80) || 'Writing room';
+    let room = null;
+    for (let i = 0; i < 5 && !room; i++) {
+      const code = newRoomCode();
+      try {
+        room = await mutate('luddite:room:' + code, (r) => {
+          if (r) throw new HttpError(409, 'code_taken');
+          return { code, title, teacher: me, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+        });
+      } catch (e) {
+        if (e.message !== 'code_taken') throw e;
+      }
     }
-    await putRoster(roster);
-    const users = Object.keys(roster).map((sub) => ({ sub, ...roster[sub] }));
-    return respond(200, { changed: subs.length, users });
+    if (!room) throw new HttpError(503, 'busy');
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ rooms: [room.code, ...((t && t.rooms) || [])] }));
+    return respond(200, { room });
+  }
+
+  // PUT /luddite/room { code, action, subs } -- admit | admitAll | remove |
+  // close | open | delete (delete only takes it off the teacher's list).
+  if (path === '/luddite/room' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const subs = Array.isArray(body.subs) ? body.subs : [];
+    const room = await mutate('luddite:room:' + code, (r) => {
+      if (!r) throw new HttpError(404, 'no_room');
+      if (!ownsRoom(r, info, role)) throw new HttpError(403, 'not_your_room');
+      const students = { ...r.students };
+      const set = (sub, status) => {
+        if (students[sub]) students[sub] = { ...students[sub], status, decidedAt: Date.now() };
+      };
+      if (body.action === 'admit') subs.forEach((sub) => set(sub, 'admitted'));
+      else if (body.action === 'admitAll') Object.keys(students).forEach((sub) => { if (students[sub].status === 'waiting') set(sub, 'admitted'); });
+      else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
+      else if (body.action === 'close') return { ...r, open: false };
+      else if (body.action === 'open') return { ...r, open: true };
+      else if (body.action === 'delete') return { ...r, open: false, deletedAt: Date.now() };
+      else throw new HttpError(400, 'bad_action');
+      return { ...r, students };
+    });
+    if (body.action === 'delete') {
+      await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
+    }
+    return respond(200, { room });
+  }
+
+  // PUT /luddite/drive { code } connects Drive; { disconnect: true } forgets it.
+  if (path === '/luddite/drive' && method === 'PUT') {
+    if (body.disconnect) {
+      await mutate('luddite:drive:' + me.sub, (d) => (d ? { ...d, refreshToken: '' } : undefined));
+      driveTokens.delete(me.sub);
+      return respond(200, { drive: { connected: false } });
+    }
+    if (!body.code) throw new HttpError(400, 'missing_code');
+    return respond(200, { drive: await connectDrive(info, String(body.code)) });
+  }
+
+  if (role !== 'owner') return respond(403, { error: 'owners_only' });
+
+  // ---- Owners ----
+
+  // GET /luddite/teachers; PUT { add: email } or { remove: email }.
+  if (path === '/luddite/teachers') {
+    let state;
+    if (method === 'PUT') {
+      const add = lower(body.add);
+      const remove = lower(body.remove);
+      if (add && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(add)) throw new HttpError(400, 'bad_email');
+      state = await mutate('luddite:teachers', (t) => {
+        const emails = { ...((t && t.emails) || {}) };
+        if (add) emails[add] = { addedAt: Date.now() };
+        if (remove) delete emails[remove];
+        return { emails };
+      });
+    } else {
+      state = (await readItem('luddite:teachers')).state;
+    }
+    const emails = (state && state.emails) || {};
+    return respond(200, { owners: OWNER_EMAILS, teachers: Object.keys(emails).sort().map((email) => ({ email, addedAt: emails[email].addedAt })) });
   }
 
   return respond(404, { error: 'Not found' });
+}
+
+async function driveStatus(teacherSub) {
+  const { state } = await readItem('luddite:drive:' + teacherSub);
+  return { connected: !!(state && state.refreshToken), email: (state && state.email) || '', configured: !!GOOGLE_CLIENT_SECRET };
 }
 
 export const handler = async (event) => {
