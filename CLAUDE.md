@@ -4,6 +4,7 @@
 
 - Jake is learning coding vocabulary. Whenever Jake uses a coding term incorrectly or loosely (e.g. calling a branch a "version", a commit a "save", or CSS "code for the database"), correct it briefly: name the right term and what it means, in a sentence, then carry on with the request. Don't skip the correction to be polite, and don't let it take over the reply.
 - **Merging:** by default, finished work gets merged into `main` (which is what the live site at jake-goldwasser.com serves, via GitHub Pages) — but always ask Jake to OK the merge first with a popup (the AskUserQuestion tool), never just in prose. Only merge once he OKs it.
+- **Local sessions, not cloud.** Jake works in local Claude Code sessions on his own computer. Never start cloud sessions or cloud agents for him (no creating remote sessions, no cloud routines, no suggested tasks that run in the cloud); do the work in the current session. If a session turns out to be running in the cloud, say so once at the start.
 
 ## Bookbug (`bookbug/`)
 
