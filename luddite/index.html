@@ -130,6 +130,23 @@
   .pill.approved { color: var(--ink); }
   .pill.pending { color: var(--lock); }
   .empty { color: var(--muted); padding: 16px 0; border-top: 1px solid var(--rule); }
+
+  /* Admin preview of the student screens */
+  .preview-bar {
+    position: fixed;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+    max-width: calc(100% - 32px);
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px var(--rule), 0 2px 12px rgba(0, 0, 0, 0.06);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .preview-bar .linkish.on { color: var(--ink); text-decoration: none; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -200,6 +217,15 @@
   </div>
 </section>
 
+<!-- Shown over the student screens while an admin previews them -->
+<div class="preview-bar" id="previewBar" hidden>
+  <span>Student view:</span>
+  <button class="linkish" data-preview="pendingScreen">Waiting for approval</button>
+  <button class="linkish" data-preview="readyScreen">Approved</button>
+  <span>&middot;</span>
+  <button class="linkish" id="exitPreviewBtn">Back to Approvals</button>
+</div>
+
 <!-- Approvals (admins only) -->
 <section class="screen" id="adminScreen" hidden>
   <div class="card">
@@ -207,11 +233,12 @@
       <h2>Approvals</h2>
       <div class="row">
         <button class="btn small" id="approveAllBtn">Approve all pending</button>
-        <button class="btn small ghost" id="adminBackBtn">Back</button>
+        <button class="btn small ghost" id="previewBtn">See what students see</button>
       </div>
     </div>
     <p class="fine" id="adminNote" style="margin:0 0 12px"></p>
     <div id="userList"></div>
+    <p class="fine"><span class="who-email"></span> &middot; <button class="linkish" data-signout>Sign out</button></p>
   </div>
 </section>
 
@@ -234,8 +261,17 @@
 
   function $(id) { return document.getElementById(id); }
   var screens = ['signInScreen', 'pendingScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'adminScreen'];
+  // True while an admin is looking at the student screens from Approvals.
+  var previewing = false;
   function show(id) {
     screens.forEach(function (s) { $(s).hidden = s !== id; });
+    // The bar sits over the two screens a student lands on, never over the
+    // writing or locked screens, which stay exactly as students get them.
+    var bar = previewing && (id === 'pendingScreen' || id === 'readyScreen');
+    $('previewBar').hidden = !bar;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-preview]'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-preview') === id);
+    });
   }
 
   function store(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) {} }
@@ -286,11 +322,13 @@
       return;
     }
     Array.prototype.forEach.call(document.querySelectorAll('.who-email'), function (el) { el.textContent = me.email; });
-    if (me.status === 'approved') showReady();
+    if (me.admin && !me.legacy) showAdmin();
+    else if (me.status === 'approved') showReady();
     else show('pendingScreen');
   }
 
   function signOut() {
+    previewing = false;
     authToken = null;
     store(AUTH_KEY, null);
     me = { email: '', name: '', admin: false, status: '' };
@@ -312,7 +350,7 @@
     })(50);
   }
 
-  $('recheckBtn').addEventListener('click', checkStatus);
+  $('recheckBtn').addEventListener('click', function () { if (!previewing) checkStatus(); });
 
   // ---------------------------------------------------------------------
   // Ready screen
@@ -326,7 +364,7 @@
     $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
     $('downloadBtn').hidden = !has;
     $('newPageBtn').hidden = $('newPageSep').hidden = !has;
-    $('adminLink').hidden = $('adminSep').hidden = !(me.admin && !me.legacy);
+    $('adminLink').hidden = $('adminSep').hidden = !(me.admin && !me.legacy) || previewing;
     var fsOk = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
     $('noFullscreen').hidden = fsOk;
     $('startBtn').disabled = !fsOk;
@@ -508,8 +546,23 @@
   // ---------------------------------------------------------------------
   var users = [];
 
-  $('adminLink').addEventListener('click', function () { show('adminScreen'); loadUsers(); });
-  $('adminBackBtn').addEventListener('click', showReady);
+  function showAdmin() {
+    previewing = false;
+    show('adminScreen');
+    loadUsers();
+  }
+  $('adminLink').addEventListener('click', showAdmin);
+  $('exitPreviewBtn').addEventListener('click', showAdmin);
+  $('previewBtn').addEventListener('click', function () {
+    previewing = true;
+    showReady();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-preview]'), function (b) {
+    b.addEventListener('click', function () {
+      if (b.getAttribute('data-preview') === 'readyScreen') showReady();
+      else show('pendingScreen');
+    });
+  });
   $('approveAllBtn').addEventListener('click', function () { setStatus({ all: true, status: 'approved' }); });
 
   async function loadUsers() {
