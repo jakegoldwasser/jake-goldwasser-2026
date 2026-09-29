@@ -4046,8 +4046,17 @@
   // unchanged when the cloud copy arrives, it's safe to swap in the
   // cloud's (possibly newer, e.g. edited on a phone) version of it.
   var bookAtLoad = null;
+  // A tab left open in the background catches up when it's looked at
+  // again, rather than holding (and saving over) an old copy of the books.
+  var lastPullAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || !cloudAuthToken || !signedInThisLoad) return;
+    if (Date.now() - lastPullAt < 15000) return;
+    pullLibraryFromCloud();
+  });
   async function pullLibraryFromCloud() {
     if (!cloudAuthToken) return;
+    lastPullAt = Date.now();
     if (!signedInThisLoad) setAccountStatus('Syncing…');
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
@@ -4068,6 +4077,7 @@
       // lapsed, or books from before sign-in was required) into the
       // account rather than letting either side overwrite the other.
       flushPendingSave();
+      var localCur = state.chapbookId ? library.filter(function (c) { return c.id === state.chapbookId; })[0] : null;
       var merged = mergeLibraries(library, trash, ours.chapbooks || [], ours.trash || []);
       library = merged.library;
       trash = merged.trash;
@@ -4086,7 +4096,21 @@
       // (their newer edits win the merge anyway) and just refresh lists.
       var untouched = bookAtLoad === null || JSON.stringify(state) === bookAtLoad;
       if (untouched) openLastOpenedBook();
-      else { renderChapbooksList(); if (isHomeShown()) renderHome(); }
+      else {
+        // The open book was edited more recently somewhere else (another
+        // tab or device): show that copy, so this tab doesn't go on
+        // editing -- and saving -- an old one.
+        var mergedCur = localCur && library.filter(function (c) { return c.id === localCur.id; })[0];
+        if (mergedCur && mergedCur !== localCur && mergedCur.data && (mergedCur.updatedAt || 0) > (localCur.updatedAt || 0)) {
+          state = migrateFontKeys(JSON.parse(JSON.stringify(mergedCur.data)));
+          state.chapbookId = mergedCur.id;
+          state.isExample = false;
+          saveStateCache();
+          renderAll();
+        }
+        renderChapbooksList();
+        if (isHomeShown()) renderHome();
+      }
       initialLoadDone = true;
       updateSignInGate();
       if (merged.changed || migrated || pbChanged) await syncLibraryToCloud();
