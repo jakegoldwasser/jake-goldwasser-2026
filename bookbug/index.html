@@ -1126,6 +1126,13 @@
   .archive-panel > [id$="ArchiveList"], #archiveList { margin-top: 14px; }
   .archive-panel > [hidden] { display: none; }
   .archive-toggle { min-width: 4.5em; justify-content: center; }
+  /* Recently deleted: under the archive, set apart by a rule. */
+  .recent-deleted { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+  .recent-deleted-head { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+  .recent-deleted-note { margin: -2px 0 4px; font-size: 12px; color: var(--ink-faint); }
+  .recent-deleted-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; font-size: 13.5px; }
+  .recent-deleted-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-deleted-left { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
   #homeArchivedGrid[hidden] { display: none; }
   .home-archived[hidden] { display: none; }
   .home-archived-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
@@ -2017,6 +2024,15 @@
       <span class="home-new-label">New book</span>
     </button>
     <div id="homeShelves"></div>
+    <div class="home-archived" id="homeDeleted" hidden>
+      <div class="archive-head">
+        <h3 class="home-archived-title" id="homeDeletedTitle">Recently deleted</h3>
+        <div class="archive-actions">
+          <button class="btn btn-sm archive-toggle" id="homeDeletedBtn" type="button" aria-expanded="false" aria-controls="homeDeletedList">Show</button>
+        </div>
+      </div>
+      <div id="homeDeletedList" hidden></div>
+    </div>
     <div class="home-archived" id="homeArchived" hidden>
       <div class="archive-head">
         <h3 class="home-archived-title" id="homeArchivedTitle">Archived</h3>
@@ -3255,6 +3271,18 @@
   // account's books, for fast reloads and so edits made while a sign-in
   // has lapsed aren't lost; signing out clears it.
   // ---------------------------------------------------------------------
+  // Books deleted for good in the last RECOVER_DAYS: { id, kind ('text'
+  // | 'picture' | 'cartoon'), deletedAt, entry (the whole library entry) }.
+  // Synced; the library's tombstone stays in its trash as before.
+  var RECENTLY_DELETED_KEY = 'bookbug.recentlyDeleted.v1';
+  var recentlyDeleted = [];
+  try { recentlyDeleted = JSON.parse(localStorage.getItem(RECENTLY_DELETED_KEY) || '[]'); } catch (e) { recentlyDeleted = []; }
+  function persistRecentlyDeleted() { try { localStorage.setItem(RECENTLY_DELETED_KEY, JSON.stringify(recentlyDeleted)); } catch (e) {} }
+  function rememberDeletedBook(kind, entry) {
+    recentlyDeleted = recentlyDeleted.filter(function (d) { return d.id !== entry.id; });
+    recentlyDeleted.push({ id: entry.id, kind: kind, deletedAt: Date.now(), entry: JSON.parse(JSON.stringify(entry)) });
+    persistRecentlyDeleted();
+  }
   var LIBRARY_KEY = 'poetryBooklet.library.v1';
   var TRASH_KEY = 'poetryBooklet.trash.v1';
   var library = [];
@@ -3286,6 +3314,48 @@
   }
   function activeBooks() { return library.filter(function (c) { return !c.archived; }); }
   function archivedBooks() { return library.filter(function (c) { return c.archived; }); }
+
+  // ---- Recently deleted ----
+  // Deleting for good isn't instant: whatever's deleted -- a book, an
+  // archived poem or cartoon, a spread, an emptied archive -- is kept for
+  // RECOVER_DAYS in a Recently deleted list, where it can be restored,
+  // and only then is gone. Books keep theirs in `recentlyDeleted` (synced
+  // with the library); things inside a book keep theirs in the book
+  // (`deletedPoems`, a picture book's or cartoon book's `deleted`).
+  var RECOVER_DAYS = 7, RECOVER_MS = RECOVER_DAYS * 24 * 3600 * 1000;
+  function freshDeleted(list) {
+    var cut = Date.now() - RECOVER_MS;
+    return (Array.isArray(list) ? list : []).filter(function (d) { return d && d.deletedAt > cut; });
+  }
+  function daysLeftLabel(deletedAt) {
+    var days = Math.ceil((deletedAt + RECOVER_MS - Date.now()) / (24 * 3600 * 1000));
+    return days <= 1 ? 'Gone for good within a day' : days + ' days left';
+  }
+  // The Recently deleted part of an archive panel: each item's name, how
+  // long it's kept, and Restore.
+  function recentlyDeletedSection(list, nameOf, onRestore) {
+    var wrap = document.createElement('div');
+    wrap.className = 'recent-deleted';
+    wrap.innerHTML = '<div class="recent-deleted-head">Recently deleted</div><p class="recent-deleted-note">Kept for ' + RECOVER_DAYS + ' days, then deleted for good.</p>';
+    list.forEach(function (d, i) {
+      var row = document.createElement('div');
+      row.className = 'recent-deleted-row';
+      var name = document.createElement('span');
+      name.className = 'recent-deleted-name';
+      name.textContent = nameOf(d);
+      var left = document.createElement('span');
+      left.className = 'recent-deleted-left';
+      left.textContent = daysLeftLabel(d.deletedAt);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm';
+      btn.textContent = 'Restore';
+      btn.addEventListener('click', function () { onRestore(d, i); });
+      row.append(name, left, btn);
+      wrap.appendChild(row);
+    });
+    return wrap;
+  }
 
   function makeChapbookId() { return 'cb' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -3710,6 +3780,8 @@
       margin: typeof d.margin === 'number' ? d.margin : PB_STANDARD.margin,
       gutter: typeof d.gutter === 'number' ? d.gutter : PB_STANDARD.gutter,
       spreads: spreads, archived: (d.archived || []).map(pbNormalizeSpread),
+      // Recently deleted spreads: { deletedAt, spread, from: 'book' | 'archive', at }.
+      deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, spread: pbNormalizeSpread(x.spread), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
       images: d.images && typeof d.images === 'object' ? d.images : {}
     });
   }
@@ -3777,6 +3849,7 @@
       titlePage: d.titlePage !== false, numbers: !!d.numbers,
       cartoons: (d.cartoons || []).map(cbNormalizeCartoon),
       archived: (d.archived || []).map(cbNormalizeCartoon),
+      deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, cartoon: cbNormalizeCartoon(x.cartoon) }; }),
       images: d.images && typeof d.images === 'object' ? d.images : {}
     };
   }
@@ -4204,6 +4277,9 @@
       persistTrash();
       var pbChanged = mergePictureBooksFromCloud(ours, data.state);
       if (mergeCartoonsFromCloud(ours)) pbChanged = true;
+      var deletedBefore = JSON.stringify(recentlyDeleted);
+      mergeRecentlyDeleted(ours.recentlyDeleted);
+      if (JSON.stringify(recentlyDeleted) !== deletedBefore || JSON.stringify(recentlyDeleted) !== JSON.stringify(freshDeleted(ours.recentlyDeleted))) pbChanged = true;
       var cloudOpened = ours.lastOpened || null;
       var localOpened = getLastOpened();
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
@@ -4308,7 +4384,7 @@
         body: JSON.stringify({ app: 'chapbookbuilder', data: {
           chapbooks: library, trash: trash, lastOpened: getLastOpened(),
           pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
-          cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash
+          cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, recentlyDeleted: freshDeleted(recentlyDeleted)
         } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
@@ -7837,7 +7913,7 @@
     var keys = {};
     if (state.coverImage) keys[state.coverImage] = true;
     if (state.backImage) keys[state.backImage] = true;
-    (state.poems || []).concat(state.archivedPoems || []).forEach(function (p) {
+    (state.poems || []).concat(state.archivedPoems || [], (state.deletedPoems || []).map(function (d) { return d.poem; })).forEach(function (p) {
       (p.lines || []).forEach(function (l) { var k = imageKeyForLine(l, state); if (k) keys[k] = true; });
     });
     return keys;
@@ -9032,10 +9108,11 @@
   // closed by the Show / Hide on the panel itself -- never by a button
   // elsewhere that says "Archive" without archiving anything.
   function syncArchivePanel(o) {
-    o.panel.hidden = !o.count;
-    o.title.textContent = o.label + (o.count ? ' (' + o.count + ')' : '');
+    var deleted = o.deleted || 0;
+    o.panel.hidden = !o.count && !deleted;
+    o.title.textContent = o.label + (o.count ? ' (' + o.count + ')' : '') + (deleted ? ' · ' + deleted + ' recently deleted' : '');
     o.list.hidden = !o.open;
-    if (o.empty) o.empty.hidden = !o.open;
+    if (o.empty) o.empty.hidden = !o.open || !o.count;
     o.toggle.textContent = o.open ? 'Hide' : 'Show';
     o.toggle.setAttribute('aria-expanded', o.open ? 'true' : 'false');
   }
@@ -9047,9 +9124,11 @@
 
   function updateArchiveButton() {
     var n = (state.archivedPoems || []).length;
-    if (!n) archiveOpen = false;
+    state.deletedPoems = freshDeleted(state.deletedPoems);
+    var d = state.deletedPoems.length;
+    if (!n && !d) archiveOpen = false;
     syncArchivePanel({ panel: archivePanel, title: document.getElementById('archiveTitle'), label: 'Archived ' + formNouns().many,
-      count: n, open: archiveOpen, list: archiveList, empty: emptyArchiveBtn, toggle: archiveToggleBtn });
+      count: n, deleted: d, open: archiveOpen, list: archiveList, empty: emptyArchiveBtn, toggle: archiveToggleBtn });
   }
 
   archiveToggleBtn.addEventListener('click', function () {
@@ -9103,8 +9182,21 @@
   function renderArchiveList() {
     archiveList.innerHTML = '';
     var archived = state.archivedPoems || [];
+    state.deletedPoems = freshDeleted(state.deletedPoems);
+    if (state.deletedPoems.length) {
+      archiveList.appendChild(recentlyDeletedSection(state.deletedPoems, function (d) {
+        return (d.poem.title || (isSection(d.poem) ? 'Untitled' : entryLabel(d.poem))) + (isSection(d.poem) ? ' (' + formNouns().section + ')' : '');
+      }, function (d) {
+        // Back where it was deleted from: the archive.
+        state.deletedPoems = state.deletedPoems.filter(function (x) { return x !== d; });
+        state.archivedPoems = (state.archivedPoems || []).concat([d.poem]);
+        persist();
+        renderArchiveList();
+        updateArchiveButton();
+      }));
+    }
     if (!archived.length) {
-      archiveList.innerHTML = '<div class="status-line">Nothing archived.</div>';
+      if (!state.deletedPoems.length) archiveList.innerHTML = '<div class="status-line">Nothing archived.</div>';
       return;
     }
     archived.forEach(function (poem, i) {
@@ -9121,12 +9213,13 @@
       var deleteBtn = document.createElement('button');
       deleteBtn.className = 'btn btn-ghost btn-danger';
       deleteBtn.type = 'button';
-      deleteBtn.title = 'Delete forever';
+      deleteBtn.title = 'Delete (kept in Recently deleted for ' + RECOVER_DAYS + ' days)';
       deleteBtn.textContent = '×';
       deleteBtn.addEventListener('click', async function () {
-        var ok = await confirmDialog('Permanently delete “' + (poem.title || entryLabel(poem)) + '”? This can’t be undone.');
+        var ok = await confirmDialog('Delete “' + (poem.title || entryLabel(poem)) + '”? You can restore it from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete');
         if (!ok) return;
-        state.archivedPoems.splice(i, 1);
+        var gone = state.archivedPoems.splice(i, 1)[0];
+        state.deletedPoems = freshDeleted(state.deletedPoems).concat([{ deletedAt: Date.now(), poem: gone }]);
         persist();
         renderArchiveList();
         updateArchiveButton();
@@ -9134,15 +9227,17 @@
       row.appendChild(titleSpan);
       row.appendChild(restoreBtn);
       row.appendChild(deleteBtn);
-      archiveList.appendChild(row);
+      archiveList.insertBefore(row, archiveList.querySelector('.recent-deleted'));
     });
   }
 
   emptyArchiveBtn.addEventListener('click', async function () {
     var archived = state.archivedPoems || [];
     if (!archived.length) return;
-    var ok = await confirmDialog('Permanently delete all ' + archived.length + ' archived items? This can’t be undone.');
+    var ok = await confirmDialog('Delete all ' + archived.length + ' archived items? You can restore them from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
+    var now = Date.now();
+    state.deletedPoems = freshDeleted(state.deletedPoems).concat(archived.map(function (poem) { return { deletedAt: now, poem: poem }; }));
     state.archivedPoems = [];
     persist();
     renderArchiveList();
@@ -9696,7 +9791,7 @@
   // ---------------------------------------------------------------------
   var homeMQ = window.matchMedia('(min-width: 701px)');
   var homeView = document.getElementById('homeView');
-  var homeArchivedOpen = false;
+  var homeArchivedOpen = false, homeDeletedOpen = false;
   function isHomeShown() { return document.body.classList.contains('view-home'); }
   function showHome() {
     hidePictureBookView();
@@ -9873,6 +9968,20 @@
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks());
+    // Recently deleted books, kept RECOVER_DAYS, each restorable.
+    recentlyDeleted = freshDeleted(recentlyDeleted);
+    if (!recentlyDeleted.length) homeDeletedOpen = false;
+    var delList = document.getElementById('homeDeletedList');
+    syncArchivePanel({ panel: document.getElementById('homeDeleted'), title: document.getElementById('homeDeletedTitle'), label: 'Recently deleted',
+      count: recentlyDeleted.length, open: homeDeletedOpen, list: delList, toggle: document.getElementById('homeDeletedBtn') });
+    delList.innerHTML = '';
+    if (recentlyDeleted.length) {
+      var sec = recentlyDeletedSection(recentlyDeleted.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }), function (d) {
+        return (d.entry.title || 'Untitled book') + ' · ' + (d.kind === 'picture' ? 'picture book' : d.kind === 'cartoon' ? 'cartoon book' : BOOK_FORMS[bookFormOf(d.entry.data)].add.toLowerCase());
+      }, restoreDeletedBook);
+      sec.removeChild(sec.firstChild);
+      delList.appendChild(sec);
+    }
     var archivedGrid = document.getElementById('homeArchivedGrid');
     if (!archived.length) homeArchivedOpen = false;
     syncArchivePanel({ panel: document.getElementById('homeArchived'), title: document.getElementById('homeArchivedTitle'), label: 'Archived',
@@ -9964,6 +10073,11 @@
     if (!isHomeShown()) return;
     clearTimeout(homeFitTimer);
     homeFitTimer = setTimeout(fitHomeShelves, 100);
+  });
+  document.getElementById('homeDeletedBtn').addEventListener('click', function () {
+    homeDeletedOpen = !homeDeletedOpen;
+    renderHome();
+    if (homeDeletedOpen) document.getElementById('homeDeleted').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
   document.getElementById('homeArchivedBtn').addEventListener('click', function () {
     homeArchivedOpen = !homeArchivedOpen;
@@ -10224,11 +10338,54 @@
   // Only an archived book can be deleted for good: archive first, then
   // delete from the archive. The menus only offer it there; this holds
   // even if something else ever calls it.
+  // Back into its library, archived (where it was deleted from); its
+  // stamp now beats the deletion tombstone on every device.
+  async function restoreDeletedBook(d) {
+    recentlyDeleted = recentlyDeleted.filter(function (x) { return x.id !== d.id; });
+    persistRecentlyDeleted();
+    var entry = JSON.parse(JSON.stringify(d.entry));
+    entry.archived = true;
+    entry.archiveChangedAt = Date.now();
+    if (d.kind === 'picture') {
+      pbTrash = pbTrash.filter(function (t) { return t.id !== entry.id; });
+      pbLibrary = pbLibrary.filter(function (c) { return c.id !== entry.id; }).concat([entry]);
+      persistPbLibrary(); persistPbTrash();
+    } else if (d.kind === 'cartoon') {
+      cbTrash = cbTrash.filter(function (t) { return t.id !== entry.id; });
+      cbLibrary = cbLibrary.filter(function (c) { return c.id !== entry.id; }).concat([entry]);
+      persistCbLibrary(); persistCbTrash();
+    } else {
+      trash = trash.filter(function (t) { return t.id !== entry.id; });
+      library = library.filter(function (c) { return c.id !== entry.id; }).concat([entry]);
+      persistLibrary(); persistTrash();
+    }
+    renderChapbooksList();
+    if (isHomeShown()) renderHome();
+    showToast('Restored “' + (entry.title || 'Untitled book') + '” to Archived.');
+    if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  // Folds another device's Recently deleted list into this one: newest
+  // deletion wins, anything past RECOVER_DAYS goes, and a book that's
+  // since been restored (its library copy is newer) drops out.
+  function mergeRecentlyDeleted(cloudList) {
+    var byId = {};
+    freshDeleted(recentlyDeleted).concat(freshDeleted(cloudList)).forEach(function (d) {
+      if (d && d.id && (!byId[d.id] || d.deletedAt > byId[d.id].deletedAt)) byId[d.id] = d;
+    });
+    function live(d) {
+      var lib = d.kind === 'picture' ? pbLibrary : d.kind === 'cartoon' ? cbLibrary : library;
+      var e = lib.filter(function (c) { return c.id === d.id; })[0];
+      return e && Math.max(e.updatedAt || 0, e.archiveChangedAt || 0) > d.deletedAt;
+    }
+    recentlyDeleted = Object.keys(byId).map(function (k) { return byId[k]; }).filter(function (d) { return !live(d); });
+    persistRecentlyDeleted();
+  }
   async function deleteChapbookForever(id) {
     var entry = library.filter(function (c) { return c.id === id; })[0];
     if (!entry || !entry.archived) return;
-    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled book') + '”? This can’t be undone.');
+    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled book') + '”? You can restore it from Recently deleted, at the bottom of Home, for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
+    rememberDeletedBook('text', entry);
     library = library.filter(function (c) { return c.id !== id; });
     trash = trash.filter(function (t) { return t.id !== id; });
     trash.push({ id: id, deletedAt: Date.now() });
@@ -11685,8 +11842,9 @@
   async function deletePictureBookForever(id) {
     var entry = pbEntry(id);
     if (!entry || !entry.archived) return;
-    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled picture book') + '”? This can’t be undone.');
+    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled picture book') + '”? You can restore it from Recently deleted, at the bottom of Home, for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
+    rememberDeletedBook('picture', entry);
     pbLibrary = pbLibrary.filter(function (c) { return c.id !== id; });
     pbTrash = pbTrash.filter(function (t) { return t.id !== id; });
     pbTrash.push({ id: id, deletedAt: Date.now() });
@@ -15096,19 +15254,23 @@
 
   // ---- Archived spreads ----
   function pbSpreadIsEmpty(sp) { return !sp.items.length && !(sp.notes || '').trim(); }
-  // Deleting a spread outright, skipping the archive. An empty one just
-  // goes; one with anything on it asks first.
+  // Deleting a spread, skipping the archive. An empty one just goes; one
+  // with anything on it asks first, and is kept in Recently deleted for
+  // RECOVER_DAYS, restorable to where it was.
   async function pbDeleteSpread(s) {
     var n = pbState.spreads.length;
     if (s <= 0 || s >= n - 1) return;
     var sp = pbState.spreads[s];
-    if (!pbSpreadIsEmpty(sp)) {
+    var empty = pbSpreadIsEmpty(sp);
+    if (!empty) {
       var pages = pbSpreadPages(s, n);
-      var ok = await confirmDialog('Delete pages ' + pages.left + '–' + pages.right + ' and everything on them? This skips the archive, so the spread can’t be restored later.', 'Delete');
+      var ok = await confirmDialog('Delete pages ' + pages.left + '–' + pages.right + ' and everything on them? You can restore the spread from Recently deleted, under the spreads, for ' + RECOVER_DAYS + ' days.', 'Delete');
       if (!ok || pbState.spreads[s] !== sp) return;
     }
     pbCheckpoint();
     pbState.spreads.splice(s, 1);
+    if (!empty) pbState.deleted = freshDeleted(pbState.deleted).concat([{ deletedAt: Date.now(), spread: sp, from: 'book', at: s }]);
+    renderPbArchive();
     pbSel = null;
     pbPersist();
     pbRenderView();
@@ -15132,20 +15294,39 @@
   }
   function updatePbArchiveButton() {
     var n = pbState.archived.length;
-    if (!n) pbArchiveOpen = false;
-    syncArchivePanel({ panel: pbFmt('pbArchivePanel'), title: pbFmt('pbArchiveTitle'), label: 'Archived spreads', count: n,
+    pbState.deleted = freshDeleted(pbState.deleted);
+    var d = pbState.deleted.length;
+    if (!n && !d) pbArchiveOpen = false;
+    syncArchivePanel({ panel: pbFmt('pbArchivePanel'), title: pbFmt('pbArchiveTitle'), label: 'Archived spreads', count: n, deleted: d,
       open: pbArchiveOpen, list: pbFmt('pbArchiveList'), empty: pbFmt('pbEmptyArchiveBtn'), toggle: pbFmt('pbArchiveToggleBtn') });
+  }
+  function pbDeletedSection() {
+    return recentlyDeletedSection(pbState.deleted, function (d) {
+      var words = d.spread.items.filter(function (it) { return it.type === 'text'; }).map(function (it) { return stripFormatMarkers(pbItemText(it)); }).join(' / ').trim();
+      var art = d.spread.items.some(function (it) { return it.type === 'image'; });
+      return (d.from === 'book' ? 'Spread' : 'Archived spread') + (typeof d.at === 'number' && d.from === 'book' ? ' ' + d.at : '') + ': ' + (words || (art ? 'illustration' : d.spread.notes || 'notes'));
+    }, function (d) {
+      pbCheckpoint();
+      pbState.deleted = pbState.deleted.filter(function (x) { return x !== d; });
+      if (d.from === 'book') {
+        var at = Math.max(1, Math.min(typeof d.at === 'number' ? d.at : pbState.spreads.length - 1, pbState.spreads.length - 1));
+        pbState.spreads.splice(at, 0, d.spread);
+        pbPersist(); pbRenderView(); renderPbArchive(); pbFollow(at);
+      } else {
+        pbState.archived.unshift(d.spread);
+        pbPersist(); renderPbArchive();
+      }
+    });
   }
   function renderPbArchive() {
     updatePbArchiveButton();
     var list = pbFmt('pbArchiveList');
     list.innerHTML = '';
     pbFmt('pbEmptyArchiveBtn').disabled = !pbState.archived.length;
-    if (!pbState.archived.length) {
-      list.innerHTML = '<div class="chapbooks-empty" style="padding:4px 0;">Nothing archived. Archiving a spread puts it here.</div>';
-      return;
-    }
     if (!pbArchiveOpen) return;
+    if (pbState.deleted.length) list.appendChild(pbDeletedSection());
+    if (!pbState.archived.length) return;
+    var deletedEl = list.firstChild;
     pbState.archived.forEach(function (sp, gi) {
       var item = document.createElement('div');
       item.className = 'pb-archive-item';
@@ -15182,7 +15363,7 @@
         pbFollow(at);
       });
       item.appendChild(restore);
-      list.appendChild(item);
+      list.insertBefore(item, deletedEl);
     });
   }
   pbFmt('pbArchiveToggleBtn').addEventListener('click', function () {
@@ -15193,8 +15374,10 @@
   pbFmt('pbEmptyArchiveBtn').addEventListener('click', async function () {
     var n = pbState.archived.length;
     if (!n) return;
-    var ok = await confirmDialog('Permanently delete ' + n + ' archived spread' + (n === 1 ? '' : 's') + '? This can’t be undone.');
+    var ok = await confirmDialog('Delete ' + n + ' archived spread' + (n === 1 ? '' : 's') + '? You can restore ' + (n === 1 ? 'it' : 'them') + ' from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
+    var now = Date.now();
+    pbState.deleted = freshDeleted(pbState.deleted).concat(pbState.archived.map(function (sp) { return { deletedAt: now, spread: sp, from: 'archive', at: null }; }));
     pbState.archived = [];
     pbPersist();
     renderPbArchive();
@@ -15772,8 +15955,9 @@
   async function deleteCartoonBookForever(id) {
     var entry = cbEntry(id);
     if (!entry || !entry.archived) return;
-    var ok = await confirmDialog('Permanently delete “' + (entry.title || 'Untitled cartoon book') + '”? This can’t be undone.');
+    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled cartoon book') + '”? You can restore it from Recently deleted, at the bottom of Home, for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
+    rememberDeletedBook('cartoon', entry);
     cbLibrary = cbLibrary.filter(function (c) { return c.id !== id; });
     cbTrash = cbTrash.filter(function (t) { return t.id !== id; });
     cbTrash.push({ id: id, deletedAt: Date.now() });
@@ -16068,13 +16252,22 @@
 
   // ---- Archived cartoons ----
   function cbRenderArchive() {
-    if (!cbState.archived.length) cbArchiveOpen = false;
+    cbState.deleted = freshDeleted(cbState.deleted);
+    if (!cbState.archived.length && !cbState.deleted.length) cbArchiveOpen = false;
     syncArchivePanel({ panel: cbFmt('cbArchivePanel'), title: cbFmt('cbArchiveTitle'), label: 'Archived cartoons', count: cbState.archived.length,
-      open: cbArchiveOpen, list: cbFmt('cbArchiveList'), empty: cbFmt('cbEmptyArchiveBtn'), toggle: cbFmt('cbArchiveToggleBtn') });
+      deleted: cbState.deleted.length, open: cbArchiveOpen, list: cbFmt('cbArchiveList'), empty: cbFmt('cbEmptyArchiveBtn'), toggle: cbFmt('cbArchiveToggleBtn') });
     var list = cbFmt('cbArchiveList');
     list.innerHTML = '';
     cbFmt('cbEmptyArchiveBtn').disabled = !cbState.archived.length;
-    if (!cbState.archived.length) { list.innerHTML = '<div class="chapbooks-empty" style="padding:4px 0;">Nothing archived.</div>'; return; }
+    if (cbState.deleted.length) {
+      list.appendChild(recentlyDeletedSection(cbState.deleted, function (d) { return cbTypeset(d.cartoon.caption, d.cartoon.spoken) || 'A cartoon with no caption'; }, function (d) {
+        cbState.deleted = cbState.deleted.filter(function (x) { return x !== d; });
+        cbState.archived.unshift(d.cartoon);
+        cbPersist(); cbRenderArchive(); cbUpdateStats();
+      }));
+    }
+    var deletedEl = list.firstChild;
+    if (!cbState.archived.length) return;
     cbState.archived.forEach(function (c, gi) {
       var item = document.createElement('div');
       item.className = 'pb-archive-item';
@@ -16097,7 +16290,7 @@
         cbPersist(); cbRenderList();
       });
       item.appendChild(restore);
-      list.appendChild(item);
+      list.insertBefore(item, deletedEl);
     });
   }
   cbFmt('cbArchiveToggleBtn').addEventListener('click', function () {
@@ -16108,7 +16301,9 @@
   cbFmt('cbEmptyArchiveBtn').addEventListener('click', async function () {
     var n = cbState.archived.length;
     if (!n) return;
-    if (!(await confirmDialog('Permanently delete ' + n + ' archived cartoon' + (n === 1 ? '' : 's') + '? This can’t be undone.'))) return;
+    if (!(await confirmDialog('Delete ' + n + ' archived cartoon' + (n === 1 ? '' : 's') + '? You can restore ' + (n === 1 ? 'it' : 'them') + ' from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete'))) return;
+    var now = Date.now();
+    cbState.deleted = freshDeleted(cbState.deleted).concat(cbState.archived.map(function (c) { return { deletedAt: now, cartoon: c }; }));
     cbState.archived = [];
     cbPersist(); cbRenderArchive(); cbUpdateStats();
   });

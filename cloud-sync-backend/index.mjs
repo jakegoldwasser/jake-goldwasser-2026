@@ -167,6 +167,20 @@ export function mergeBookbugSave(stored, incoming) {
     out[libKey] = m.lib;
     out[trashKey] = m.trash;
   });
+  // Recently deleted books (kept 7 days, restorable): union by id, the
+  // newest deletion wins, anything older than 7 days goes, and a book
+  // that's back in a library with a newer stamp (restored) drops out.
+  if (Array.isArray(stored.recentlyDeleted) || Array.isArray(incoming.recentlyDeleted)) {
+    const cut = Date.now() - 7 * 24 * 3600 * 1000, byId = new Map();
+    [].concat(stored.recentlyDeleted || [], incoming.recentlyDeleted || []).forEach(d => {
+      if (!d || !d.id || !(Number(d.deletedAt) > cut)) return;
+      const cur = byId.get(d.id);
+      if (!cur || Number(d.deletedAt) > Number(cur.deletedAt)) byId.set(d.id, d);
+    });
+    const live = new Map();
+    ['chapbooks', 'pictureBooks', 'cartoonBooks'].forEach(k => (out[k] || []).forEach(e => { if (e && e.id) live.set(e.id, bookStamp(e)); }));
+    out.recentlyDeleted = [...byId.values()].filter(d => !(live.get(d.id) > Number(d.deletedAt)));
+  }
   out.lastOpened = newerStamped(stored.lastOpened, incoming.lastOpened);
   out.homeForms = newerStamped(stored.homeForms, incoming.homeForms);
   return out;
