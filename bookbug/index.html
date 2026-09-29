@@ -1660,6 +1660,14 @@
   /* The fields are rich text (a bold or italic word shows as it prints),
      so the placeholder is drawn in: absolutely placed, it sits where the
      first line starts without adding a line of its own. */
+  .pb-fmt-scope { margin-bottom: 14px; }
+  .pb-fmt-scope button:disabled { color: var(--ink-faint); cursor: default; }
+  .pb-matter-pages { display: flex; flex-direction: column; gap: 6px; }
+  .pb-matter-row { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 8px; }
+  .pb-matter-page { font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .pb-matter-row select.pb-role { width: 100%; font-size: 13px; }
+  .pb-matter-field { display: flex; flex-direction: column; gap: 3px; margin: 0 0 4px 50px; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .pb-matter-text { font: inherit; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 8px; resize: vertical; background: var(--surface-2); }
   .pbt-field.is-empty::before, .pb-pop-text.is-empty::before {
     content: attr(data-placeholder); position: absolute; pointer-events: none; color: var(--ink-faint); font-style: italic; font-weight: 400;
   }
@@ -2063,8 +2071,15 @@
             <span class="panel-title">Formatting</span><span class="panel-chevron" aria-hidden="true">▾</span>
           </button>
           <div class="panel-body" id="pbFormattingBody" hidden>
+            <!-- Formatting is for the whole book unless you switch to the
+                 selected box: selecting one doesn't take over the panel. -->
+            <div class="seg pb-fmt-scope" id="pbFmtScope" role="group" aria-label="Format">
+              <button type="button" data-scope="book" class="active" aria-pressed="true">Whole book</button>
+              <button type="button" data-scope="item" aria-pressed="false">This text box</button>
+            </div>
+            <div id="pbFmtItem" hidden>
             <div id="pbFmtNone">
-              <p class="pb-fmt-hint">Click a text box or illustration on a spread to format it. Double-click an empty spot on a page to add a text box there.</p>
+              <p class="pb-fmt-hint">Select a text box or illustration to format just that one: click it on a spread, or click into its words in Text view. Double-click an empty spot on a page to add a text box there.</p>
             </div>
             <div id="pbFmtText" hidden>
               <div class="subhead">Text box</div>
@@ -2093,7 +2108,7 @@
               </div>
               <div class="field">
                 <label>Line spacing</label>
-                <div class="pb-range"><input type="range" id="pbBoxLh" min="0.9" max="2.2" step="0.05"><output id="pbBoxLhOut"></output></div>
+                <div class="pb-range"><input type="range" id="pbBoxLh" min="1" max="2" step="0.1"><output id="pbBoxLhOut"></output></div>
               </div>
               <div class="field">
                 <label>Text color</label>
@@ -2105,11 +2120,11 @@
               </div>
               <div class="field">
                 <label>Width</label>
-                <div class="pb-range"><input type="range" id="pbBoxW" min="8" max="200" step="1"><output id="pbBoxWOut"></output></div>
+                <div class="pb-range"><input type="range" id="pbBoxW" min="10" max="100" step="10"><output id="pbBoxWOut"></output></div>
               </div>
               <div class="field">
                 <label>Angle</label>
-                <div class="pb-range"><input type="range" id="pbBoxRot" min="-180" max="180" step="1"><output id="pbBoxRotOut"></output></div>
+                <div class="pb-range"><input type="range" id="pbBoxRot" min="-90" max="90" step="15"><output id="pbBoxRotOut"></output></div>
               </div>
               <div class="field">
                 <label>Place on its page</label>
@@ -2140,11 +2155,11 @@
               </div>
               <div class="field" id="pbImgScaleField">
                 <label>Size</label>
-                <div class="pb-range"><input type="range" id="pbImgScale" min="10" max="100" step="1"><output id="pbImgScaleOut"></output></div>
+                <div class="pb-range"><input type="range" id="pbImgScale" min="10" max="100" step="10"><output id="pbImgScaleOut"></output></div>
               </div>
               <div class="field" id="pbImgRotField">
                 <label>Angle</label>
-                <div class="pb-range"><input type="range" id="pbImgRot" min="-180" max="180" step="1"><output id="pbImgRotOut"></output></div>
+                <div class="pb-range"><input type="range" id="pbImgRot" min="-90" max="90" step="15"><output id="pbImgRotOut"></output></div>
               </div>
               <div class="field">
                 <label>Scanned art</label>
@@ -2163,7 +2178,8 @@
                 <button type="button" class="btn btn-sm btn-danger" data-item-action="delete">Delete</button>
               </div>
             </div>
-            <div class="subhead">Whole book</div>
+            </div>
+            <div id="pbFmtBook">
             <div class="field">
               <label>Shape and size</label>
               <div class="pb-trim-grid" id="pbTrimGrid"></div>
@@ -2186,11 +2202,11 @@
             </div>
             <div class="field">
               <label>Line spacing</label>
-              <div class="pb-range"><input type="range" id="pbBookLh" min="1" max="2" step="0.05"><output id="pbBookLhOut"></output></div>
+              <div class="pb-range"><input type="range" id="pbBookLh" min="1" max="2" step="0.1"><output id="pbBookLhOut"></output></div>
             </div>
             <div class="field">
               <label>Text box width</label>
-              <div class="pb-range"><input type="range" id="pbBookTextW" min="30" max="100" step="1"><output id="pbBookTextWOut"></output></div>
+              <div class="pb-range"><input type="range" id="pbBookTextW" min="30" max="100" step="10"><output id="pbBookTextWOut"></output></div>
             </div>
             <div class="field">
               <label>Outer margins</label>
@@ -2201,7 +2217,7 @@
               <div class="pb-range"><input type="range" id="pbBookGutter" min="0.25" max="1.5" step="0.125"><output id="pbBookGutterOut"></output></div>
             </div>
             <div class="pb-btn-row" style="margin:-2px 0 12px;">
-              <button type="button" class="btn btn-sm" id="pbLayoutStandard" title="Automatic type size, 135% leading, text 60% of the page wide, 0.5 in margins, 0.75 in gutter">Use standard layout</button>
+              <button type="button" class="btn btn-sm" id="pbLayoutStandard" title="Automatic type size, 140% leading, text 60% of the page wide, 0.5 in margins, 0.75 in gutter">Use standard layout</button>
             </div>
             <div class="checkline">
               <input type="checkbox" id="pbSnapOuter">
@@ -2212,6 +2228,23 @@
               <label>Page numbers</label>
               <div class="seg seg-3" id="pbPageNums"><button type="button" data-val="outer">Outer corners</button><button type="button" data-val="center">Center</button><button type="button" data-val="none">None</button></div>
             </div>
+            </div>
+          </div>
+        </div>
+        <!-- The pages before and after the story: which layout, what each
+             page is, and the dedication and copyright wording. -->
+        <div class="panel collapsible-panel" id="pbMatterPanel">
+          <button type="button" class="panel-toggle" id="pbMatterToggle" aria-expanded="false" aria-controls="pbMatterBody">
+            <span class="panel-title">Front and Back Matter</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="pbMatterBody" hidden>
+            <div class="subhead" style="margin-top:0;">Layout</div>
+            <div class="pb-layouts" id="pbMatterLayouts"></div>
+            <div class="subhead">Front matter</div>
+            <div class="pb-matter-pages" id="pbMatterFront"></div>
+            <div class="subhead">Back matter</div>
+            <div class="pb-matter-pages" id="pbMatterBack"></div>
+            <p class="field-note" style="margin:8px 0 0;">The title and author come from the book's own title and author at the top.</p>
           </div>
         </div>
         <div class="panel collapsible-panel" id="pbExportPanel">
@@ -2305,11 +2338,11 @@
             </div>
             <div class="field">
               <label>Caption size</label>
-              <div class="pb-range"><input type="range" id="cbCaptionSize" min="11" max="28" step="1"><output id="cbCaptionSizeOut"></output></div>
+              <div class="pb-range"><input type="range" id="cbCaptionSize" min="12" max="28" step="2"><output id="cbCaptionSizeOut"></output></div>
             </div>
             <div class="field">
               <label>Drawing size</label>
-              <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="100" step="1"><output id="cbArtSizeOut"></output></div>
+              <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="100" step="5"><output id="cbArtSizeOut"></output></div>
             </div>
             <div class="checkline">
               <input type="checkbox" id="cbTitlePage">
@@ -3334,7 +3367,7 @@
   // ones -- 17 pt on an 8.5 in square), leading of 135%, a text block
   // about 60% of the page wide, half an inch clear of the trim and three
   // quarters of an inch clear of the fold.
-  var PB_STANDARD = { lh: 1.35, textW: 0.6, margin: 0.5, gutter: 0.75 };
+  var PB_STANDARD = { lh: 1.4, textW: 0.6, margin: 0.5, gutter: 0.75 };
   function pbAutoSize(trimKey) {
     var t = pbTrim(trimKey);
     return Math.max(14, Math.min(24, Math.round(Math.min(t.pageW, t.pageH) * 2)));
@@ -3572,7 +3605,8 @@
       bg: /^#[0-9A-F]{6}$/i.test(it.bg || '') ? it.bg : null,
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       rel: typeof it.rel === 'number' ? it.rel : null,
-      auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null };
+      auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null,
+      copyright: !!it.copyright || undefined };
   }
   function pbNormalizeSpread(sp) {
     sp = sp || {};
@@ -4678,16 +4712,19 @@
     { key: 'courierprime', label: 'Courier', pdfFamily: 'mono', sizeScale: 1, displayStack: "'Courier Prime', 'Courier New', Courier, monospace" }
   ];
   // Body leading, as a multiple of the type size. Sizes are already
-  // scaled per face (sizeScale) toward an even x-height, so a flat 1.55
-  // em set small-x-height faces like Garamond airy and big-x-height ones
-  // like Baskerville or Poppins cramped. Instead every face gets the same
-  // leading relative to its x-height (recovered from sizeScale, which is
-  // (0.45 / x-height) ^ 0.75): 1.55 em for a 0.45 x-height at spacing
-  // 1.15, scaled by the Line spacing setting. The PDF, the preview and
-  // both editors all use this, so they agree line for line.
+  // scaled per face (sizeScale) toward an even x-height. Book leading
+  // runs about 1.35-1.5 times the type size, a little more for faces with
+  // a big x-height (Baskerville, Poppins) than for small ones (Garamond),
+  // but only a little: it tracks the point size far more than the
+  // x-height (keeping x-heights-per-line constant set Baskerville nearly
+  // double-spaced). So: 0.97 + the face's x-height (recovered from
+  // sizeScale, which is (0.45 / x-height) ^ 0.75) -- Garamond 1.38,
+  // Baskerville 1.50, Poppins 1.52 -- at Line spacing 1.15, the default;
+  // 1.0 is ~single and 2.0 ~double, as in Word or Docs. The PDF, the
+  // preview and both editors all use this, so they agree line for line.
   function bodyLeading(fontKey, spacing) {
     var xh = 0.45 / Math.pow(getFontChoice(fontKey).sizeScale || 1, 4 / 3);
-    return Math.max(1.2, 1.55 * ((spacing || 1.15) / 1.15) * xh / 0.45);
+    return Math.max(1.1, (0.97 + xh) * ((spacing || 1.15) / 1.15));
   }
   function fontSizePt(pt, fontKey) {
     return Math.round(pt * (getFontChoice(fontKey).sizeScale || 1) * 10) / 10;
@@ -12214,12 +12251,20 @@
           ctx.fillRect(-bw / 2 - pad, -bh / 2 - pad, bw + 2 * pad, bh + 2 * pad);
         }
         ctx.fillStyle = pbColor(it.color);
-        ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
+        // Each line's baseline where a browser puts it in a line box of
+        // this height (the font's ascent and descent centered in it), so
+        // the page matches Spread view exactly -- canvas's 'middle'
+        // baseline sits up to a tenth of an em higher in fonts whose
+        // ascent and descent aren't even.
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = pbRunFont(it, px, false, false);
+        var fm = ctx.measureText('Hg'), fa = fm.fontBoundingBoxAscent, fd = fm.fontBoundingBoxDescent;
+        var baseOff = typeof fa === 'number' && typeof fd === 'number' ? (lineH - (fa + fd)) / 2 + fa : lineH / 2 + px * 0.35;
         // Word by word, each in its own style, the line placed as a whole.
         lines.forEach(function (ln, i) {
           var x = g.align === 'left' ? -bw / 2 : g.align === 'right' ? bw / 2 - ln.w : -ln.w / 2;
-          var y = -bh / 2 + i * lineH + lineH / 2;
+          var y = -bh / 2 + i * lineH + baseOff;
           ln.segs.forEach(function (sg) {
             ctx.font = pbRunFont(it, px, sg.b, sg.i);
             ctx.fillText(sg.t, x, y);
@@ -12463,6 +12508,8 @@
     f.style.fontWeight = styled && it.bold ? '700' : '400';
     f.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     f.style.textAlign = pbGeom(it, s).align;
+    // The box's own line spacing, as on the page (not a fixed 1.4).
+    f.style.lineHeight = String(pbLh(it));
     f.classList.toggle('is-selected', !!(pbSel && pbSel.id === it.id));
     // A new font, weight or alignment rewraps the words: refit the height.
     if (f.isConnected) autoGrow(f);
@@ -13426,7 +13473,8 @@
       if (it.bind === 'title') fitTitleInput(pbTitleInput);
       pbRefreshBound();
     } else {
-      if (it.bind === 'copyright') it.bind = null;
+      // Remembered as the copyright (Front and Back Matter still finds it).
+      if (it.bind === 'copyright') { it.bind = null; it.copyright = true; }
       it.text = value;
     }
     pbPersist();
@@ -13457,7 +13505,7 @@
     pbPopText.style.fontWeight = styled && it.bold ? '700' : '400';
     pbPopText.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
     pbPopText.style.textAlign = pbGeom(it, pbPopFor.s).align;
-    pbPopText.style.lineHeight = String(Math.max(1.3, pbLh(it)));
+    pbPopText.style.lineHeight = String(pbLh(it));
     var tools = pbPop.querySelector('.pb-pop-tools');
     tools.innerHTML = '';
     tools.append(
@@ -13555,7 +13603,9 @@
           var r = stage.getBoundingClientRect();
           // Along the box's own axis, so a turned box widens along its slant.
           var along = (dx * Math.cos(a) + dy * Math.sin(a)) / r.width;
-          var w = Math.max(0.03, fromLeft ? w0 - along : w0 + along);
+          // At most a page wide (a box laid out wider across the fold,
+          // like a spread title, can still be narrowed).
+          var w = Math.min(Math.max(0.5, w0), Math.max(0.03, fromLeft ? w0 - along : w0 + along));
           // Keep the far edge put (the box turns about its center, so this
           // is close, not exact, for a turned box).
           var x = fromLeft ? x0 + (w0 - w) : x0;
@@ -14309,19 +14359,30 @@
   // ---- Formatting: the selected item, then the whole book ----
   var pbFmt = function (id) { return document.getElementById(id); };
   function pbRangeOut(id, text) { pbFmt(id + 'Out').textContent = text; }
+  // Which Formatting shows: the whole book (always first) or the selected
+  // box. It stays on the box while you click from box to box, and goes
+  // back to the book when nothing's selected.
+  var pbFmtScope = 'book';
   function pbSyncFormatting() {
     pbRenderQuickbar();
     if (!pbState) return;
     var it = pbSelected();
+    if (!it) pbFmtScope = 'book';
+    pbFmt('pbFmtScope').querySelectorAll('button').forEach(function (b) {
+      var on = b.dataset.scope === pbFmtScope;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (b.dataset.scope === 'item') {
+        b.textContent = it && it.type === 'image' ? 'This illustration' : 'This text box';
+        b.disabled = !it;
+        b.title = it ? '' : 'Select a text box or illustration first';
+      }
+    });
+    pbFmt('pbFmtBook').hidden = pbFmtScope !== 'book';
+    pbFmt('pbFmtItem').hidden = pbFmtScope !== 'item';
     pbFmt('pbFmtNone').hidden = !!it;
     pbFmt('pbFmtText').hidden = !it || it.type !== 'text';
     pbFmt('pbFmtImage').hidden = !it || it.type !== 'image';
-    // Selecting something opens Formatting, so its controls are in reach.
-    if (it && pbFmt('pbFormattingBody').hidden && !pbFormattingClosedByHand) {
-      pbFmt('pbFormattingBody').hidden = false;
-      pbFmt('pbFormattingPanel').classList.add('is-open');
-      pbFmt('pbFormattingToggle').setAttribute('aria-expanded', 'true');
-    }
     document.querySelectorAll('#pbFmtText [data-item-action="delete"], #pbFmtImage [data-item-action="delete"]').forEach(function (b) {
       b.textContent = it && pbItemHasInfo(it) ? 'Archive' : 'Delete';
     });
@@ -14361,6 +14422,14 @@
       pbFmt('pbImgInk').classList.toggle('btn-primary', it.clean === 'ink');
     }
   }
+  pbFmt('pbFmtScope').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-scope]');
+    if (!b || b.disabled) return;
+    pbFmtScope = b.dataset.scope;
+    pbSyncFormatting();
+  });
+  // Keeps a field's selection when the switch is pressed.
+  pbFmt('pbFmtScope').addEventListener('mousedown', function (e) { if (e.target.closest('button')) e.preventDefault(); });
   var pbFormattingClosedByHand = false;
   pbFmt('pbFormattingToggle').addEventListener('click', function () {
     // (The panel's own open/close is the shared .panel-toggle handler.)
@@ -14823,7 +14892,121 @@
     if (pbViewMode === 'thumbs') pbRenderFlatplan();
     else renderPbSheet();
     updatePbStats();
+    renderPbMatter();
   }
+
+  // ---- Front and Back Matter ----
+  // The front matter pages (1-3, or up to 5 after endpapers) and the last
+  // three, with the same choices each page's own menu offers, in one
+  // place; a standard layout sets them all at once.
+  function pbMatterPages(book) {
+    var total = pbTotalPagesFor(book.spreads.length), front = [], back = [];
+    var frontMax = pbRoleAt(book, 3) === 'endpaper' ? 5 : 3;
+    for (var p = 1; p <= Math.min(frontMax, total); p++) front.push(p);
+    for (var q = Math.max(front.length + 1, total - 2); q <= total; q++) back.push(q);
+    return { front: front, back: back, total: total };
+  }
+  function pbCurrentLayout(book) {
+    var pages = pbMatterPages(book), all = [1, 2, 3, 4, 5].concat(pages.back).filter(function (p) { return p <= pages.total; });
+    for (var i = 0; i < PB_LAYOUTS.length; i++) {
+      var roles = PB_LAYOUTS[i].roles(pages.total);
+      if (all.every(function (p) { return pbRoleAt(book, p) === (roles[p] || 'story'); })) return PB_LAYOUTS[i].key;
+    }
+    return null;
+  }
+  // A standard layout: the matter pages go back to story (words you've
+  // written on them stay), then the layout's roles are set in page
+  // order, each following from the page before -- as for a new book.
+  function pbApplyLayout(book, key) {
+    var layout = PB_LAYOUTS.filter(function (l) { return l.key === key; })[0];
+    if (!layout) return;
+    var total = pbTotalPagesFor(book.spreads.length);
+    [total, total - 1, total - 2, 5, 4, 3, 2, 1].forEach(function (p, i, a) {
+      if (p >= 1 && p <= total && a.indexOf(p) === i && pbRoleAt(book, p) !== 'story') pbApplyRole(book, p, 'story');
+    });
+    var roles = layout.roles(total);
+    for (var p = 1; p <= total; p++) if (roles[p] && pbRoleAt(book, p) !== roles[p]) pbApplyRole(book, p, roles[p]);
+  }
+  // The box on page p holding its dedication (the italic line a
+  // dedication page is laid out with) or its copyright.
+  function pbMatterBox(p, kind) {
+    var spot = pbPageSpot(p, pbState.spreads.length), sp = pbState.spreads[spot.s];
+    if (!sp) return null;
+    return sp.items.filter(function (it) {
+      if (it.type !== 'text' || pbStraddles(it) || pbPageSide(it) !== spot.side) return false;
+      if (kind === 'copyright') return it.bind === 'copyright' || it.copyright;
+      return /dedication/.test(it.auto || '') && !it.bind && it.italic;
+    })[0] || null;
+  }
+  function renderPbMatter() {
+    if (!pbState || pbFmt('pbMatterBody').hidden) return;
+    // Not while one of its own fields is being typed in.
+    if (pbFmt('pbMatterBody').contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return;
+    var pages = pbMatterPages(pbState), current = pbCurrentLayout(pbState);
+    var box = pbFmt('pbMatterLayouts');
+    box.innerHTML = '';
+    PB_LAYOUTS.forEach(function (l) {
+      var lab = document.createElement('label');
+      lab.className = 'pb-layout';
+      lab.innerHTML = '<input type="radio" name="pbMatterLayout"><strong></strong><span></span>';
+      lab.querySelector('input').checked = l.key === current;
+      lab.querySelector('strong').textContent = l.name;
+      lab.querySelector('span').textContent = l.about(pages.total);
+      lab.querySelector('input').addEventListener('change', function () {
+        pbCheckpoint();
+        pbApplyLayout(pbState, l.key);
+        pbValidateRoles(pbState);
+        pbSel = null;
+        pbPersist();
+        pbRenderView();
+      });
+      box.appendChild(lab);
+    });
+    if (!current) {
+      var custom = document.createElement('p');
+      custom.className = 'field-note';
+      custom.style.margin = '6px 0 0';
+      custom.textContent = 'Your own arrangement (set below). Choosing a layout replaces it; words you’ve written on those pages stay.';
+      box.appendChild(custom);
+    }
+    [['pbMatterFront', pages.front], ['pbMatterBack', pages.back]].forEach(function (pair) {
+      var list = pbFmt(pair[0]);
+      list.innerHTML = '';
+      pair[1].forEach(function (p) {
+        var spot = pbPageSpot(p, pbState.spreads.length);
+        var row = document.createElement('div');
+        row.className = 'pb-matter-row';
+        var lab = document.createElement('span');
+        lab.className = 'pb-matter-page';
+        lab.textContent = 'p. ' + p;
+        row.append(lab, pbMakeRoleSelect(spot.s, spot.side));
+        list.appendChild(row);
+        [['dedication', 'Dedication', 'For …', 2], ['copyright', 'Copyright', '', 3]].forEach(function (k) {
+          var it = pbMatterBox(p, k[0]);
+          if (!it) return;
+          var wrap = document.createElement('label');
+          wrap.className = 'pb-matter-field';
+          var name = document.createElement('span');
+          name.textContent = k[1];
+          var ta = document.createElement('textarea');
+          ta.className = 'pb-matter-text';
+          ta.rows = k[3];
+          ta.value = stripFormatMarkers(pbItemText(it));
+          ta.placeholder = k[2];
+          ta.spellcheck = prefs.spellcheck;
+          ta.addEventListener('input', function () {
+            pbSetText(it, ta.value);
+            pbPersist();
+            pbRefreshSpread(spot.s);
+          });
+          ta.addEventListener('blur', function () { setTimeout(renderPbMatter, 0); });
+          wrap.append(name, ta);
+          list.appendChild(wrap);
+        });
+      });
+    });
+  }
+  pbFmt('pbMatterToggle').addEventListener('click', function () { setTimeout(renderPbMatter, 0); });
   // Redraws one spread in whichever view is showing. In Text view the
   // card being typed in isn't rebuilt (that would drop the caret): its
   // fields are restyled and its thumbnail redrawn, and it's rebuilt once
