@@ -1161,6 +1161,8 @@
     opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
   }
   .bb-toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+  .bb-toast.has-action.is-on { pointer-events: auto; white-space: nowrap; display: flex; align-items: center; gap: 14px; padding-right: 8px; }
+  .bb-toast-btn { appearance: none; border: 0; border-radius: 999px; background: #FFFFFF; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; padding: 5px 12px; cursor: pointer; }
 
   .select-entries-box { max-width: 440px; width: 100%; }
   .select-entries-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
@@ -1655,6 +1657,46 @@
      selected -- never both, so only one page ever shows the bar. */
   textarea.pbt-field:focus, #pbSheet:not(:has(textarea.pbt-field:focus)) textarea.pbt-field.is-selected { background: #F7F9FA; box-shadow: inset 3px 0 0 var(--accent); }
   textarea.pbt-field::placeholder { color: var(--ink-faint); font-style: italic; }
+  /* A box in Text view: a grip at its right edge to drag it to another
+     page, and Merge on the line above it when it has a neighbour there.
+     Shown on hover with a mouse; always on touch screens. */
+  .pbt-box { position: relative; touch-action: pan-y; }
+  .pbt-box textarea.pbt-field { position: relative; z-index: 1; }
+  /* Swipe to remove: the box slides left over an Archive (or Delete) label. */
+  .pbt-swipe-under {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: flex-end; padding: 0 16px;
+    background: var(--warning-soft); color: var(--warning); font-size: 13px; font-weight: 700;
+  }
+  .pbt-box.is-swiping { overflow: hidden; }
+  .pbt-box.is-swiping .pbt-swipe-under { display: flex; }
+  .pbt-box.is-past .pbt-swipe-under { background: var(--warning); color: #FFFFFF; }
+  .pbt-box.is-swiping textarea.pbt-field { background: #FFFFFF; }
+  .pbt-box.is-swiping .pbt-grip, .pbt-box.is-swiping .pbt-join { visibility: hidden; }
+  .pbt-box textarea.pbt-field { padding-right: 34px; }
+  .pbt-grip {
+    position: absolute; z-index: 2; top: 6px; right: 4px; width: 26px; height: 30px; display: flex; align-items: center; justify-content: center;
+    appearance: none; border: 0; border-radius: 5px; background: transparent; color: var(--ink-faint); padding: 0;
+    cursor: grab; touch-action: none; opacity: 0; transition: opacity .15s ease, background-color .15s ease;
+  }
+  .pbt-box:hover .pbt-grip, .pbt-box:focus-within .pbt-grip, .pbt-grip:focus-visible { opacity: 1; }
+  .pbt-grip:hover { background: var(--accent-soft); color: var(--accent); }
+  .pbt-join {
+    position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); z-index: 2;
+    appearance: none; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink-soft);
+    padding: 2px 10px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; opacity: 0; transition: opacity .15s ease;
+  }
+  .pbt-box:hover .pbt-join, .pbt-box:hover + .pbt-box .pbt-join, .pbt-box:focus-within .pbt-join, .pbt-box:focus-within + .pbt-box .pbt-join, .pbt-join:focus-visible { opacity: 1; }
+  .pbt-join:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  @media (hover: none) { .pbt-grip, .pbt-join { opacity: 1; } }
+  .pbt-box.is-dragging { opacity: .45; }
+  .pbt-box.is-arrived textarea.pbt-field { animation: pbt-arrive 1.2s ease; }
+  @keyframes pbt-arrive { from { background: var(--accent-soft); } to { background: transparent; } }
+  body.pbt-dragging, body.pbt-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+  .pbt-page.is-drop-target { outline: 3px solid var(--accent); outline-offset: 2px; background: var(--accent-soft); }
+  .pbt-ghost {
+    position: fixed; top: 0; left: 0; z-index: 200; pointer-events: none; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: var(--ink); color: #FFFFFF; border-radius: 8px; padding: 6px 10px; font-size: 13px; box-shadow: 3px 3px 0 var(--line-strong);
+  }
   .pbt-pic {
     appearance: none; display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: 6px; cursor: pointer;
     border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: 12px; text-align: left;
@@ -7773,12 +7815,20 @@
   }
   // A short note at the foot of the window.
   var toastEl = null, toastTimer = null;
-  function showToast(msg) {
+  // With an action (Undo), a button after the words, and it stays longer.
+  function showToast(msg, actionLabel, action) {
     if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'bb-toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
     toastEl.textContent = msg;
+    toastEl.classList.toggle('has-action', !!action);
+    if (action) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'bb-toast-btn'; b.textContent = actionLabel;
+      b.addEventListener('click', function () { toastEl.classList.remove('is-on'); action(); });
+      toastEl.appendChild(b);
+    }
     toastEl.classList.add('is-on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, 3500);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, action ? 6000 : 3500);
   }
   function openEntryMenu(btn, index) {
     var reopening = entryMenuBtn === btn;
@@ -12357,6 +12407,10 @@
         f.dataset.id = item.id;
         pbSel = { s: s, id: item.id };
         f.classList.add('is-selected');
+        // Now a real box: once you leave it, its page gets + Text box and
+        // the box its grip.
+        var card = f.closest('.pb-spread');
+        if (card) card._stale = true;
         pbSyncFormatting();
       }
       pbSetText(item, f.value);
@@ -12408,12 +12462,13 @@
       var row = document.createElement('div');
       row.className = 'pbt-page pbt-across';
       row.innerHTML = '<div class="pbt-page-label">Across the spread</div>';
-      wide.forEach(function (it) { row.appendChild(pbMakeField(s, it, 'left')); });
+      wide.forEach(function (it) { row.appendChild(pbWrapField(s, it, pbMakeField(s, it, 'left'), null)); });
       cols.appendChild(row);
     }
     ['left', 'right'].forEach(function (side) {
       var col = document.createElement('div');
       col.className = 'pbt-page';
+      col.dataset.side = side;
       if (!pages[side]) {
         col.classList.add('is-none');
         col.innerHTML = '<div class="pbt-page-label"></div>';
@@ -12433,9 +12488,9 @@
       }
       col.appendChild(lab);
       var mine = texts.filter(function (it) { return !pbStraddles(it) && pbPageSide(it) === side; });
-      mine.forEach(function (it) {
+      mine.forEach(function (it, k) {
         var f = pbMakeField(s, it, side);
-        col.appendChild(f);
+        col.appendChild(pbWrapField(s, it, f, k ? mine[k - 1] : null));
         pbFieldFitNote(f, s, it);
       });
       if (!mine.length && ['endpaper', 'blank'].indexOf(sp[side].role) === -1) col.appendChild(pbMakeField(s, null, side));
@@ -12459,7 +12514,7 @@
     // Leaving a card that changed while you typed in it rebuilds it.
     body.addEventListener('focusout', function (e) {
       var card = body.closest('.pb-spread');
-      if (card && card._stale && !card.contains(e.relatedTarget)) {
+      if (card && card._stale && !card.contains(e.relatedTarget) && !pbTextDrag) {
         card._stale = false;
         setTimeout(function () { if (!card.contains(document.activeElement)) pbRenderSpread(s); }, 0);
       }
@@ -12473,18 +12528,247 @@
   function pbAddTextInTextView(s, side, mine) {
     pbCheckpoint();
     var it = pbNewStoryBox(side);
-    var m = pbMargins(), top = 1 - m.top - 2 * pbLineFrac(it) - 0.03, lowest = 0;
-    mine.forEach(function (o) { var g = pbGeom(o, s); lowest = Math.max(lowest, g.y + g.h); });
-    if (lowest > top) {
-      var lift = lowest - top;
-      mine.forEach(function (o) { o.y = Math.max(m.top, pbGeom(o, s).y - lift); });
-    }
+    pbMakeRoomBelow(s, mine, 2 * pbLineFrac(it));
     pbState.spreads[s].items.push(it);
     pbSel = { s: s, id: it.id };
     pbRenderSpread(s);
     var f = pbSheet.querySelector('.pb-spread[data-spread="' + s + '"] .pbt-field[data-id="' + it.id + '"]');
     if (f) f.focus();
     pbSyncFormatting();
+  }
+
+  // Lifts a page's boxes so something `h` tall fits under them, on the
+  // bottom margin.
+  function pbMakeRoomBelow(s, mine, h) {
+    var m = pbMargins(), top = 1 - m.top - h - 0.03, lowest = 0;
+    mine.forEach(function (o) { var g = pbGeom(o, s); lowest = Math.max(lowest, g.y + g.h); });
+    if (lowest > top) {
+      var lift = lowest - top;
+      mine.forEach(function (o) { o.y = Math.max(m.top, pbGeom(o, s).y - lift); });
+    }
+  }
+  // A page's text boxes in reading order (top to bottom).
+  function pbPageTexts(s, side) {
+    return pbState.spreads[s].items.filter(function (o) { return o.type === 'text' && !pbStraddles(o) && pbPageSide(o) === side; })
+      .sort(function (a, b) { return a.y - b.y; });
+  }
+  // Title, author and byline boxes follow the book's own title and
+  // author, so they aren't merged into story text.
+  function pbCanMerge(it) { return !!it && it.type === 'text' && (!it.bind || it.bind === 'copyright'); }
+
+  // Merging two boxes on a page: the lower one's words follow the upper
+  // one's, on a new line, in the upper box (its place and style); the
+  // lower box goes, as nothing of it is lost.
+  function pbMergeText(s, upperId, lowerId) {
+    var up = pbFindItem(s, upperId), low = pbFindItem(s, lowerId);
+    if (!pbCanMerge(up) || !pbCanMerge(low)) return;
+    pbCheckpoint();
+    var a = pbItemText(up).replace(/\s+$/, ''), b = pbItemText(low).replace(/^\s+/, '');
+    up.bind = null;
+    up.text = a && b ? a + '\n' + b : a || b;
+    var items = pbState.spreads[s].items;
+    items.splice(items.indexOf(low), 1);
+    pbSel = { s: s, id: up.id };
+    pbPersist();
+    if (pbViewMode === 'text') {
+      pbRenderSpread(s);
+      var f = pbSheet.querySelector('.pb-spread[data-spread="' + s + '"] .pbt-field[data-id="' + up.id + '"]');
+      if (f) { f.focus(); f.setSelectionRange(a.length + (a && b ? 1 : 0), a.length + (a && b ? 1 : 0)); }
+    } else { pbRefreshSpread(s); pbRenderQuickbar(); }
+    pbSyncFormatting();
+  }
+  // Spread view's Merge: the selected box and the next one down its
+  // page (or, for the lowest, the one above).
+  function pbMergePartner(s, it) {
+    if (!pbCanMerge(it) || pbStraddles(it)) return null;
+    var list = pbPageTexts(s, pbPageSide(it)), i = list.indexOf(it);
+    var other = list[i + 1] || list[i - 1];
+    if (!pbCanMerge(other)) return null;
+    return list.indexOf(other) > i ? { up: it, low: other } : { up: other, low: it };
+  }
+
+  // Moving a box to another page (in this spread or any other): it keeps
+  // its words and style, and goes to the bottom of the new page, after
+  // what's there, which makes room for it.
+  function pbMoveTextToPage(fromS, id, toS, side) {
+    var it = pbFindItem(fromS, id);
+    if (!it) return;
+    pbCheckpoint();
+    var from = pbState.spreads[fromS].items;
+    from.splice(from.indexOf(it), 1);
+    var mine = pbPageTexts(toS, side);
+    var w = pbStraddles(it) ? pbStoryW(side) : Math.min(it.w, pbStoryW(side));
+    Object.assign(it, { x: pbCenterX(side, w), w: w, y: PB_BOTTOM, rot: 0 });
+    pbState.spreads[toS].items.push(it);
+    pbMakeRoomBelow(toS, mine, pbGeom(it, toS).h || 2 * pbLineFrac(it));
+    pbSel = { s: toS, id: it.id };
+    pbPersist();
+    pbRenderSpread(fromS);
+    if (toS !== fromS) pbRenderSpread(toS);
+    pbFollow(toS);
+    var f = pbSheet.querySelector('.pb-spread[data-spread="' + toS + '"] .pbt-field[data-id="' + it.id + '"]');
+    if (f) {
+      var box = f.closest('.pbt-box');
+      box.classList.add('is-arrived');
+      setTimeout(function () { box.classList.remove('is-arrived'); }, 1200);
+      if (!pbInView(box)) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    pbSyncFormatting();
+  }
+  function pbInView(el) { var r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; }
+
+  // A Text view box: its field, a grip to drag it to another page, and
+  // (under another box on the same page) Merge.
+  function pbWrapField(s, it, f, above) {
+    var box = document.createElement('div');
+    box.className = 'pbt-box';
+    box.appendChild(f);
+    var grip = document.createElement('button');
+    grip.type = 'button';
+    grip.className = 'pbt-grip';
+    grip.title = 'Drag to another page';
+    grip.setAttribute('aria-label', 'Move this text box: drag it to another page');
+    grip.innerHTML = '<svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><g fill="currentColor"><circle cx="2.5" cy="3" r="1.5"/><circle cx="7.5" cy="3" r="1.5"/><circle cx="2.5" cy="8" r="1.5"/><circle cx="7.5" cy="8" r="1.5"/><circle cx="2.5" cy="13" r="1.5"/><circle cx="7.5" cy="13" r="1.5"/></g></svg>';
+    grip.addEventListener('pointerdown', function (e) { pbStartTextDrag(e, s, it.id, grip); });
+    box.appendChild(grip);
+    var under = document.createElement('div');
+    under.className = 'pbt-swipe-under';
+    under.setAttribute('aria-hidden', 'true');
+    box.insertBefore(under, f);
+    box.addEventListener('pointerdown', function (e) { pbStartSwipe(e, s, it.id, box); });
+    if (above && pbCanMerge(above) && pbCanMerge(it)) {
+      var join = document.createElement('button');
+      join.type = 'button';
+      join.className = 'pbt-join';
+      join.textContent = 'Merge';
+      join.title = 'Merge this text box into the one above';
+      join.addEventListener('click', function () { pbMergeText(s, above.id, it.id); });
+      box.appendChild(join);
+    }
+    return box;
+  }
+
+  // Swiping a Text view box to the left (on a touch screen) removes it:
+  // to the archive if it has words of its own, like Archive in Spread
+  // view, and with Undo in the note that follows. A mostly-up-and-down
+  // swipe is left to scroll the page.
+  function pbStartSwipe(e, s, id, box) {
+    if (e.pointerType === 'mouse' || pbTextDrag || e.target.closest('.pbt-grip, .pbt-join')) return;
+    var x0 = e.clientX, y0 = e.clientY, dx = 0, on = false, pid = e.pointerId;
+    var f = box.querySelector('.pbt-field');
+    function move(ev) {
+      if (ev.pointerId !== pid) return;
+      var mx = ev.clientX - x0, my = ev.clientY - y0;
+      if (!on) {
+        if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+        if (mx > 0 || Math.abs(mx) < Math.abs(my) * 1.5) { stop(); return; }
+        on = true;
+        var it = pbFindItem(s, id);
+        box.querySelector('.pbt-swipe-under').textContent = it && pbItemHasInfo(it) ? 'Archive' : 'Delete';
+        box.classList.add('is-swiping');
+        try { box.setPointerCapture(pid); } catch (err) {}
+      }
+      dx = Math.min(0, mx);
+      f.style.transform = 'translateX(' + dx + 'px)';
+      box.classList.toggle('is-past', -dx > pbSwipeCut(box));
+    }
+    function end(ev) {
+      if (ev.pointerId !== pid) return;
+      stop();
+      if (!on) return;
+      if (ev.type === 'pointerup' && -dx > pbSwipeCut(box)) {
+        f.style.transition = 'transform .18s ease';
+        f.style.transform = 'translateX(-100%)';
+        setTimeout(function () { pbArchiveTextBox(s, id); }, 180);
+      } else {
+        f.style.transition = 'transform .18s ease';
+        f.style.transform = '';
+        setTimeout(function () { f.style.transition = ''; box.classList.remove('is-swiping', 'is-past'); }, 200);
+      }
+    }
+    function stop() {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+  function pbSwipeCut(box) { return Math.min(140, box.offsetWidth * 0.35); }
+  function pbArchiveTextBox(s, id) {
+    if (!pbFindItem(s, id)) return;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    pbSel = { s: s, id: id };
+    var had = pbItemHasInfo(pbSelected());
+    pbItemAction('delete');
+    pbRenderSpread(s);
+    showToast(had ? 'Text box archived.' : 'Empty text box deleted.', 'Undo', pbUndo);
+  }
+
+  // Dragging a Text view box by its grip, with a mouse or a finger: a
+  // tag of its first words follows the pointer, the page under it lights
+  // up, and the window scrolls near its top and bottom edges so any page
+  // in the book is in reach.
+  var pbTextDrag = null;
+  function pbStartTextDrag(e, s, id, grip) {
+    if (e.button > 0 || pbTextDrag) return;
+    var it = pbFindItem(s, id);
+    if (!it) return;
+    e.preventDefault();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    var ghost = document.createElement('div');
+    ghost.className = 'pbt-ghost';
+    ghost.textContent = (pbItemText(it).trim().split('\n')[0] || 'Empty text box').slice(0, 48);
+    document.body.appendChild(ghost);
+    var src = grip.closest('.pbt-box');
+    src.classList.add('is-dragging');
+    document.body.classList.add('pbt-dragging');
+    var d = pbTextDrag = { s: s, id: id, it: it, ghost: ghost, src: src, target: null, x: e.clientX, y: e.clientY, raf: 0 };
+    // Listened for on the window: the grip's card can be rebuilt under it.
+    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    function move(ev) { d.x = ev.clientX; d.y = ev.clientY; pbTextDragUpdate(); }
+    function finish(ev) {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      cancelAnimationFrame(d.raf);
+      ghost.remove();
+      src.classList.remove('is-dragging');
+      document.body.classList.remove('pbt-dragging');
+      if (d.target) d.target.classList.remove('is-drop-target');
+      var t = ev.type === 'pointerup' && d.target;
+      pbTextDrag = null;
+      if (t) pbMoveTextToPage(d.s, d.id, +t.closest('.pb-spread').dataset.spread, t.dataset.side);
+    }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    pbTextDragUpdate();
+    (function scroll() {
+      var edge = 72, v = 0;
+      if (d.y < edge) v = -(edge - d.y) / 3;
+      else if (d.y > window.innerHeight - edge) v = (d.y - (window.innerHeight - edge)) / 3;
+      if (v) { window.scrollBy(0, v); pbTextDragUpdate(); }
+      d.raf = requestAnimationFrame(scroll);
+    })();
+  }
+  function pbTextDragUpdate() {
+    var d = pbTextDrag;
+    if (!d) return;
+    d.ghost.style.transform = 'translate(' + (d.x + 14) + 'px, ' + (d.y + 12) + 'px)';
+    var el = document.elementFromPoint(d.x, d.y);
+    var col = el && el.closest('#pbSheet .pbt-page[data-side]:not(.is-none)');
+    // Its own page isn't somewhere to move it to.
+    if (col) {
+      var ts = +col.closest('.pb-spread').dataset.spread;
+      if (ts === d.s && !pbStraddles(d.it) && col.dataset.side === pbPageSide(d.it)) col = null;
+    }
+    if (col !== d.target) {
+      if (d.target) d.target.classList.remove('is-drop-target');
+      if (col) col.classList.add('is-drop-target');
+      d.target = col;
+    }
   }
 
   function pbMakeRoleSelect(s, side) {
@@ -13358,7 +13642,7 @@
   // Clicking anywhere that isn't an item, a handle or a formatting control drops the selection.
   document.addEventListener('pointerdown', function (e) {
     if (!pbSel || !isPictureBookShown()) return;
-    if (e.target.closest('.pb-tb, .pb-img-hit, .pb-img-free, .pb-h, .pb-quickbar, .pb-pop, .pbt-field, .pbt-pic, #pbFormattingPanel, .entry-menu, .font-picker-list, .modal-overlay')) return;
+    if (e.target.closest('.pb-tb, .pb-img-hit, .pb-img-free, .pb-h, .pb-quickbar, .pb-pop, .pbt-field, .pbt-pic, .pbt-add, .pbt-grip, .pbt-join, #pbFormattingPanel, .entry-menu, .font-picker-list, .modal-overlay')) return;
     pbSelect(null);
   });
   // Double-click a page for a new text box on it: centered at the
@@ -13507,6 +13791,11 @@
           return placeBtn;
         })(),
         pbQbSep(),
+        (function () {
+          var pair = pbMergePartner(pbSel.s, it);
+          return pair ? pbQb('Merge', 'Merge with the ' + (pair.up === it ? 'text box below' : 'text box above') + ' on this page', false, function () { pbMergeText(pbSel.s, pair.up.id, pair.low.id); })
+            : document.createTextNode('');
+        })(),
         pbQb(pbItemHasInfo(it) ? 'Archive' : 'Delete', pbItemHasInfo(it) ? 'Send this text box to the archive' : 'Delete this empty text box', false, function () { pbItemAction('delete'); })
       );
     } else {
