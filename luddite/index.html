@@ -93,6 +93,7 @@
     color: var(--ink);
     font: 20px/1.7 Literata, Georgia, serif;
     caret-color: var(--ink);
+    tab-size: 4;
     -webkit-user-select: text;
     user-select: text;
   }
@@ -494,6 +495,20 @@
     if (e.shiftKey && k === 'insert') return stop(e);
     if (/^f\d+$/.test(k) || k === 'contextmenu') return stop(e);
     if (k === 'escape') return stop(e);
+    // Tab indents instead of moving focus out of the page; Shift+Tab takes
+    // back a tab just before the cursor.
+    if (k === 'tab') {
+      stop(e);
+      if (locked || e.isComposing) return;
+      pad.focus();
+      if (e.shiftKey) {
+        if (pad.selectionStart === pad.selectionEnd && pad.value.charAt(pad.selectionStart - 1) === '\t') {
+          if (!document.execCommand('delete')) insertAtCaret('', 1);
+        }
+      } else if (!document.execCommand('insertText', false, '\t')) {
+        insertAtCaret('\t', 0);
+      }
+    }
   }, true);
 
   // Only let text in one keystroke at a time. Anything that inserts a
@@ -519,6 +534,15 @@
     updateCount();
     scheduleSave();
   });
+  // Fallback where execCommand is unavailable: edit the text directly and
+  // record it as typed, so the tamper check below doesn't undo it.
+  function insertAtCaret(text, deleteBefore) {
+    var start = pad.selectionStart - deleteBefore;
+    pad.setRangeText(text, start, pad.selectionEnd, 'end');
+    shadow = pad.value;
+    updateCount();
+    scheduleSave();
+  }
   var composing = false;
   pad.addEventListener('compositionstart', function () { composing = true; });
   pad.addEventListener('compositionend', function () { composing = false; shadow = pad.value; scheduleSave(); });
