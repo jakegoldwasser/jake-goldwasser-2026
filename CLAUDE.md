@@ -3,7 +3,7 @@
 ## Working with Jake
 
 - Jake is learning coding vocabulary. Whenever Jake uses a coding term incorrectly or loosely (e.g. calling a branch a "version", a commit a "save", or CSS "code for the database"), correct it briefly: name the right term and what it means, in a sentence, then carry on with the request. Don't skip the correction to be polite, and don't let it take over the reply.
-- **Merging:** finished work gets merged into `main` (which is what the live site at jake-goldwasser.com serves, via GitHub Pages). In a local session, just merge it — no need to ask. Only in a cloud session, ask Jake to OK the merge first with a popup (the AskUserQuestion tool), never just in prose, and merge once he OKs it.
+- **Merging:** finished work gets merged into `main` (which is what the live site at jake-goldwasser.com serves, via GitHub Pages) and pushed, without asking — in local and cloud sessions alike. Two guards: first bring the branch up to date with the latest `main` and resolve any conflicts (checkouts and cloud sessions go stale, and a stale merge can undo newer work); and don't merge a page change that depends on backend (`cloud-sync-backend`) code that isn't deployed yet — deploying the Lambda needs Jake's AWS sign-in, so hold it on its branch and say so until the backend is live.
 - **Local sessions, not cloud.** Jake works in local Claude Code sessions on his own computer. Never start cloud sessions or cloud agents for him (no creating remote sessions, no cloud routines, no suggested tasks that run in the cloud); do the work in the current session. If a session turns out to be running in the cloud, say so once at the start.
 
 ## Bookbug (`bookbug/`)
