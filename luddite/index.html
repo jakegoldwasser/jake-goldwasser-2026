@@ -415,6 +415,17 @@
     <p class="fine" style="margin:0 0 10px">Open a room to let students in, watch them write, and see what&rsquo;s handed in. Deleting a room only takes it off this list; handed-in work stays under Students.</p>
     <div id="roomList"></div>
 
+    <h3>Join another teacher&rsquo;s room</h3>
+    <div class="newroom">
+      <label class="lbl" for="teacherJoinCode">Room code <span class="hint">&mdash; the two words the teacher gave out</span></label>
+      <form class="row" id="teacherJoinForm" style="justify-content:flex-start">
+        <input class="field grow" id="teacherJoinCode" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Starry whale" aria-label="Room code">
+        <button class="btn" type="submit">Join to write</button>
+      </form>
+      <p class="fine" style="margin-top:10px">You&rsquo;ll wait to be let in and write like everyone else. Your own rooms stay here.</p>
+      <p class="fine warn" id="teacherJoinNote" hidden></p>
+    </div>
+
     <h3>Students</h3>
     <p class="fine" style="margin:0 0 10px">Everyone who has handed work in to you, with every comment you've made on their work this year.</p>
     <input class="field grow studentsearch" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="width:100%">
@@ -423,10 +434,13 @@
     <div id="teachersSection" hidden>
       <h3>Teachers</h3>
       <p class="fine" style="margin:0 0 10px">Anyone listed here can open rooms. You and your other address always can.</p>
-      <form class="row" id="addTeacherForm">
-        <input class="field grow" id="addTeacherEmail" type="email" placeholder="teacher@horacemann.org" aria-label="Teacher email">
-        <button class="btn small" type="submit">Add teacher</button>
+      <label class="lbl" for="addTeacherEmail">Add teachers <span class="hint">&mdash; paste one address or a whole list; names, commas and &lt;brackets&gt; are fine</span></label>
+      <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
+        <textarea class="field grow" id="addTeacherEmail" rows="2" style="border-radius:14px; resize:vertical; font-size:14px"
+          placeholder="Jane Smith <jane_smith@horacemann.org>, bob_lee@horacemann.org" aria-label="Teacher email addresses"></textarea>
+        <button class="btn" type="submit">Add</button>
       </form>
+      <p class="fine" id="addTeacherNote" hidden></p>
       <div id="teacherList" style="margin-top:14px"></div>
     </div>
 
@@ -665,7 +679,11 @@
     var linked = new URLSearchParams(location.search).get('room') || '';
     if (linked) history.replaceState(null, '', location.pathname);
     if (isTeacher) {
-      if (linked) openRoom(linked); else showDash();
+      if (!linked) { showDash(); return; }
+      // Their own room opens as its teacher; anyone else's, they join to write.
+      api('/luddite/room?code=' + encodeURIComponent(linked)).then(function (d) {
+        if (d.room && d.room.students) openRoom(linked); else teacherJoin(linked);
+      }).catch(function () { showDash(); });
       return;
     }
     mode = 'room';
@@ -765,8 +783,32 @@
     store(roomKey(), null);
     roomCode = '';
     roomInfo = null;
-    showJoin();
+    if (isTeacher) { stopHeartbeat(); showDash(); } else showJoin();
   }
+
+  // A teacher joining someone else's room writes in it like a student.
+  async function teacherJoin(code) {
+    var note = $('teacherJoinNote');
+    note.hidden = true;
+    try {
+      var data = await api('/luddite/join', { code: code });
+      mode = 'room';
+      previewing = false;
+      roomCode = data.room.code;
+      onRoomUpdate(data.room);
+    } catch (e) {
+      if (e.message === 'signed_out') return;
+      showDash();
+      note.hidden = false;
+      note.textContent = e.message === 'no_room' ? 'There’s no room called “' + code + '”. Check the spelling.'
+        : e.message === 'room_closed' ? 'That room is closed.' : 'Couldn’t reach the server. Try again.';
+    }
+  }
+  $('teacherJoinForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = $('teacherJoinCode').value.trim();
+    if (code) teacherJoin(code);
+  });
   $('leaveRoomBtn').addEventListener('click', leaveRoom);
   $('leaveRoomBtn2').addEventListener('click', leaveRoom);
 
@@ -790,7 +832,7 @@
     $('downloadBtn').hidden = !has;
     $('newPageWrap').hidden = !has;
     $('dashWrap').hidden = !isTeacher || previewing;
-    $('leaveWrap').hidden = !inRoom || isTeacher;
+    $('leaveWrap').hidden = !inRoom || previewing;
     var fsOk = canFs() || fsExempt();
     $('noFullscreen').hidden = fsOk;
     $('startBtn').disabled = !fsOk;
@@ -1273,14 +1315,30 @@
       list.appendChild(row);
     });
   }
+  // Pulls every email address out of whatever's pasted: "Name <a@b.org>",
+  // commas, semicolons, spaces, line breaks, mailto: and so on.
+  function extractEmails(text) {
+    var found = String(text).match(/[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g) || [];
+    var seen = {};
+    return found.map(function (e) { return e.toLowerCase().replace(/^'+|'+$/g, ''); })
+      .filter(function (e) { if (seen[e]) return false; seen[e] = 1; return true; });
+  }
   $('addTeacherForm').addEventListener('submit', async function (e) {
     e.preventDefault();
-    var email = $('addTeacherEmail').value.trim();
-    if (!email) return;
-    try {
-      loadTeachers(await api('/luddite/teachers', { add: email }));
-      $('addTeacherEmail').value = '';
-    } catch (err) { alert('That doesn’t look like an email address.'); }
+    var note = $('addTeacherNote');
+    var emails = extractEmails($('addTeacherEmail').value);
+    note.hidden = false;
+    if (!emails.length) { note.className = 'fine warn'; note.textContent = 'No email addresses found in that.'; return; }
+    var added = [], failed = [], data = null;
+    for (var i = 0; i < emails.length; i++) {
+      try { data = await api('/luddite/teachers', { add: emails[i] }); added.push(emails[i]); }
+      catch (err) { failed.push(emails[i]); }
+    }
+    if (data) loadTeachers(data);
+    note.className = 'fine' + (failed.length ? ' warn' : ' good');
+    note.textContent = (added.length ? 'Added ' + plural(added.length, 'teacher', 'teachers') + ': ' + added.join(', ') + '.' : '') +
+      (failed.length ? ' Couldn’t add: ' + failed.join(', ') + '.' : '');
+    if (!failed.length) $('addTeacherEmail').value = '';
   });
 
   // ---------------------------------------------------------------------
