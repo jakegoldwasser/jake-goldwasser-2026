@@ -92,6 +92,9 @@
   .editwrap { position: relative; flex: 1; min-width: 220px; display: flex; }
   .editwrap .field { flex: 1; padding-right: 40px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }
   .editwrap .pencil { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 15px; }
+  .permrow { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 14px; cursor: pointer; }
+  .permrow input { margin-top: 4px; }
+  .stamp { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
   .roomcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 12px;
     box-shadow: inset 0 0 0 1px var(--rule); padding: 14px 16px; margin-bottom: 10px; }
   .roomcard .info { flex: 1; min-width: 220px; }
@@ -422,11 +425,13 @@
 
     <h3>Open a new room</h3>
     <div class="newroom">
-      <label class="lbl" for="newRoomTitle">Room name <span class="hint">&mdash; a suggestion; click it to type your own, like &ldquo;Period 3 essay&rdquo;</span></label>
+      <label class="lbl" for="newRoomTitle">Room name <span class="hint">&mdash; say what the assignment is, like &ldquo;Period 3 &mdash; Hamlet essay&rdquo;. The date and time are stamped on the room for you.</span></label>
       <form class="row" id="newRoomForm" style="justify-content:flex-start">
-        <span class="editwrap"><input class="field" id="newRoomTitle" maxlength="80" placeholder="Name this room" aria-label="Room name (editable)"><span class="pencil" aria-hidden="true">&#9998;</span></span>
+        <input class="field" id="newRoomTitle" maxlength="80" placeholder="What is this room for?" aria-label="Room name" autocomplete="off">
         <button class="btn" type="submit">Open this room</button>
       </form>
+      <p class="fine warn" id="newRoomNote" hidden>Give the room a name that says what the assignment is, so you can tell your rooms apart.</p>
+      <label class="permrow"><input type="checkbox" id="newRoomPerm"> <span><b>Permanent room</b> &mdash; students can come back to the work they&rsquo;re in the middle of. When you close it, it gets a new Entry Phrase for next time; students need that phrase to get back in, and their drafts are kept.</span></label>
       <p class="fine" style="margin-top:10px">Luddite gives each room a two-word <b>Entry Phrase</b>, like <i>Starry whale</i>, for students to type.
         Students see you as <b id="displayName"></b>. <button class="btn small ghost" id="changeNameBtn" style="margin-left:4px">Change my name</button></p>
     </div>
@@ -473,8 +478,9 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; All rooms</button></p>
     <div class="head">
-      <h2 id="roomTitle"></h2>
+      <div><h2 id="roomTitle"></h2><p class="stamp" id="roomStamp"></p></div>
       <div class="row">
+        <button class="btn small ghost" id="renameBtn">Rename</button>
         <button class="btn small ghost" id="previewBtn">See what students see</button>
         <button class="btn small ghost" id="openCloseBtn"></button>
       </div>
@@ -772,7 +778,7 @@
       store(roomKey(), null);
       roomCode = '';
       showJoin(e.message === 'no_room' ? 'No room has the Entry Phrase “' + code + '”. Check the spelling and try again.'
-        : e.message === 'room_closed' ? 'That room is closed. Ask your teacher.'
+        : e.message === 'room_closed' ? 'That room is closed. If your teacher has a new Entry Phrase for you, type it above; work you were in the middle of is kept.'
         : 'Couldn’t reach the server. Try again.');
     }
   }
@@ -841,7 +847,9 @@
   // Ready screen
   // ---------------------------------------------------------------------
   function scope() { return mode === 'solo' ? 'solo' : roomCode; }
-  function textKey() { return 'luddite.text.' + me.email + '.' + scope(); }
+  // A permanent room's draft is kept under its series, so it survives the
+  // room's Entry Phrase changing; the lock-out count stays with each session.
+  function textKey() { return 'luddite.text.' + me.email + '.' + (mode === 'room' && roomInfo && roomInfo.seriesId ? roomInfo.seriesId : scope()); }
   function leavesKey() { return 'luddite.leaves.' + me.email + '.' + scope(); }
 
   function showReady() {
@@ -1179,30 +1187,18 @@
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
-    refreshDefaultTitle();
     loadStudents();
     poll(loadRooms, POLL_DASH_MS);
   }
 
-  // ---- New rooms are named "<teacher>, <date>, <time>" by default ----
+  // ---- Rooms are named for the assignment; the date and time are a stamp ----
   var displayName = '';
-  var defaultTitle = '';
-  function makeDefaultTitle() {
-    var now = new Date();
-    return (displayName ? displayName + ', ' : '') + now.toLocaleDateString([], { month: 'long', day: 'numeric' }) +
-      ', ' + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-  // Only replaces the box's text if the teacher hasn't typed their own.
-  function refreshDefaultTitle() {
-    var f = $('newRoomTitle');
-    if (f.value && f.value !== defaultTitle) return;
-    defaultTitle = makeDefaultTitle();
-    f.value = defaultTitle;
-  }
   function setDisplayName(name) {
     displayName = name;
     $('displayName').textContent = name;
-    refreshDefaultTitle();
+  }
+  function stampOf(t) {
+    return new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
   $('changeNameBtn').addEventListener('click', async function () {
     var name = prompt('What should students see you as? For example, Ms. Smith', displayName);
@@ -1223,7 +1219,6 @@
   async function loadRooms() {
     var data = await api('/luddite/rooms');
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
-    else refreshDefaultTitle(); // keep the time current
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
     var list = $('roomList');
@@ -1241,13 +1236,14 @@
       info.appendChild(name);
       var meta = el('div', 'meta');
       meta.appendChild(el('span', 'codetag', 'Entry Phrase: ' + r.codeLabel));
-      meta.appendChild(document.createTextNode('Opened ' + new Date(r.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+      meta.appendChild(document.createTextNode('Opened ' + stampOf(r.createdAt) +
         ' · ' + plural(r.admitted, 'student', 'students') + ' in · ' + r.submissions + ' handed in'));
       info.appendChild(meta);
       card.appendChild(info);
       var acts = el('div', 'acts');
       if (r.waiting) acts.appendChild(el('span', 'pill warn', r.waiting + ' waiting'));
-      acts.appendChild(el('span', 'pill' + (r.open ? ' good' : ''), r.open ? 'Open' : 'Closed'));
+      if (r.permanent) acts.appendChild(el('span', 'pill', 'Permanent'));
+      acts.appendChild(el('span', 'pill' + (r.open ? ' good' : ''), r.open ? 'Open' : (r.permanent && !r.nextCode ? 'Not open yet' : 'Closed')));
       acts.appendChild(button('Open', 'btn small', function () { openRoom(r.code); }));
       acts.appendChild(button('Delete', 'btn small danger', function () { deleteRoom(r); }));
       card.appendChild(acts);
@@ -1266,15 +1262,17 @@
 
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
+    var title = $('newRoomTitle').value.trim();
+    $('newRoomNote').hidden = !!title;
+    if (!title) { $('newRoomTitle').focus(); return; }
     try {
-      // A default name left as-is gets the time the room actually opens.
-      if ($('newRoomTitle').value === defaultTitle) $('newRoomTitle').value = makeDefaultTitle();
-      var data = await api('/luddite/rooms', { title: $('newRoomTitle').value || makeDefaultTitle() });
+      var data = await api('/luddite/rooms', { title: title, permanent: $('newRoomPerm').checked });
       $('newRoomTitle').value = '';
-      refreshDefaultTitle();
+      $('newRoomPerm').checked = false;
       openRoom(data.room.code);
     } catch (err) {}
   });
+  $('newRoomTitle').addEventListener('input', function () { if ($('newRoomTitle').value.trim()) $('newRoomNote').hidden = true; });
 
   // ---- Google Drive, where handed-in work goes ----
   function renderDrive(box, drive) {
@@ -1394,9 +1392,9 @@
     }
   }
 
-  async function roomAction(action, subs) {
+  async function roomAction(action, subs, title) {
     try {
-      var data = await api('/luddite/room', { code: teacherRoom.code, action: action, subs: subs || [] });
+      var data = await api('/luddite/room', { code: teacherRoom.code, action: action, subs: subs || [], title: title });
       teacherRoom = data.room;
       if (action === 'delete') { showDash(); return; }
       loadRoom();
@@ -1425,11 +1423,17 @@
 
   function drawRoom(room, drive) {
     $('roomTitle').textContent = room.title;
+    $('roomStamp').textContent = (room.permanent ? 'Permanent room · ' : '') + 'Opened ' + stampOf(room.createdAt);
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
-    $('openCloseBtn').textContent = room.open ? 'Close the room' : 'Reopen the room';
+    // A permanent room's Close starts its next session under a new phrase; a
+    // closed one's phrase never works again, so it points to the next one.
+    $('openCloseBtn').textContent = room.open ? (room.permanent ? 'Close for today' : 'Close the room')
+      : room.nextCode ? 'Go to the next Entry Phrase' : room.permanent ? 'Open this room' : 'Reopen the room';
     renderDrive($('roomDrive'), drive);
-    $('roomNote').textContent = room.open ? '' : 'This room is closed: nobody new can ask to join. Students already in can keep writing and hand in.';
+    $('roomNote').textContent = room.open ? '' : room.nextCode ? 'This room is closed. Its next Entry Phrase is “' + room.nextLabel + '” (opens as its own room, closed until you open it). Students already in can finish and hand in; nobody can get back in with this phrase.'
+      : room.permanent ? 'This room is closed until you open it. Give students the Entry Phrase above once it’s open.'
+      : 'This room is closed: nobody new can ask to join. Students already in can keep writing and hand in.';
 
     var students = Object.keys(room.students).map(function (sub) { var s = room.students[sub]; s.sub = sub; return s; });
     var waiting = students.filter(function (s) { return s.status === 'waiting'; }).sort(function (a, b) { return a.requestedAt - b.requestedAt; });
@@ -1507,7 +1511,24 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
-  $('openCloseBtn').addEventListener('click', function () { roomAction(teacherRoom.open ? 'close' : 'open'); });
+  $('openCloseBtn').addEventListener('click', async function () {
+    if (teacherRoom.open && teacherRoom.permanent) {
+      if (!confirm('Close “' + teacherRoom.title + '” for today?\n\nThis phrase stops working. Everyone who was in keeps their place and their draft; you\u2019ll get a new Entry Phrase for the next session, to give out when you\u2019re ready.')) return;
+      try {
+        var data = await api('/luddite/room', { code: teacherRoom.code, action: 'close', subs: [] });
+        if (data.next) { openRoom(data.next.code); return; }
+        teacherRoom = data.room; loadRoom();
+      } catch (e) { $('roomNote').textContent = 'Couldn’t close it. Try again.'; }
+      return;
+    }
+    if (teacherRoom.nextCode) { openRoom(teacherRoom.nextCode); return; }
+    roomAction(teacherRoom.open ? 'close' : 'open');
+  });
+  $('renameBtn').addEventListener('click', async function () {
+    var t = prompt('What is this room for? Name it for the assignment.', teacherRoom.title);
+    if (!t || !t.trim()) return;
+    await roomAction('rename', [], t.trim());
+  });
   $('deleteRoomBtn').addEventListener('click', function () {
     if (confirm('Delete “' + teacherRoom.title + '”? It leaves your list and nobody can join it. Work already handed in stays in your Drive.')) roomAction('delete');
   });

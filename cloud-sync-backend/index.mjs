@@ -575,6 +575,7 @@ function roomSummary(room) {
   const students = Object.values(room.students || {});
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open, createdAt: room.createdAt,
+    permanent: !!room.permanent, nextCode: room.nextCode || null, nextLabel: room.nextLabel || null,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
     submissions: (room.submissions || []).length
@@ -586,6 +587,8 @@ function studentView(room, sub) {
   const me = room.students[sub] || null;
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open,
+    // A permanent room's drafts stay put on a student's device across its changing codes.
+    seriesId: room.permanent ? room.seriesId || room.code : null,
     teacherName: room.teacher.name || room.teacher.email,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
@@ -842,6 +845,9 @@ async function routeLuddite(event, method, path, info) {
     const room = await mutate('luddite:room:' + code, (r) => {
       if (!r) throw new HttpError(404, 'no_room');
       const s = r.students[me.sub];
+      // A permanent room's code only works while that day's room is open,
+      // even for students who were in yesterday.
+      if (r.permanent && !r.open) throw new HttpError(403, 'room_closed');
       if (s) {
         if (s.email === me.email && s.name === me.name) return undefined;
         return { ...r, students: { ...r.students, [me.sub]: { ...s, email: me.email, name: me.name } } };
@@ -1028,17 +1034,22 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/rooms { title } -- open a new room with a fresh two-word code.
+  // PUT /luddite/rooms { title, permanent } -- open a new room with a fresh two-word code.
+  // A room needs a name that says what the assignment is. A permanent room
+  // is a standing room: closing it hands out a new Entry Phrase for the next
+  // session, and everyone who was in keeps their place (and their draft).
   if (path === '/luddite/rooms' && method === 'PUT') {
     const teacher = { ...me, name: await displayNameOf(info, role) };
-    const title = String(body.title || '').trim().slice(0, 80) || teacher.name;
+    const title = String(body.title || '').trim().slice(0, 80);
+    if (!title) throw new HttpError(400, 'need_title');
+    const permanent = !!body.permanent;
     let room = null;
     for (let i = 0; i < 12 && !room; i++) {
       const { code, codeLabel } = newRoomCode();
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title, teacher, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title, teacher, open: true, createdAt: Date.now(), students: {}, submissions: [], ...(permanent ? { permanent: true, seriesId: code } : {}) };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -1067,11 +1078,46 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false };
-      else if (body.action === 'open') return { ...r, open: true };
+      else if (body.action === 'open') {
+        if (r.nextCode) throw new HttpError(409, 'rotated'); // that room's code has moved on
+        return { ...r, open: true };
+      }
+      else if (body.action === 'rename') {
+        const title = String(body.title || '').trim().slice(0, 80);
+        if (!title) throw new HttpError(400, 'need_title');
+        return { ...r, title };
+      }
       else if (body.action === 'delete') return { ...r, open: false, deletedAt: Date.now() };
       else throw new HttpError(400, 'bad_action');
       return { ...r, students };
     });
+    // Closing a permanent room starts the next session under a new code:
+    // everyone who was in is still in (already let in, nothing handed in),
+    // but it stays closed until the teacher opens it, so the new phrase
+    // can be held back until the next day.
+    let next = null;
+    if (body.action === 'close' && room.permanent && !room.nextCode) {
+      const carry = {};
+      Object.entries(room.students || {}).forEach(([sub, st]) => {
+        if (st.status === 'admitted') carry[sub] = { email: st.email, name: st.name, status: 'admitted', leaves: 0, words: 0, decidedAt: Date.now() };
+        else if (st.status === 'removed') carry[sub] = { ...st };
+      });
+      for (let i = 0; i < 12 && !next; i++) {
+        const { code: nc, codeLabel } = newRoomCode();
+        try {
+          next = await mutate('luddite:room:' + nc, (r2) => {
+            if (r2) throw new HttpError(409, 'code_taken');
+            return { code: nc, codeLabel, title: room.title, teacher: room.teacher, open: false, createdAt: Date.now(), students: carry, submissions: [], permanent: true, seriesId: room.seriesId || room.code };
+          });
+        } catch (e) {
+          if (e.message !== 'code_taken') throw e;
+        }
+      }
+      if (!next) throw new HttpError(503, 'busy');
+      await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: [next.code, ...((t && t.rooms) || [])] }));
+      const done = await mutate('luddite:room:' + code, (r) => ({ ...r, nextCode: next.code, nextLabel: next.codeLabel }));
+      return respond(200, { room: done, next: roomSummary(next) });
+    }
     if (body.action === 'delete') {
       await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
     }
