@@ -34,6 +34,11 @@ const IMAGE_MAX_BYTES = 390 * 1024;
 const IMAGE_ID = /^[A-Za-z0-9_-]{6,64}$/;
 const IMAGE_TYPES = /^image\/(jpeg|png|webp)$/;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+// Luddite signs people in through its own Google app (Google Cloud project
+// "Luddite"), so its consent screen says Luddite and school IT can approve
+// it on its own. Sign-ins from either app are accepted; Google gives a
+// person the same "sub" in both, so accounts carry over.
+const LUDDITE_CLIENT_ID = process.env.LUDDITE_GOOGLE_CLIENT_ID || '522963753495-m1qigb1q8ct9rmmrh56fkv7r3hs2psap.apps.googleusercontent.com';
 // Signs this backend's own session tokens (see issueSession). Any long
 // random string; changing it signs everyone out. If unset, no sessions
 // are issued and the tools fall back to Google's ~1hr ID tokens alone.
@@ -61,7 +66,7 @@ async function verifyGoogleToken(idToken) {
   if (!res.ok) return null;
   const info = await res.json();
   if (!info.sub) return null;
-  if (GOOGLE_CLIENT_ID && info.aud !== GOOGLE_CLIENT_ID) return null;
+  if (GOOGLE_CLIENT_ID && info.aud !== GOOGLE_CLIENT_ID && info.aud !== LUDDITE_CLIENT_ID) return null;
   return info;
 }
 
@@ -413,10 +418,10 @@ export async function fetchPage(raw) {
 // which needs no permission beyond the GetItem/PutItem the role has.
 // ---------------------------------------------------------------------
 const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
-// The OAuth client's secret, for turning a teacher's one-time Drive
-// consent into a lasting refresh token (Configuration -> Environment
+// The Luddite Google app's client secret, for turning a teacher's one-time
+// Drive consent into a lasting refresh token (Configuration -> Environment
 // variables in the Lambda console). Without it, Drive can't be connected.
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const LUDDITE_CLIENT_SECRET = process.env.LUDDITE_GOOGLE_CLIENT_SECRET || '';
 const MAX_SUBMISSION_CHARS = 400000;
 // A DynamoDB item tops out at 400 KB, so a piece is kept for marking up only
 // if its text fits with room to spare for the teacher's marks.
@@ -587,7 +592,7 @@ async function googleToken(params) {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, ...params })
+    body: new URLSearchParams({ client_id: LUDDITE_CLIENT_ID, client_secret: LUDDITE_CLIENT_SECRET, ...params })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -599,7 +604,7 @@ async function googleToken(params) {
 }
 
 async function connectDrive(info, code) {
-  if (!GOOGLE_CLIENT_SECRET) throw new HttpError(503, 'drive_not_configured');
+  if (!LUDDITE_CLIENT_SECRET) throw new HttpError(503, 'drive_not_configured');
   const data = await googleToken({ code, grant_type: 'authorization_code', redirect_uri: 'postmessage' });
   if (!String(data.scope || '').includes('https://www.googleapis.com/auth/drive.file')) throw new HttpError(409, 'drive_not_granted');
   let email = '';
@@ -1011,7 +1016,7 @@ async function routeLuddite(event, method, path, info) {
 
 async function driveStatus(teacherSub) {
   const { state } = await readItem('luddite:drive:' + teacherSub);
-  return { connected: !!(state && state.refreshToken), email: (state && state.email) || '', configured: !!GOOGLE_CLIENT_SECRET };
+  return { connected: !!(state && state.refreshToken), email: (state && state.email) || '', configured: !!LUDDITE_CLIENT_SECRET };
 }
 
 export const handler = async (event) => {
