@@ -1,5 +1,5 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
-import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomUUID, randomBytes } from 'node:crypto';
 
 // The AWS Lambda behind Luddite (/luddite/ on the site): rooms, waiting
 // rooms, hand-ins, mark-up and Google Drive. It is Luddite's alone: its own
@@ -11,9 +11,10 @@ const TABLE_NAME = process.env.TABLE_NAME || 'LudditeData';
 // Luddite signs people in through its own Google app (Google Cloud project
 // "Luddite"); only tokens minted for it are accepted.
 const LUDDITE_CLIENT_ID = process.env.LUDDITE_GOOGLE_CLIENT_ID || '522963753495-m1qigb1q8ct9rmmrh56fkv7r3hs2psap.apps.googleusercontent.com';
-// Signs this backend's own session tokens (see issueSession). Any long
-// random string, used for Luddite only; changing it signs everyone out.
-const SESSION_SECRET = process.env.SESSION_SECRET || '';
+// Signs this backend's own session tokens (see issueSession). Luddite's
+// alone. If SESSION_SECRET isn't set, one is generated on first use and kept
+// in the table (see loadSessionSecret), so there's nothing to paste.
+let SESSION_SECRET = process.env.SESSION_SECRET || '';
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 const ddb = new DynamoDBClient({});
@@ -43,6 +44,13 @@ async function verifyGoogleToken(idToken) {
 // hands back its own session token -- "s1.<base64url JSON payload>.<HMAC>"
 // -- good for 30 days and re-issued on each status check, so regular use
 // keeps sliding the window forward.
+async function loadSessionSecret() {
+  if (SESSION_SECRET) return;
+  const { state } = await readItem('luddite:config');
+  if (state && state.sessionSecret) { SESSION_SECRET = state.sessionSecret; return; }
+  const made = await mutate('luddite:config', (c) => (c && c.sessionSecret ? undefined : { ...(c || {}), sessionSecret: randomBytes(48).toString('base64url') }));
+  SESSION_SECRET = made.sessionSecret;
+}
 function b64url(buf) { return Buffer.from(buf).toString('base64url'); }
 function sign(data) { return createHmac('sha256', SESSION_SECRET).update(data).digest('base64url'); }
 
@@ -840,6 +848,7 @@ export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
   const path = event.rawPath || '/';
 
+  await loadSessionSecret();
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
   if (!token) return respond(401, { error: 'Missing bearer token' });

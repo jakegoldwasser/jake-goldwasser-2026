@@ -17,8 +17,8 @@ Bookbug (`cloud-sync-backend/`). Source: `index.mjs`, one file, no build step.
    `dynamodb:PutItem` on the `LudditeData` table's ARN. Name it
    `luddite-table-access`.
 4. **Environment variables** (Configuration -> Environment variables):
-   - `SESSION_SECRET`: a new long random string, for Luddite only
-     (`openssl rand -base64 48`). Changing it signs everyone out.
+   - `SESSION_SECRET` isn't needed: the function makes its own on first use and keeps
+     it in the table. (Set it only to force a value; changing it signs everyone out.)
    - `LUDDITE_GOOGLE_CLIENT_SECRET`: the Luddite Google app's client secret
      (Google Cloud project "Luddite" -> Credentials). Without it, Drive can't be
      connected. It is the same value the Bookbug function holds today.
