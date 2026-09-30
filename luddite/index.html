@@ -194,6 +194,9 @@
   .notice.warn { box-shadow: inset 0 0 0 1px var(--lock); }
   .joinbox { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 18px; padding: 16px 18px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
   .joinbox .bigcode { font: 400 34px Literata, Georgia, serif; }
+  .joinbox .phrase { display: flex; flex-direction: column; }
+  .phraselbl { font: 600 12px Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .joinlbl { display: block; font: 600 13px Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
   .joinbox .link { flex: 1; min-width: 200px; color: var(--muted); font-size: 13px; word-break: break-all; }
   form.row { justify-content: flex-start; margin-top: 10px; }
 
@@ -308,13 +311,14 @@
   </div>
 </section>
 
-<!-- Student: enter a room code -->
+<!-- Student: enter a room's Entry Phrase -->
 <section class="screen" id="joinScreen" hidden>
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
-    <p class="sub">Type the two-word room code your teacher gave you.</p>
+    <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
+    <label class="joinlbl" for="joinCode">Entry Phrase</label>
     <form class="row" id="joinForm" style="justify-content:center">
-      <input class="field codeword" id="joinCode" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Starry whale" aria-label="Room code">
+      <input class="field codeword" id="joinCode" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Starry whale" aria-label="Entry Phrase">
       <button class="btn" type="submit">Join</button>
     </form>
     <p class="fine warn" id="joinNote"></p>
@@ -408,7 +412,7 @@
         <span class="editwrap"><input class="field" id="newRoomTitle" maxlength="80" placeholder="Name this room" aria-label="Room name (editable)"><span class="pencil" aria-hidden="true">&#9998;</span></span>
         <button class="btn" type="submit">Open this room</button>
       </form>
-      <p class="fine" style="margin-top:10px">Luddite gives each room a two-word code, like <i>Starry whale</i>, for students to type.
+      <p class="fine" style="margin-top:10px">Luddite gives each room a two-word <b>Entry Phrase</b>, like <i>Starry whale</i>, for students to type.
         Students see you as <b id="displayName"></b>. <button class="btn small ghost" id="changeNameBtn" style="margin-left:4px">Change my name</button></p>
     </div>
 
@@ -418,9 +422,9 @@
 
     <h3>Join another teacher&rsquo;s room</h3>
     <div class="newroom">
-      <label class="lbl" for="teacherJoinCode">Room code <span class="hint">&mdash; the two words the teacher gave out</span></label>
+      <label class="lbl" for="teacherJoinCode">Entry Phrase <span class="hint">&mdash; the two words the teacher gave out</span></label>
       <form class="row" id="teacherJoinForm" style="justify-content:flex-start">
-        <input class="field grow" id="teacherJoinCode" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Starry whale" aria-label="Room code">
+        <input class="field grow" id="teacherJoinCode" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Starry whale" aria-label="Entry Phrase">
         <button class="btn" type="submit">Join to write</button>
       </form>
       <p class="fine" style="margin-top:10px">You&rsquo;ll wait to be let in and write like everyone else. Your own rooms stay here.</p>
@@ -461,7 +465,7 @@
       </div>
     </div>
     <div class="joinbox">
-      <span class="bigcode" id="roomCode"></span>
+      <span class="phrase"><span class="phraselbl">Entry Phrase</span><span class="bigcode" id="roomCode"></span></span>
       <span class="link" id="roomLink"></span>
       <button class="btn small" id="copyLinkBtn">Copy link</button>
     </div>
@@ -733,7 +737,7 @@
   $('joinForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var code = $('joinCode').value.trim();
-    if (code.replace(/[^A-Za-z0-9]/g, '').length < 5) { $('joinNote').textContent = 'Room codes are two words, like Starry whale.'; return; }
+    if (code.replace(/[^A-Za-z0-9]/g, '').length < 5) { $('joinNote').textContent = 'Entry Phrases are two words, like Starry whale.'; return; }
     joinRoom(code);
   });
 
@@ -747,7 +751,7 @@
       if (e.message === 'signed_out') return;
       store(roomKey(), null);
       roomCode = '';
-      showJoin(e.message === 'no_room' ? 'There’s no room called “' + code + '”. Check the spelling and try again.'
+      showJoin(e.message === 'no_room' ? 'No room has the Entry Phrase “' + code + '”. Check the spelling and try again.'
         : e.message === 'room_closed' ? 'That room is closed. Ask your teacher.'
         : 'Couldn’t reach the server. Try again.');
     }
@@ -801,7 +805,7 @@
       if (e.message === 'signed_out') return;
       showDash();
       note.hidden = false;
-      note.textContent = e.message === 'no_room' ? 'There’s no room called “' + code + '”. Check the spelling.'
+      note.textContent = e.message === 'no_room' ? 'No room has the Entry Phrase “' + code + '”. Check the spelling.'
         : e.message === 'room_closed' ? 'That room is closed.' : 'Couldn’t reach the server. Try again.';
     }
   }
@@ -1206,7 +1210,7 @@
     list.innerHTML = '';
     $('roomCount').textContent = data.rooms.length ? '(' + data.rooms.length + ')' : '';
     if (!data.rooms.length) {
-      list.appendChild(el('div', 'empty', 'No rooms yet. Open one above to get a code to give your students.'));
+      list.appendChild(el('div', 'empty', 'No rooms yet. Open one above to get an Entry Phrase to give your students.'));
       return;
     }
     data.rooms.forEach(function (r) {
@@ -1216,7 +1220,7 @@
       name.addEventListener('click', function () { openRoom(r.code); });
       info.appendChild(name);
       var meta = el('div', 'meta');
-      meta.appendChild(el('span', 'codetag', 'Code: ' + r.codeLabel));
+      meta.appendChild(el('span', 'codetag', 'Entry Phrase: ' + r.codeLabel));
       meta.appendChild(document.createTextNode('Opened ' + new Date(r.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
         ' · ' + plural(r.admitted, 'student', 'students') + ' in · ' + r.submissions + ' handed in'));
       info.appendChild(meta);
@@ -1413,7 +1417,7 @@
     var removed = students.filter(function (s) { return s.status === 'removed'; });
 
     $('admitAllBtn').hidden = waiting.length < 2;
-    fill('waitingList', waiting, 'Nobody’s waiting. Give students the code or link above; they’ll show up here.', function (s, row) {
+    fill('waitingList', waiting, 'Nobody’s waiting. Give students the Entry Phrase or link above; they’ll show up here.', function (s, row) {
       var asked = el('span', 'pill');
       asked.setAttribute('data-asked', s.requestedAt);
       row.appendChild(asked);
