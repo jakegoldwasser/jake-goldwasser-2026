@@ -575,7 +575,9 @@ function studentView(room, sub) {
     teacherName: room.teacher.name || room.teacher.email,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
-    submittedAt: me ? me.submittedAt || 0 : 0
+    submittedAt: me ? me.submittedAt || 0 : 0,
+    // Handing in is final: no more writing until the teacher releases them.
+    handedIn: !!(me && me.handedIn)
   };
 }
 
@@ -774,7 +776,7 @@ async function routeLuddite(event, method, path, info) {
       const next = { ...s, lastSeen: Date.now() };
       // `away` means locked out right now, until they go back to writing.
       if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false });
-      if (body.type === 'writing' || body.type === 'idle') Object.assign(next, { away: false, writing: body.type === 'writing' });
+      if (body.type === 'writing' || body.type === 'idle') Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
       if (Number.isFinite(body.words)) next.words = Math.max(0, Math.floor(body.words));
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
@@ -788,6 +790,7 @@ async function routeLuddite(event, method, path, info) {
     const room = await getRoom(code);
     const s = room.students[me.sub];
     if (!s || s.status !== 'admitted') throw new HttpError(403, 'not_admitted');
+    if (s.handedIn) throw new HttpError(409, 'already_handed_in');
     const text = String(body.text || '');
     if (!text.trim()) throw new HttpError(400, 'empty');
     if (text.length > MAX_SUBMISSION_CHARS) throw new HttpError(413, 'too_long');
@@ -834,7 +837,7 @@ async function routeLuddite(event, method, path, info) {
     const saved = await mutate('luddite:room:' + code, (r) => ({
       ...r,
       submissions: [submission, ...(r.submissions || [])],
-      students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words } }
+      students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, writing: false } }
     }));
     return respond(200, { room: studentView(saved, me.sub) });
   }
@@ -950,7 +953,8 @@ async function routeLuddite(event, method, path, info) {
   }
 
   // PUT /luddite/room { code, action, subs } -- admit | admitAll | remove |
-  // close | open | delete (delete only takes it off the teacher's list).
+  // release (let a student who handed in keep writing) | close | open |
+  // delete (delete only takes it off the teacher's list).
   if (path === '/luddite/room' && method === 'PUT') {
     const code = cleanCode(body.code);
     const subs = Array.isArray(body.subs) ? body.subs : [];
@@ -964,6 +968,7 @@ async function routeLuddite(event, method, path, info) {
       if (body.action === 'admit') subs.forEach((sub) => set(sub, 'admitted'));
       else if (body.action === 'admitAll') Object.keys(students).forEach((sub) => { if (students[sub].status === 'waiting') set(sub, 'admitted'); });
       else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
+      else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false };
       else if (body.action === 'open') return { ...r, open: true };
       else if (body.action === 'delete') return { ...r, open: false, deletedAt: Date.now() };
