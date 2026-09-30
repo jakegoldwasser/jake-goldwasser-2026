@@ -92,7 +92,7 @@
     min-width: 0;
   }
   .field:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--ink); }
-  .field.code { width: 9.5em; text-align: center; letter-spacing: 0.25em; text-transform: uppercase; font-size: 18px; }
+  .field.codeword { width: 13em; max-width: 100%; text-align: center; font-size: 18px; }
   .field.grow { flex: 1; }
 
   /* Waiting room */
@@ -161,7 +161,7 @@
   .notice { margin: 16px 0 0; padding: 12px 16px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--rule); font-size: 14px; }
   .notice.warn { box-shadow: inset 0 0 0 1px var(--lock); }
   .joinbox { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 18px; padding: 16px 18px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
-  .joinbox .bigcode { font: 400 34px Literata, Georgia, serif; letter-spacing: 0.12em; }
+  .joinbox .bigcode { font: 400 34px Literata, Georgia, serif; }
   .joinbox .link { flex: 1; min-width: 200px; color: var(--muted); font-size: 13px; word-break: break-all; }
   form.row { justify-content: flex-start; margin-top: 10px; }
 
@@ -199,9 +199,9 @@
 <section class="screen" id="joinScreen" hidden>
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
-    <p class="sub">Enter the room code your teacher gave you.</p>
+    <p class="sub">Type the two-word room code your teacher gave you.</p>
     <form class="row" id="joinForm" style="justify-content:center">
-      <input class="field code" id="joinCode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code">
+      <input class="field codeword" id="joinCode" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Starry whale" aria-label="Room code">
       <button class="btn" type="submit">Join</button>
     </form>
     <p class="fine warn" id="joinNote"></p>
@@ -279,10 +279,11 @@
 
     <h3>Your rooms</h3>
     <form class="row" id="newRoomForm">
-      <input class="field grow" id="newRoomTitle" maxlength="80" placeholder="Name a new room" aria-label="New room name">
-      <button class="btn small ghost" type="button" id="shuffleNameBtn" title="Suggest another name" aria-label="Suggest another name">&#8635;</button>
+      <input class="field grow" id="newRoomTitle" maxlength="80" placeholder="Room name" aria-label="New room name">
       <button class="btn small" type="submit">Open a room</button>
     </form>
+    <p class="fine" style="margin-top:8px">Each room gets a two-word code, like <i>Starry whale</i>, for students to type.
+      Students see you as <b id="displayName"></b> &middot; <button class="linkish" id="changeNameBtn">Change</button></p>
     <div id="roomList" style="margin-top:14px"></div>
 
     <div id="teachersSection" hidden>
@@ -466,7 +467,7 @@
     isTeacher = me.role === 'owner' || me.role === 'teacher';
     each('.who-email', function (n) { n.textContent = me.email; });
 
-    var linked = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
+    var linked = new URLSearchParams(location.search).get('room') || '';
     if (linked) history.replaceState(null, '', location.pathname);
     if (isTeacher) {
       if (linked) openRoom(linked); else showDash();
@@ -506,6 +507,8 @@
   // Students: code, waiting room, let in
   // ---------------------------------------------------------------------
   function roomKey() { return 'luddite.room.' + me.email; }
+  // "Mr. Goldwasser, September 29, 2:45 PM" already says whose room it is.
+  function roomLine(r) { return r.title.indexOf(r.teacherName) !== -1 ? r.title : r.title + ' · ' + r.teacherName; }
 
   function showJoin(note) {
     $('joinNote').textContent = note || '';
@@ -515,22 +518,22 @@
 
   $('joinForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var code = $('joinCode').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (code.length !== 5) { $('joinNote').textContent = 'Room codes are 5 letters and numbers.'; return; }
+    var code = $('joinCode').value.trim();
+    if (code.replace(/[^A-Za-z0-9]/g, '').length < 5) { $('joinNote').textContent = 'Room codes are two words, like Starry whale.'; return; }
     joinRoom(code);
   });
 
   async function joinRoom(code) {
     try {
       var data = await api('/luddite/join', { code: code });
-      roomCode = code;
-      store(roomKey(), code);
+      roomCode = data.room.code;
+      store(roomKey(), roomCode);
       onRoomUpdate(data.room);
     } catch (e) {
       if (e.message === 'signed_out') return;
       store(roomKey(), null);
       roomCode = '';
-      showJoin(e.message === 'no_room' ? 'There’s no room with that code. Check it and try again.'
+      showJoin(e.message === 'no_room' ? 'There’s no room called “' + code + '”. Check the spelling and try again.'
         : e.message === 'room_closed' ? 'That room is closed. Ask your teacher.'
         : 'Couldn’t reach the server. Try again.');
     }
@@ -544,7 +547,7 @@
       showReady();
       return;
     }
-    $('waitRoom').textContent = room.title + ' · ' + room.teacherName;
+    $('waitRoom').textContent = roomLine(room);
     if (room.status === 'removed') {
       $('waitMsg').textContent = 'Your teacher took you out of this room.';
     } else if (!room.open && room.status !== 'waiting') {
@@ -583,7 +586,7 @@
     var text = previewing ? '' : load(textKey()) || '';
     var has = text.trim().length > 0;
     var inRoom = mode === 'room';
-    $('readyRoom').textContent = inRoom && roomInfo ? roomInfo.title + ' · ' + roomInfo.teacherName : '';
+    $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
     $('readyRoom').hidden = !inRoom;
     $('readyTells').textContent = inRoom ? ', and your teacher sees each time' : '';
     $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
@@ -845,37 +848,37 @@
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
-    if (!$('newRoomTitle').value || $('newRoomTitle').value === suggestedName) suggestName();
+    refreshDefaultTitle();
     poll(loadRooms, POLL_DASH_MS);
   }
 
-  // ---- Room name suggestions ----
-  // Short, easy to spell, and chosen so no pairing can come out rude:
-  // colors, weather and gentle qualities; animals, plants and small
-  // everyday things.
-  var NAME_ADJECTIVES = ['Blue', 'Green', 'Red', 'Golden', 'Silver', 'Copper', 'Coral', 'Olive', 'Violet', 'Scarlet',
-    'Calm', 'Quiet', 'Bright', 'Brave', 'Swift', 'Gentle', 'Merry', 'Sunny', 'Misty', 'Snowy', 'Breezy', 'Sandy',
-    'Mossy', 'Frosty', 'Tiny', 'Giant', 'Lucky', 'Jolly', 'Clever', 'Noble', 'Wise', 'Bold', 'Early', 'Sleepy',
-    'Humble', 'Patient', 'Hidden', 'Wooden', 'Paper', 'Velvet', 'Cotton', 'Maple', 'Cedar', 'Autumn', 'Spring',
-    'Winter', 'Summer', 'Polar', 'Starry', 'Rainy'];
-  var NAME_NOUNS = ['trout', 'otter', 'heron', 'robin', 'finch', 'badger', 'rabbit', 'owl', 'fox', 'wren', 'moose',
-    'seal', 'whale', 'crane', 'swan', 'lark', 'newt', 'frog', 'goose', 'llama', 'panda', 'koala', 'tiger', 'zebra',
-    'camel', 'bison', 'falcon', 'hawk', 'raven', 'dove', 'puffin', 'walrus', 'beetle', 'cricket', 'acorn', 'pebble',
-    'meadow', 'river', 'canyon', 'lantern', 'kettle', 'pencil', 'compass', 'anchor', 'button', 'ribbon', 'candle',
-    'comet', 'planet', 'island', 'forest', 'garden', 'willow', 'clover', 'tulip', 'daisy', 'fern', 'cactus', 'pine', 'teapot'];
-  var suggestedName = '';
-  var roomTitles = [];
-  function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
-  function suggestName() {
-    var name = '';
-    for (var i = 0; i < 20; i++) {
-      name = pick(NAME_ADJECTIVES) + ' ' + pick(NAME_NOUNS);
-      if (name !== suggestedName && roomTitles.indexOf(name.toLowerCase()) === -1) break;
-    }
-    suggestedName = name;
-    $('newRoomTitle').value = name;
+  // ---- New rooms are named "<teacher>, <date>, <time>" by default ----
+  var displayName = '';
+  var defaultTitle = '';
+  function makeDefaultTitle() {
+    var now = new Date();
+    return (displayName ? displayName + ', ' : '') + now.toLocaleDateString([], { month: 'long', day: 'numeric' }) +
+      ', ' + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
-  $('shuffleNameBtn').addEventListener('click', function () { suggestName(); $('newRoomTitle').focus(); });
+  // Only replaces the box's text if the teacher hasn't typed their own.
+  function refreshDefaultTitle() {
+    var f = $('newRoomTitle');
+    if (f.value && f.value !== defaultTitle) return;
+    defaultTitle = makeDefaultTitle();
+    f.value = defaultTitle;
+  }
+  function setDisplayName(name) {
+    displayName = name;
+    $('displayName').textContent = name;
+    refreshDefaultTitle();
+  }
+  $('changeNameBtn').addEventListener('click', async function () {
+    var name = prompt('What should students see you as? For example, Ms. Smith', displayName);
+    if (!name || !name.trim()) return;
+    try {
+      setDisplayName((await api('/luddite/me', { displayName: name.trim() })).displayName);
+    } catch (e) { alert('Couldn’t save that. Try again.'); }
+  });
   $('dashLink').addEventListener('click', showDash);
   $('backToDash').addEventListener('click', showDash);
 
@@ -887,8 +890,9 @@
 
   async function loadRooms() {
     var data = await api('/luddite/rooms');
+    if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
+    else refreshDefaultTitle(); // keep the time current
     if (!changed(data)) return;
-    roomTitles = data.rooms.map(function (r) { return r.title.toLowerCase(); });
     renderDrive($('driveBox'), data.drive);
     var list = $('roomList');
     list.innerHTML = '';
@@ -900,7 +904,7 @@
       var row = el('div', 'item click');
       var who = el('div', 'who');
       who.appendChild(el('b', null, r.title));
-      who.appendChild(el('span', null, r.code + ' · opened ' + new Date(r.createdAt).toLocaleDateString() + ' · ' +
+      who.appendChild(el('span', null, 'Code: ' + r.codeLabel + ' · opened ' + new Date(r.createdAt).toLocaleDateString() + ' · ' +
         plural(r.admitted, 'student', 'students') + ' in · ' + r.submissions + ' handed in'));
       row.appendChild(who);
       if (r.waiting) row.appendChild(el('span', 'pill warn', r.waiting + ' waiting'));
@@ -913,9 +917,11 @@
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     try {
-      var data = await api('/luddite/rooms', { title: $('newRoomTitle').value || suggestedName });
-      roomTitles.push(data.room.title.toLowerCase());
-      suggestName(); // a fresh one waiting for next time
+      // A default name left as-is gets the time the room actually opens.
+      if ($('newRoomTitle').value === defaultTitle) $('newRoomTitle').value = makeDefaultTitle();
+      var data = await api('/luddite/rooms', { title: $('newRoomTitle').value || makeDefaultTitle() });
+      $('newRoomTitle').value = '';
+      refreshDefaultTitle();
       openRoom(data.room.code);
     } catch (err) {}
   });
@@ -997,14 +1003,15 @@
   // ---------------------------------------------------------------------
   // Teachers: one room, live
   // ---------------------------------------------------------------------
-  function joinLink(code) { return location.origin + location.pathname + '?room=' + code; }
+  // ?room=starry-whale -- readable, and the server ignores the dash.
+  function joinLink(room) { return location.origin + location.pathname + '?room=' + (room.codeLabel || room.code).toLowerCase().replace(/\s+/g, '-'); }
 
   function openRoom(code) {
     previewing = false;
     teacherRoom = { code: code };
     $('roomTitle').textContent = '';
-    $('roomCode').textContent = code;
-    $('roomLink').textContent = joinLink(code);
+    $('roomCode').textContent = '';
+    $('roomLink').textContent = '';
     ['waitingList', 'admittedList', 'submissionList'].forEach(function (id) { $(id).innerHTML = ''; });
     show('roomScreen');
     poll(loadRoom, POLL_ROOM_MS);
@@ -1052,6 +1059,8 @@
 
   function drawRoom(room, drive) {
     $('roomTitle').textContent = room.title;
+    $('roomCode').textContent = room.codeLabel || room.code;
+    $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = room.open ? 'Close the room' : 'Reopen the room';
     renderDrive($('roomDrive'), drive);
     $('roomNote').textContent = room.open ? '' : 'This room is closed: nobody new can ask to join. Students already in can keep writing and hand in.';
@@ -1130,7 +1139,7 @@
     if (confirm('Delete “' + teacherRoom.title + '”? It leaves your list and nobody can join it. Work already handed in stays in your Drive.')) roomAction('delete');
   });
   $('copyLinkBtn').addEventListener('click', function () {
-    var link = joinLink(teacherRoom.code);
+    var link = joinLink(teacherRoom);
     (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () {
       $('copyLinkBtn').textContent = 'Copied';
       setTimeout(function () { $('copyLinkBtn').textContent = 'Copy link'; }, 1500);
@@ -1141,12 +1150,12 @@
   $('previewBtn').addEventListener('click', function () {
     previewing = true;
     mode = 'room';
-    roomInfo = { title: teacherRoom.title, teacherName: me.name || me.email, open: true, status: 'waiting' };
+    roomInfo = { title: teacherRoom.title, teacherName: teacherRoom.teacher ? teacherRoom.teacher.name : displayName, open: true, status: 'waiting' };
     previewScreen('waitScreen');
   });
   function previewScreen(id) {
     if (id === 'readyScreen') { showReady(); return; }
-    $('waitRoom').textContent = roomInfo.title + ' · ' + roomInfo.teacherName;
+    $('waitRoom').textContent = roomLine(roomInfo);
     $('waitMsg').innerHTML = '<span class="pulse"></span>Waiting for your teacher to let you in&hellip;';
     show('waitScreen');
   }

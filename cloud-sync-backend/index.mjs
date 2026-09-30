@@ -407,8 +407,33 @@ const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.c
 // consent into a lasting refresh token (Configuration -> Environment
 // variables in the Lambda console). Without it, Drive can't be connected.
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_SUBMISSION_CHARS = 400000;
+// What students see the owners as until they pick something else.
+const OWNER_DISPLAY_NAME = 'Mr. Goldwasser';
+
+// A room's join code is two words, like "Starry whale". The lists are
+// short, easy-to-spell words picked so no pairing can come out rude:
+// colors, weather and gentle qualities; animals, plants and small
+// everyday things. About 100 x 100, so ~10,000 codes.
+const CODE_ADJECTIVES = ['Blue', 'Green', 'Red', 'Golden', 'Silver', 'Copper', 'Coral', 'Olive', 'Violet', 'Scarlet',
+  'Amber', 'Ruby', 'Orange', 'Purple', 'Pink', 'Calm', 'Quiet', 'Bright', 'Brave', 'Swift', 'Gentle', 'Merry',
+  'Sunny', 'Misty', 'Snowy', 'Breezy', 'Sandy', 'Mossy', 'Frosty', 'Tiny', 'Giant', 'Lucky', 'Jolly', 'Clever',
+  'Noble', 'Wise', 'Bold', 'Early', 'Sleepy', 'Humble', 'Patient', 'Hidden', 'Wooden', 'Paper', 'Velvet', 'Cotton',
+  'Maple', 'Cedar', 'Autumn', 'Spring', 'Winter', 'Summer', 'Polar', 'Starry', 'Rainy', 'Cloudy', 'Stormy', 'Windy',
+  'Foggy', 'Icy', 'Kind', 'Friendly', 'Honest', 'Loyal', 'Happy', 'Cheerful', 'Playful', 'Nimble', 'Steady', 'Silent',
+  'Shiny', 'Round', 'Tall', 'Little', 'Mighty', 'Speedy', 'Fluffy', 'Crisp', 'Fresh', 'Northern', 'Southern',
+  'Eastern', 'Western', 'Mountain', 'Ocean', 'Desert', 'Evening', 'Morning', 'Midnight', 'Lunar', 'Solar', 'Cosmic',
+  'Magic', 'Royal', 'Brass', 'Marble', 'Crystal', 'Glass', 'Stone', 'Iron'];
+const CODE_NOUNS = ['trout', 'otter', 'heron', 'robin', 'finch', 'badger', 'rabbit', 'owl', 'fox', 'wren', 'moose',
+  'seal', 'whale', 'crane', 'swan', 'lark', 'newt', 'frog', 'goose', 'llama', 'panda', 'koala', 'tiger', 'zebra',
+  'camel', 'bison', 'falcon', 'hawk', 'raven', 'dove', 'puffin', 'walrus', 'beetle', 'cricket', 'acorn', 'pebble',
+  'meadow', 'river', 'canyon', 'lantern', 'kettle', 'pencil', 'compass', 'anchor', 'button', 'ribbon', 'candle',
+  'comet', 'planet', 'island', 'garden', 'willow', 'clover', 'tulip', 'daisy', 'fern', 'cactus', 'pine', 'teapot',
+  'penguin', 'dolphin', 'turtle', 'salmon', 'parrot', 'pelican', 'sparrow', 'deer', 'elk', 'lion', 'bear', 'wolf',
+  'lamb', 'kitten', 'puppy', 'pony', 'goat', 'mouse', 'hedgehog', 'gecko', 'octopus', 'starfish', 'oyster',
+  'lobster', 'valley', 'volcano', 'cloud', 'rainbow', 'oak', 'birch', 'mitten', 'scarf', 'umbrella', 'bicycle',
+  'violin', 'piano', 'trumpet', 'drum', 'kite', 'rocket', 'crayon', 'notebook', 'basket', 'teacup', 'ladder',
+  'lighthouse', 'windmill', 'castle', 'bridge', 'tower'];
 
 class HttpError extends Error {
   constructor(status, code) { super(code); this.status = status; }
@@ -473,16 +498,31 @@ async function roleOf(info) {
   return state && state.emails && state.emails[email] ? 'teacher' : 'student';
 }
 
+const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+
+// { code: 'starrywhale', codeLabel: 'Starry whale' }. The stored code is
+// just the letters, so however a student types it -- "Starry whale",
+// "starry-whale", "STARRYWHALE" -- it finds the same room.
 function newRoomCode() {
-  let code = '';
-  for (let i = 0; i < 5; i++) code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
-  return code;
+  const codeLabel = pickOne(CODE_ADJECTIVES) + ' ' + pickOne(CODE_NOUNS);
+  return { code: codeLabel.toLowerCase().replace(/[^a-z]/g, ''), codeLabel };
 }
 
 function cleanCode(code) {
-  const c = String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (c.length !== 5) throw new HttpError(404, 'no_room');
+  const raw = String(code || '');
+  // The first rooms had 5-character codes like "P6XVW" (every word code
+  // is at least 6 letters, so these can't be confused with one).
+  const old = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (old.length === 5) return old;
+  const c = raw.toLowerCase().replace(/[^a-z]/g, '');
+  if (c.length < 6 || c.length > 40) throw new HttpError(404, 'no_room');
   return c;
+}
+
+async function displayNameOf(info, role) {
+  const { state } = await readItem('luddite:teacher:' + info.sub);
+  if (state && state.displayName) return state.displayName;
+  return role === 'owner' ? OWNER_DISPLAY_NAME : (info.name || info.email || '');
 }
 
 async function getRoom(code) {
@@ -499,7 +539,7 @@ function ownsRoom(room, info, role) {
 function roomSummary(room) {
   const students = Object.values(room.students || {});
   return {
-    code: room.code, title: room.title, open: room.open, createdAt: room.createdAt,
+    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open, createdAt: room.createdAt,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
     submissions: (room.submissions || []).length
@@ -510,7 +550,7 @@ function roomSummary(room) {
 function studentView(room, sub) {
   const me = room.students[sub] || null;
   return {
-    code: room.code, title: room.title, open: room.open,
+    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open,
     teacherName: room.teacher.name || room.teacher.email,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
@@ -593,7 +633,7 @@ async function roomFolder(teacherSub, token, room, fresh) {
   let { state: drive } = await readItem('luddite:drive:' + teacherSub);
   if (!fresh && drive.roomFolders && drive.roomFolders[room.code]) return drive.roomFolders[room.code];
   const rootId = (!fresh && drive.rootId) || await createFolder(token, 'Luddite submissions');
-  const folderId = await createFolder(token, room.title + ' (' + room.code + ')', rootId);
+  const folderId = await createFolder(token, room.title + ' (' + (room.codeLabel || room.code) + ')', rootId);
   await mutate('luddite:drive:' + teacherSub, (d) => ({ ...d, rootId, roomFolders: { ...(d.roomFolders || {}), [room.code]: folderId } }));
   return folderId;
 }
@@ -725,26 +765,39 @@ async function routeLuddite(event, method, path, info) {
     const { state } = await readItem('luddite:teacher:' + me.sub);
     const codes = (state && state.rooms) || [];
     const rooms = (await Promise.all(codes.map((c) => readItem('luddite:room:' + c)))).map((r) => r.state).filter(Boolean);
-    return respond(200, { rooms: rooms.map(roomSummary), drive: await driveStatus(me.sub) });
+    return respond(200, {
+      rooms: rooms.map(roomSummary),
+      drive: await driveStatus(me.sub),
+      displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
+    });
   }
 
-  // PUT /luddite/rooms { title } -- open a new room with a fresh code.
+  // PUT /luddite/me { displayName } -- what students see this teacher as.
+  if (path === '/luddite/me' && method === 'PUT') {
+    const displayName = String(body.displayName || '').trim().slice(0, 60);
+    if (!displayName) throw new HttpError(400, 'empty');
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), displayName }));
+    return respond(200, { displayName });
+  }
+
+  // PUT /luddite/rooms { title } -- open a new room with a fresh two-word code.
   if (path === '/luddite/rooms' && method === 'PUT') {
-    const title = String(body.title || '').trim().slice(0, 80) || 'Writing room';
+    const teacher = { ...me, name: await displayNameOf(info, role) };
+    const title = String(body.title || '').trim().slice(0, 80) || teacher.name;
     let room = null;
-    for (let i = 0; i < 5 && !room; i++) {
-      const code = newRoomCode();
+    for (let i = 0; i < 12 && !room; i++) {
+      const { code, codeLabel } = newRoomCode();
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, title, teacher: me, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title, teacher, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
       }
     }
     if (!room) throw new HttpError(503, 'busy');
-    await mutate('luddite:teacher:' + me.sub, (t) => ({ rooms: [room.code, ...((t && t.rooms) || [])] }));
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || {}), rooms: [room.code, ...((t && t.rooms) || [])] }));
     return respond(200, { room });
   }
 
@@ -770,7 +823,7 @@ async function routeLuddite(event, method, path, info) {
       return { ...r, students };
     });
     if (body.action === 'delete') {
-      await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
+      await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
     }
     return respond(200, { room });
   }
