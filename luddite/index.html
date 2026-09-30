@@ -137,6 +137,7 @@
   .rcard .badge { background: var(--lock); color: #fff; border-radius: 999px; padding: 3px 12px; font-weight: 600; font-size: 14px; }
   .rcard .del { margin-left: auto; }
   .permrow { display: flex; gap: 12px; align-items: flex-start; margin-top: 18px; font-size: 16px; line-height: 1.45; cursor: pointer; }
+  .permrow[hidden] { display: none; } /* display:flex above would otherwise beat the hidden attribute */
   .permrow input { margin-top: 4px; width: 20px; height: 20px; flex: none; }
   .stamp { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
   .roomcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 12px;
@@ -476,7 +477,7 @@
           <p class="help">Name it for the assignment, like &ldquo;Period 3 &mdash; Hamlet essay&rdquo;. Today&rsquo;s date and time are added for you.</p>
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the assignment name here" aria-label="Room name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your rooms apart.</p>
-          <label class="permrow"><input type="checkbox" id="newRoomPerm"> <span><b>Permanent room.</b> Students can come back to the work they started. When you close it, it gets a new Entry Phrase for next time.</span></label>
+          <label class="permrow" id="permRow" hidden><input type="checkbox" id="newRoomPerm"> <span><b>Permanent room.</b> Students can come back to the work they started. When you close it, it gets a new Entry Phrase for next time.</span></label>
           <button class="btn huge" type="submit">Create the room</button>
         </form>
       </div>
@@ -531,7 +532,7 @@
     <div class="head">
       <div><h2 id="roomTitle"></h2><p class="stamp" id="roomStamp"></p></div>
       <div class="row">
-        <button class="btn small ghost" id="renameBtn">Rename</button>
+        <button class="btn small ghost" id="renameBtn" hidden>Rename</button>
         <button class="btn small ghost" id="previewBtn">See what students see</button>
         <button class="btn small ghost" id="openCloseBtn"></button>
       </div>
@@ -1267,9 +1268,13 @@
     showReady();
   });
 
+  var features = {};
   async function loadRooms() {
     var data = await api('/luddite/rooms');
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
+    // Permanent rooms and Rename need the newer server; until it reports them, don't offer them.
+    features = data.features || {};
+    $('permRow').hidden = !features.permanent;
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
     var list = $('roomList');
@@ -1324,7 +1329,7 @@
     $('newRoomNote').hidden = !!title;
     if (!title) { $('newRoomTitle').focus(); return; }
     try {
-      var data = await api('/luddite/rooms', { title: title, permanent: $('newRoomPerm').checked });
+      var data = await api('/luddite/rooms', { title: title, permanent: !$('permRow').hidden && $('newRoomPerm').checked });
       $('newRoomTitle').value = '';
       $('newRoomPerm').checked = false;
       openRoom(data.room.code);
@@ -1481,6 +1486,7 @@
 
   function drawRoom(room, drive) {
     $('roomTitle').textContent = room.title;
+    $('renameBtn').hidden = !features.rename;
     $('roomStamp').textContent = (room.permanent ? 'Permanent room · ' : '') + 'Opened ' + stampOf(room.createdAt);
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);

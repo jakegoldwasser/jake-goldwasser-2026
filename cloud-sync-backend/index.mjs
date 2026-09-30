@@ -953,6 +953,7 @@ async function routeLuddite(event, method, path, info) {
     const rooms = (await Promise.all(codes.map((c) => readItem('luddite:room:' + c)))).map((r) => r.state).filter(Boolean);
     return respond(200, {
       rooms: rooms.map(roomSummary),
+      features: { permanent: true, rename: true }, // lets the page offer these only once this code is deployed
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
