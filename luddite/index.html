@@ -225,7 +225,8 @@
   .sheethead { grid-column: 1 / -1; margin-bottom: 4px; }
   .sheethead b { font: 400 22px Literata, Georgia, serif; display: block; }
   .sheethead span { color: var(--muted); font-size: 13px; }
-  .paper { font: 17px/1.75 Literata, Georgia, serif; white-space: pre-wrap; word-wrap: break-word; tab-size: 4; position: relative; cursor: text; }
+  .paper { font: 17px/1.75 Literata, Georgia, serif; white-space: pre-wrap; word-wrap: break-word; tab-size: 4; position: relative; cursor: text; caret-color: var(--pen); }
+  .paper:focus { outline: none; }
   .paper .hl { background: var(--pen-wash); border-bottom: 1.5px solid var(--pen); cursor: pointer; }
   .paper .strike { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; cursor: pointer; }
   .paper .ins { color: var(--pen); font-family: Inter, system-ui, sans-serif; font-size: 14.5px; cursor: pointer; white-space: pre-wrap; }
@@ -490,14 +491,14 @@
   <div class="card">
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
-      <span class="markhint grow">Select words to comment or cross them out. Click between words to write something in.</span>
+      <span class="markhint grow">Click in the text and type to write something in. Select words and press Delete to cross them out, or right-click them to comment.</span>
       <span class="savestate" id="markSaved"></span>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markPrint">Print</button>
     </div>
     <div class="sheet" id="sheet">
       <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span></div>
-      <div class="paper" id="paper"></div>
+      <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
       <div class="endwrap">
         <label for="endComment">End comment</label>
@@ -1653,7 +1654,7 @@
   function showTools() {
     if ($('markScreen').hidden || !$('markPop').hidden) return;
     var s = selectionInPaper();
-    if (!s) { hideTools(); return; }
+    if (!s || s.collapsed) { hideTools(); return; }
     // Selections trimmed of spaces at the ends, the way a teacher means them.
     if (!s.collapsed) {
       while (s.start < s.end && /\s/.test(piece.text.charAt(s.start))) s.start++;
@@ -1677,7 +1678,7 @@
     // Clicking an existing mark (with nothing selected) opens it instead.
     var sel = window.getSelection();
     if (sel.isCollapsed) {
-      var hit = e.target.closest('.ins, .mnum, .hl, .strike');
+      var hit = e.target.closest('.ins, .mnum');
       if (hit) { hideTools(); openExisting(hit); return; }
     }
     setTimeout(showTools, 0);
@@ -1704,6 +1705,119 @@
       return;
     }
     openPop(null, { type: t, start: r.start, end: t === 'insert' ? r.start : r.end }, r.rect);
+  });
+
+  // ---- Typing, deleting and right-clicking right in the text ----
+  // The paper is contenteditable only so there's a caret to type at; every
+  // edit is caught in beforeinput and turned into marks, so the student's
+  // own words never change.
+  function trimRange(r) {
+    var a = r.start, b = r.end;
+    while (a < b && /\s/.test(piece.text.charAt(a))) a++;
+    while (b > a && /\s/.test(piece.text.charAt(b - 1))) b--;
+    return { start: a, end: b };
+  }
+  function insertAt(p) {
+    for (var i = 0; i < piece.marks.length; i++) if (piece.marks[i].type === 'insert' && piece.marks[i].start === p) return piece.marks[i];
+    return null;
+  }
+  function newMark(m) {
+    m.id = Math.random().toString(36).slice(2, 10);
+    m.at = Date.now();
+    m.note = m.note || '';
+    piece.marks.push(m);
+    return m;
+  }
+  function strikeRange(r) {
+    r = trimRange(r);
+    if (r.start >= r.end) return;
+    var already = piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
+    if (!already) newMark({ type: 'strike', start: r.start, end: r.end });
+  }
+  function caretAfter(node) {
+    var r = document.createRange();
+    r.setStartAfter(node);
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  function caretAtOffset(p) {
+    var segs = $('paper').querySelectorAll('.seg');
+    for (var i = 0; i < segs.length; i++) {
+      var o = Number(segs[i].dataset.o), len = segs[i].textContent.length;
+      if (p >= o && p <= o + len && segs[i].firstChild) {
+        var r = document.createRange();
+        r.setStart(segs[i].firstChild, p - o);
+        r.collapse(true);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+    }
+  }
+  function typeText(txt, s) {
+    if (!s.collapsed) strikeRange(s); // typing over a selection: cross it out, write after it
+    var p = s.collapsed ? s.start : s.end;
+    var m = insertAt(p);
+    if (m) m.note += txt; else m = newMark({ type: 'insert', start: p, end: p, note: txt });
+    drawPiece();
+    queueSave();
+    var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
+    if (node) caretAfter(node);
+  }
+  $('paper').addEventListener('beforeinput', function (e) {
+    if (!piece) return;
+    e.preventDefault();
+    hideTools();
+    var s = selectionInPaper();
+    if (!s) return;
+    var t = e.inputType || '';
+    if (t === 'insertText' || t === 'insertReplacementText' || t === 'insertFromPaste' || t === 'insertFromDrop') {
+      var txt = e.data != null ? e.data : (e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
+      txt = String(txt || '').replace(/\s*\n\s*/g, ' ');
+      if (txt) typeText(txt, s);
+      return;
+    }
+    if (t.indexOf('delete') !== 0) return; // Enter, undo, formatting: nothing
+    if (!s.collapsed) {
+      strikeRange(s);
+      drawPiece();
+      queueSave();
+      caretAtOffset(s.end);
+      return;
+    }
+    // Backspace right after your own words takes them back, a letter (or a word) at a time.
+    var m = insertAt(s.start);
+    if (m && t.indexOf('Backward') !== -1) {
+      m.note = t === 'deleteWordBackward' ? m.note.replace(/\S*\s*$/, '') : m.note.slice(0, -1);
+      if (!m.note) piece.marks = piece.marks.filter(function (x) { return x !== m; });
+      drawPiece();
+      queueSave();
+      var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
+      if (node) caretAfter(node); else caretAtOffset(s.start);
+    }
+  });
+  // Keyboards that compose characters can't be stopped beforehand; redraw
+  // from the marks so the student's text is never left changed.
+  $('paper').addEventListener('input', function () { if (piece) drawPiece(); });
+  // Right-click: comment on the selected words, or open the mark you clicked.
+  $('paper').addEventListener('contextmenu', function (e) {
+    if (!piece) return;
+    var s = selectionInPaper();
+    var hit = e.target.closest('.hl, .strike, .ins, .mnum');
+    var sel = window.getSelection();
+    var insideHit = hit && sel.rangeCount && hit.contains(sel.getRangeAt(0).commonAncestorContainer);
+    if (s && !s.collapsed && !insideHit) {
+      var r = trimRange(s);
+      if (r.start >= r.end) return;
+      e.preventDefault();
+      hideTools();
+      openPop(null, { type: 'margin', start: r.start, end: r.end }, s.rect);
+      return;
+    }
+    if (hit) { e.preventDefault(); hideTools(); openExisting(hit); }
   });
 
   function addMark(m) {
