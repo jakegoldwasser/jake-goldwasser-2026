@@ -479,8 +479,11 @@
      continuation indented (a hanging indent), the same way the printed
      page turns it over -- so a wrapped line never reads as a new line
      of the poem. Each line is its own <div>, so this works in every
-     browser. Prose entries don't get the class and wrap flush. */
-  .poem-text.is-verse > div:not(.ed-image) { padding-left: 1.5em; text-indent: -1.5em; }
+     browser. Prose entries don't get the class and wrap flush.
+     'hanging' rather than padding plus a negative indent: that trick
+     starts the first line 1.5em left of the box, so a Tab only got as
+     far as the box's edge -- about 5 spaces, not the half inch. */
+  .poem-text.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
   /* Indented prose paragraphs, as on the page (see tagProseLines). */
   .is-para-indent > div:not(.ed-image):not(.is-full-out):not(.is-break) { text-indent: var(--para-indent, 2.5em); }
   .is-para-indent > .is-break { text-align: center; }
@@ -545,6 +548,17 @@
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint);
     padding: 8px 0 2px; border-top: 1px solid var(--line); margin-top: 6px;
   }
+  /* A book type's group folds under its label; the type you're in opens. */
+  button.prefs-group-title {
+    display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px;
+    appearance: none; background: none; border-left: none; border-right: none; border-bottom: none;
+    font-family: inherit; text-align: left; cursor: pointer;
+  }
+  button.prefs-group-title:hover { color: var(--ink); }
+  .prefs-group-title .panel-chevron { transition: transform .15s ease; }
+  .prefs-group-title[aria-expanded="false"] .panel-chevron { transform: rotate(-90deg); }
+  .prefs-row.is-select { flex-direction: column; gap: 6px; cursor: default; }
+  .prefs-row select { font: inherit; font-size: 13px; }
   .prefs-panel > .prefs-group-title:first-child { border-top: none; margin-top: 0; padding-top: 0; }
   .prefs-group[hidden] { display: none; }
   .prefs-panel > .prefs-group:first-child .prefs-group-title { border-top: none; margin-top: 0; padding-top: 0; }
@@ -1947,16 +1961,27 @@
           <!-- Grouped by book type: the type you're in comes first and the
                others are a click away (see the script). -->
           <div class="prefs-group" data-prefs-form="collection">
-            <div class="prefs-group-title">Poetry, prose &amp; scripts</div>
-            <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
-            <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
-            <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
+            <button type="button" class="prefs-group-title" aria-expanded="true" aria-controls="prefsBodyCollection">Poetry, prose &amp; scripts<span class="panel-chevron" aria-hidden="true">▾</span></button>
+            <div class="prefs-group-body" id="prefsBodyCollection">
+              <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
+              <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
+              <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
+              <label class="prefs-row is-select"><span>Tab indent<small>How far a Tab moves a line; also a prose paragraph's first-line indent</small></span>
+                <select data-pref-select="tabIndentPt" aria-label="Tab indent">
+                  <option value="18">¼ inch</option>
+                  <option value="36">½ inch (Docs, Word)</option>
+                  <option value="54">¾ inch</option>
+                  <option value="72">1 inch</option>
+                </select></label>
+            </div>
           </div>
           <div class="prefs-group" data-prefs-form="picture">
-            <div class="prefs-group-title">Picture books</div>
-            <label class="prefs-row"><input type="checkbox" data-pref="showSpreadNumbers"><span>Show spread numbers</span></label>
-            <label class="prefs-row"><input type="checkbox" data-pref="showGuides"><span>Show safe-area guides<small>A dashed line half an inch in from the trim and the fold</small></span></label>
-            <label class="prefs-row"><input type="checkbox" data-pref="showArtNotes"><span>Show illustration notes</span></label>
+            <button type="button" class="prefs-group-title" aria-expanded="true" aria-controls="prefsBodyPicture">Picture books<span class="panel-chevron" aria-hidden="true">▾</span></button>
+            <div class="prefs-group-body" id="prefsBodyPicture">
+              <label class="prefs-row"><input type="checkbox" data-pref="showSpreadNumbers"><span>Show spread numbers</span></label>
+              <label class="prefs-row"><input type="checkbox" data-pref="showGuides"><span>Show safe-area guides<small>A dashed line half an inch in from the trim and the fold</small></span></label>
+              <label class="prefs-row"><input type="checkbox" data-pref="showArtNotes"><span>Show illustration notes</span></label>
+            </div>
           </div>
           <div class="prefs-group-title">Everywhere</div>
           <label class="prefs-row"><input type="checkbox" data-pref="spellcheck"><span>Check spelling</span></label>
@@ -2269,6 +2294,11 @@
               <div class="export-status" id="pbExportStatus"></div>
             </div>
           </div>
+        </div>
+        <div class="panel" id="pbPlotterPanel">
+          <div class="panel-title">Story Plotter</div>
+          <p class="field-note" style="margin:0 0 10px;">Map out your story's spine, act by act, before you lay out the spreads.</p>
+          <a class="btn" href="../storyplotter/" target="_blank" rel="noopener" style="width:100%; justify-content:center; text-decoration:none;">Open Story Plotter ↗</a>
         </div>
       </div>
     </div>
@@ -3031,7 +3061,7 @@
   // ---------------------------------------------------------------------
   var PREFS_KEY = 'bookbug.prefs.v1';
   var PREF_DEFAULTS = { showCounts: true, showNumbers: true, showWrapWarning: true, spellcheck: true, smartPunctuation: false,
-    showSpreadNumbers: true, showGuides: true, showArtNotes: true };
+    showSpreadNumbers: true, showGuides: true, showArtNotes: true, tabIndentPt: 36 };
   var prefs = Object.assign({}, PREF_DEFAULTS);
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch (e) {}
   function applyPrefClasses() {
@@ -4784,9 +4814,10 @@
     return measureCtx.measureText(text).width;
   }
 
-  // One indent (Tab, or the toolbar's Indent button) is a half inch --
-  // the default tab stop in Google Docs and Word.
-  var TAB_STOP_PT = 36;
+  // One indent (Tab, or the toolbar's Indent button) is a half inch by
+  // default -- the tab stop in Google Docs and Word -- or whatever the
+  // Tab indent preference says.
+  var TAB_STOP_PT = [18, 36, 54, 72].indexOf(+prefs.tabIndentPt) !== -1 ? +prefs.tabIndentPt : 36;
   // CSS tab-size for an editor whose tab stop should be `px` wide, given
   // as a count of the font's own spaces. Safari doesn't reliably honor a
   // length here and falls back to 8 spaces -- well short of Docs' half
@@ -7208,8 +7239,8 @@
       var ta = card.querySelector('.poem-text');
       if (ta && document.activeElement === ta) scrollCaretIntoView(ta);
     });
-    if (!(history.state && history.state.bookbugWriting)) {
-      try { history.pushState({ bookbugWriting: true }, ''); } catch (e) {}
+    if (!writingPushed) {
+      try { history.pushState({ bookbugWriting: true }, ''); writingPushed = true; } catch (e) {}
     }
   }
   function exitWriting() {
@@ -7235,11 +7266,22 @@
     }
     card.scrollIntoView({ block: 'center' });
   }
+  // Only step back through an entry this page load pushed itself. The
+  // browser keeps history.state across a reload -- and iOS reloads a tab
+  // it put to sleep -- so a leftover { bookbugWriting } entry would make
+  // Done go back *off* Bookbug, to a blank page.
+  var writingPushed = false;
+  if (history.state && history.state.bookbugWriting) {
+    try { history.replaceState(null, ''); } catch (e) {}
+  }
   function finishWriting() {
-    if (history.state && history.state.bookbugWriting) history.back();
+    if (writingPushed && history.state && history.state.bookbugWriting) history.back();
     else exitWriting();
   }
-  window.addEventListener('popstate', function () { if (writingCard) exitWriting(); });
+  window.addEventListener('popstate', function () {
+    writingPushed = false;
+    if (writingCard) exitWriting();
+  });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', syncWriterViewport);
     window.visualViewport.addEventListener('scroll', syncWriterViewport);
@@ -10948,6 +10990,23 @@
 
   (function () {
     var btn = document.getElementById('prefsBtn'), panel = document.getElementById('prefsPanel');
+    panel.querySelectorAll('[data-pref-select]').forEach(function (sel) {
+      var key = sel.dataset.prefSelect;
+      sel.value = String(key === 'tabIndentPt' ? TAB_STOP_PT : prefs[key]);
+      sel.addEventListener('change', function () {
+        prefs[key] = +sel.value;
+        try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+        if (key === 'tabIndentPt') { TAB_STOP_PT = +sel.value; renderAll(); }
+      });
+    });
+    function setGroupOpen(g, open) {
+      var t = g.querySelector('.prefs-group-title');
+      t.setAttribute('aria-expanded', open ? 'true' : 'false');
+      g.querySelector('.prefs-group-body').hidden = !open;
+    }
+    panel.querySelectorAll('button.prefs-group-title').forEach(function (t) {
+      t.addEventListener('click', function () { setGroupOpen(t.closest('.prefs-group'), t.getAttribute('aria-expanded') !== 'true'); });
+    });
     panel.querySelectorAll('[data-pref]').forEach(function (box) {
       box.checked = !!prefs[box.dataset.pref];
       box.addEventListener('change', function () {
@@ -10973,7 +11032,12 @@
       if (!forms.length) forms = ['collection'];
       var order = ['collection', 'picture'].filter(function (f) { return forms.indexOf(f) !== -1; });
       if (primary) order = [primary].concat(order.filter(function (f) { return f !== primary; }));
-      panel.querySelectorAll('[data-prefs-form]').forEach(function (g) { g.hidden = order.indexOf(g.dataset.prefsForm) === -1; });
+      // The kind you're in opens; the rest fold under their labels (all
+      // open on Home, where no kind is "current").
+      panel.querySelectorAll('[data-prefs-form]').forEach(function (g) {
+        g.hidden = order.indexOf(g.dataset.prefsForm) === -1;
+        setGroupOpen(g, !primary || g.dataset.prefsForm === primary);
+      });
       order.slice().reverse().forEach(function (f) { panel.insertBefore(panel.querySelector('[data-prefs-form="' + f + '"]'), panel.firstChild); });
       panel.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
