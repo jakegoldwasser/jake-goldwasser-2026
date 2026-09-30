@@ -1,5 +1,5 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
@@ -397,6 +397,16 @@ export async function fetchPage(raw) {
 //                             open, createdAt, students: { [sub]: {...} },
 //                             submissions: [...] }
 //   luddite:drive:<sub>     { refreshToken, email, rootId, roomFolders }
+//   luddite:sub:<id>        one handed-in piece, kept so its teacher can mark
+//                           it up: { id, code, roomTitle, teacherSub, sub,
+//                           email, name, label, text, words, leaves, at, link,
+//                           marks: [...], endComment }
+//   luddite:tstudent:<teacherSub>:<email>
+//                           { email, name, subs: [{ id, at, roomTitle, label,
+//                           words }] } newest first: a student's year with
+//                           one teacher. The teacher's own item lists these
+//                           students in `students: { [email]: { name, last,
+//                           count } }`.
 // A room is written by all of its students at once (joins, "left the
 // page" reports, word counts), so every write is read-modify-write under
 // an optimistic lock -- a `ver` number checked by a conditional PutItem --
@@ -408,6 +418,12 @@ const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.c
 // variables in the Lambda console). Without it, Drive can't be connected.
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const MAX_SUBMISSION_CHARS = 400000;
+// A DynamoDB item tops out at 400 KB, so a piece is kept for marking up only
+// if its text fits with room to spare for the teacher's marks.
+const MAX_STORED_CHARS = 250000;
+const MAX_MARKS = 600;
+const MAX_MARK_CHARS = 60000; // all of one piece's comments together
+const MAX_ITEM_BYTES = 390000;
 // What students see the owners as until they pick something else.
 const OWNER_DISPLAY_NAME = 'Mr. Goldwasser';
 
@@ -661,6 +677,38 @@ async function saveToDrive(room, doc) {
   }
 }
 
+// ---- Marks ----
+// The piece's own teacher (or an owner) may read and mark it.
+async function ownSub(id, me, role) {
+  const key = String(id || '');
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(key)) throw new HttpError(404, 'no_sub');
+  const { state } = await readItem('luddite:sub:' + key);
+  if (!state) throw new HttpError(404, 'no_sub');
+  if (state.teacherSub !== me.sub && role !== 'owner') throw new HttpError(403, 'not_your_student');
+  return state;
+}
+
+// margin: a note beside words [start, end). strike: words crossed out.
+// insert: the teacher's own words written into the text at `start`.
+function cleanMarks(list, length) {
+  if (!Array.isArray(list)) throw new HttpError(400, 'bad_marks');
+  if (list.length > MAX_MARKS) throw new HttpError(413, 'too_many_marks');
+  let chars = 0;
+  const out = list.map((m) => {
+    const type = m && m.type;
+    if (!['margin', 'strike', 'insert'].includes(type)) throw new HttpError(400, 'bad_marks');
+    const start = Math.max(0, Math.min(length, Math.floor(Number(m.start) || 0)));
+    const end = type === 'insert' ? start : Math.max(start, Math.min(length, Math.floor(Number(m.end) || 0)));
+    if (type !== 'insert' && end === start) throw new HttpError(400, 'bad_marks');
+    const note = String(m.note || '').slice(0, 2000);
+    if (type === 'insert' && !note.trim()) throw new HttpError(400, 'bad_marks');
+    chars += note.length;
+    return { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
+  });
+  if (chars > MAX_MARK_CHARS) throw new HttpError(413, 'too_many_marks');
+  return out;
+}
+
 // ---- Routes ----
 async function handleLuddite(event, method, path, info) {
   try {
@@ -741,13 +789,43 @@ async function routeLuddite(event, method, path, info) {
     const words = (text.trim().match(/\S+/g) || []).length;
     const label = String(body.label || '').replace(/[\r\n\/\\]/g, ' ').slice(0, 60) || new Date().toISOString().slice(0, 16);
     const who = me.name || me.email;
-    const file = await saveToDrive(room, {
-      name: who + ' — ' + label,
-      description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), room ' + room.title + ' (' + code + '). ' +
-        words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
-      text
-    });
-    const submission = { id: file.id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at: Date.now(), link: file.webViewLink };
+    // Drive is where the teacher keeps it; Luddite keeps its own copy to
+    // mark up. A Drive hiccup (or no Drive yet) no longer loses the piece.
+    let file = null, driveError = null;
+    try {
+      file = await saveToDrive(room, {
+        name: who + ' — ' + label,
+        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), room ' + room.title + ' (' + code + '). ' +
+          words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
+        text
+      });
+    } catch (e) {
+      if (!(e instanceof HttpError)) throw e;
+      driveError = e.message;
+    }
+    const stored = text.length <= MAX_STORED_CHARS;
+    if (!file && !stored) throw new HttpError(409, driveError);
+    const at = Date.now();
+    const id = file ? file.id : 'l' + randomUUID();
+    const submission = { id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
+      link: file ? file.webViewLink : null, stored, driveError, marked: 0 };
+    if (stored) {
+      await mutate('luddite:sub:' + id, () => ({
+        id, code, roomTitle: room.title, teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
+        label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: ''
+      }));
+      const email = me.email.toLowerCase();
+      await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
+        email, name: me.name || (t && t.name) || '',
+        subs: [{ id, at, roomTitle: room.title, label, words }, ...((t && t.subs) || [])]
+      }));
+      await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
+        const students = { ...((t && t.students) || {}) };
+        const prev = students[email] || { count: 0 };
+        students[email] = { name: me.name || prev.name || '', last: at, count: prev.count + 1 };
+        return { ...(t || { rooms: [] }), students };
+      });
+    }
     const saved = await mutate('luddite:room:' + code, (r) => ({
       ...r,
       submissions: [submission, ...(r.submissions || [])],
@@ -770,6 +848,71 @@ async function routeLuddite(event, method, path, info) {
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
+  }
+
+  // ---- Marking up handed-in work ----
+
+  // GET /luddite/sub?id= -- one piece with its marks, for its teacher.
+  if (path === '/luddite/sub' && method === 'GET') {
+    return respond(200, { sub: await ownSub(q.id, me, role) });
+  }
+
+  // PUT /luddite/marks { id, marks, endComment } -- the teacher's comments,
+  // cross-outs and insertions, all anchored to character offsets in the
+  // (never-changing) text.
+  if (path === '/luddite/marks' && method === 'PUT') {
+    const piece = await ownSub(body.id, me, role);
+    const marks = cleanMarks(body.marks, piece.text.length);
+    const endComment = String(body.endComment || '').slice(0, 8000);
+    const saved = await mutate('luddite:sub:' + piece.id, (x) => {
+      const next = { ...x, marks, endComment, markedAt: Date.now() };
+      if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
+      return next;
+    });
+    // The room's list shows which pieces have been marked.
+    const count = marks.length + (endComment.trim() ? 1 : 0);
+    await mutate('luddite:room:' + piece.code, (r) => {
+      if (!r) return undefined;
+      const i = (r.submissions || []).findIndex((x) => x.id === piece.id);
+      if (i === -1 || r.submissions[i].marked === count) return undefined;
+      const submissions = r.submissions.slice();
+      submissions[i] = { ...submissions[i], marked: count };
+      return { ...r, submissions };
+    }).catch(() => {});
+    return respond(200, { ok: true, markedAt: saved.markedAt });
+  }
+
+  // GET /luddite/students -- everyone who has handed work in to this teacher.
+  if (path === '/luddite/students' && method === 'GET') {
+    const { state } = await readItem('luddite:teacher:' + me.sub);
+    const students = Object.entries((state && state.students) || {})
+      .map(([email, x]) => ({ email, name: x.name, last: x.last, count: x.count }))
+      .sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
+    return respond(200, { students });
+  }
+
+  // GET /luddite/student?email= -- one student's year: every piece handed in
+  // to this teacher, with each comment and the words it was about.
+  if (path === '/luddite/student' && method === 'GET') {
+    const email = String(q.email || '').toLowerCase();
+    const { state } = await readItem('luddite:tstudent:' + me.sub + ':' + email);
+    if (!state) throw new HttpError(404, 'no_student');
+    const pieces = [];
+    for (let i = 0; i < state.subs.length; i += 10) {
+      const batch = await Promise.all(state.subs.slice(i, i + 10).map((x) => readItem('luddite:sub:' + x.id)));
+      batch.forEach(({ state: p }, j) => {
+        const x = state.subs[i + j];
+        if (!p) return pieces.push({ ...x, missing: true, marks: [], endComment: '' });
+        const quote = (a, b) => { const t = p.text.slice(a, b).replace(/\s+/g, ' ').trim(); return t.length > 240 ? t.slice(0, 237) + '…' : t; };
+        pieces.push({
+          id: p.id, at: p.at, roomTitle: p.roomTitle, label: p.label, words: p.words, link: p.link, endComment: p.endComment || '',
+          marks: (p.marks || []).slice().sort((a, b) => a.start - b.start).map((m) => ({
+            type: m.type, note: m.note || '', quote: m.type === 'insert' ? quote(Math.max(0, m.start - 40), m.start) : quote(m.start, m.end)
+          }))
+        });
+      });
+    }
+    return respond(200, { student: { email: state.email, name: state.name }, pieces });
   }
 
   // PUT /luddite/me { displayName } -- what students see this teacher as.
