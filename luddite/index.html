@@ -106,6 +106,13 @@
 
   /* Writing */
   #writeScreen { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--paper); }
+  /* Hand-in confirmation: inside the page, so asking doesn't pull the
+     student out of full screen (a browser dialog would, and lock them). */
+  .handin { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+    background: color-mix(in srgb, var(--paper) 92%, transparent); }
+  .handin .card { background: var(--card); border-radius: 16px; padding: 28px 26px; box-shadow: 0 10px 40px rgba(0,0,0,.14), inset 0 0 0 1px var(--rule); max-width: 420px; }
+  .handin h2 { font: 400 26px Literata, Georgia, serif; margin: 0 0 8px; }
+  .handin .row { justify-content: center; margin-top: 18px; }
   #pad {
     flex: 1;
     width: 100%;
@@ -312,7 +319,7 @@
     <p class="sub">Writing opens full screen. Leaving it &mdash; another tab, another app, or Esc &mdash; locks the page<span id="readyTells"></span>. Copying and pasting are off.</p>
     <div class="row">
       <button class="btn" id="startBtn">Start writing</button>
-      <button class="btn ghost" id="submitBtn" hidden>Hand it in</button>
+      <button class="btn ghost" id="submitBtn" hidden>Hand in</button>
       <button class="btn ghost" id="downloadBtn" hidden>Download .txt</button>
     </div>
     <p class="fine" id="submitNote" hidden></p>
@@ -339,6 +346,17 @@
       <span id="leaves"></span>
     </div>
     <button class="linkish" id="doneBtn">Done</button>
+  </div>
+  <div class="handin" id="handinBox" hidden>
+    <div class="card">
+      <h2>Hand this in?</h2>
+      <p class="sub" style="margin:0" id="handinText"></p>
+      <p class="fine warn" id="handinErr" hidden></p>
+      <div class="row">
+        <button class="btn ghost" id="handinCancel">Keep writing</button>
+        <button class="btn" id="handinGo">Hand in</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -755,8 +773,30 @@
     var sub = inRoom && roomInfo && roomInfo.submittedAt && !previewing;
     $('submitNote').hidden = !sub;
     $('submitNote').className = 'fine good';
-    if (sub) $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. Hand it in again to send a newer version.';
+    if (sub) $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '.';
+    // In a room, the writing page's button hands the piece in; on your own it's just Done.
+    $('doneBtn').textContent = inRoom && !previewing ? 'Hand in' : 'Done';
+    // Handing in is final: no more writing until the teacher lets them back in.
+    var handedIn = inRoom && roomInfo && roomInfo.handedIn && !previewing;
+    if (handedIn) {
+      $('startBtn').hidden = true;
+      $('submitBtn').hidden = true;
+      $('newPageWrap').hidden = true;
+      $('submitNote').hidden = false;
+      $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. If you need to keep working on it, ask your teacher to let you back in; this page opens again by itself.';
+    } else {
+      $('startBtn').hidden = false;
+    }
     show('readyScreen');
+    if (handedIn) poll(pollRelease, POLL_WAITING_MS);
+  }
+
+  // While handed in, watch for the teacher letting them back in to write.
+  async function pollRelease() {
+    var data = await api('/luddite/room?code=' + encodeURIComponent(roomCode));
+    roomInfo = data.room;
+    if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
+    if (!data.room.handedIn) showReady();
   }
 
   $('downloadBtn').addEventListener('click', function () {
@@ -778,30 +818,36 @@
   $('submitBtn').addEventListener('click', async function () {
     var text = load(textKey()) || '';
     if (!text.trim()) return;
-    if (!confirm('Hand this in to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '? You’ll keep your copy here.')) return;
+    if (!confirm('Hand this in to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '? After you hand it in, you can’t keep writing unless your teacher lets you back in.')) return;
     var btn = $('submitBtn');
     btn.disabled = true;
     btn.textContent = 'Handing in…';
     try {
-      var data = await api('/luddite/submit', {
-        code: roomCode, text: text, words: wordCount(text),
-        label: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-      });
-      roomInfo = data.room;
-      btn.textContent = 'Hand it in';
+      await handIn(text);
+      btn.textContent = 'Hand in';
       showReady();
     } catch (e) {
-      btn.textContent = 'Hand it in';
+      btn.textContent = 'Hand in';
       btn.disabled = false;
       $('submitNote').hidden = false;
       $('submitNote').className = 'fine warn';
-      $('submitNote').textContent =
-        e.message === 'teacher_no_drive' ? 'Your teacher hasn’t connected Google Drive yet, so this can’t be handed in. Your writing is safe here; try again later.'
+      $('submitNote').textContent = handInError(e);
+    }
+  });
+  function handInError(e) {
+    return e.message === 'already_handed_in' ? 'You’ve already handed this in. Ask your teacher to let you back in to keep working.'
+        : e.message === 'teacher_no_drive' ? 'Your teacher hasn’t connected Google Drive yet, so this can’t be handed in. Your writing is safe here; try again later.'
         : e.message === 'not_admitted' ? 'You’re not in this room anymore, so this can’t be handed in.'
         : e.message === 'drive_revoked' ? 'Your teacher’s Google Drive connection has stopped working. Tell your teacher; your writing is safe here.'
         : 'Couldn’t hand it in. Your writing is safe here; try again.';
-    }
-  });
+  }
+  async function handIn(text) {
+    var data = await api('/luddite/submit', {
+      code: roomCode, text: text, words: wordCount(text),
+      label: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    });
+    roomInfo = data.room;
+  }
 
   // ---------------------------------------------------------------------
   // Writing: full screen, and locked the moment focus leaves
@@ -846,6 +892,7 @@
   function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
 
   function enterWriting() {
+    if (mode === 'room' && roomInfo && roomInfo.handedIn && !previewing) { showReady(); return; }
     requestFs().then(function () {
       writing = true;
       locked = false;
@@ -887,6 +934,10 @@
   });
 
   $('doneBtn').addEventListener('click', function () {
+    if (mode === 'room' && !previewing) { openHandIn(); return; }
+    finishWriting(showReady);
+  });
+  function finishWriting(then) {
     leavingOnPurpose = true;
     save();
     writing = false;
@@ -896,8 +947,40 @@
     var exit = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen && document.webkitExitFullscreen());
     Promise.resolve(exit).catch(function () {}).then(function () {
       leavingOnPurpose = false;
-      showReady();
+      then();
     });
+  }
+
+  // "Hand in" from the writing page asks inside the page, then hands the
+  // piece in and closes it for good (until the teacher lets them back in).
+  function openHandIn() {
+    save();
+    if (!shadow.trim()) { $('handinText').textContent = 'There’s nothing written yet.'; }
+    else $('handinText').textContent = 'This sends ' + plural(wordCount(shadow), 'word', 'words') + ' to ' +
+      (roomInfo ? roomInfo.teacherName : 'your teacher') + '. After you hand it in, you can’t keep writing unless your teacher lets you back in.';
+    $('handinGo').disabled = !shadow.trim();
+    $('handinErr').hidden = true;
+    $('handinBox').hidden = false;
+    $('handinCancel').focus();
+  }
+  function closeHandIn() { $('handinBox').hidden = true; pad.focus(); }
+  $('handinCancel').addEventListener('click', closeHandIn);
+  $('handinGo').addEventListener('click', async function () {
+    var go = $('handinGo');
+    go.disabled = true;
+    go.textContent = 'Handing in…';
+    try {
+      save();
+      await handIn(load(textKey()) || shadow);
+      $('handinBox').hidden = true;
+      finishWriting(showReady);
+    } catch (e) {
+      $('handinErr').textContent = handInError(e);
+      $('handinErr').hidden = false;
+      go.disabled = false;
+    } finally {
+      go.textContent = 'Hand in';
+    }
   });
 
   document.addEventListener('fullscreenchange', function () { if (!isFs()) lock('You left full screen'); });
@@ -1241,6 +1324,7 @@
       if (s.words) row.appendChild(el('span', 'pill', plural(s.words, 'word', 'words')));
       if (s.leaves) row.appendChild(el('span', 'pill warn', 'Left the page ' + s.leaves + '×'));
       if (s.submittedAt) row.appendChild(el('span', 'pill good', 'Handed in ' + clock(s.submittedAt)));
+      if (s.handedIn) row.appendChild(button('Let back in to write', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
       row.appendChild(button('Remove', 'linkish', function () {
         if (confirm('Take ' + (s.name || s.email) + ' out of the room?')) roomAction('remove', [s.sub]);
       }));
