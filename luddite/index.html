@@ -77,9 +77,30 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
-  .btn.small { padding: 6px 14px; font-size: 13px; }
+  .btn.ghost { background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 35%, transparent), 0 1px 2px rgba(0,0,0,.06); }
+  .btn.small { padding: 7px 15px; font-size: 13.5px; }
+  .btn:hover:not(:disabled) { filter: brightness(1.12); }
+  .btn.ghost:hover:not(:disabled) { filter: none; background: var(--rule); }
+  .btn.danger { color: var(--lock); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--lock) 55%, transparent); background: var(--card); }
+  .btn.danger:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--lock) 10%, var(--card)); }
   .btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* The dashboard's "Open a new room" box and the list of rooms */
+  .lbl { display: block; font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  .lbl .hint { font-weight: 400; color: var(--muted); }
+  .newroom { background: var(--card); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--rule); padding: 16px 18px; }
+  .editwrap { position: relative; flex: 1; min-width: 220px; display: flex; }
+  .editwrap .field { flex: 1; padding-right: 40px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); }
+  .editwrap .pencil { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; font-size: 15px; }
+  .roomcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 12px;
+    box-shadow: inset 0 0 0 1px var(--rule); padding: 14px 16px; margin-bottom: 10px; }
+  .roomcard .info { flex: 1; min-width: 220px; }
+  .roomcard .name { font-weight: 600; font-size: 16px; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; text-align: left; font-family: inherit; }
+  .roomcard .name:hover { text-decoration: underline; }
+  .roomcard .meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .roomcard .codetag { display: inline-block; font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--rule); border-radius: 6px; padding: 1px 8px; margin-right: 6px; }
+  .roomcard .acts { display: flex; gap: 8px; align-items: center; }
   .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
   .linkish { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }
   #gsiBtn { display: flex; justify-content: center; min-height: 44px; }
@@ -379,14 +400,20 @@
     </div>
     <div id="driveBox"></div>
 
-    <h3>Your rooms</h3>
-    <form class="row" id="newRoomForm">
-      <input class="field grow" id="newRoomTitle" maxlength="80" placeholder="Room name" aria-label="New room name">
-      <button class="btn small" type="submit">Open a room</button>
-    </form>
-    <p class="fine" style="margin-top:8px">Each room gets a two-word code, like <i>Starry whale</i>, for students to type.
-      Students see you as <b id="displayName"></b> &middot; <button class="linkish" id="changeNameBtn">Change</button></p>
-    <div id="roomList" style="margin-top:14px"></div>
+    <h3>Open a new room</h3>
+    <div class="newroom">
+      <label class="lbl" for="newRoomTitle">Room name <span class="hint">&mdash; a suggestion; click it to type your own, like &ldquo;Period 3 essay&rdquo;</span></label>
+      <form class="row" id="newRoomForm" style="justify-content:flex-start">
+        <span class="editwrap"><input class="field" id="newRoomTitle" maxlength="80" placeholder="Name this room" aria-label="Room name (editable)"><span class="pencil" aria-hidden="true">&#9998;</span></span>
+        <button class="btn" type="submit">Open this room</button>
+      </form>
+      <p class="fine" style="margin-top:10px">Luddite gives each room a two-word code, like <i>Starry whale</i>, for students to type.
+        Students see you as <b id="displayName"></b>. <button class="btn small ghost" id="changeNameBtn" style="margin-left:4px">Change my name</button></p>
+    </div>
+
+    <h3><span>Rooms you&rsquo;ve opened <span id="roomCount" style="font-weight:400"></span></span></h3>
+    <p class="fine" style="margin:0 0 10px">Open a room to let students in, watch them write, and see what&rsquo;s handed in. Deleting a room only takes it off this list; handed-in work stays under Students.</p>
+    <div id="roomList"></div>
 
     <h3>Students</h3>
     <p class="fine" style="margin:0 0 10px">Everyone who has handed work in to you, with every comment you've made on their work this year.</p>
@@ -410,7 +437,7 @@
 <!-- Teacher: one room -->
 <section class="screen page" id="roomScreen" hidden>
   <div class="card">
-    <p style="margin:0 0 10px"><button class="linkish" id="backToDash">&larr; All rooms</button></p>
+    <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; All rooms</button></p>
     <div class="head">
       <h2 id="roomTitle"></h2>
       <div class="row">
@@ -440,7 +467,7 @@
     </div>
 
     <p class="fine" id="roomNote"></p>
-    <p class="fine" style="margin-top:28px"><button class="linkish" id="deleteRoomBtn">Delete this room</button></p>
+    <p class="fine" style="margin-top:28px"><button class="btn small danger" id="deleteRoomBtn">Delete this room</button></p>
   </div>
 </section>
 
@@ -1134,22 +1161,40 @@
     renderDrive($('driveBox'), data.drive);
     var list = $('roomList');
     list.innerHTML = '';
+    $('roomCount').textContent = data.rooms.length ? '(' + data.rooms.length + ')' : '';
     if (!data.rooms.length) {
-      list.appendChild(el('div', 'empty', 'No rooms yet. Name one above to get a code to give your students.'));
+      list.appendChild(el('div', 'empty', 'No rooms yet. Open one above to get a code to give your students.'));
       return;
     }
     data.rooms.forEach(function (r) {
-      var row = el('div', 'item click');
-      var who = el('div', 'who');
-      who.appendChild(el('b', null, r.title));
-      who.appendChild(el('span', null, 'Code: ' + r.codeLabel + ' · opened ' + new Date(r.createdAt).toLocaleDateString() + ' · ' +
-        plural(r.admitted, 'student', 'students') + ' in · ' + r.submissions + ' handed in'));
-      row.appendChild(who);
-      if (r.waiting) row.appendChild(el('span', 'pill warn', r.waiting + ' waiting'));
-      if (!r.open) row.appendChild(el('span', 'pill', 'Closed'));
-      row.addEventListener('click', function () { openRoom(r.code); });
-      list.appendChild(row);
+      var card = el('div', 'roomcard');
+      var info = el('div', 'info');
+      var name = el('button', 'name', r.title);
+      name.addEventListener('click', function () { openRoom(r.code); });
+      info.appendChild(name);
+      var meta = el('div', 'meta');
+      meta.appendChild(el('span', 'codetag', 'Code: ' + r.codeLabel));
+      meta.appendChild(document.createTextNode('Opened ' + new Date(r.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' · ' + plural(r.admitted, 'student', 'students') + ' in · ' + r.submissions + ' handed in'));
+      info.appendChild(meta);
+      card.appendChild(info);
+      var acts = el('div', 'acts');
+      if (r.waiting) acts.appendChild(el('span', 'pill warn', r.waiting + ' waiting'));
+      acts.appendChild(el('span', 'pill' + (r.open ? ' good' : ''), r.open ? 'Open' : 'Closed'));
+      acts.appendChild(button('Open', 'btn small', function () { openRoom(r.code); }));
+      acts.appendChild(button('Delete', 'btn small danger', function () { deleteRoom(r); }));
+      card.appendChild(acts);
+      list.appendChild(card);
     });
+  }
+
+  async function deleteRoom(r) {
+    if (!confirm('Delete the room “' + r.title + '”?\n\nIt comes off your list and nobody can join it. Work already handed in stays under Students (and in your Drive).')) return;
+    try {
+      await api('/luddite/room', { code: r.code, action: 'delete' });
+      lastDrawn = '';
+      await loadRooms();
+    } catch (e) { alert('Couldn’t delete that room. Try again.'); }
   }
 
   $('newRoomForm').addEventListener('submit', async function (e) {
@@ -1314,7 +1359,7 @@
       asked.setAttribute('data-asked', s.requestedAt);
       row.appendChild(asked);
       row.appendChild(button('Let in', 'btn small', function () { roomAction('admit', [s.sub]); }));
-      row.appendChild(button('Remove', 'linkish', function () { roomAction('remove', [s.sub]); }));
+      row.appendChild(button('Remove', 'btn small danger', function () { roomAction('remove', [s.sub]); }));
     });
 
     fill('admittedList', admitted, 'Nobody’s in yet.', function (s, row) {
@@ -1325,7 +1370,7 @@
       if (s.leaves) row.appendChild(el('span', 'pill warn', 'Left the page ' + s.leaves + '×'));
       if (s.submittedAt) row.appendChild(el('span', 'pill good', 'Handed in ' + clock(s.submittedAt)));
       if (s.handedIn) row.appendChild(button('Let back in to write', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
-      row.appendChild(button('Remove', 'linkish', function () {
+      row.appendChild(button('Remove', 'btn small danger', function () {
         if (confirm('Take ' + (s.name || s.email) + ' out of the room?')) roomAction('remove', [s.sub]);
       }));
     });
