@@ -501,6 +501,9 @@
   var POLL_ROOM_MS = 3000;      // teacher looking at a room
   var POLL_DASH_MS = 10000;     // teacher looking at the room list
   var HEARTBEAT_MS = 30000;     // student writing: word count for the teacher
+  // iPhones can't go full screen. These accounts may write there anyway
+  // (for testing on a phone); leaving the tab or app still locks the page.
+  var NO_FULLSCREEN_OK = ['nymets892@gmail.com'];
 
   var authToken = null;
   var me = { email: '', name: '', role: '' };
@@ -544,6 +547,7 @@
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
+  var pollMs = 0;
 
   function show(id) {
     stopPoll();
@@ -560,6 +564,7 @@
   function poll(fn, ms) {
     stopPoll();
     pollFn = fn;
+    pollMs = ms;
     (function tick(first) {
       if (pollFn !== fn) return;
       var p = document.hidden && !first ? Promise.resolve() : Promise.resolve(fn()).catch(function () {});
@@ -568,7 +573,9 @@
   }
   function stopPoll() { clearTimeout(pollTimer); pollTimer = null; pollFn = null; }
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && pollFn) { var fn = pollFn; clearTimeout(pollTimer); Promise.resolve(fn()).catch(function () {}); }
+    // Start over rather than just calling fn, which would drop the next
+    // tick and leave the screen frozen until a reload.
+    if (!document.hidden && pollFn) poll(pollFn, pollMs);
   });
 
   // ---------------------------------------------------------------------
@@ -737,7 +744,7 @@
     $('newPageWrap').hidden = !has;
     $('dashWrap').hidden = !isTeacher || previewing;
     $('leaveWrap').hidden = !inRoom || isTeacher;
-    var fsOk = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    var fsOk = canFs() || fsExempt();
     $('noFullscreen').hidden = fsOk;
     $('startBtn').disabled = !fsOk;
     var leaves = Number(load(leavesKey()) || 0);
@@ -820,7 +827,11 @@
   function startHeartbeat() { stopHeartbeat(); report('writing'); heartbeat = setInterval(function () { if (!locked) report('writing'); }, HEARTBEAT_MS); }
   function stopHeartbeat() { clearInterval(heartbeat); heartbeat = null; }
 
+  function canFs() { return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen); }
+  function fsExempt() { return !canFs() && NO_FULLSCREEN_OK.indexOf((me.email || '').toLowerCase()) !== -1; }
+
   function requestFs() {
+    if (fsExempt()) return Promise.resolve();
     var el = document.documentElement;
     var p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
     return Promise.resolve(p).then(function () {
