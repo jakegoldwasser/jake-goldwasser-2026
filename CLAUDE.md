@@ -6,6 +6,17 @@
 - **Merging:** finished work gets merged into `main` (which is what the live site at jake-goldwasser.com serves, via GitHub Pages) and pushed, without asking — in local and cloud sessions alike. Two guards: first bring the branch up to date with the latest `main` and resolve any conflicts (checkouts and cloud sessions go stale, and a stale merge can undo newer work); and don't merge a page change that depends on backend (`cloud-sync-backend`) code that isn't deployed yet — deploying the Lambda needs Jake's AWS sign-in, so hold it on its branch and say so until the backend is live.
 - **Local sessions, not cloud.** Jake works in local Claude Code sessions on his own computer. Never start cloud sessions or cloud agents for him (no creating remote sessions, no cloud routines, no suggested tasks that run in the cloud); do the work in the current session. If a session turns out to be running in the cloud, say so once at the start.
 
+## Luddite (`luddite/`)
+
+Use these words, and only these, in the UI, in conversation and in commit messages (one word per idea, so a teacher always knows what a button means):
+
+- **Room** — what a teacher opens for a class or assignment. Named for the assignment (never an auto date/time name); the date and time are a stamp ("Opened Wed, Sep 30, 2026, 2:15 PM"). A **permanent room** keeps its students and their drafts across days; closing it makes the next session's **Entry Phrase**.
+- **Entry Phrase** — the two words students type to join (never "code", "room code" or "code word"; `code` is fine inside the code).
+- **Home** — the teacher's first page (not "Dashboard"). **Student work** is its list of everyone who has handed work in.
+- **Waiting room** — where students ask in. The teacher **lets them in**; a teacher **removes** someone.
+- **Hand in / Handed in** — what a student does with their writing in a room (never "submit"). "Done" is only for writing on your own. A handed-in student is **locked** until the teacher **unlocks** them ("Unlock so they can write again").
+- **Paper** — one handed-in piece of writing (not "piece" or "submission"; the Drive folder is literally named "Luddite submissions", which is left alone). **Mark up** is the verb; teachers write a **comment** in the margin, **cross out** words, **write in** words, add an **end comment** and a **grade**. The teacher's pen is green; red means locked or a warning.
+
 ## Bookbug (`bookbug/`)
 
 - The app's name is **Bookbug** — one capital B. Never "BookBug", "Book Bug", or "BookLouse". The lowercase `bookbug` wordmark in the page header is a logo and stays lowercase. This applies everywhere: UI text, `<title>`, comments, commit messages, docs.
