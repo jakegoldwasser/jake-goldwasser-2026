@@ -698,6 +698,80 @@ async function saveToDrive(room, doc) {
   }
 }
 
+// The marked-up piece as HTML, which Drive turns into a Google Doc: the
+// teacher's words in green (bold/italic as typed), crossed-out words struck
+// through, commented words highlighted with a number, then the comments,
+// the end comment and the grade.
+const escHtml = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const PEN = '#2f6b3a';
+function markedHtml(piece) {
+  const text = piece.text, marks = piece.marks || [];
+  const margins = marks.filter((m) => m.type === 'margin').sort((a, b) => a.start - b.start || a.end - b.end);
+  const num = new Map(margins.map((m, i) => [m.id, i + 1]));
+  const cuts = new Set([0, text.length]);
+  marks.forEach((m) => { cuts.add(m.start); cuts.add(m.end); });
+  const pts = [...cuts].sort((a, b) => a - b);
+  const pen = (inner) => '<span style="color:' + PEN + '">' + inner + '</span>';
+  let body = '';
+  pts.forEach((p, i) => {
+    margins.forEach((m) => { if (m.end === p) body += pen('<sup>[' + num.get(m.id) + ']</sup>'); });
+    marks.forEach((m) => {
+      if (m.type !== 'insert' || m.start !== p) return;
+      const f = String(m.fmt || '').padEnd(m.note.length, ' ');
+      let runs = '', cur = '', curF = null;
+      const flush = () => {
+        if (curF === null) return;
+        let h = escHtml(cur);
+        if (curF === 'b' || curF === 'x') h = '<b>' + h + '</b>';
+        if (curF === 'i' || curF === 'x') h = '<i>' + h + '</i>';
+        runs += h; cur = '';
+      };
+      for (let k = 0; k < m.note.length; k++) {
+        if (f[k] !== curF) { flush(); curF = f[k]; }
+        cur += m.note[k];
+      }
+      flush();
+      body += pen('\u2038' + runs) + ' ';
+    });
+    const next = pts[i + 1];
+    if (next === undefined || next === p) return;
+    let h = escHtml(text.slice(p, next)).replace(/\n/g, '<br>');
+    const on = marks.filter((m) => m.type !== 'insert' && m.start <= p && m.end >= next);
+    if (on.some((m) => m.type === 'strike')) h = '<s style="text-decoration-color:' + PEN + '">' + h + '</s>';
+    if (on.some((m) => m.type === 'margin')) h = '<span style="background-color:#e3f0e3">' + h + '</span>';
+    body += h;
+  });
+  let html = '<html><body><p style="font-size:11pt"><b>' + escHtml(piece.name || piece.email) + '</b> \u2014 ' + escHtml(piece.roomTitle || '') + '</p>';
+  if (piece.grade) html += '<p style="color:' + PEN + ';font-size:14pt"><b>Grade: ' + escHtml(piece.grade) + '</b></p>';
+  html += '<p>' + body + '</p>';
+  if (margins.length) {
+    html += '<hr><p style="color:' + PEN + '"><b>Comments</b></p>';
+    margins.forEach((m) => {
+      const q = text.slice(m.start, m.end).replace(/\s+/g, ' ').trim();
+      html += '<p style="color:' + PEN + '">[' + num.get(m.id) + '] \u201c' + escHtml(q.length > 80 ? q.slice(0, 77) + '\u2026' : q) + '\u201d \u2014 ' + escHtml(m.note) + '</p>';
+    });
+  }
+  if (piece.endComment && piece.endComment.trim()) {
+    html += '<hr><p style="color:' + PEN + '"><b>End comment</b></p><p style="color:' + PEN + '">' + escHtml(piece.endComment).replace(/\n/g, '<br>') + '</p>';
+  }
+  return html + '</body></html>';
+}
+
+// Replace the piece's Google Doc with its marked-up version. The piece's id
+// is the Doc's file id when it reached Drive. Best effort: marks are kept
+// here either way.
+async function updateDriveDoc(teacherSub, piece) {
+  if (!piece.link || !/^[A-Za-z0-9_-]{10,}$/.test(piece.id)) return;
+  const { state: drive } = await readItem('luddite:drive:' + teacherSub);
+  if (!drive || !drive.refreshToken) return;
+  const token = await driveAccessToken(teacherSub, drive);
+  await driveCall(token, 'https://www.googleapis.com/upload/drive/v3/files/' + piece.id + '?uploadType=media&fields=id', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'text/html; charset=UTF-8' },
+    body: markedHtml(piece)
+  });
+}
+
 // ---- Marks ----
 // The piece's own teacher (or an owner) may read and mark it.
 async function ownSub(id, me, role) {
@@ -724,7 +798,13 @@ function cleanMarks(list, length) {
     const note = String(m.note || '').slice(0, 2000);
     if (type === 'insert' && !note.trim()) throw new HttpError(400, 'bad_marks');
     chars += note.length;
-    return { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
+    const mark = { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
+    // An insert's look, letter by letter: ' ' plain, 'b' bold, 'i' italic, 'x' both.
+    if (type === 'insert') {
+      const f = String(m.fmt || '').replace(/[^bix ]/g, ' ').slice(0, note.length);
+      if (/[bix]/.test(f)) mark.fmt = f.padEnd(note.length, ' ');
+    }
+    return mark;
   });
   if (chars > MAX_MARK_CHARS) throw new HttpError(413, 'too_many_marks');
   return out;
@@ -886,12 +966,15 @@ async function routeLuddite(event, method, path, info) {
     const piece = await ownSub(body.id, me, role);
     const marks = cleanMarks(body.marks, piece.text.length);
     const endComment = String(body.endComment || '').slice(0, 8000);
+    const grade = String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40);
     const saved = await mutate('luddite:sub:' + piece.id, (x) => {
-      const next = { ...x, marks, endComment, markedAt: Date.now() };
+      const next = { ...x, marks, endComment, grade, markedAt: Date.now() };
       if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
       return next;
     });
     // The room's list shows which pieces have been marked.
+    // Drive's copy carries the mark-up too (green text, cross-outs, comments, grade).
+    await updateDriveDoc(piece.teacherSub, saved).catch((e) => console.warn('drive markup failed', e.detail || e.message));
     const count = marks.length + (endComment.trim() ? 1 : 0);
     await mutate('luddite:room:' + piece.code, (r) => {
       if (!r) return undefined;
@@ -927,7 +1010,7 @@ async function routeLuddite(event, method, path, info) {
         if (!p) return pieces.push({ ...x, missing: true, marks: [], endComment: '' });
         const quote = (a, b) => { const t = p.text.slice(a, b).replace(/\s+/g, ' ').trim(); return t.length > 240 ? t.slice(0, 237) + '…' : t; };
         pieces.push({
-          id: p.id, at: p.at, roomTitle: p.roomTitle, label: p.label, words: p.words, link: p.link, endComment: p.endComment || '',
+          id: p.id, at: p.at, roomTitle: p.roomTitle, label: p.label, words: p.words, link: p.link, endComment: p.endComment || '', grade: p.grade || '',
           marks: (p.marks || []).slice().sort((a, b) => a.start - b.start).map((m) => ({
             type: m.type, note: m.note || '', quote: m.type === 'insert' ? quote(Math.max(0, m.start - 40), m.start) : quote(m.start, m.end)
           }))

@@ -21,8 +21,8 @@
     --lock: #b3261e;
     --ok: #2f6b3a;
     --card: #ffffff;
-    --pen: #b3261e;      /* the teacher's red pen */
-    --pen-wash: #fbe9e7;
+    --pen: #2f6b3a;      /* the teacher's green pen (red is for the lock) */
+    --pen-wash: #e3f0e3;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -35,8 +35,8 @@
       --lock: #ef8a80;
       --ok: #8fc79a;
       --card: #201e1b;
-      --pen: #ef8a80;
-      --pen-wash: #3a2220;
+      --pen: #8fc79a;
+      --pen-wash: #1f3326;
     }
   }
   * { box-sizing: border-box; }
@@ -165,6 +165,9 @@
     transition: opacity 0.2s;
   }
   .bar:hover { opacity: 1; }
+  /* The one big button at the foot of the writing page: impossible to miss. */
+  .handinbar { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+  .handinbar .btn { pointer-events: auto; font-size: 19px; padding: 16px 56px; min-width: min(320px, calc(100vw - 32px)); }
   .bar .left { display: flex; gap: 16px; }
   #leaves.has { color: var(--lock); opacity: 1; }
 
@@ -232,30 +235,40 @@
   .paper:focus { outline: none; }
   .paper .hl { background: var(--pen-wash); border-bottom: 1.5px solid var(--pen); cursor: pointer; }
   .paper .strike { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; cursor: pointer; }
-  .paper .ins { color: var(--pen); font-family: Inter, system-ui, sans-serif; font-size: 14.5px; cursor: pointer; white-space: pre-wrap; }
+  .paper .ins { color: var(--pen); cursor: pointer; white-space: pre-wrap; } /* same face and size as the student's words */
+  .paper .ins .b { font-weight: 700; }
+  .paper .ins .i { font-style: italic; }
   .paper .ins::before { content: '‸'; font-weight: 600; margin-right: 1px; }
   .paper .ins { margin-right: .3em; }
   .paper .mnum, .mnote .n { font: 600 10.5px Inter, system-ui, sans-serif; color: var(--pen); }
   .paper .mnum { vertical-align: super; margin-left: 1px; cursor: pointer; user-select: none; }
   .paper .on { outline: 2px solid var(--pen); outline-offset: 1px; border-radius: 2px; }
   .margin { position: relative; }
-  .mnote { position: absolute; left: 0; right: 0; font-size: 13px; line-height: 1.45; color: var(--pen); padding: 6px 8px;
+  .mnote { position: absolute; left: 0; right: 0; font-size: 15px; line-height: 1.45; color: var(--pen); padding: 6px 8px;
     border-left: 2px solid var(--pen); background: var(--pen-wash); border-radius: 0 6px 6px 0; cursor: pointer; white-space: pre-wrap; word-wrap: break-word; }
   .mnote .n { margin-right: 4px; }
   .mnote.on { box-shadow: 0 0 0 2px var(--pen); }
+  .gradebox { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .gradebox label { font: 600 12px Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .gradebox input { width: 9em; font: 600 20px Literata, Georgia, serif; color: var(--pen); background: transparent; border: 0; border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--rule); padding: 6px 12px; text-align: center; }
+  .gradebox input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
+  .gradeprint { display: none; font: 600 14pt Literata, Georgia, serif; color: var(--pen); }
+  .fmtbtn { min-width: 34px; padding: 6px 0; border: 0; border-radius: 8px; background: none; box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); font: 17px Literata, Georgia, serif; cursor: pointer; }
+  .fmtbtn.on { background: var(--pen); color: var(--accent-ink); box-shadow: none; }
   .endwrap { grid-column: 1 / -1; margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 14px; }
   .endwrap label { font: 600 12px Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .endwrap textarea { width: 100%; min-height: 110px; margin-top: 6px; font: 15px/1.55 Inter, system-ui, sans-serif; color: var(--pen);
+  .endwrap textarea { width: 100%; min-height: 110px; margin-top: 6px; font: 17px/1.55 Literata, Georgia, serif; color: var(--pen);
     background: transparent; border: 0; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--rule); padding: 10px 12px; resize: vertical; }
   .endwrap textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
-  .endprint { display: none; color: var(--pen); white-space: pre-wrap; font-size: 14px; line-height: 1.55; margin-top: 6px; }
+  .endprint { display: none; color: var(--pen); white-space: pre-wrap; font-size: 11.5pt; line-height: 1.55; margin-top: 6px; }
   .marktools, .markpop { position: fixed; z-index: 50; background: var(--card); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18), inset 0 0 0 1px var(--rule); }
   .marktools { display: flex; gap: 2px; padding: 4px; }
   .marktools button { border: 0; background: none; font: 500 13px Inter, system-ui, sans-serif; color: var(--ink); padding: 6px 10px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
   .marktools button:hover { background: var(--pen-wash); color: var(--pen); }
   .markpop { width: min(340px, calc(100vw - 24px)); padding: 12px; text-align: left; }
   .markpop .what { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .markpop textarea { width: 100%; min-height: 76px; font: 14px/1.45 Inter, system-ui, sans-serif; color: var(--pen); border: 0; border-radius: 8px;
+  .markpop textarea { width: 100%; min-height: 76px; font: 16px/1.45 Literata, Georgia, serif; color: var(--pen); border: 0; border-radius: 8px;
     box-shadow: inset 0 0 0 1px var(--rule); padding: 8px; background: transparent; resize: vertical; }
   .markpop textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
   .markpop .row { margin-top: 8px; justify-content: flex-end; }
@@ -280,20 +293,22 @@
      line up with what they're about (see .printing, set on beforeprint). */
   .sheet.printing { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; border-radius: 0; width: 6.95in; }
   .sheet.printing .paper { font-size: 11.5pt; line-height: 1.7; }
-  .sheet.printing .mnote { font-size: 9pt; }
+  .sheet.printing .mnote { font-size: 10.5pt; }
   @media print {
     @page { margin: 0.75in; }
     body { background: #fff !important; color: #000; }
-    :root { --paper: #fff; --ink: #000; --card: #fff; --rule: #ccc; --pen: #b3261e; --pen-wash: #fdeeec; --muted: #555; }
+    :root { --paper: #fff; --ink: #000; --card: #fff; --rule: #ccc; --pen: #2f6b3a; --pen-wash: #e8f3e8; --muted: #555; }
     .no-print, .markbar, .marktools, .markpop, #previewBar { display: none !important; }
     .screen { display: block !important; padding: 0 !important; min-height: 0 !important; }
     .screen[hidden] { display: none !important; }
     #markScreen .card, #studentScreen .card { max-width: none; }
     .sheet { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; width: 6.95in; }
     .paper { font-size: 11.5pt; line-height: 1.7; }
-    .mnote { font-size: 9pt; }
+    .mnote { font-size: 10.5pt; }
     .endwrap textarea { display: none; }
     .endprint { display: block; }
+    .gradebox { display: none; }
+    .gradeprint.has { display: block; }
     .paper .hl, .mnote { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
@@ -363,7 +378,7 @@
 
 <!-- Writing -->
 <section id="writeScreen" hidden>
-  <textarea id="pad" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="sentences"
+  <textarea id="pad" spellcheck="true" autocomplete="off" autocorrect="off" autocapitalize="sentences"
     data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
     aria-label="Your writing" placeholder="Begin."></textarea>
   <div class="bar">
@@ -371,8 +386,8 @@
       <span id="count">0 words</span>
       <span id="leaves"></span>
     </div>
-    <button class="linkish" id="doneBtn">Done</button>
   </div>
+  <div class="handinbar"><button class="btn" id="doneBtn">Hand in</button></div>
   <div class="handin" id="handinBox" hidden>
     <div class="card">
       <h2>Hand this in?</h2>
@@ -496,12 +511,17 @@
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
       <span class="markhint grow">Click in the text and type to write something in. Select words and press Delete to cross them out, or right-click them to comment.</span>
+      <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
+      <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markPrint">Print</button>
     </div>
     <div class="sheet" id="sheet">
-      <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span></div>
+      <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span>
+        <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false" placeholder="e.g. 92 or A−"></div>
+        <div class="gradeprint" id="gradePrint"></div>
+      </div>
       <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
       <div class="endwrap">
@@ -1549,6 +1569,9 @@
     if (piece.link) $('markDrive').href = piece.link;
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
+    $('markGrade').value = piece.grade || '';
+    showGradePrint();
+    typeB = typeI = false; syncFmt();
     drawPiece();
     window.scrollTo(0, 0);
   }
@@ -1579,7 +1602,10 @@
       });
       marks.forEach(function (m) {
         if (m.type === 'insert' && m.start === p) {
-          var ins = el('span', 'ins', m.note);
+          var ins = el('span', 'ins');
+          fmtRuns(m).forEach(function (r) {
+            ins.appendChild(el('span', (r.f === 'b' || r.f === 'x' ? 'b ' : '') + (r.f === 'i' || r.f === 'x' ? 'i' : ''), r.t));
+          });
           ins.dataset.mark = m.id;
           ins.contentEditable = 'false';
           paper.appendChild(ins);
@@ -1761,11 +1787,46 @@
       }
     }
   }
+  // What the teacher writes in can be bold or italic: each insert holds its
+  // words (note) and a same-length string (fmt) saying how each letter looks:
+  // ' ' plain, 'b' bold, 'i' italic, 'x' both.
+  var typeB = false, typeI = false;
+  function fmtChar() { return typeB && typeI ? 'x' : typeB ? 'b' : typeI ? 'i' : ' '; }
+  function fmtOf(m) {
+    var f = String(m.fmt || '');
+    while (f.length < m.note.length) f += ' ';
+    return f.slice(0, m.note.length);
+  }
+  function fmtRuns(m) {
+    var f = fmtOf(m), runs = [];
+    for (var i = 0; i < m.note.length; i++) {
+      var last = runs[runs.length - 1];
+      if (last && last.f === f.charAt(i)) last.t += m.note.charAt(i); else runs.push({ f: f.charAt(i), t: m.note.charAt(i) });
+    }
+    return runs;
+  }
+  function syncFmt() {
+    $('fmtB').classList.toggle('on', typeB); $('fmtB').setAttribute('aria-pressed', typeB);
+    $('fmtI').classList.toggle('on', typeI); $('fmtI').setAttribute('aria-pressed', typeI);
+  }
+  function toggleFmt(which) {
+    if (which === 'b') typeB = !typeB; else typeI = !typeI;
+    syncFmt();
+    $('paper').focus();
+  }
+  ['fmtB', 'fmtI'].forEach(function (id) {
+    $(id).addEventListener('mousedown', function (e) { e.preventDefault(); }); // keep the caret where it is
+    $(id).addEventListener('click', function () { toggleFmt(id === 'fmtB' ? 'b' : 'i'); });
+  });
+  $('paper').addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'b' || e.key === 'i')) { e.preventDefault(); toggleFmt(e.key); }
+  });
   function typeText(txt, s) {
     if (!s.collapsed) strikeRange(s); // typing over a selection: cross it out, write after it
     var p = s.collapsed ? s.start : s.end;
     var m = insertAt(p);
-    if (m) m.note += txt; else m = newMark({ type: 'insert', start: p, end: p, note: txt });
+    if (m) { m.fmt = fmtOf(m) + new Array(txt.length + 1).join(fmtChar()); m.note += txt; }
+    else m = newMark({ type: 'insert', start: p, end: p, note: txt, fmt: new Array(txt.length + 1).join(fmtChar()) });
     drawPiece();
     queueSave();
     var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
@@ -1795,7 +1856,9 @@
     // Backspace right after your own words takes them back, a letter (or a word) at a time.
     var m = insertAt(s.start);
     if (m && t.indexOf('Backward') !== -1) {
+      var f = fmtOf(m);
       m.note = t === 'deleteWordBackward' ? m.note.replace(/\S*\s*$/, '') : m.note.slice(0, -1);
+      m.fmt = f.slice(0, m.note.length);
       if (!m.note) piece.marks = piece.marks.filter(function (x) { return x !== m; });
       drawPiece();
       queueSave();
@@ -1885,7 +1948,9 @@
     var note = $('popText').value.trim();
     if (popMark) {
       if (!note) { deleteMark(popMark); closePop(); return; }
+      if (popMark.type === 'insert') popMark.fmt = fmtOf(popMark);
       popMark.note = note;
+      if (popMark.type === 'insert') popMark.fmt = fmtOf(popMark);
       drawPiece();
       queueSave();
     } else if (popDraft && note) {
@@ -1907,6 +1972,17 @@
     queueSave();
   });
 
+  function showGradePrint() {
+    var g = (piece && piece.grade || '').trim();
+    $('gradePrint').textContent = g ? 'Grade: ' + g : '';
+    $('gradePrint').classList.toggle('has', !!g);
+  }
+  $('markGrade').addEventListener('input', function () {
+    piece.grade = $('markGrade').value.trim();
+    showGradePrint();
+    queueSave();
+  });
+
   function queueSave() {
     $('markSaved').textContent = 'Saving…';
     clearTimeout(markSaveTimer);
@@ -1918,7 +1994,7 @@
     if (!piece) return;
     var p = piece;
     try {
-      await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '' });
+      await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '' });
       if (p === piece) $('markSaved').textContent = 'Saved';
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
@@ -1998,7 +2074,7 @@
       h.style.flex = '1';
       h.appendChild(el('h4', null, p.roomTitle || 'Untitled room'));
       h.appendChild(el('div', 'meta', new Date(p.at).toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) +
-        (p.words ? ' · ' + plural(p.words, 'word', 'words') : '')));
+        (p.words ? ' · ' + plural(p.words, 'word', 'words') : '') + (p.grade ? ' · Grade: ' + p.grade : '')));
       head.appendChild(h);
       if (!p.missing) head.appendChild(button('Mark up', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown); }); }));
       box.appendChild(head);
