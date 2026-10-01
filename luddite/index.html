@@ -447,6 +447,16 @@
   .tag { border: 0; background: var(--rule); color: var(--ink); border-radius: 999px; padding: 1px 10px; box-shadow: none; font-size: 12.5px; font-weight: 600; }
   .tag.warnTag { background: var(--tomato-tint); color: var(--tomato-deep); }
   .classcard { border: 1.5px solid var(--edge); border-left: 1.5px solid var(--edge); border-radius: 14px; box-shadow: none; background: var(--card); }
+  .classcard.click { cursor: pointer; }
+  .classcard.click:hover { background: var(--hover); }
+  .classcard .chev { font: 400 28px/1 var(--ui); color: var(--muted); }
+  /* "Make a new class" is just a plus; it turns into a minus while the form is open. */
+  #newClassBox { margin-top: 12px; }
+  #newClassBox > summary { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1.5px solid var(--ink); border-radius: 50%;
+    font: 400 24px/1 var(--ui); text-decoration: none; color: var(--ink); background: var(--card); }
+  #newClassBox > summary::before { content: '+'; }
+  #newClassBox[open] > summary::before { content: '\2013'; }
+  #newClassBox > summary:hover { background: var(--hover); }
 
   /* People and papers: one thin-outlined row each. */
   .item { border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 14px; margin-top: 8px; background: var(--card); }
@@ -740,7 +750,7 @@
     <h3 class="sect">Classes <span id="classCount"></span> <span class="q" tabindex="0" data-tip="A class is a list of email addresses. Give a writing session a class and everyone on the list is let in on their own when it starts.">?</span></h3>
     <div id="classList"></div>
     <details class="more" id="newClassBox">
-      <summary>Make a new class</summary>
+      <summary aria-label="Make a new class" data-tip="Make a new class"></summary>
       <div class="newroom">
         <form id="newClassForm">
           <label class="lbl" for="newClassName">Class name</label>
@@ -765,21 +775,6 @@
     <div id="studentList"></div>
 
     <!-- 4. Less common things, tucked away -->
-    <details class="more" id="teachersSection" hidden>
-      <summary>Teachers who can make writing sessions</summary>
-      <div class="newroom">
-        <label class="lbl" for="addTeacherEmail">Add teachers <span class="q" tabindex="0" data-tip="Anyone listed here can make classes and writing sessions (you and your other address always can). Paste one address or a whole list.">?</span></label>
-        <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
-          <textarea class="field grow" id="addTeacherEmail" rows="2" style="border-radius:14px; resize:vertical; font-size:14px"
-            placeholder="Jane Smith <jane_smith@horacemann.org>, bob_lee@horacemann.org" aria-label="Teacher email addresses"></textarea>
-          <button class="btn" type="submit">Add</button>
-        </form>
-        <p class="fine" id="addTeacherNote" hidden></p>
-        <div id="teacherList" style="margin-top:14px"></div>
-        <button class="btn small" id="teacherClassBtn" type="button" style="margin-top:14px">Make the &ldquo;UD English Teachers&rdquo; class</button> <span class="q" tabindex="0" data-tip="Makes a class of everyone listed here, plus you. It goes in the account you are signed in with, so do it once in each account.">?</span>
-        <p class="fine" id="teacherClassNote" hidden></p>
-      </div>
-    </details>
 
     <p class="footline"><button class="linkish" id="soloBtn">Write on my own</button> &middot; <span class="who-email"></span> &middot; <button class="linkish" data-signout>Sign out</button></p>
   </div>
@@ -926,13 +921,13 @@
 
 <!-- One button hides every student's name on every teacher page (and in print). -->
 <div class="topright no-print" id="topRight" hidden>
-  <button id="prefsBtn" type="button">Preferences</button>
+  <button id="prefsBtn" type="button">Settings</button>
 </div>
 
-<!-- Teacher: preferences (saved as you change them) -->
+<!-- Teacher: settings (saved as you change them) -->
 <div class="overlay no-print" id="prefsBox" hidden>
   <div class="box">
-    <h2>Preferences <span class="q" tabindex="0" data-tip="These apply to every writing session you run, including ones already going. Changes save right away.">?</span></h2>
+    <h2>Settings <span class="q" tabindex="0" data-tip="These apply to every writing session you run, including ones already going. Changes save right away.">?</span></h2>
     <div class="switchrow"><span class="nm">Spellcheck <span class="q" tabindex="0" data-tip="Underline only: misspelled words are underlined, but students can't right-click for suggestions or autocorrect. Off: no underlines at all.">?</span></span>
       <span class="seg" id="prefSpell"><button type="button" data-v="underline">Underline only</button><button type="button" data-v="off">Off</button></span></div>
     <div class="switchrow"><span class="nm">Lock the page if a student leaves it <span class="q" tabindex="0" data-tip="Writing opens full screen. Leaving it (another tab, another app, Esc) locks the page and tells you. Off: students can write in a normal window.">?</span></span>
@@ -943,6 +938,21 @@
       <span class="seg" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Hand in by itself when own time ends <span class="q" tabindex="0" data-tip="For a student with their own time: when it runs out, their paper is handed in automatically. Off: the clock just says Time is up.">?</span></span>
       <span class="seg" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+    <div id="teachersSection" hidden style="margin-top:22px">
+      <h3 style="margin-top:0">Teachers who can make writing sessions</h3>
+      <div style="margin-top:8px">
+        <label class="lbl" for="addTeacherEmail">Add teachers <span class="q" tabindex="0" data-tip="Anyone listed here can make classes and writing sessions (you and your other address always can). Paste one address or a whole list.">?</span></label>
+        <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
+          <textarea class="field grow" id="addTeacherEmail" rows="2" style="border-radius:14px; resize:vertical; font-size:14px"
+            placeholder="Jane Smith <jane_smith@horacemann.org>, bob_lee@horacemann.org" aria-label="Teacher email addresses"></textarea>
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <p class="fine" id="addTeacherNote" hidden></p>
+        <div id="teacherList" style="margin-top:14px"></div>
+        <button class="btn small" id="teacherClassBtn" type="button" style="margin-top:14px">Make the &ldquo;UD English Teachers&rdquo; class</button> <span class="q" tabindex="0" data-tip="Makes a class of everyone listed here, plus you. It goes in the account you are signed in with, so do it once in each account.">?</span>
+        <p class="fine" id="teacherClassNote" hidden></p>
+      </div>
+    </div>
     <div class="row" style="justify-content:flex-end; margin-top:18px"><span class="fine" id="prefsSaved" style="margin:0 auto 0 0"></span><button class="btn small" id="prefsClose" type="button">Done</button></div>
   </div>
 </div>
@@ -1176,7 +1186,7 @@
     // writing or locked screens, which stay exactly as students get them.
     $('previewBar').hidden = !(previewing && (id === 'waitScreen' || id === 'readyScreen'));
     each('[data-preview]', function (b) { b.classList.toggle('on', b.getAttribute('data-preview') === id); });
-    // Preferences sits on the teacher pages (not over the marking bar, which has its own Hide names).
+    // Settings sits on the teacher pages (not over the marking bar, which has its own Hide names).
     syncAnonBtn();
     $('topRight').hidden = !(isTeacher && !previewing && ['dashScreen', 'roomScreen', 'classScreen', 'studentScreen'].indexOf(id) !== -1);
   }
@@ -1608,7 +1618,7 @@
   function canFs() { return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen); }
   function fsExempt() { return !canFs() && NO_FULLSCREEN_OK.indexOf((me.email || '').toLowerCase()) !== -1; }
 
-  // What the teacher's Preferences allow while writing. On your own, everything is on.
+  // What the teacher's Settings allow while writing. On your own, everything is on.
   var DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
   function P() { return mode === 'room' && roomInfo && roomInfo.prefs ? roomInfo.prefs : DEFAULT_PREFS; }
 
@@ -1916,7 +1926,7 @@
     return c ? c.name : '';
   }
 
-  // ---- Preferences: what students get while writing, saved as they're changed ----
+  // ---- Settings: what students get while writing, saved as they're changed ----
   var teacherPrefs = DEFAULT_PREFS;
   function syncPrefs() {
     each('#prefSpell button', function (b) { b.classList.toggle('on', b.getAttribute('data-v') === teacherPrefs.spellcheck); });
@@ -1960,7 +1970,6 @@
     box.innerHTML = '';
     $('roomCount').textContent = list.length ? '(' + list.length + ')' : '';
     if (!list.length) {
-      box.appendChild(el('div', 'empty', 'No writing sessions yet. Open “New Writing Session” above to make one.'));
       if (!loadRooms.seen) $('newRoomBox').open = true;
       loadRooms.seen = true;
       return;
@@ -2087,12 +2096,16 @@
     $('classCount').textContent = classes.length ? '(' + classes.length + ')' : '';
     if (!classes.length) box.appendChild(el('div', 'empty', 'No classes yet.'));
     classes.forEach(function (c) {
-      var card = el('div', 'classcard');
+      var card = el('div', 'classcard click');
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
       var info = el('div', 'info');
       info.appendChild(el('h4', null, c.name));
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students')));
       card.appendChild(info);
-      card.appendChild(button('Open the list →', 'btn small ghost', function () { openClass(c.id); }));
+      card.appendChild(el('span', 'chev', '\u203A'));
+      card.addEventListener('click', function () { openClass(c.id); });
+      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openClass(c.id); } });
       box.appendChild(card);
     });
   }
