@@ -304,6 +304,9 @@
 
   /* ---- Marking up a handed-in piece ---- */
   #markScreen .card, #studentScreen .card, #printScreen .card { max-width: 1040px; }
+  /* Its sections in a column so a past session can put what was handed in first (style="order"). */
+  #roomBody { display: flex; flex-direction: column; }
+  .btn.grade { font-size: 16px; padding: 10px 22px; }
   .markbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; }
   .markbar .grow { flex: 1; }
   .markhint { color: var(--muted); font-size: 13px; }
@@ -2588,7 +2591,7 @@
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
-    $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : '');
+    $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : state === 'ended' ? 'ghost' : ''); // once it's over, grading is the main thing
     renderDrive($('driveBox'), drive);
     $('roomNote').textContent = '';
     chip.setAttribute('data-tip', state === 'ended' ? 'Over: nobody new can get in. Students already in can finish and hand in; what they handed in is below.'
@@ -2626,7 +2629,10 @@
       if (ol) row.appendChild(el('span', 'pill own', ol));
       var ob = ownButton(room, (s.email || '').toLowerCase(), who(s.name, s.email));
       if (ob) row.appendChild(ob);
-      if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small', function () { roomAction('release', [s.sub]); }));
+      // Grading is what comes next for a handed-in paper, so it's the big button.
+      var paper = (room.submissions || []).filter(function (x) { return x.sub === s.sub && x.stored; })[0];
+      if (paper) row.appendChild(button('Grade', 'btn grade', function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); }));
+      if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
       row.appendChild(button('Remove', 'btn small danger', function () {
         if (confirm('Take ' + who(s.name, s.email) + ' out of this writing session?')) roomAction('remove', [s.sub]);
       }));
@@ -2670,7 +2676,7 @@
       row.appendChild(w);
       if (x.late) row.appendChild(el('span', 'pill warn', 'Late'));
       if (x.marked) row.appendChild(el('span', 'pill good', 'Marked'));
-      if (x.stored) row.appendChild(button('Mark up', 'btn small', function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); }));
+      if (x.stored) row.appendChild(button('Grade', 'btn grade', function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); }));
       if (x.link) {
         var a = el('a', 'btn small ghost', 'Open in Drive');
         a.href = x.link;
@@ -3611,7 +3617,7 @@
       h.appendChild(el('div', 'meta', new Date(p.at).toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) +
         (p.words ? ' · ' + plural(p.words, 'word', 'words') : '') + (p.grade ? ' · Grade: ' + p.grade : '')));
       head.appendChild(h);
-      if (!p.missing) head.appendChild(button('Mark up', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown); }); }));
+      if (!p.missing) head.appendChild(button('Grade', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown); }); }));
       box.appendChild(head);
       if (p.endComment) box.appendChild(el('p', 'endc', p.endComment));
       if (p.marks.length) {
