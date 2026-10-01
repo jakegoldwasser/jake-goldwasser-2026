@@ -415,7 +415,7 @@
   .more > summary { font-weight: 600; }
   .newroom { border: 1.5px solid var(--edge); border-radius: 14px; box-shadow: none; background: var(--card); }
 
-  /* "Start a new writing session": a quiet card that minimizes with the icon at its top right. */
+  /* "New Writing Session": a quiet card that minimizes with the icon at its top right. */
   .newroombox { background: var(--card); border: 1.5px solid var(--edge); border-radius: 16px; margin-top: 18px; }
   .newroombox > summary.bigstart { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; padding: 16px 20px; background: none; color: var(--ink);
     border: 0; border-radius: 16px; font-size: 22px; }
@@ -423,7 +423,7 @@
   .newroombox > summary.bigstart::after { content: '+'; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1.5px solid var(--ink);
     border-radius: 50%; font: 400 22px/1 var(--ui); flex: none; }
   .newroombox[open] > summary.bigstart::after { content: '\2013'; }
-  .newroombox > .newroom { border: 0; border-top: 1.5px solid var(--rule); border-radius: 0; padding: 18px 20px 22px; background: none; }
+  .newroombox > .newroom { border: 0; border-top: 1.5px solid var(--rule); border-radius: 0; padding: 18px 20px 22px; background: none; box-shadow: none; }
 
   /* Writing sessions: three groups; colour is only a small dot and a small label. */
   .grouphead { display: flex; align-items: center; gap: 10px; font-size: 20px; margin: 28px 0 0; padding-bottom: 0; border-bottom: 0; }
@@ -517,6 +517,32 @@
   .timeleft { font-weight: 600; }
   .timeleft.low { color: var(--lock); }
   @media (max-width: 560px) { .topright { top: 8px; right: 8px; } .dashtop { padding-top: 36px; } }
+
+
+  /* ---- Type scale: one size for each job, used everywhere.
+     12 small caps labels and tags · 14 labels, notes, buttons-small · 16 body, inputs, titles of rows ·
+     20 card and group titles · 26 section titles · 34 the Entry Phrase. Weights: 400 and 600 only. ---- */
+  body { font: 400 16px/1.55 var(--ui); }
+  .field, textarea.field, select.field, .field.wide, .promptfield, .picker input[type=date], .picker input[type=time], input.field[type=number], input[type=search].field {
+    font: 400 16px/1.4 var(--ui); }
+  .field::placeholder, textarea::placeholder { font: 400 16px/1.4 var(--ui); color: var(--muted); opacity: .8; }
+  .field.codeword { font: 600 18px var(--display); }
+  .lbl { font: 600 14px/1.4 var(--ui); margin: 0 0 6px; }
+  .btn { font: 600 15px var(--ui); }
+  .btn.small, .seg button, .topright button, .markbar .anonbtn { font: 600 14px var(--ui); }
+  .btn.huge { font: 600 16px var(--ui); }
+  .fine, .help, .stamp, .stampline, .item .who span, .meta, .piece .meta, .quietline, .footline { font-size: 14px; }
+  h3 { font: 600 12px var(--ui); }
+  .pill, .tag, .chip, .q, .pbtn span, .phraselbl, .k { font-size: 12px; }
+  .q { font-weight: 600; }
+  .pbtn b { font-size: 20px; }
+  .head h2 { font-size: clamp(24px, 4vw, 28px); }
+  .grouphead, .rcard h4, .classcard h4 { font-size: 20px; }
+  .newroombox > summary.bigstart { font-size: 30px; padding: 20px 22px; }
+  .rcard .phraseline .phrase { font-size: 20px; }
+  .item .who b { font-size: 16px; }
+  [data-tip]:hover::after, [data-tip]:focus::after { font-size: 14px; }
+  .joinbox .bigcode { font-size: 34px; }
 
   /* One paper in the print-all view: heading, the paper with its marks, then its comments. */
   .pp { border: 1.5px solid var(--rule); border-radius: 14px; background: var(--card); padding: 22px 26px; margin-top: 14px; }
@@ -675,10 +701,9 @@
 
     <!-- 1. What teachers do most: start a writing session -->
     <details class="newroombox" id="newRoomBox">
-      <summary class="bigstart" aria-label="Start a new writing session (minimize or open)">Start a new writing session</summary>
+      <summary class="bigstart" aria-label="New Writing Session (minimize or open)">New Writing Session</summary>
       <div class="newroom">
         <form id="newRoomForm">
-          <label class="lbl big" for="newRoomTitle">What is this writing session?</label>
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
 
@@ -1935,7 +1960,7 @@
     box.innerHTML = '';
     $('roomCount').textContent = list.length ? '(' + list.length + ')' : '';
     if (!list.length) {
-      box.appendChild(el('div', 'empty', 'No writing sessions yet. Press the big “Start a new writing session” button above.'));
+      box.appendChild(el('div', 'empty', 'No writing sessions yet. Open “New Writing Session” above to make one.'));
       if (!loadRooms.seen) $('newRoomBox').open = true;
       loadRooms.seen = true;
       return;
