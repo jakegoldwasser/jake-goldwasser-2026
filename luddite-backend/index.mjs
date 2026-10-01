@@ -518,12 +518,27 @@ async function saveToDrive(room, doc) {
 // teacher's words in green (bold/italic as typed), crossed-out words struck
 // through, commented words highlighted with a number, then the comments,
 // the end comment and the grade.
+// The few words around one point in the text, to name an arrow's two ends.
+function wordsAt(text, p) {
+  const a = Math.max(0, p - 18), b = Math.min(text.length, p + 22);
+  let t = text.slice(a, b).replace(/\s+/g, ' ');
+  if (a > 0) t = t.replace(/^\S*\s/, '');
+  if (b < text.length) t = t.replace(/\s\S*$/, '');
+  return t.trim();
+}
+// "from <words> to <words>", following the arrowhead.
+function arrowQuote(text, m) {
+  const from = m.head === 'start' ? m.end : m.start, to = m.head === 'start' ? m.start : m.end;
+  return 'from \u201c' + wordsAt(text, from) + '\u201d to \u201c' + wordsAt(text, to) + '\u201d';
+}
 const escHtml = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const PEN = '#2f6b3a';
 function markedHtml(piece) {
   const text = piece.text, marks = piece.marks || [];
-  const margins = marks.filter((m) => m.type === 'margin').sort((a, b) => a.start - b.start || a.end - b.end);
-  const num = new Map(margins.map((m, i) => [m.id, i + 1]));
+  // Comments and arrows share one numbering, in the order they come in the text.
+  const notes = marks.filter((m) => m.type === 'margin' || m.type === 'arrow').sort((a, b) => a.start - b.start || a.end - b.end);
+  const margins = notes.filter((m) => m.type === 'margin');
+  const num = new Map(notes.map((m, i) => [m.id, i + 1]));
   const cuts = new Set([0, text.length]);
   marks.forEach((m) => { cuts.add(m.start); cuts.add(m.end); });
   const pts = [...cuts].sort((a, b) => a - b);
@@ -552,7 +567,7 @@ function markedHtml(piece) {
     const next = pts[i + 1];
     if (next === undefined || next === p) return;
     let h = escHtml(text.slice(p, next)).replace(/\n/g, '<br>');
-    const on = marks.filter((m) => m.type !== 'insert' && m.start <= p && m.end >= next);
+    const on = marks.filter((m) => (m.type === 'margin' || m.type === 'strike') && m.start <= p && m.end >= next);
     if (on.some((m) => m.type === 'strike')) h = '<s style="text-decoration-color:' + PEN + '">' + h + '</s>';
     if (on.some((m) => m.type === 'margin')) h = '<span style="background-color:#e3f0e3">' + h + '</span>';
     body += h;
@@ -560,9 +575,13 @@ function markedHtml(piece) {
   let html = '<html><body><p style="font-size:11pt"><b>' + escHtml(piece.name || piece.email) + '</b> \u2014 ' + escHtml(piece.roomTitle || '') + '</p>';
   if (piece.grade) html += '<p style="color:' + PEN + ';font-size:14pt"><b>Grade: ' + escHtml(piece.grade) + '</b></p>';
   html += '<p>' + body + '</p>';
-  if (margins.length) {
+  if (notes.length) {
     html += '<hr><p style="color:' + PEN + '"><b>Comments</b></p>';
-    margins.forEach((m) => {
+    notes.forEach((m) => {
+      if (m.type === 'arrow') {
+        html += '<p style="color:' + PEN + '">[' + num.get(m.id) + '] Arrow ' + escHtml(arrowQuote(text, m)) + (m.note ? ' \u2014 ' + escHtml(m.note) : '') + '</p>';
+        return;
+      }
       const q = text.slice(m.start, m.end).replace(/\s+/g, ' ').trim();
       html += '<p style="color:' + PEN + '">[' + num.get(m.id) + '] \u201c' + escHtml(q.length > 80 ? q.slice(0, 77) + '\u2026' : q) + '\u201d \u2014 ' + escHtml(m.note) + '</p>';
     });
@@ -601,20 +620,25 @@ async function ownSub(id, me, role) {
 
 // margin: a note beside words [start, end). strike: words crossed out.
 // insert: the teacher's own words written into the text at `start`.
+// arrow: a line drawn between two points in the text, start < end, with its
+// head at `head` ('start' or 'end') and an optional note about the connection.
 function cleanMarks(list, length) {
   if (!Array.isArray(list)) throw new HttpError(400, 'bad_marks');
   if (list.length > MAX_MARKS) throw new HttpError(413, 'too_many_marks');
   let chars = 0;
   const out = list.map((m) => {
     const type = m && m.type;
-    if (!['margin', 'strike', 'insert'].includes(type)) throw new HttpError(400, 'bad_marks');
-    const start = Math.max(0, Math.min(length, Math.floor(Number(m.start) || 0)));
-    const end = type === 'insert' ? start : Math.max(start, Math.min(length, Math.floor(Number(m.end) || 0)));
+    if (!['margin', 'strike', 'insert', 'arrow'].includes(type)) throw new HttpError(400, 'bad_marks');
+    const clamp = (v) => Math.max(0, Math.min(length, Math.floor(Number(v) || 0)));
+    let start = clamp(m.start);
+    let end = type === 'insert' ? start : Math.max(start, clamp(m.end));
+    if (type === 'arrow') { const a = clamp(m.start), b = clamp(m.end); start = Math.min(a, b); end = Math.max(a, b); }
     if (type !== 'insert' && end === start) throw new HttpError(400, 'bad_marks');
     const note = String(m.note || '').slice(0, 2000);
     if (type === 'insert' && !note.trim()) throw new HttpError(400, 'bad_marks');
     chars += note.length;
     const mark = { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
+    if (type === 'arrow') mark.head = m.head === 'start' ? 'start' : 'end';
     // An insert's look, letter by letter: ' ' plain, 'b' bold, 'i' italic, 'x' both.
     if (type === 'insert') {
       const f = String(m.fmt || '').replace(/[^bix ]/g, ' ').slice(0, note.length);
@@ -958,7 +982,7 @@ async function routeLuddite(event, method, path, info) {
         pieces.push({
           id: p.id, at: p.at, roomTitle: p.roomTitle, label: p.label, words: p.words, link: p.link, endComment: p.endComment || '', grade: p.grade || '',
           marks: (p.marks || []).slice().sort((a, b) => a.start - b.start).map((m) => ({
-            type: m.type, note: m.note || '', quote: m.type === 'insert' ? quote(Math.max(0, m.start - 40), m.start) : quote(m.start, m.end)
+            type: m.type, note: m.note || '', quote: m.type === 'arrow' ? arrowQuote(p.text, m) : m.type === 'insert' ? quote(Math.max(0, m.start - 40), m.start) : quote(m.start, m.end)
           }))
         });
       });

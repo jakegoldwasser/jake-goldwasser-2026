@@ -152,10 +152,12 @@
   .pbtn.on span { color: var(--accent-ink); opacity: .8; }
   .pbreak { display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 11.5px; color: var(--muted); padding: 0 6px;
     border-left: 2px dotted var(--rule); border-right: 2px dotted var(--rule); }
-  .seg { display: inline-flex; gap: 6px; flex-wrap: wrap; }
-  .seg button { border: 0; border-radius: 999px; padding: 7px 16px; font: 600 14px var(--ui); cursor: pointer; color: var(--ink);
+  /* A row of choice buttons (Right now / At a set time, On / Off). Not .seg,
+     which is a piece of the student's text on the marking page. */
+  .segctl { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .segctl button { border: 0; border-radius: 999px; padding: 7px 16px; font: 600 14px var(--ui); cursor: pointer; color: var(--ink);
     background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
-  .seg button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+  .segctl button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
   .formrow { margin-top: 18px; }
   .formrow > .lbl { margin-bottom: 8px; }
   select.field { border-radius: 12px; appearance: auto; }
@@ -381,7 +383,7 @@
   .wordmark { font-family: Rokkitt, Rockwell, 'Roboto Slab', Georgia, serif; font-weight: 600; letter-spacing: 0; font-size: clamp(44px, 9vw, 58px); line-height: 1; background: none; }
   .sub { font-size: clamp(15px, 2vw, 16px); }
   .fine { font-size: 14px; }
-  [class*="pill"], .btn, .chip, .tag, .seg button, h3, .phraselbl, .joinlbl, .lbl, .k { font-family: var(--ui); }
+  [class*="pill"], .btn, .chip, .tag, .segctl button, h3, .phraselbl, .joinlbl, .lbl, .k { font-family: var(--ui); }
 
   .btn { border: 1.5px solid var(--accent); font-weight: 600; transition: background .15s, border-color .15s; }
   .btn:hover:not(:disabled) { filter: none; background: #44501F; border-color: #44501F; }
@@ -480,9 +482,9 @@
   .pbtn.on { background: var(--ink); color: var(--paper); }
   .pbtn.on span { color: var(--paper); }
   .pbreak { border-color: var(--edge); }
-  .seg button { border: 1.5px solid var(--ink); box-shadow: none; font-weight: 600; }
-  .seg button:hover { background: var(--hover); }
-  .seg button.on { background: var(--ink); color: var(--paper); }
+  .segctl button { border: 1.5px solid var(--ink); box-shadow: none; font-weight: 600; }
+  .segctl button:hover { background: var(--hover); }
+  .segctl button.on { background: var(--ink); color: var(--paper); }
   .tbox-preview { background: var(--mint-tint); border: 0; border-radius: 10px; padding: 10px 14px; }
   .tbox-preview:empty { display: none; }
 
@@ -513,7 +515,7 @@
   .readyprompt b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .switchrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 12px; margin-top: 8px; background: var(--card); }
   .switchrow .nm { font-weight: 600; font-size: 15px; }
-  .switchrow .seg { flex: none; }
+  .switchrow .segctl { flex: none; }
   .promptfield { width: 100%; border-radius: 10px; resize: vertical; min-height: 84px; font: 400 16px/1.45 var(--ui); padding: 10px 14px; }
 
   /* Hiding names (marking page only): a button in the marking bar, and a band across the top while it's on. */
@@ -541,7 +543,7 @@
   .field.codeword { font: 600 18px var(--display); }
   .lbl { font: 600 14px/1.4 var(--ui); margin: 0 0 6px; }
   .btn { font: 600 15px var(--ui); }
-  .btn.small, .seg button, .topright button, .markbar .anonbtn { font: 600 14px var(--ui); }
+  .btn.small, .segctl button, .topright button, .markbar .anonbtn { font: 600 14px var(--ui); }
   .btn.huge { font: 600 16px var(--ui); }
   .fine, .help, .stamp, .stampline, .item .who span, .meta, .piece .meta, .quietline, .footline { font-size: 14px; }
   h3 { font: 600 12px var(--ui); }
@@ -588,6 +590,22 @@
   .panel .rcard .facts { margin-top: 6px; font-size: 14px; }
   .panel .empty { border: 0; border-top: 1px solid var(--rule); border-radius: 0; margin: 0; padding: 10px 4px; }
   @media (max-width: 480px) { .actions { grid-template-columns: 1fr; } .panel { padding: 14px 14px 16px; } }
+
+  /* Arrows: the teacher's green pen, drawn over the page between two points in
+     the text. Only the lines themselves (and their numbers) take clicks; a
+     wide invisible stroke under each line makes it easy to hit. */
+  #sheet { position: relative; }
+  .arrows { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+  .arrows .line { fill: none; stroke: var(--pen); stroke-width: 2; stroke-linecap: round; }
+  .arrows .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+  .arrows .tail { fill: var(--pen); }
+  .arrows .lab circle { fill: var(--card); stroke: var(--pen); stroke-width: 1.5; }
+  .arrows .lab text { fill: var(--pen); font: 600 11px var(--ui); text-anchor: middle; dominant-baseline: central; }
+  .arrows .lab { pointer-events: all; cursor: pointer; }
+  .arrows .on .line { stroke-width: 3.5; }
+  .arrows .draft { fill: none; stroke: var(--pen); stroke-width: 2; stroke-dasharray: 5 5; }
+  .mnote .arw { margin-right: 4px; }
+  @media print { .arrows .line, .arrows .tail, .arrows .lab { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
   /* One paper in the print-all view: heading, the paper with its marks, then its comments. */
   .pp { border: 1.5px solid var(--rule); border-radius: 14px; background: var(--card); padding: 22px 26px; margin-top: 14px; }
@@ -773,7 +791,7 @@
 
           <div class="formrow">
             <label class="lbl">When does it start?</label>
-            <div class="seg" id="whenSeg">
+            <div class="segctl" id="whenSeg">
               <button type="button" class="on" data-when="now">Right now</button>
               <button type="button" data-when="later">At a set time</button>
             </div>
@@ -916,7 +934,7 @@
   <div class="card">
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
-      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out, or right-click them to comment.">?</span></span>
+      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out, or right-click them to comment. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
@@ -931,6 +949,8 @@
       </div>
       <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
+      <!-- Arrows drawn between two points in the text (right-drag), over the page -->
+      <svg class="arrows" id="arrows" aria-hidden="true"></svg>
       <div class="endwrap">
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
@@ -965,15 +985,15 @@
   <div class="box">
     <h2>Settings <span class="q" tabindex="0" data-tip="These apply to every writing session you run, including ones already going. Changes save right away.">?</span></h2>
     <div class="switchrow"><span class="nm">Spellcheck <span class="q" tabindex="0" data-tip="Underline only: misspelled words are underlined, but students can't right-click for suggestions or autocorrect. Off: no underlines at all.">?</span></span>
-      <span class="seg" id="prefSpell"><button type="button" data-v="underline">Underline only</button><button type="button" data-v="off">Off</button></span></div>
+      <span class="segctl" id="prefSpell"><button type="button" data-v="underline">Underline only</button><button type="button" data-v="off">Off</button></span></div>
     <div class="switchrow"><span class="nm">Lock the page if a student leaves it <span class="q" tabindex="0" data-tip="Writing opens full screen. Leaving it (another tab, another app, Esc) locks the page and tells you. Off: students can write in a normal window.">?</span></span>
-      <span class="seg" data-pref="lockOnLeave"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+      <span class="segctl" data-pref="lockOnLeave"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can only type; pasting, dropping or auto-inserting text is refused.">?</span></span>
-      <span class="seg" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+      <span class="segctl" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Show students a word count</span>
-      <span class="seg" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+      <span class="segctl" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Hand in by itself when own time ends <span class="q" tabindex="0" data-tip="For a student with their own time: when it runs out, their paper is handed in automatically. Off: the clock just says Time is up.">?</span></span>
-      <span class="seg" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+      <span class="segctl" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div id="teachersSection" hidden style="margin-top:22px">
       <h3 style="margin-top:0">Teachers who can make writing sessions</h3>
       <div style="margin-top:8px">
@@ -1036,7 +1056,7 @@
     <h2 id="tbTitle"></h2>
     
     <div id="tbStartRow">
-      <div class="seg" id="tbStartSeg">
+      <div class="segctl" id="tbStartSeg">
         <button type="button" data-start="same" class="on">Same start as everyone</button>
         <button type="button" data-start="own">A different time</button>
       </div>
@@ -1044,7 +1064,7 @@
     <div id="tbPicker"></div>
     <div id="tbLenRow" class="formrow">
       <label class="lbl" id="tbLenLbl"></label>
-      <div class="seg" id="tbMultSeg"></div>
+      <div class="segctl" id="tbMultSeg"></div>
     </div>
     <p class="tbox-preview" id="tbPreview"></p>
     <p class="fine warn" id="tbNote" hidden></p>
@@ -2853,16 +2873,19 @@
   }
   $('markBack').addEventListener('click', function () { flushMarks(); hideTools(); closePop(); (markBackTo || showDash)(); });
 
+  // Everything that gets a numbered note in the margin: comments and arrows,
+  // numbered together in the order they come in the text.
   function marginMarks() {
-    return piece.marks.filter(function (m) { return m.type === 'margin'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    return piece.marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
   }
+  var noteNumbers = {};
 
   function drawPiece() {
     var text = piece.text, marks = piece.marks;
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
     marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
-    var numbers = {};
+    var numbers = noteNumbers = {};
     marginMarks().forEach(function (m, i) { numbers[m.id] = i + 1; });
     var paper = $('paper');
     paper.innerHTML = '';
@@ -2900,10 +2923,11 @@
     var margin = $('margin');
     margin.innerHTML = '';
     marginMarks().forEach(function (m) {
-      var note = el('div', 'mnote');
+      var note = el('div', 'mnote' + (m.type === 'arrow' ? ' arrow' : ''));
       note.dataset.mark = m.id;
       note.appendChild(el('span', 'n', String(numbers[m.id])));
-      note.appendChild(document.createTextNode(m.note || ''));
+      if (m.type === 'arrow') note.appendChild(el('span', 'arw', '\u2197'));
+      note.appendChild(document.createTextNode(m.note || (m.type === 'arrow' ? 'Arrow' : '')));
       margin.appendChild(note);
     });
     layoutNotes();
@@ -2916,14 +2940,147 @@
     var paper = $('paper'), margin = $('margin');
     var top0 = paper.getBoundingClientRect().top, bottom = 0;
     Array.prototype.forEach.call(margin.children, function (note) {
-      var seg = paper.querySelector('.seg[data-m~="' + note.dataset.mark + '"]');
-      var want = seg ? seg.getClientRects()[0].top - top0 : bottom;
+      var want = bottom;
+      var m = findMark(note.dataset.mark);
+      if (m && m.type === 'arrow') {
+        var a = pointRect(m.start), b = pointRect(m.end);
+        if (a && b) want = Math.min(a.top, b.top) - top0;
+      } else {
+        var seg = paper.querySelector('.seg[data-m~="' + note.dataset.mark + '"]');
+        if (seg) want = seg.getClientRects()[0].top - top0;
+      }
       var top = Math.max(want, bottom);
       note.style.top = top + 'px';
       bottom = top + note.offsetHeight + 8;
     });
     margin.style.minHeight = bottom + 'px';
+    drawArrows();
   }
+
+  // ---- Arrows ----
+  // An arrow joins two points in the student's text (character offsets, so
+  // it stays put when the page reflows or prints). It's drawn as a gentle
+  // curve bowing out to one side, with its number at the middle.
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    var n = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    return n;
+  }
+  // Where a character offset sits on screen: the left edge of the letter there
+  // (or the right edge of the last letter), and that line's top and height.
+  function pointRect(p) {
+    var segs = $('paper').querySelectorAll('.seg');
+    for (var i = 0; i < segs.length; i++) {
+      var o = Number(segs[i].dataset.o), t = segs[i].firstChild, len = t ? t.length : 0;
+      if (!t || p < o || p > o + len) continue;
+      if (p === o + len && i + 1 < segs.length && Number(segs[i + 1].dataset.o) === p) continue; // take the next segment's first letter
+      var r = document.createRange();
+      var k = p - o, atEnd = k >= len;
+      // A line break as "the letter" would sit at the end of the line; step onto a real letter.
+      while (!atEnd && t.data.charAt(k) === '\n' && k > 0) k--;
+      r.setStart(t, atEnd ? len - 1 : k);
+      r.setEnd(t, atEnd ? len : k + 1);
+      var rects = r.getClientRects(), q = rects[rects.length - 1] || r.getBoundingClientRect();
+      if (!q || (!q.width && !q.height)) continue;
+      return { x: atEnd ? q.right : q.left, top: q.top, h: q.height };
+    }
+    return null;
+  }
+  // The sheet's inside corner, which the drawing's coordinates start from.
+  function sheetBox() { var sh = $('sheet'), r = sh.getBoundingClientRect(); return { left: r.left + sh.clientLeft, top: r.top + sh.clientTop }; }
+  function arrowGeometry(m, box) {
+    var tailAt = m.head === 'start' ? m.end : m.start, headAt = m.head === 'start' ? m.start : m.end;
+    var a = pointRect(tailAt), b = pointRect(headAt);
+    if (!a || !b) return null;
+    var x1 = a.x - box.left, y1 = a.top + a.h / 2 - box.top, x2 = b.x - box.left, y2 = b.top + b.h / 2 - box.top;
+    var dx = x2 - x1, dy = y2 - y1, d = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Bow out to the left of the page for a line that runs down or up it, upward for one along a line.
+    var nx = -dy / d, ny = dx / d;
+    if (Math.abs(dy) < 6 ? ny > 0 : nx > 0) { nx = -nx; ny = -ny; }
+    var k = Math.max(26, Math.min(110, d * 0.28));
+    var cx = (x1 + x2) / 2 + nx * k, cy = (y1 + y2) / 2 + ny * k;
+    return { x1: x1, y1: y1, x2: x2, y2: y2, cx: cx, cy: cy, mx: 0.25 * x1 + 0.5 * cx + 0.25 * x2, my: 0.25 * y1 + 0.5 * cy + 0.25 * y2 };
+  }
+  function drawArrows() {
+    var svg = $('arrows');
+    if (!svg || !piece) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var box = sheetBox();
+    var defs = svgEl('defs');
+    var mk = svgEl('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' });
+    mk.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'var(--pen)', style: 'fill: var(--pen)' }));
+    defs.appendChild(mk);
+    svg.appendChild(defs);
+    piece.marks.forEach(function (m) {
+      if (m.type !== 'arrow') return;
+      var g = arrowGeometry(m, box);
+      if (!g) return;
+      var d = 'M' + g.x1 + ',' + g.y1 + ' Q' + g.cx + ',' + g.cy + ' ' + g.x2 + ',' + g.y2;
+      var grp = svgEl('g', { 'data-mark': m.id });
+      grp.appendChild(svgEl('path', { d: d, class: 'hit' }));
+      grp.appendChild(svgEl('path', { d: d, class: 'line', 'marker-end': 'url(#arrowhead)' }));
+      grp.appendChild(svgEl('circle', { cx: g.x1, cy: g.y1, r: 2.5, class: 'tail' }));
+      var lab = svgEl('g', { class: 'lab' });
+      lab.appendChild(svgEl('circle', { cx: g.mx, cy: g.my, r: 9 }));
+      var t = svgEl('text', { x: g.mx, y: g.my });
+      t.textContent = String(noteNumbers[m.id] || '');
+      lab.appendChild(t);
+      grp.appendChild(lab);
+      grp.addEventListener('click', function (e) { e.stopPropagation(); hideTools(); openPop(m, null, lab.getBoundingClientRect()); });
+      svg.appendChild(grp);
+    });
+  }
+  // While dragging: a dashed straight line from the start point to the pointer.
+  function drawDraft(from, x, y) {
+    var svg = $('arrows'), box = sheetBox(), a = pointRect(from);
+    var old = svg.querySelector('.draft');
+    if (old) old.parentNode.removeChild(old);
+    if (!a) return;
+    svg.appendChild(svgEl('line', { class: 'draft', x1: a.x - box.left, y1: a.top + a.h / 2 - box.top, x2: x - box.left, y2: y - box.top }));
+  }
+  function clearDraft() { var d = $('arrows').querySelector('.draft'); if (d) d.parentNode.removeChild(d); }
+  // The character offset under a point on screen, or null off the text.
+  function pointOffset(x, y) {
+    var node, off;
+    if (document.caretPositionFromPoint) { var cp = document.caretPositionFromPoint(x, y); if (!cp) return null; node = cp.offsetNode; off = cp.offset; }
+    else if (document.caretRangeFromPoint) { var cr = document.caretRangeFromPoint(x, y); if (!cr) return null; node = cr.startContainer; off = cr.startOffset; }
+    else return null;
+    if (!node || !$('paper').contains(node)) return null;
+    return textOffset(node, off);
+  }
+  // Right-drag (or Control-drag on a Mac) from one place to another draws an
+  // arrow. A right-click that doesn't move still does what it always did
+  // (comment on the selected words, or open a mark), decided on release
+  // because a Mac sends the right-click before the drag.
+  var drag = null, swallowMenu = false;
+  $('paper').addEventListener('mousedown', function (e) {
+    if (!piece || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
+    var o = pointOffset(e.clientX, e.clientY);
+    if (o === null) return;
+    drag = { from: o, x: e.clientX, y: e.clientY, moved: false, menu: null };
+    if (e.button === 0) e.preventDefault(); // Control-drag shouldn't select text
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 12) return;
+    if (!drag.moved) { drag.moved = true; hideTools(); }
+    drawDraft(drag.from, e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseup', function (e) {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    clearDraft();
+    if (!d.moved) { if (d.menu) rightClick(d.menu); return; }
+    swallowMenu = true;
+    setTimeout(function () { swallowMenu = false; }, 400);
+    var to = pointOffset(e.clientX, e.clientY);
+    if (to === null || to === d.from) return;
+    window.getSelection().removeAllRanges();
+    openPop(null, { type: 'arrow', start: Math.min(d.from, to), end: Math.max(d.from, to), head: to > d.from ? 'end' : 'start' },
+      { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 });
+  });
   window.addEventListener('resize', function () { if (!$('markScreen').hidden) layoutNotes(); });
 
   // A DOM position inside the paper -> a character offset in the text.
@@ -2981,6 +3138,7 @@
   }
   function hideTools() { $('markTools').hidden = true; toolRange = null; }
   $('paper').addEventListener('mouseup', function (e) {
+    if (e.button !== 0 || e.ctrlKey) return; // right-button and Control-drags are arrows
     // Clicking an existing mark (with nothing selected) opens it instead.
     var sel = window.getSelection();
     if (sel.isCollapsed) {
@@ -3148,20 +3306,25 @@
   // Right-click: comment on the selected words, or open the mark you clicked.
   $('paper').addEventListener('contextmenu', function (e) {
     if (!piece) return;
+    if (swallowMenu) { e.preventDefault(); return; } // the end of an arrow drag
+    if (drag) { e.preventDefault(); drag.menu = { target: e.target }; return; } // decide when the button comes up
+    if (rightClick({ target: e.target })) e.preventDefault();
+  });
+  function rightClick(e) {
     var s = selectionInPaper();
     var hit = e.target.closest('.hl, .strike, .ins, .mnum');
     var sel = window.getSelection();
     var insideHit = hit && sel.rangeCount && hit.contains(sel.getRangeAt(0).commonAncestorContainer);
     if (s && !s.collapsed && !insideHit) {
       var r = trimRange(s);
-      if (r.start >= r.end) return;
-      e.preventDefault();
+      if (r.start >= r.end) return false;
       hideTools();
       openPop(null, { type: 'margin', start: r.start, end: r.end }, s.rect);
-      return;
+      return true;
     }
-    if (hit) { e.preventDefault(); hideTools(); openExisting(hit); }
-  });
+    if (hit) { hideTools(); openExisting(hit); return true; }
+    return false;
+  }
 
   function addMark(m) {
     m.id = Math.random().toString(36).slice(2, 10);
@@ -3182,6 +3345,18 @@
     if (note) openPop(findMark(note.dataset.mark), null, note.getBoundingClientRect());
   });
 
+  // The few words around one point in the text, to name an arrow's two ends.
+  function wordsAt(text, p) {
+    var a = Math.max(0, p - 18), b = Math.min(text.length, p + 22);
+    var t = text.slice(a, b).replace(/\s+/g, ' ');
+    if (a > 0) t = t.replace(/^\S*\s/, '');
+    if (b < text.length) t = t.replace(/\s\S*$/, '');
+    return t.trim();
+  }
+  function arrowQuote(text, m) {
+    var from = m.head === 'start' ? m.end : m.start, to = m.head === 'start' ? m.start : m.end;
+    return 'from \u201c' + wordsAt(text, from) + '\u201d to \u201c' + wordsAt(text, to) + '\u201d';
+  }
   function quoteOf(m) {
     var q = piece.text.slice(m.start, m.end).replace(/\s+/g, ' ').trim();
     return q.length > 60 ? q.slice(0, 57) + '…' : q;
@@ -3192,27 +3367,28 @@
     var pop = $('markPop');
     $('popWhat').textContent = m.type === 'margin' ? 'Comment on “' + quoteOf(m) + '”'
       : m.type === 'strike' ? 'Crossed out “' + quoteOf(m) + '”'
+      : m.type === 'arrow' ? 'Arrow ' + arrowQuote(piece.text, m)
       : 'Written into the text';
     $('popText').hidden = m.type === 'strike';
     $('popText').value = mark ? mark.note || '' : '';
-    $('popText').placeholder = m.type === 'insert' ? 'What to add here' : 'Your comment';
+    $('popText').placeholder = m.type === 'insert' ? 'What to add here' : m.type === 'arrow' ? 'How are these two parts connected? (optional)' : 'Your comment';
     $('popSave').hidden = m.type === 'strike';
     $('popDelete').hidden = !mark;
-    $('popDelete').textContent = m.type === 'strike' ? 'Remove the cross-out' : 'Delete';
+    $('popDelete').textContent = m.type === 'strike' ? 'Remove the cross-out' : m.type === 'arrow' ? 'Delete the arrow' : 'Delete';
     pop.hidden = false;
     var x = Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, rect.left));
     var y = rect.bottom + 8;
     if (y + pop.offsetHeight > window.innerHeight - 12) y = Math.max(12, rect.top - pop.offsetHeight - 8);
     pop.style.left = x + 'px';
     pop.style.top = y + 'px';
-    each('.paper .on, .mnote.on', function (n) { n.classList.remove('on'); });
+    each('.paper .on, .mnote.on, .arrows .on', function (n) { n.classList.remove('on'); });
     if (mark) each('[data-mark="' + mark.id + '"], .seg[data-m~="' + mark.id + '"], .seg[data-s~="' + mark.id + '"]', function (n) { n.classList.add('on'); });
     if (!$('popText').hidden) $('popText').focus();
   }
   function closePop() {
     $('markPop').hidden = true;
     popMark = popDraft = null;
-    each('.paper .on, .mnote.on', function (n) { n.classList.remove('on'); });
+    each('.paper .on, .mnote.on, .arrows .on', function (n) { n.classList.remove('on'); });
   }
   $('popCancel').addEventListener('click', closePop);
   $('popSave').addEventListener('click', savePop);
@@ -3223,14 +3399,16 @@
   function savePop() {
     var note = $('popText').value.trim();
     if (popMark) {
-      if (!note) { deleteMark(popMark); closePop(); return; }
+      if (!note && popMark.type !== 'arrow') { deleteMark(popMark); closePop(); return; } // an arrow can stand without words
       if (popMark.type === 'insert') popMark.fmt = fmtOf(popMark);
       popMark.note = note;
       if (popMark.type === 'insert') popMark.fmt = fmtOf(popMark);
       drawPiece();
       queueSave();
-    } else if (popDraft && note) {
-      addMark({ type: popDraft.type, start: popDraft.start, end: popDraft.end, note: note });
+    } else if (popDraft && (note || popDraft.type === 'arrow')) {
+      var nm = { type: popDraft.type, start: popDraft.start, end: popDraft.end, note: note };
+      if (popDraft.type === 'arrow') nm.head = popDraft.head;
+      addMark(nm);
     }
     window.getSelection().removeAllRanges();
     closePop();
@@ -3376,6 +3554,10 @@
             li.appendChild(el('q', null, m.quote));
             li.appendChild(document.createTextNode(' — '));
             li.appendChild(el('span', 'note', m.note));
+          } else if (m.type === 'arrow') {
+            li.appendChild(el('span', 'kind', 'Arrow'));
+            li.appendChild(document.createTextNode(m.quote + (m.note ? ' — ' : '')));
+            if (m.note) li.appendChild(el('span', 'note', m.note));
           } else if (m.type === 'strike') {
             li.appendChild(el('span', 'kind', 'Crossed out'));
             li.appendChild(el('q', null, m.quote));
@@ -3421,9 +3603,10 @@
     box.appendChild(head);
     if (p.grade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
     var text = p.text, marks = p.marks || [];
-    var margins = marks.filter(function (m) { return m.type === 'margin'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    var allNotes = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    var margins = allNotes.filter(function (m) { return m.type === 'margin'; });
     var num = {};
-    margins.forEach(function (m, i) { num[m.id] = i + 1; });
+    allNotes.forEach(function (m, i) { num[m.id] = i + 1; });
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
     marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
@@ -3438,14 +3621,15 @@
       });
       var next = pts[i + 1];
       if (next === undefined || next === pt) return;
-      var on = marks.filter(function (m) { return m.type !== 'insert' && m.start <= pt && m.end >= next; });
+      var on = marks.filter(function (m) { return (m.type === 'margin' || m.type === 'strike') && m.start <= pt && m.end >= next; });
       var cls = (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl' : '');
       paper.appendChild(el('span', cls.trim(), text.slice(pt, next)));
     });
     box.appendChild(paper);
-    if (margins.length) {
+    if (allNotes.length) {
       var notes = el('div', 'pnotes');
-      margins.forEach(function (m) {
+      allNotes.forEach(function (m) {
+        if (m.type === 'arrow') { notes.appendChild(el('p', null, '[' + num[m.id] + '] Arrow ' + arrowQuote(text, m) + (m.note ? ' — ' + m.note : ''))); return; }
         var q = text.slice(m.start, m.end).replace(/\s+/g, ' ').trim();
         notes.appendChild(el('p', null, '[' + num[m.id] + '] “' + (q.length > 80 ? q.slice(0, 77) + '…' : q) + '” — ' + m.note));
       });
