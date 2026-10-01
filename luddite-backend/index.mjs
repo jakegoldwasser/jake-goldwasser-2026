@@ -96,7 +96,7 @@ function verifySession(token) {
 //   luddite:teacher:<sub>   { rooms: [code, ...], classes: [id, ...] }  newest first
 //   luddite:class:<id>      { id, name, teacher: { sub, email, name }, emails: [...],
 //                             assignments: [code, ...] newest first, createdAt }
-//   luddite:mine:<email>    { classes: [id, ...], own: [code, ...] }: how a
+//   luddite:mine:<email>    { classes: [id, ...], own: [code, ...], rooms: [code, ...] }: how a
 //                           student's login finds their assignments (their
 //                           classes' assignments, and ones with their own time)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
@@ -314,6 +314,7 @@ function stateAt(win, now) {
 }
 
 async function onRoster(room, email) {
+  if ((room.emails || []).includes(email)) return true; // the session's own list
   if (!room.classId) return false;
   const { state } = await readItem('luddite:class:' + room.classId);
   return !!(state && state.emails.includes(email));
@@ -345,6 +346,7 @@ function roomSummary(room) {
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running', state, createdAt: room.createdAt,
     classId: room.classId || null, casual: !!room.casual, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
+    invited: (room.emails || []).length,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
@@ -692,6 +694,8 @@ async function routeLuddite(event, method, path, info) {
     const { state: mine } = await readItem('luddite:mine:' + em);
     const codes = new Set((mine && mine.own) || []);
     const viaClass = new Set();
+    // Sessions made with a typed-in list of addresses, rather than a class.
+    ((mine && mine.rooms) || []).forEach((code) => { codes.add(code); viaClass.add(code); });
     const classes = await Promise.all(((mine && mine.classes) || []).map((id) => readItem('luddite:class:' + id)));
     classes.forEach(({ state: c }) => {
       if (!c || c.deletedAt || !c.emails.includes(em)) return;
@@ -702,6 +706,7 @@ async function routeLuddite(event, method, path, info) {
     rooms.forEach(({ state: r }) => {
       if (!r || r.deletedAt) return;
       if (!viaClass.has(r.code) && !(r.own && r.own[em])) return;
+      if (!r.classId && r.emails && !r.emails.includes(em) && !(r.own && r.own[em])) return;
       const s = r.students[me.sub];
       if (s && s.status === 'removed') return;
       const win = windowOf(r, em);
@@ -1004,7 +1009,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/assignments { title, prompt, classId, startAt } -- make a
+  // PUT /luddite/assignments { title, prompt, classId | emails, startAt } -- make a
   // writing session with a fresh two-word Entry Phrase. It needs a name that
   // says what it is. startAt (ms; omitted = now) is when it starts and the
   // teacher ends it; prompt (optional) is shown to students at the top of
@@ -1018,14 +1023,17 @@ async function routeLuddite(event, method, path, info) {
     if (!title && !casual) throw new HttpError(400, 'need_title');
     const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
     const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
-    const cls = body.classId && !casual ? await getClass(body.classId, me, role) : null;
+    // Who's let in on their own: a class, or a list of addresses typed in for this session alone.
+    const emails = casual ? [] : cleanEmails(body.emails);
+    if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
+    const cls = body.classId && !casual && !emails.length ? await getClass(body.classId, me, role) : null;
     let room = null;
     for (let i = 0; i < 12 && !room; i++) {
       const { code, codeLabel } = newRoomCode();
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title: title || codeLabel, titled: !!title, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title: title || codeLabel, titled: !!title, teacher, classId: cls ? cls.id : null, emails: emails.length ? emails : undefined, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -1036,6 +1044,11 @@ async function routeLuddite(event, method, path, info) {
     if (cls) {
       await mutate('luddite:class:' + cls.id, (c) => ({ ...c, assignments: [room.code, ...(c.assignments || [])].slice(0, MAX_CLASS_ASSIGNMENTS) }));
     }
+    // Each address on the session's own list finds it under their writing sessions.
+    await inBatches(emails, (email) => mutate('luddite:mine:' + email, (m) => {
+      const rooms = (m && m.rooms) || [];
+      return { ...(m || {}), rooms: [room.code, ...rooms.filter((c) => c !== room.code)].slice(0, 60) };
+    }));
     return respond(200, { room });
   }
 
@@ -1148,6 +1161,7 @@ async function classesOf(teacherState) {
 
 // The addresses on an assignment's class, so its teacher can see who hasn't come in.
 async function rosterOf(room) {
+  if (!room.classId && room.emails && room.emails.length) return { id: null, name: '', emails: room.emails };
   if (!room.classId) return null;
   const { state } = await readItem('luddite:class:' + room.classId);
   return state && !state.deletedAt ? { id: state.id, name: state.name, emails: state.emails } : null;
