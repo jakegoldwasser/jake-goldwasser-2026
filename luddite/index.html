@@ -510,7 +510,8 @@
   #promptBar .pk { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 2px; }
   #promptBar button { flex: none; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); width: 30px; height: 30px; border-radius: 50%; font: 400 18px/1 var(--ui); cursor: pointer; }
   #promptBar button:hover { background: var(--hover); }
-  .promptshow { background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-decoration: underline; padding: 0; }
+  .promptshow { flex: none; align-self: center; margin-top: 10px; border: 1.5px solid var(--edge); background: var(--sun-tint); color: var(--ink); font: 600 14px var(--ui); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
+  .promptshow:hover { background: var(--hover); }
   .readyprompt { text-align: left; background: var(--sun-tint); border-radius: 12px; padding: 12px 16px; margin: 0 0 18px; white-space: pre-wrap; font-size: 16px; }
   .readyprompt b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .switchrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 12px; margin-top: 8px; background: var(--card); }
@@ -697,7 +698,7 @@
     <div class="row">
       <button class="btn" id="startBtn">Start writing</button>
       <button class="btn ghost" id="submitBtn" hidden>Hand in</button>
-      <button class="btn ghost" id="downloadBtn" hidden>Download .txt</button>
+      <button class="btn huge" id="leaveBigBtn" hidden>Leave this writing session</button>
     </div>
     <p class="fine" id="submitNote" hidden></p>
     <p class="fine warn" id="noFullscreen" hidden>This browser can&rsquo;t go full screen, so Luddite won&rsquo;t work here. Try Chrome, Edge, Firefox or Safari on a computer.</p>
@@ -718,13 +719,13 @@
     <div class="ptext"><span class="pk">Prompt</span><span id="promptText"></span></div>
     <button type="button" id="promptClose" aria-label="Close the prompt" title="Close the prompt">&times;</button>
   </div>
+  <button type="button" class="promptshow" id="promptShow" hidden>Show the prompt</button>
   <textarea id="pad" spellcheck="true" autocomplete="off" autocorrect="off" autocapitalize="sentences"
     data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
     aria-label="Your writing" placeholder="Begin."></textarea>
   <div class="bar">
     <div class="left">
       <span id="count">0 words</span>
-      <button class="promptshow" id="promptShow" hidden>Show prompt</button>
       <span id="timeLeft" class="timeleft"></span>
       <span id="leaves"></span>
     </div>
@@ -984,11 +985,11 @@
 <div class="overlay no-print" id="prefsBox" hidden>
   <div class="box">
     <h2>Settings <span class="q" tabindex="0" data-tip="These apply to every writing session you run, including ones already going. Changes save right away.">?</span></h2>
-    <div class="switchrow"><span class="nm">Spellcheck <span class="q" tabindex="0" data-tip="Underline only: misspelled words are underlined, but students can't right-click for suggestions or autocorrect. Off: no underlines at all.">?</span></span>
+    <div class="switchrow"><span class="nm">Spellcheck <span class="q" tabindex="0" data-tip="Underline only: misspelled words are underlined, and students can right-click one to pick a spelling, but nothing is ever corrected for them. Off: no underlines or suggestions at all.">?</span></span>
       <span class="segctl" id="prefSpell"><button type="button" data-v="underline">Underline only</button><button type="button" data-v="off">Off</button></span></div>
     <div class="switchrow"><span class="nm">Lock the page if a student leaves it <span class="q" tabindex="0" data-tip="Writing opens full screen. Leaving it (another tab, another app, Esc) locks the page and tells you. Off: students can write in a normal window.">?</span></span>
       <span class="segctl" data-pref="lockOnLeave"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
-    <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can only type; pasting, dropping or auto-inserting text is refused.">?</span></span>
+    <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can cut, copy and paste within their own writing, but pasting, dropping or auto-inserting anything from elsewhere is refused.">?</span></span>
       <span class="segctl" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Show students a word count</span>
       <span class="segctl" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
@@ -1503,6 +1504,7 @@
 
   $('leaveRoomBtn').addEventListener('click', leaveRoom);
   $('leaveRoomBtn2').addEventListener('click', leaveRoom);
+  $('leaveBigBtn').addEventListener('click', leaveRoom);
 
   // ---------------------------------------------------------------------
   // Ready screen
@@ -1520,7 +1522,7 @@
     // Say only the rules this teacher has switched on.
     var rules = [];
     if (P().lockOnLeave) rules.push('Writing opens full screen. Leaving it \u2014 another tab, another app, or Esc \u2014 locks the page' + (inRoom ? ', and your teacher sees each time' : ''));
-    if (P().blockPaste) rules.push('Copying and pasting are off');
+    if (P().blockPaste) rules.push('You can cut, copy and paste within your writing, but nothing can be pasted in from elsewhere');
     $('readyRules').textContent = rules.length ? rules.join('. ') + '.' : '';
     $('readyRules').hidden = !rules.length;
     // When it runs, and whether this student's time is up.
@@ -1536,7 +1538,6 @@
     $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
     $('submitBtn').hidden = !inRoom;
     $('submitBtn').disabled = !has || previewing;
-    $('downloadBtn').hidden = !has;
     $('newPageWrap').hidden = !has;
     $('dashWrap').hidden = !isTeacher || previewing;
     $('leaveWrap').hidden = !inRoom || previewing;
@@ -1558,11 +1559,13 @@
       $('startBtn').hidden = true;
       $('submitBtn').hidden = true;
       $('newPageWrap').hidden = true;
+      $('leaveWrap').hidden = true;
       $('submitNote').hidden = false;
       $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. If you need to keep working on it, ask your teacher to unlock it; this page opens again by itself.';
     } else {
       $('startBtn').hidden = false;
     }
+    $('leaveBigBtn').hidden = !handedIn;
     show('readyScreen');
     if (handedIn) poll(pollRelease, POLL_WAITING_MS);
   }
@@ -1575,17 +1578,8 @@
     if (!data.room.handedIn) showReady();
   }
 
-  $('downloadBtn').addEventListener('click', function () {
-    var blob = new Blob([load(textKey()) || ''], { type: 'text/plain' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'luddite-' + new Date().toISOString().slice(0, 10) + '.txt';
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-  });
-
   $('newPageBtn').addEventListener('click', function () {
-    if (!confirm('Clear the page? This can’t be undone. Download it first if you want to keep it.')) return;
+    if (!confirm('Clear the page? This can’t be undone.')) return;
     store(textKey(), null);
     store(leavesKey(), null);
     showReady();
@@ -1820,21 +1814,53 @@
   window.addEventListener('blur', function () { lock('You switched to another window'); });
 
   // ---------------------------------------------------------------------
-  // No copy, cut, paste, drag-and-drop, or inserted text
+  // Nothing pasted, dropped or inserted from outside. Cut, copy and paste
+  // work within the writing through Luddite's own clipboard (`clip`), which
+  // never touches the computer's, so nothing from elsewhere can come in.
   // ---------------------------------------------------------------------
   function stop(e) { e.preventDefault(); e.stopPropagation(); }
-  ['copy', 'cut', 'paste', 'drop', 'dragstart', 'dragover', 'contextmenu'].forEach(function (type) {
-    document.addEventListener(type, function (e) { if (writing && (P().blockPaste || type === 'contextmenu')) stop(e); }, true);
+  var clip = '', insertingClip = false;
+  function padSelection() { return pad.value.slice(pad.selectionStart, pad.selectionEnd); }
+  document.addEventListener('copy', function (e) {
+    if (!writing || !P().blockPaste) return;
+    stop(e);
+    if (e.target === pad && !locked && padSelection()) clip = padSelection();
+  }, true);
+  document.addEventListener('cut', function (e) {
+    if (!writing || !P().blockPaste) return;
+    stop(e);
+    if (e.target !== pad || locked || !padSelection()) return;
+    clip = padSelection();
+    if (!document.execCommand('delete')) insertAtCaret('', 0);
+  }, true);
+  document.addEventListener('paste', function (e) {
+    if (!writing || !P().blockPaste) return;
+    stop(e);
+    if (e.target !== pad || locked || !clip) return;
+    insertingClip = true;
+    if (!document.execCommand('insertText', false, clip)) insertAtCaret(clip, 0);
+    insertingClip = false;
+  }, true);
+  ['drop', 'dragstart', 'dragover'].forEach(function (type) {
+    document.addEventListener(type, function (e) { if (writing && P().blockPaste) stop(e); }, true);
   });
+  // Right-click only on the writing, and only to fix a spelling: picking a
+  // suggestion is the one replacement let in, and only just after the menu
+  // opened, so nothing gets corrected without the writer choosing it.
+  var spellMenuAt = 0;
+  document.addEventListener('contextmenu', function (e) {
+    if (!writing) return;
+    if (e.target !== pad || locked || P().spellcheck === 'off') { stop(e); return; }
+    spellMenuAt = Date.now();
+  }, true);
 
   // Shortcuts that would copy, paste, print, save, open or close things.
   var BLOCKED_KEYS = { c: 1, v: 1, x: 1, p: 1, s: 1, o: 1, n: 1, t: 1, w: 1, q: 1, l: 1, r: 1, f: 1, g: 1, h: 1, j: 1, k: 1, d: 1, u: 1, e: 1, m: 1 };
   document.addEventListener('keydown', function (e) {
     if (!writing) return;
     var k = (e.key || '').toLowerCase();
-    if ((e.metaKey || e.ctrlKey) && BLOCKED_KEYS[k] && (P().blockPaste || !{ c: 1, v: 1, x: 1 }[k])) return stop(e);
-    if (e.shiftKey && k === 'insert' && P().blockPaste) return stop(e);
-    if (/^f\d+$/.test(k) || k === 'contextmenu') return stop(e);
+    if ((e.metaKey || e.ctrlKey) && BLOCKED_KEYS[k] && !{ c: 1, v: 1, x: 1 }[k]) return stop(e);
+    if (/^f\d+$/.test(k)) return stop(e);
     if (k === 'escape') return stop(e);
     // Tab indents instead of moving focus out of the page; Shift+Tab takes
     // back a tab just before the cursor.
@@ -1862,8 +1888,11 @@
   var MAX_INSERT = 8; // one grapheme, even a long emoji sequence
   var lastBeforeInputOk = false;
   pad.addEventListener('beforeinput', function (e) {
-    var ok = !P().blockPaste || (ALLOWED_INPUT.test(e.inputType) &&
+    var picked = e.inputType === 'insertReplacementText' && Date.now() - spellMenuAt < 60000;
+    var ok = !P().blockPaste || insertingClip || picked || (ALLOWED_INPUT.test(e.inputType) &&
       !(e.inputType === 'insertText' && e.data && e.data.length > MAX_INSERT));
+    if (e.inputType === 'insertReplacementText' && !picked) ok = false;
+    if (picked) spellMenuAt = 0;
     lastBeforeInputOk = ok;
     if (!ok) e.preventDefault();
   });
