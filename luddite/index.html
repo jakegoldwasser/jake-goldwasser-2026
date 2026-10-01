@@ -2116,7 +2116,9 @@
   });
   pad.addEventListener('input', function (e) {
     var grew = pad.value.length - shadow.length;
-    if (P().blockPaste && !lastBeforeInputOk && grew > MAX_INSERT && !e.isComposing) { revert(); return; }
+    // (Text Luddite pastes itself comes through execCommand, which sends no
+    // beforeinput, so insertingClip vouches for it.)
+    if (P().blockPaste && !lastBeforeInputOk && !insertingClip && grew > MAX_INSERT && !e.isComposing) { revert(); return; }
     lastBeforeInputOk = false;
     shadow = pad.value;
     updateCount();
