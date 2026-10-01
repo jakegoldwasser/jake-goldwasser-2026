@@ -781,7 +781,16 @@ async function routeLuddite(event, method, path, info) {
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
     if (!room) throw new HttpError(404, 'no_room');
+    // A backup of the writing so far (sent when it has changed), so a lost
+    // laptop or a cleared browser doesn't lose the work.
+    if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') await saveDraft(code, me.sub, body.text);
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
+  }
+
+  // GET /luddite/draft?code= -- this student's backed-up writing in a session.
+  if (path === '/luddite/draft' && method === 'GET') {
+    const { state } = await readItem('luddite:draft:' + cleanCode(q.code) + ':' + me.sub);
+    return respond(200, { draft: state ? { text: state.text, at: state.at } : null });
   }
 
   // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
@@ -816,28 +825,34 @@ async function routeLuddite(event, method, path, info) {
     const at = Date.now();
     const id = file ? file.id : 'l' + randomUUID();
     const win = windowOf(room, lower(me.email));
+    // A new hand-in replaces this student's earlier one in the session. The
+    // earlier ones aren't deleted: their copies stay, listed in `replaces`.
+    const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
+    const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]);
     const submission = { id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-      link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS) };
+      link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS),
+      ...(replaces.length ? { replaces } : {}) };
     if (stored) {
       await mutate('luddite:sub:' + id, () => ({
         id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
-        label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: ''
+        label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '',
+        ...(replaces.length ? { replaces } : {})
       }));
       const email = me.email.toLowerCase();
       await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
         email, name: me.name || (t && t.name) || '',
-        subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || [])]
+        subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || []).filter((x) => !replaces.includes(x.id))]
       }));
       await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
         const students = { ...((t && t.students) || {}) };
         const prev = students[email] || { count: 0 };
-        students[email] = { name: me.name || prev.name || '', last: at, count: prev.count + 1 };
+        students[email] = { name: me.name || prev.name || '', last: at, count: prev.count + (earlier.length ? 0 : 1) };
         return { ...(t || { rooms: [] }), students };
       });
     }
     const saved = await mutate('luddite:room:' + code, (r) => ({
       ...r,
-      submissions: [submission, ...(r.submissions || [])],
+      submissions: [submission, ...(r.submissions || []).filter((x) => x.sub !== me.sub)],
       students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, writing: false } }
     }));
     return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
@@ -1164,6 +1179,21 @@ async function classesOf(teacherState) {
 }
 
 // The addresses on an assignment's class, so its teacher can see who hasn't come in.
+// The latest backup of a student's writing in one session. If the writing
+// suddenly shrinks by more than half (a glitch, or a wiped page), the copy
+// before it is kept too, as `prev`.
+async function saveDraft(code, sub, raw) {
+  const text = String(raw).slice(0, MAX_STORED_CHARS);
+  await mutate('luddite:draft:' + code + ':' + sub, (d) => {
+    if (d && d.text === text) return undefined;
+    const at = Date.now();
+    const shrank = d && d.text && text.length < d.text.length / 2;
+    const prev = shrank ? { text: d.text, at: d.at } : d && d.prev;
+    const keepPrev = prev && prev.text.length + text.length < 350000;
+    return { code, sub, text, at, ...(keepPrev ? { prev } : {}) };
+  });
+}
+
 async function rosterOf(room) {
   if (!room.classId && room.emails && room.emails.length) return { id: null, name: '', emails: room.emails };
   if (!room.classId) return null;
