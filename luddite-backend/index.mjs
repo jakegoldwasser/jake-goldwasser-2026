@@ -704,7 +704,8 @@ async function routeLuddite(event, method, path, info) {
   // (polled while waiting), or the whole thing for its teacher.
   if (path === '/luddite/assignment' && method === 'GET') {
     const room = await getRoom(cleanCode(q.code));
-    if (isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
+    // ?as=student: a teacher (or owner) writing in a session asks for their own place in it, not the teacher's copy.
+    if (q.as !== 'student' && isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 

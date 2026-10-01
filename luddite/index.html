@@ -166,7 +166,7 @@
   .classcard h4 { font: 400 20px Literata, Georgia, serif; margin: 0; }
   .classcard .meta { color: var(--muted); font-size: 13px; }
   .tag { display: inline-block; font-size: 12.5px; font-weight: 600; background: var(--paper); box-shadow: inset 0 0 0 1px var(--rule); border-radius: 6px; padding: 1px 8px; }
-  .overlay { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow-y: auto;
+  .overlay { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow-y: auto;
     background: color-mix(in srgb, var(--paper) 90%, transparent); }
   .overlay .box { background: var(--card); border-radius: 16px; padding: 24px 24px 22px; box-shadow: inset 0 0 0 2px var(--ink); width: 100%; max-width: 560px; text-align: left; }
   .overlay h2 { font: 400 24px Literata, Georgia, serif; margin: 0 0 4px; }
@@ -556,6 +556,38 @@
   [data-tip]:hover::after, [data-tip]:focus::after { font-size: 14px; }
   .joinbox .bigcode { font-size: 34px; }
 
+
+  /* ---- Home: a few clear panels instead of loose titles. Each panel is a white
+     card with its title (and its one action) on top, and its items as plain
+     rows separated by hairlines, so nothing is a card inside a card. ---- */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .btn.bigaction { padding: 14px 18px; font-size: 16px; width: 100%; }
+  .btn.ghost.bigaction { border-color: var(--edge); }
+  .btn.bigaction.on { background: #44501F; }
+  .panel { background: var(--card); border: 1.5px solid var(--edge); border-radius: 16px; padding: 16px 20px 18px; margin-top: 18px; }
+  .panelhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .panelhead h3.sect { margin: 0; font-size: 22px; display: flex; align-items: baseline; gap: 0; }
+  .panelhead h3.sect .q { align-self: center; }
+  .panelhead h3.sect.big { font-size: 28px; }
+  .panelhead h3.sect .n { font: 400 16px var(--ui); color: var(--muted); margin-left: 8px; }
+  .iconbtn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1.5px solid var(--ink); border-radius: 50%;
+    background: var(--card); color: var(--ink); font: 400 20px/1 var(--ui); cursor: pointer; }
+  .iconbtn:hover { background: var(--hover); }
+  .panel .newroom { border: 0; padding: 4px 0 0; background: none; box-shadow: none; }
+  .panel #newClassBox { border-top: 1px solid var(--rule); padding: 12px 0 14px; margin-bottom: 4px; }
+  /* Session groups: small labels, and a quiet line when a group is empty. */
+  .panel .grouphead { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 2px; gap: 8px; }
+  .panel .grouphead:first-child { margin-top: 6px; }
+  .panel .grouphead .dot { width: 9px; height: 9px; }
+  .panel .grouphead .n { font: 600 12px var(--ui); color: var(--muted); }
+  .groupempty { margin: 0; padding: 8px 4px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--rule); }
+  .panel .rcard, .panel .classcard, .panel .item { border: 0; border-top: 1px solid var(--rule); border-radius: 0; margin: 0; padding: 12px 6px; background: none; box-shadow: none; }
+  .panel .rcard.click:hover, .panel .classcard.click:hover, .panel .item.click:hover { background: var(--hover); }
+  .panel .rcard h4, .panel .classcard h4 { font-size: 18px; margin: 0; }
+  .panel .rcard .facts { margin-top: 6px; font-size: 14px; }
+  .panel .empty { border: 0; border-top: 1px solid var(--rule); border-radius: 0; margin: 0; padding: 10px 4px; }
+  @media (max-width: 480px) { .actions { grid-template-columns: 1fr; } .panel { padding: 14px 14px 16px; } }
+
   /* One paper in the print-all view: heading, the paper with its marks, then its comments. */
   .pp { border: 1.5px solid var(--rule); border-radius: 14px; background: var(--card); padding: 22px 26px; margin-top: 14px; }
   .pp .pphead b { font: 600 20px var(--display); display: block; }
@@ -642,7 +674,7 @@
     <p class="sub" id="readyRoom"></p>
     <p class="sub" id="readyWindow" hidden></p>
     <div class="readyprompt" id="readyPrompt" hidden><b>Prompt</b><span id="readyPromptText"></span></div>
-    <p class="sub" id="readyRules">Writing opens full screen. Leaving it &mdash; another tab, another app, or Esc &mdash; locks the page<span id="readyTells"></span>. Copying and pasting are off.</p>
+    <p class="sub" id="readyRules"></p>
     <div class="row">
       <button class="btn" id="startBtn">Start writing</button>
       <button class="btn ghost" id="submitBtn" hidden>Hand in</button>
@@ -709,11 +741,22 @@
       <h2 class="wordmark">Luddite</h2>
     </div>
 
-    <!-- 1. What teachers do most: start a writing session -->
-    <details class="newroombox" id="newRoomBox">
-      <summary class="bigstart" aria-label="New Writing Session (minimize or open)">New Writing Session</summary>
-      <div class="newroom">
-        <form id="newRoomForm">
+    <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
+    <section class="panel" id="forYouBox" hidden>
+      <div class="panelhead"><h3 class="sect">For you to write <span class="q" tabindex="0" data-tip="Writing sessions another teacher has given to a class you are on. Enter one to write in it like a student.">?</span></h3></div>
+      <div id="forYouList"></div>
+    </section>
+
+    <!-- The two things a teacher starts from Home -->
+    <div class="actions">
+      <button class="btn bigaction" id="newBtn" type="button">+ New writing session</button>
+      <button class="btn ghost bigaction" id="casualBtn" type="button">Casual session</button>
+    </div>
+    <p class="fine warn" id="casualNote" hidden></p>
+
+    <section class="panel" id="newRoomBox" hidden>
+      <div class="panelhead"><h3 class="sect big">New Writing Session</h3><button class="iconbtn" id="newRoomClose" type="button" aria-label="Minimize">&ndash;</button></div>
+      <form id="newRoomForm">
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
 
@@ -724,7 +767,7 @@
 
           <div class="formrow" id="classRow">
             <label class="lbl" for="newRoomClass">Class <span class="q" tabindex="0" data-tip="Everyone on the class list is let in on their own once the session starts. Anyone else can use the Entry Phrase and wait in the waiting room.">?</span></label>
-            <select class="field wide" id="newRoomClass" style="font-size:16px; padding:11px 14px"></select>
+            <select class="field wide" id="newRoomClass"></select>
           </div>
 
           <div class="formrow">
@@ -739,30 +782,22 @@
           <p class="fine warn" id="newRoomWhenNote" hidden></p>
           <button class="btn huge" type="submit">Create the writing session</button>
         </form>
-      </div>
-    </details>
+    </section>
 
-    <div class="row" style="justify-content:flex-start; margin-top:12px">
-      <button class="btn ghost" id="casualBtn" type="button">Casual session</button>
-      <span class="q" tabindex="0" data-tip="Starts right now. Anyone with the Entry Phrase can write: no name, no class, no waiting room.">?</span>
-      <span class="fine" id="casualNote" hidden></span>
-    </div>
+    <section class="panel">
+      <div class="panelhead"><h3 class="sect">Writing sessions <span class="n" id="roomCount"></span> <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. A casual session starts right away: no name, no class, anyone with the Entry Phrase comes straight in. Deleting a session only takes it off this list; work handed in stays under Student work.">?</span></h3></div>
+      <div id="roomList"></div>
+    </section>
 
-    <!-- 2. Their writing sessions -->
-    <h3 class="sect">Your writing sessions <span id="roomCount"></span> <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past, in that order. Deleting a session only takes it off this list; work students handed in stays under Student work.">?</span></h3>
-    <div id="roomList"></div>
-
-    <!-- 2b. Classes -->
-    <h3 class="sect">Classes <span id="classCount"></span> <span class="q" tabindex="0" data-tip="A class is a list of email addresses. Give a writing session a class and everyone on the list is let in on their own when it starts.">?</span></h3>
-    <div id="classList"></div>
-    <details class="more" id="newClassBox">
-      <summary aria-label="Make a new class" data-tip="Make a new class"></summary>
-      <div class="newroom">
+    <section class="panel">
+      <div class="panelhead"><h3 class="sect">Classes <span class="n" id="classCount"></span> <span class="q" tabindex="0" data-tip="A class is a list of email addresses. Give a writing session a class and everyone on the list is let in on their own when it starts.">?</span></h3>
+        <button class="iconbtn" id="newClassToggle" type="button" aria-label="Make a new class" data-tip="Make a new class">+</button></div>
+      <div id="newClassBox" hidden>
         <form id="newClassForm">
           <label class="lbl" for="newClassName">Class name</label>
-          <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off" style="font-size:16px">
+          <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off">
           <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
-          <textarea class="field" id="newClassEmails" rows="4" style="border-radius:14px; resize:vertical; font-size:14px; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
+          <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
           <div class="row" style="justify-content:flex-start; margin-top:8px">
             <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
           </div>
@@ -770,17 +805,17 @@
           <button class="btn" type="submit" style="margin-top:6px">Make the class</button>
         </form>
       </div>
-    </details>
+      <div id="classList"></div>
+    </section>
 
-    <!-- 3. Student work -->
-    <h3 class="sect">Student work <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3>
-    <div class="row" style="justify-content:flex-start; margin-bottom:6px">
-      <select class="field" id="studentClass" aria-label="Show students from" style="font-size:15px" hidden></select>
-      <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
-    </div>
-    <div id="studentList"></div>
-
-    <!-- 4. Less common things, tucked away -->
+    <section class="panel">
+      <div class="panelhead"><h3 class="sect">Student work <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3></div>
+      <div class="row" style="justify-content:flex-start; margin-bottom:6px">
+        <select class="field" id="studentClass" aria-label="Show students from" hidden></select>
+        <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
+      </div>
+      <div id="studentList"></div>
+    </section>
 
   </div>
 </section>
@@ -848,7 +883,7 @@
     </div>
     <h3>Add students</h3>
     <form id="classAddForm">
-      <textarea class="field" id="classAddEmails" rows="3" style="border-radius:14px; resize:vertical; font-size:14px; width:100%" placeholder="Paste addresses here, or upload a file below"></textarea>
+      <textarea class="field" id="classAddEmails" rows="3" style="resize:vertical; width:100%" placeholder="Paste addresses here, or upload a file below"></textarea>
       <div class="row" style="justify-content:flex-start; margin-top:8px">
         <input type="file" id="classAddFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
         <button class="btn small" type="submit">Add</button>
@@ -919,7 +954,7 @@
   </div>
 </section>
 
-<!-- One button hides every student's name on every teacher page (and in print). -->
+<!-- Settings, top right on the teacher pages -->
 <div class="topright no-print" id="topRight" hidden>
   <button id="prefsBtn" type="button">Settings</button>
 </div>
@@ -943,7 +978,7 @@
       <div style="margin-top:8px">
         <label class="lbl" for="addTeacherEmail">Add teachers <span class="q" tabindex="0" data-tip="Anyone listed here can make classes and writing sessions (you and your other address always can). Paste one address or a whole list.">?</span></label>
         <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
-          <textarea class="field grow" id="addTeacherEmail" rows="2" style="border-radius:14px; resize:vertical; font-size:14px"
+          <textarea class="field grow" id="addTeacherEmail" rows="2" style="resize:vertical"
             placeholder="Jane Smith <jane_smith@horacemann.org>, bob_lee@horacemann.org" aria-label="Teacher email addresses"></textarea>
           <button class="btn" type="submit">Add</button>
         </form>
@@ -984,9 +1019,9 @@
 <!-- Teacher: the Entry Phrase and link (under More on a writing session) -->
 <div class="overlay no-print" id="phraseBox" hidden>
   <div class="box">
-    <h2>Entry Phrase</h2>
+    <h2>Entry Phrase <span class="q" tabindex="0" data-tip="Anyone can use this phrase, even if they are not in the class; they wait in the waiting room until you let them in (in a casual session they come straight in). People on the class list are let in on their own.">?</span></h2>
     <div class="joinbox" style="margin-top:12px">
-      <span class="phrase"><span class="phraselbl">Entry Phrase <span class="q" tabindex="0" data-tip="Anyone can use this phrase, even if they are not in the class; they wait in the waiting room until you let them in. People on the class list are let in on their own.">?</span></span><span class="bigcode" id="roomCode"></span></span>
+      <span class="phrase"><span class="bigcode" id="roomCode"></span></span>
       <span class="link" id="roomLink"></span>
       <button class="btn small" id="copyLinkBtn">Copy link</button>
     </div>
@@ -1274,7 +1309,8 @@
       if (!linked) { showDash(); return; }
       // Their own writing session opens as its teacher; anyone else's, they join to write.
       api('/luddite/assignment?code=' + encodeURIComponent(linked)).then(function (d) {
-        if (d.room && d.room.students) openRoom(linked); else showDash();
+        if (d.room && d.room.students && d.room.teacher && d.room.teacher.email === me.email) openRoom(linked);
+        else { mode = 'room'; roomCode = linked; joinRoom(linked); }
       }).catch(function () { showDash(); });
       return;
     }
@@ -1402,6 +1438,8 @@
       if (e.message === 'signed_out') return;
       if (e.message !== 'not_started') store(roomKey(), null);
       roomCode = '';
+      // Teachers have no join screen; they go back Home and are told why.
+      if (isTeacher) { showDash(); alert(joinError(e, code).replace(' If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.', '')); return; }
       await loadMine();
       showJoin(joinError(e, code));
     }
@@ -1418,7 +1456,7 @@
     $('waitRoom').textContent = roomLine(room);
     if (room.status === 'removed') {
       $('waitMsg').textContent = 'Your teacher took you out of this writing session.';
-    } else if (!room.open && room.status !== 'waiting') {
+    } else if (room.state === 'ended' || (!room.open && room.status !== 'waiting')) {
       $('waitMsg').textContent = 'This writing session has ended.';
     } else {
       $('waitMsg').innerHTML = '<span class="pulse"></span>Waiting for your teacher to let you in&hellip;';
@@ -1430,7 +1468,7 @@
   }
 
   async function pollWaiting() {
-    var data = await api('/luddite/assignment?code=' + encodeURIComponent(roomCode));
+    var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
     noteNow(data.room.now);
     onRoomUpdate(data.room);
   }
@@ -1458,7 +1496,6 @@
     var inRoom = mode === 'room';
     $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
     $('readyRoom').hidden = !inRoom;
-    $('readyTells').textContent = inRoom ? ', and your teacher sees each time' : '';
     // Say only the rules this teacher has switched on.
     var rules = [];
     if (P().lockOnLeave) rules.push('Writing opens full screen. Leaving it \u2014 another tab, another app, or Esc \u2014 locks the page' + (inRoom ? ', and your teacher sees each time' : ''));
@@ -1511,7 +1548,7 @@
 
   // While handed in, watch for the teacher letting them back in to write.
   async function pollRelease() {
-    var data = await api('/luddite/assignment?code=' + encodeURIComponent(roomCode));
+    var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
     roomInfo = data.room;
     if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
     if (!data.room.handedIn) showReady();
@@ -1859,7 +1896,25 @@
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
     loadStudents();
+    loadForYou();
     poll(loadRooms, POLL_DASH_MS);
+  }
+  // Sessions on Home that this teacher writes in (not their own).
+  async function loadForYou() {
+    var list = (await loadMine()).filter(function (a) { return a.status !== 'removed'; });
+    var box = $('forYouList');
+    box.innerHTML = '';
+    $('forYouBox').hidden = !list.length;
+    list.forEach(function (a) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, a.title));
+      w.appendChild(el('span', null, a.teacherName + ' \u00b7 ' + (a.state === 'running' ? 'happening now' : 'opens ' + whenLabel(a.startAt))));
+      row.appendChild(w);
+      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Open' : 'Enter', 'btn small', function () { mode = 'room'; previewing = false; roomCode = a.code; joinRoom(a.code); }));
+      else row.appendChild(el('span', 'pill', 'Not started'));
+      box.appendChild(row);
+    });
   }
 
   // ---- Hiding names, on the marking page only ----
@@ -1950,6 +2005,16 @@
     return c ? c.name : '';
   }
 
+  // Esc, or a click on the dimmed page around it, closes a teacher's pop-up window.
+  ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) {
+    $(id).addEventListener('click', function (e) { if (e.target === $(id)) $(id).hidden = true; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || writing) return;
+    ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) { $(id).hidden = true; });
+    if ($('roomMenu')) $('roomMenu').open = false;
+  });
+
   // ---- Settings: what students get while writing, saved as they're changed ----
   var teacherPrefs = DEFAULT_PREFS;
   function syncPrefs() {
@@ -1992,9 +2057,9 @@
   function drawSessions(list) {
     var box = $('roomList');
     box.innerHTML = '';
-    $('roomCount').textContent = list.length ? '(' + list.length + ')' : '';
+    $('roomCount').textContent = list.length ? String(list.length) : '';
     if (!list.length) {
-      if (!loadRooms.seen) $('newRoomBox').open = true;
+      if (!loadRooms.seen) setNewOpen(true);
       loadRooms.seen = true;
       return;
     }
@@ -2010,10 +2075,10 @@
       var h = el('h4', 'grouphead ' + g[0]);
       h.appendChild(el('span', 'dot'));
       h.appendChild(document.createTextNode(g[1] + ' '));
-      h.appendChild(el('span', 'n', '(' + items.length + ')'));
+      h.appendChild(el('span', 'n', String(items.length)));
       h.appendChild(tipEl(g[2]));
       box.appendChild(h);
-      if (!items.length) box.appendChild(el('div', 'empty', g[3]));
+      if (!items.length) box.appendChild(el('p', 'groupempty', g[3]));
       items.forEach(function (r) { box.appendChild(sessionCard(r)); });
     });
   }
@@ -2056,6 +2121,20 @@
 
   // ---- Starting a writing session ----
   var newPicker = null, newWhen = 'now';
+  function setNewOpen(open) {
+    $('newRoomBox').hidden = !open;
+    $('newBtn').classList.toggle('on', open);
+    if (open) $('newRoomTitle').focus();
+  }
+  $('newBtn').addEventListener('click', function () { setNewOpen($('newRoomBox').hidden); });
+  $('newRoomClose').addEventListener('click', function () { setNewOpen(false); });
+  function setClassFormOpen(open) {
+    $('newClassBox').hidden = !open;
+    $('newClassToggle').textContent = open ? '\u2013' : '+';
+    $('newClassToggle').setAttribute('aria-label', open ? 'Close the new class form' : 'Make a new class');
+    if (open) $('newClassName').focus();
+  }
+  $('newClassToggle').addEventListener('click', function () { setClassFormOpen($('newClassBox').hidden); });
   function fillClassSelects() {
     var sel = $('newRoomClass'), keep = sel.value;
     sel.innerHTML = '';
@@ -2129,7 +2208,7 @@
   function drawClasses() {
     var box = $('classList');
     box.innerHTML = '';
-    $('classCount').textContent = classes.length ? '(' + classes.length + ')' : '';
+    $('classCount').textContent = classes.length ? String(classes.length) : '';
     if (!classes.length) box.appendChild(el('div', 'empty', 'No classes yet.'));
     classes.forEach(function (c) {
       var card = el('div', 'classcard click');
@@ -2174,7 +2253,7 @@
     try {
       var data = await api('/luddite/classes', { name: name, emails: emails });
       $('newClassName').value = ''; $('newClassEmails').value = ''; found.textContent = '';
-      $('newClassBox').open = false;
+      setClassFormOpen(false);
       openClass(data['class'].id);
     } catch (err) {
       if (err.message === 'signed_out') return;
@@ -2461,6 +2540,8 @@
     var removed = students.filter(function (s) { return s.status === 'removed'; });
 
     $('admitAllBtn').hidden = waiting.length < 2;
+    // A casual session lets everyone straight in, so it has no waiting room to show.
+    $('secWaiting').hidden = !!room.casual && !waiting.length;
     fill('waitingList', waiting, 'Nobody’s waiting. Anyone who types the Entry Phrase and isn’t on the class list shows up here.', function (s, row) {
       var asked = el('span', 'pill');
       asked.setAttribute('data-asked', s.requestedAt);
