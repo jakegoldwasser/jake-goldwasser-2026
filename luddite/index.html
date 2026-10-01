@@ -816,6 +816,10 @@
           <div class="formrow" id="classRow">
             <label class="lbl" for="newRoomClass">Class <span class="q" tabindex="0" data-tip="Everyone on the class list is let in on their own once the session starts. Anyone else can use the Entry Phrase and wait in the waiting room.">?</span></label>
             <select class="field wide" id="newRoomClass"></select>
+            <div id="newRoomEmailsBox" hidden>
+              <textarea class="field promptfield" id="newRoomEmails" placeholder="One per line, or separated by commas" aria-label="Email addresses for this session"></textarea>
+              <p class="fine" id="newRoomEmailsFound" style="text-align:left; margin:4px 0 0"></p>
+            </div>
           </div>
 
           <div class="formrow">
@@ -2327,7 +2331,7 @@
     card.appendChild(top);
     var facts = el('div', 'facts');
     var cn = r.classId ? classNameOf(r.classId) : '';
-    facts.appendChild(el('span', 'tag', r.casual ? 'Casual' : cn ? 'Class: ' + cn : 'No class'));
+    facts.appendChild(el('span', 'tag', r.casual ? 'Casual' : cn ? 'Class: ' + cn : r.invited ? plural(r.invited, 'invited student', 'invited students') : 'No class'));
     facts.appendChild(el('span', null, plural(r.admitted, 'student', 'students') + ' in'));
     facts.appendChild(el('span', null, r.submissions + ' handed in'));
     if (r.ownCount) facts.appendChild(el('span', null, plural(r.ownCount, 'own time', 'own times')));
@@ -2374,7 +2378,11 @@
     none.value = '';
     sel.appendChild(none);
     classes.forEach(function (c) { var o = el('option', null, c.name + ' (' + c.count + ')'); o.value = c.id; sel.appendChild(o); });
+    var typed = el('option', null, 'Type in email addresses…'); typed.value = '__list';
+    sel.appendChild(typed);
     sel.value = keep;
+    if (sel.selectedIndex < 0) sel.value = '';
+    $('newRoomEmailsBox').hidden = sel.value !== '__list';
     var f = $('studentClass'), fk = f.value;
     f.innerHTML = '';
     var all = el('option', null, 'All my students'); all.value = '';
@@ -2409,10 +2417,16 @@
       if (!startAt) { note.textContent = 'Pick a day and a period (or another time).'; note.hidden = false; return; }
       if (startAt < Date.now() - 60000) { note.textContent = 'That time has already passed. Pick a later one.'; note.hidden = false; return; }
     }
+    // A list typed in for this session alone, in place of a class.
+    var listOnly = $('newRoomClass').value === '__list';
+    var listed = listOnly ? extractEmails($('newRoomEmails').value) : [];
+    if (listOnly && !listed.length) { note.textContent = 'Type in at least one email address, or pick a class.'; note.hidden = false; $('newRoomEmails').focus(); return; }
     try {
-      var data = await api('/luddite/assignments', { title: title, prompt: $('newRoomPrompt').value.trim(), classId: $('newRoomClass').value || null, startAt: startAt });
+      var data = await api('/luddite/assignments', { title: title, prompt: $('newRoomPrompt').value.trim(), classId: listOnly ? null : $('newRoomClass').value || null, emails: listOnly ? listed : undefined, startAt: startAt });
       $('newRoomTitle').value = '';
       $('newRoomPrompt').value = '';
+      $('newRoomEmails').value = '';
+      $('newRoomEmailsFound').textContent = '';
       openRoom(data.room.code);
     } catch (err) {
       if (err.message === 'signed_out') return;
@@ -2476,6 +2490,14 @@
     });
   }
   wireEmailFile($('newClassFile'), $('newClassEmails'), $('newClassFound'));
+  $('newRoomClass').addEventListener('change', function () {
+    $('newRoomEmailsBox').hidden = $('newRoomClass').value !== '__list';
+    if (!$('newRoomEmailsBox').hidden) $('newRoomEmails').focus();
+  });
+  $('newRoomEmails').addEventListener('input', function () {
+    var n = extractEmails($('newRoomEmails').value).length;
+    $('newRoomEmailsFound').textContent = n ? 'Found ' + plural(n, 'email address', 'email addresses') + '. They’re let in on their own.' : '';
+  });
   $('newClassForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     var name = $('newClassName').value.trim();
@@ -2748,7 +2770,7 @@
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : ' · No class');
+    $('roomWhen').textContent = whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
@@ -2810,7 +2832,7 @@
     var notHere = teacherRoster ? teacherRoster.emails.filter(function (e) { return !inEmails[e]; }) : [];
     $('notHereSection').hidden = !teacherRoster;
     if (teacherRoster) {
-      $('notHereTitle').textContent = 'On the class list, not here yet (' + notHere.length + ')';
+      $('notHereTitle').textContent = (teacherRoster.id ? 'On the class list' : 'Invited') + ', not here yet (' + notHere.length + ')';
       var nl = $('notHereList');
       nl.innerHTML = '';
       if (!notHere.length) nl.appendChild(el('div', 'empty', 'Everyone on the list has come in.'));
