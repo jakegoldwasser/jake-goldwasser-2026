@@ -316,9 +316,23 @@ async function onRoster(room, email) {
   return !!(state && state.emails.includes(email));
 }
 
-// A casual session is named by its Entry Phrase. (The first ones were all
-// stored as "Casual session"; they show their phrase too.)
-const titleOf = (r) => (r.casual && (!r.title || r.title === 'Casual session') ? r.codeLabel || r.code : r.title);
+// A casual session is named by its prompt once it has one ("Write five
+// favorite breakfast cereals"), and by its Entry Phrase until then -- unless
+// the teacher has given it a name of their own. (The first ones were stored
+// as "Casual session"; they follow the same rule.)
+function shortPrompt(p) {
+  const t = String(p || '').split('\n').map((x) => x.trim()).filter(Boolean)[0] || '';
+  const one = t.replace(/\s+/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  if (one.length <= 60) return one;
+  const cut = one.slice(0, 60);
+  return (cut.slice(0, cut.lastIndexOf(' ')) || cut).replace(/[\s,;:.\-]+$/, '') + '\u2026';
+}
+function titleOf(r) {
+  if (!r.casual) return r.title;
+  const named = r.titled || (r.title && r.title !== 'Casual session' && r.title !== r.codeLabel);
+  if (named) return r.title;
+  return shortPrompt(r.prompt) || r.codeLabel || r.code;
+}
 
 // An assignment as its teacher sees it on Home.
 function roomSummary(room) {
@@ -981,7 +995,7 @@ async function routeLuddite(event, method, path, info) {
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title: title || codeLabel, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title: title || codeLabel, titled: !!title, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -1026,7 +1040,7 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
         if (!title) throw new HttpError(400, 'need_title');
-        return { ...r, title };
+        return { ...r, title, titled: true };
       }
       else if (body.action === 'own') {
         if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
