@@ -316,13 +316,17 @@ async function onRoster(room, email) {
   return !!(state && state.emails.includes(email));
 }
 
+// A casual session is named by its Entry Phrase. (The first ones were all
+// stored as "Casual session"; they show their phrase too.)
+const titleOf = (r) => (r.casual && (!r.title || r.title === 'Casual session') ? r.codeLabel || r.code : r.title);
+
 // An assignment as its teacher sees it on Home.
 function roomSummary(room) {
   const students = Object.values(room.students || {});
   const reg = regularWindow(room);
   const state = stateAt({ ...reg, ended: regularEnded(room) }, Date.now());
   return {
-    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running', state, createdAt: room.createdAt,
+    code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running', state, createdAt: room.createdAt,
     classId: room.classId || null, casual: !!room.casual, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
@@ -339,7 +343,7 @@ function studentView(room, sub, email, prefs) {
   const now = Date.now();
   const state = stateAt(win, now);
   return {
-    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running',
+    code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running',
     state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier, minutes: room.minutes || null, now,
     teacherName: room.teacher.name || room.teacher.email,
     prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
@@ -468,7 +472,7 @@ async function roomFolder(teacherSub, token, room, fresh) {
   let { state: drive } = await readItem('luddite:drive:' + teacherSub);
   if (!fresh && drive.roomFolders && drive.roomFolders[room.code]) return drive.roomFolders[room.code];
   const rootId = (!fresh && drive.rootId) || await createFolder(token, 'Luddite submissions');
-  const folderId = await createFolder(token, room.title + ' (' + (room.codeLabel || room.code) + ')', rootId);
+  const folderId = await createFolder(token, room.casual ? 'Casual session (' + (room.codeLabel || room.code) + ')' : room.title + ' (' + (room.codeLabel || room.code) + ')', rootId);
   await mutate('luddite:drive:' + teacherSub, (d) => ({ ...d, rootId, roomFolders: { ...(d.roomFolders || {}), [room.code]: folderId } }));
   return folderId;
 }
@@ -661,7 +665,7 @@ async function routeLuddite(event, method, path, info) {
       const state = stateAt(win, now);
       if (state === 'ended' || (state === 'upcoming' && win.start - now > UPCOMING_HORIZON_MS)) return;
       list.push({
-        code: r.code, codeLabel: r.codeLabel || r.code, title: r.title, teacherName: r.teacher.name || r.teacher.email,
+        code: r.code, codeLabel: r.codeLabel || r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email,
         state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier,
         status: s ? s.status : 'none', handedIn: !!(s && s.handedIn)
       });
@@ -705,7 +709,7 @@ async function routeLuddite(event, method, path, info) {
   if (path === '/luddite/assignment' && method === 'GET') {
     const room = await getRoom(cleanCode(q.code));
     // ?as=student: a teacher (or owner) writing in a session asks for their own place in it, not the teacher's copy.
-    if (q.as !== 'student' && isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
+    if (q.as !== 'student' && isTeacher && ownsRoom(room, info, role)) return respond(200, { room: { ...room, title: titleOf(room) }, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
@@ -746,7 +750,7 @@ async function routeLuddite(event, method, path, info) {
     try {
       file = await saveToDrive(room, {
         name: who + ' — ' + label,
-        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), assignment ' + room.title + ' (' + code + '). ' +
+        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
           words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
         text
       });
@@ -763,13 +767,13 @@ async function routeLuddite(event, method, path, info) {
       link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS) };
     if (stored) {
       await mutate('luddite:sub:' + id, () => ({
-        id, code, roomTitle: room.title, teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
+        id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
         label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: ''
       }));
       const email = me.email.toLowerCase();
       await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
         email, name: me.name || (t && t.name) || '',
-        subs: [{ id, at, roomTitle: room.title, label, words }, ...((t && t.subs) || [])]
+        subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || [])]
       }));
       await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
         const students = { ...((t && t.students) || {}) };
@@ -965,8 +969,9 @@ async function routeLuddite(event, method, path, info) {
     const teacher = { ...me, name: await displayNameOf(info, role) };
     // A casual session needs no name or class: anyone with its Entry Phrase is let straight in.
     const casual = !!body.casual;
-    const title = String(body.title || '').trim().slice(0, 80) || (casual ? 'Casual session' : '');
-    if (!title) throw new HttpError(400, 'need_title');
+    // A casual session's name is its Entry Phrase, filled in once the phrase is picked below.
+    const title = String(body.title || '').trim().slice(0, 80);
+    if (!title && !casual) throw new HttpError(400, 'need_title');
     const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
     const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
     const cls = body.classId && !casual ? await getClass(body.classId, me, role) : null;
@@ -976,7 +981,7 @@ async function routeLuddite(event, method, path, info) {
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title: title || codeLabel, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
