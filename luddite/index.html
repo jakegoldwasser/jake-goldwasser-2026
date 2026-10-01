@@ -580,6 +580,7 @@
   .panel .grouphead:first-child { margin-top: 6px; }
   .panel .grouphead .dot { width: 9px; height: 9px; }
   .panel .grouphead .n { font: 600 12px var(--ui); color: var(--muted); }
+  .pastmore { margin: 10px 0 0 4px; }
   .groupempty { margin: 0; padding: 8px 4px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--rule); }
   .panel .rcard, .panel .classcard, .panel .item { border: 0; border-top: 1px solid var(--rule); border-radius: 0; margin: 0; padding: 12px 6px; background: none; box-shadow: none; }
   .panel .rcard.click:hover, .panel .classcard.click:hover, .panel .item.click:hover { background: var(--hover); }
@@ -2054,7 +2055,11 @@
   }
 
   // Three clear groups: what's happening now, what's coming, what's over.
+  // Past sessions pile up over a year, so Home shows only the latest few;
+  // the rest are a click away.
+  var PAST_ON_HOME = 2, showAllPast = false, lastSessions = [];
   function drawSessions(list) {
+    lastSessions = list;
     var box = $('roomList');
     box.innerHTML = '';
     $('roomCount').textContent = list.length ? String(list.length) : '';
@@ -2071,7 +2076,11 @@
     ];
     groups.forEach(function (g) {
       var items = list.filter(function (r) { return r.state === g[0]; });
-      items.sort(function (a, b) { return g[0] === 'upcoming' ? a.startAt - b.startAt : b.startAt - a.startAt; });
+      items.sort(function (a, b) {
+        if (g[0] === 'upcoming') return a.startAt - b.startAt;
+        if (g[0] === 'ended') return (b.endedAt || b.endAt || b.startAt) - (a.endedAt || a.endAt || a.startAt);
+        return b.startAt - a.startAt;
+      });
       var h = el('h4', 'grouphead ' + g[0]);
       h.appendChild(el('span', 'dot'));
       h.appendChild(document.createTextNode(g[1] + ' '));
@@ -2079,7 +2088,14 @@
       h.appendChild(tipEl(g[2]));
       box.appendChild(h);
       if (!items.length) box.appendChild(el('p', 'groupempty', g[3]));
-      items.forEach(function (r) { box.appendChild(sessionCard(r)); });
+      var shown = g[0] === 'ended' && !showAllPast ? items.slice(0, PAST_ON_HOME) : items;
+      shown.forEach(function (r) { box.appendChild(sessionCard(r)); });
+      if (g[0] === 'ended' && items.length > PAST_ON_HOME) {
+        var more = el('button', 'btn small ghost pastmore', showAllPast ? 'Show fewer' : 'Show all ' + items.length + ' past sessions');
+        more.type = 'button';
+        more.addEventListener('click', function () { showAllPast = !showAllPast; drawSessions(lastSessions); });
+        box.appendChild(more);
+      }
     });
   }
 
