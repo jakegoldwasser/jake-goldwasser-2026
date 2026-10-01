@@ -1650,8 +1650,23 @@
   function textKey() { return 'luddite.text.' + me.email + '.' + scope(); }
   function leavesKey() { return 'luddite.leaves.' + me.email + '.' + scope(); }
 
+  // If this browser has no copy of the writing (cleared, or another
+  // computer), bring back the server's backup, once per session.
+  var draftTried = {};
+  function restoreDraft() {
+    var key = textKey();
+    if (draftTried[key] || mode !== 'room' || previewing || !roomCode) return;
+    draftTried[key] = true;
+    api('/luddite/draft?code=' + encodeURIComponent(roomCode)).then(function (d) {
+      if (!d.draft || !d.draft.text || (load(key) || '').trim() || writing) return;
+      store(key, d.draft.text);
+      lastBackedUp = d.draft.text;
+      if (!$('readyScreen').hidden) showReady();
+    }).catch(function () {});
+  }
   function showReady() {
     var text = previewing ? '' : load(textKey()) || '';
+    if (!text.trim()) restoreDraft();
     var has = text.trim().length > 0;
     var inRoom = mode === 'room';
     $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
@@ -1800,9 +1815,16 @@
 
   // Tells the teacher what's happening: 'left' (the page locked),
   // 'writing' (with the word count, every HEARTBEAT_MS) or 'idle'.
+  // Each report also carries the writing itself when it has changed since
+  // the last one, so the server keeps a backup (see /luddite/draft).
+  var lastBackedUp = null;
   function report(type) {
     if (mode !== 'room' || previewing || !roomCode) return Promise.resolve(null);
-    return api('/luddite/event', { code: roomCode, type: type, words: wordCount(shadow) }).then(function (d) {
+    var body = { code: roomCode, type: type, words: wordCount(shadow) };
+    var sending = writing ? shadow : null;
+    if (sending !== null && sending !== lastBackedUp && (sending.trim() || lastBackedUp !== null)) body.text = sending;
+    return api('/luddite/event', body).then(function (d) {
+      if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; if (writing) drawPrompt(); }
       return d.room;
@@ -1883,6 +1905,7 @@
       pad.spellcheck = P().spellcheck !== 'off';
       $('count').hidden = !P().showCount;
       pad.value = previewing ? '' : load(textKey()) || '';
+      lastBackedUp = null; // back up this session's writing on the next report
       shadow = pad.value;
       updateCount();
       updateLeaves();
@@ -2801,6 +2824,12 @@
     each('[data-asked]', function (n) { n.textContent = 'asked ' + ago(Number(n.getAttribute('data-asked'))); });
   }
 
+  // A student's newest hand-in replaces any earlier one (the list is newest first).
+  function latestPerStudent(list) {
+    var seen = {};
+    return (list || []).filter(function (x) { var k = x.sub || x.email; if (seen[k]) return false; seen[k] = 1; return true; });
+  }
+
   function ownLabel(room, email) {
     var o = room.own && room.own[email];
     if (!o) return '';
@@ -2900,7 +2929,7 @@
       });
     }
 
-    var subs = room.submissions || [];
+    var subs = latestPerStudent(room.submissions);
     $('papersTitle').textContent = 'Handed in (' + subs.length + ')';
     $('printAllRoom').hidden = !subs.some(function (x) { return x.stored; });
     var list = $('submissionList');
@@ -4000,7 +4029,7 @@
   });
   $('printAllRoom').addEventListener('click', function () {
     var room = teacherRoom;
-    var ids = (room.submissions || []).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });
+    var ids = latestPerStudent(room.submissions).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });
     openPrintAll(ids, room.title + ': ' + plural(ids.length, 'paper', 'papers'), function () { openRoom(room.code); });
   });
 
