@@ -370,6 +370,8 @@ function studentView(room, sub, email, prefs) {
     leaves: me ? me.leaves || 0 : 0,
     // Left the page while writing: locked out until the teacher lets them back in.
     lockedOut: !!(me && me.lockedOut),
+    // Asked the teacher to unlock them (after handing in, or after a lock-out).
+    askedAt: me ? me.askedAt || 0 : 0,
     submittedAt: me ? me.submittedAt || 0 : 0,
     // Handing in is final: no more writing until the teacher releases them.
     handedIn: !!(me && me.handedIn)
@@ -761,7 +763,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
-  // PUT /luddite/event { code, type: 'left' | 'writing' | 'idle', words }
+  // PUT /luddite/event { code, type: 'left' | 'writing' | 'idle' | 'ask', words }
   // -- live status for the teacher: leaving the page, and word counts.
   if (path === '/luddite/event' && method === 'PUT') {
     const code = cleanCode(body.code);
@@ -773,6 +775,8 @@ async function routeLuddite(event, method, path, info) {
       // until the teacher lets them back in (the room's 'unlock' action).
       if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
       if ((body.type === 'writing' || body.type === 'idle') && !s.lockedOut) Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
+      // 'ask': a flag for the teacher -- please unlock me.
+      if (body.type === 'ask' && (s.handedIn || s.lockedOut)) next.askedAt = Date.now();
       if (Number.isFinite(body.words)) next.words = Math.max(0, Math.floor(body.words));
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
@@ -1072,8 +1076,8 @@ async function routeLuddite(event, method, path, info) {
       if (body.action === 'admit') subs.forEach((sub) => set(sub, 'admitted'));
       else if (body.action === 'admitAll') Object.keys(students).forEach((sub) => { if (students[sub].status === 'waiting') set(sub, 'admitted'); });
       else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
-      else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, unlockedAt: Date.now() }; });
-      else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, releasedAt: Date.now() }; });
+      else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: Date.now() }; });
+      else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, askedAt: 0, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
       else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now() };
       else if (body.action === 'schedule') {
