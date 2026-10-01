@@ -604,6 +604,7 @@
   .arrows .lab text { fill: var(--pen); font: 600 11px var(--ui); text-anchor: middle; dominant-baseline: central; }
   .arrows .lab { pointer-events: all; cursor: pointer; }
   .arrows .on .line { stroke-width: 3.5; }
+  .arrows.dragging, .arrows.dragging * { pointer-events: none !important; } /* so the text under the pointer is found, not an arrow already there */
   .arrows .draft { fill: none; stroke: var(--pen); stroke-width: 2; stroke-dasharray: 5 5; }
   .mnote .arw { margin-right: 4px; }
   @media print { .arrows .line, .arrows .tail, .arrows .lab { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
@@ -3095,7 +3096,7 @@
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
     if (!drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 12) return;
-    if (!drag.moved) { drag.moved = true; hideTools(); }
+    if (!drag.moved) { drag.moved = true; hideTools(); $('arrows').classList.add('dragging'); }
     var o = pointOffset(e.clientX, e.clientY);
     if (o !== null) drag.last = o; // letting go off the text (a margin, between lines) uses the last spot over it
     drawDraft(drag.from, e.clientX, e.clientY);
@@ -3105,6 +3106,7 @@
     var d = drag;
     drag = null;
     clearDraft();
+    $('arrows').classList.remove('dragging');
     if (!d.moved) { if (d.menu) rightClick(d.menu); return; }
     swallowMenu = true;
     setTimeout(function () { swallowMenu = false; }, 400);
