@@ -67,12 +67,3 @@ Also through `?fetch=`: a public PDF link comes back as `{ contentType: 'applica
 through Drive's public download link (following Google's "can't scan for viruses" page for large
 files). Anything that lands on Google's sign-in page answers `google_private`. The function's
 timeout is 30 s, since Drive's download host can take several seconds to answer.
-
-## Luddite
-
-The same function also keeps the approval list for Luddite (`/luddite/`),
-under the routes `/luddite/status` and `/luddite/users` (see
-`handleLuddite` in `index.mjs`). The list is one item in the same table,
-keyed `luddite:roster`. The admins, who are always let in and are the only
-ones who can approve people, are `ADMIN_EMAILS` in `index.mjs` (mirrored in
-`luddite/index.html`).
