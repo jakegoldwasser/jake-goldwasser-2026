@@ -190,6 +190,8 @@
   .roomcard .acts { display: flex; gap: 8px; align-items: center; }
   .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
   .readyacts { margin-top: 12px; }
+  .pill.flag { background: var(--tomato-tint); color: var(--tomato-deep); font-weight: 700; }
+  #readyScreen #submitNote { margin: 14px 0 4px; font-size: 15px; }
   .acctline { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
   .readyacts > span[hidden] { display: none; }
   .linkish { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; padding: 0; }
@@ -723,12 +725,13 @@
     <p class="sub" id="readyWindow" hidden></p>
     <div class="readyprompt" id="readyPrompt" hidden><b>Prompt</b><span id="readyPromptText"></span></div>
     <p class="sub" id="readyRules"></p>
+    <p class="fine" id="submitNote" hidden></p>
     <div class="row">
       <button class="btn" id="startBtn">Start writing</button>
       <button class="btn ghost" id="submitBtn" hidden>Hand in</button>
-      <button class="btn huge" id="leaveBigBtn" hidden>Leave this writing session</button>
+      <button class="btn huge ghost" id="askUnlockBtn" type="button" hidden>Ask your teacher to unlock it</button>
+      <button class="btn huge" id="leaveBigBtn" hidden>&larr; Home</button>
     </div>
-    <p class="fine" id="submitNote" hidden></p>
     <p class="fine warn" id="noFullscreen" hidden>This browser can&rsquo;t go full screen, so Luddite won&rsquo;t work here. Try Chrome, Edge, Firefox or Safari on a computer.</p>
     <p class="fine" id="lastSession" hidden></p>
     <div class="row readyacts">
@@ -736,7 +739,7 @@
       <span id="leaveWrap" hidden><button class="btn small ghost" id="leaveRoomBtn2">Leave this writing session</button></span>
       <span id="newPageWrap" hidden><button class="btn small danger" id="newPageBtn">Clear the page</button></span>
     </div>
-    <p class="fine"><span class="who-email"></span></p>
+    <p class="fine" id="readyWho"><span class="who-email"></span></p>
   </div>
 </section>
 
@@ -777,6 +780,7 @@
     <h2>Locked</h2>
     <p class="sub" id="lockWhy"></p>
     <p class="sub" id="lockWait" hidden></p>
+    <button class="btn ghost" id="lockAskBtn" type="button" hidden>Ask your teacher to let you back in</button>
     <button class="btn" id="resumeBtn">Go back to full screen</button>
     <p class="fine" id="lockCount"></p>
   </div>
@@ -1629,6 +1633,14 @@
   $('leaveRoomBtn').addEventListener('click', leaveRoom);
   $('leaveRoomBtn2').addEventListener('click', leaveRoom);
   $('leaveBigBtn').addEventListener('click', leaveRoom);
+  $('askUnlockBtn').addEventListener('click', function () {
+    var b = $('askUnlockBtn');
+    b.disabled = true;
+    report('ask').then(function (room) {
+      if (room && room.askedAt) { if (roomInfo) roomInfo.askedAt = room.askedAt; b.textContent = 'Asked — your teacher has been told'; }
+      else b.disabled = false;
+    });
+  });
 
   // ---------------------------------------------------------------------
   // Ready screen
@@ -1679,12 +1691,16 @@
     $('doneBtn').textContent = inRoom && !previewing ? 'Hand in' : 'Done';
     // Handing in is final: no more writing until the teacher lets them back in.
     var handedIn = inRoom && roomInfo && roomInfo.handedIn && !previewing;
+    // Handed in: nothing but the note, a way to ask to be unlocked, and Home.
+    ['readyRoom', 'readyWindow', 'readyPrompt', 'readyRules', 'lastSession', 'noFullscreen', 'readyWho', 'dashWrap'].forEach(function (id) { if (handedIn) $(id).hidden = true; });
+    $('readyWho').hidden = handedIn;
     if (handedIn) {
       $('startBtn').hidden = true;
       $('submitBtn').hidden = true;
       $('newPageWrap').hidden = true;
       $('leaveWrap').hidden = true;
       $('submitNote').hidden = false;
+      $('submitNote').className = 'fine good';
       $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. If you need to keep working on it, ask your teacher to unlock it; this page opens again by itself.';
     } else {
       $('startBtn').hidden = false;
@@ -1698,6 +1714,12 @@
       $('submitNote').className = 'fine warn';
       $('submitNote').textContent = 'You left the page while writing, so you’re locked out. Ask your teacher to let you back in; this page opens again by itself when they do.';
     }
+    // Asking flags this student on the teacher's page.
+    var canAsk = handedIn || lockedOut;
+    $('askUnlockBtn').hidden = !canAsk;
+    $('askUnlockBtn').disabled = !!(roomInfo && roomInfo.askedAt);
+    $('askUnlockBtn').textContent = roomInfo && roomInfo.askedAt ? 'Asked — your teacher has been told'
+      : handedIn ? 'Ask your teacher to unlock it' : 'Ask your teacher to let you back in';
     show('readyScreen');
     if (handedIn) poll(pollRelease, POLL_WAITING_MS);
     else if (lockedOut) poll(pollReadyUnlock, POLL_WAITING_MS);
@@ -1889,6 +1911,9 @@
     var held = mode === 'room' && !previewing && !isTester(me.email);
     $('resumeBtn').hidden = held;
     $('lockWait').hidden = !held;
+    $('lockAskBtn').hidden = !held;
+    $('lockAskBtn').disabled = false;
+    $('lockAskBtn').textContent = 'Ask your teacher to let you back in';
     $('lockWait').textContent = 'Ask your teacher to let you back in. This page opens again by itself when they do.';
     show('lockScreen');
     report('left').then(function (room) {
@@ -1897,7 +1922,15 @@
       else letBackIn();
     });
   }
+  $('lockAskBtn').addEventListener('click', function () {
+    var b = $('lockAskBtn');
+    b.disabled = true;
+    report('ask').then(function (room) {
+      if (room && room.askedAt) b.textContent = 'Asked — your teacher has been told'; else b.disabled = false;
+    });
+  });
   function letBackIn() {
+    $('lockAskBtn').hidden = true;
     $('lockWait').hidden = false;
     $('lockWait').textContent = mode === 'room' && !previewing && !isTester(me.email) ? 'Your teacher let you back in.' : '';
     $('lockWait').hidden = !$('lockWait').textContent;
@@ -1990,11 +2023,24 @@
     clip = padSelection();
     if (!document.execCommand('delete')) insertAtCaret('', 0);
   }
-  function clipPaste() {
-    if (locked || !clip) return;
+  function clipPaste(text) {
+    text = text == null ? clip : text;
+    if (locked || !text) return;
     insertingClip = true;
-    if (!document.execCommand('insertText', false, clip)) insertAtCaret(clip, 0);
+    if (!document.execCommand('insertText', false, text)) insertAtCaret(text, 0);
     insertingClip = false;
+  }
+  // With copying and pasting allowed, the keys use the computer's clipboard
+  // too (falling back on Luddite's own if the browser won't share it).
+  function clipKey(k) {
+    if (k === 'c' || k === 'x') {
+      if (k === 'c') clipCopy(); else clipCut();
+      if (!P().blockPaste && clip && navigator.clipboard) navigator.clipboard.writeText(clip).catch(function () {});
+    } else if (clip || P().blockPaste || !(navigator.clipboard && navigator.clipboard.readText)) {
+      clipPaste(); // what was last copied here (Chrome can stall asking to read its own clipboard)
+    } else {
+      navigator.clipboard.readText().then(function (t) { pad.focus(); clipPaste(t); }, function () {});
+    }
   }
   var CLIP_DO = { copy: clipCopy, cut: clipCut, paste: clipPaste };
   ['copy', 'cut', 'paste'].forEach(function (type) {
@@ -2024,10 +2070,11 @@
     var k = (e.key || '').toLowerCase();
     if ((e.metaKey || e.ctrlKey) && BLOCKED_KEYS[k] && !{ c: 1, v: 1, x: 1 }[k]) return stop(e);
     // Cmd/Ctrl+C, X, V: done here rather than left to the browser, which in
-    // locked full screen (keyboard lock) never turns them into copy and paste.
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && { c: 1, v: 1, x: 1 }[k] && P().blockPaste) {
+    // locked full screen (keyboard lock) never turns them into copy and paste
+    // -- whether or not the teacher allows pasting from elsewhere.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && { c: 1, v: 1, x: 1 }[k]) {
       stop(e);
-      if (e.target === pad) (k === 'c' ? clipCopy : k === 'x' ? clipCut : clipPaste)();
+      if (e.target === pad) clipKey(k);
       return;
     }
     if (/^f\d+$/.test(k)) return stop(e);
@@ -2806,6 +2853,7 @@
 
     fill('admittedList', admitted, 'Nobody’s in yet.', function (s, row) {
       var live = isLive(s);
+      if (s.askedAt && (s.handedIn || s.lockedOut)) row.appendChild(el('span', 'pill flag', '\u2691 Asks to be unlocked'));
       if (s.lockedOut) row.appendChild(el('span', 'pill warn', 'Locked out'));
       else if (s.away) row.appendChild(el('span', 'pill warn', 'Off the page now'));
       else row.appendChild(el('span', 'pill' + (live ? ' good' : ''), live ? 'Writing' : 'Not writing'));
