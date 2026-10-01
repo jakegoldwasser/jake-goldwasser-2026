@@ -761,7 +761,7 @@
         <form id="newClassForm">
           <label class="lbl" for="newClassName">Class name</label>
           <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off" style="font-size:16px">
-          <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file.">?</span></label>
+          <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
           <textarea class="field" id="newClassEmails" rows="4" style="border-radius:14px; resize:vertical; font-size:14px; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
           <div class="row" style="justify-content:flex-start; margin-top:8px">
             <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
@@ -2171,7 +2171,6 @@
     var emails = extractEmails($('newClassEmails').value);
     var found = $('newClassFound');
     if (!name) { found.className = 'fine warn'; found.textContent = 'Give the class a name first.'; $('newClassName').focus(); return; }
-    if (!emails.length) { found.className = 'fine warn'; found.textContent = 'No email addresses found yet. Paste some or upload a file.'; return; }
     try {
       var data = await api('/luddite/classes', { name: name, emails: emails });
       $('newClassName').value = ''; $('newClassEmails').value = ''; found.textContent = '';
@@ -2199,6 +2198,7 @@
     $('classCountLine').textContent = plural(openedClass.emails.length, 'student', 'students') + ' on the list';
     var box = $('classRoster');
     box.innerHTML = '';
+    if (!openedClass.emails.length) box.appendChild(el('div', 'empty', 'No one on this list yet. Add addresses above.'));
     openedClass.emails.slice().sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
       var row = el('div', 'item');
       var w = el('div', 'who');

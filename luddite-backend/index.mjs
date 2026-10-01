@@ -833,7 +833,7 @@ async function routeLuddite(event, method, path, info) {
     } else {
       emails = cleanEmails(body.emails);
     }
-    if (!emails.length) throw new HttpError(400, 'no_emails');
+    // A class can start empty; addresses can be added to it later.
     if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
     const id = randomBytes(6).toString('hex');
     const teacher = { ...me, name: await displayNameOf(info, role) };
