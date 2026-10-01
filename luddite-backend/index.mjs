@@ -100,7 +100,7 @@ function verifySession(token) {
 //                           student's login finds their assignments (their
 //                           classes' assignments, and ones with their own time)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
-//                             classId, startAt, minutes, endedAt, open,
+//                             classId, startAt, prompt, endedAt, open,
 //                             own: { [email]: { startAt, multiplier } },
 //                             createdAt, students: { [sub]: {...} },
 //                             submissions: [...] }
@@ -136,6 +136,24 @@ const MAX_CLASS_EMAILS = 400;
 const MAX_CLASS_ASSIGNMENTS = 30; // a class keeps this many of its newest assignments
 const MINE_ASSIGNMENTS_PER_CLASS = 8; // a login looks at each class's newest few
 const MAX_MINUTES = 300;
+// A session has no set length: its teacher ends it. Extra time is a multiple
+// of one period, and a session nobody ended is treated as over after 12 hours.
+const REF_MINUTES = 45;
+const MAX_OPEN_MS = 12 * 60 * 60 * 1000;
+const MAX_PROMPT_CHARS = 4000;
+// What a teacher can switch in Preferences; these are the defaults.
+const DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
+function cleanPrefs(p) {
+  const x = p && typeof p === 'object' ? p : {};
+  const out = { ...DEFAULT_PREFS };
+  if (x.spellcheck === 'off' || x.spellcheck === 'underline') out.spellcheck = x.spellcheck;
+  ['lockOnLeave', 'blockPaste', 'showCount', 'autoHandIn'].forEach((k) => { if (typeof x[k] === 'boolean') out[k] = x[k]; });
+  return out;
+}
+async function prefsOf(teacherSub) {
+  const { state } = await readItem('luddite:teacher:' + teacherSub);
+  return cleanPrefs(state && state.prefs);
+}
 const UPCOMING_HORIZON_MS = 48 * 60 * 60 * 1000;
 // A paper handed in this long after a student's time ran out is marked late.
 const LATE_GRACE_MS = 2 * 60 * 1000;
@@ -268,9 +286,9 @@ function ownsRoom(room, info, role) {
 }
 
 // ---- When an assignment runs ----
-// The regular window is startAt (or, for the first rooms, createdAt) for
-// `minutes`. Closing it early sets endedAt, which only stops new people
-// getting in. A student with their own time has their own window: their own
+// The regular window starts at startAt (or, for the first rooms, createdAt)
+// and runs until the teacher ends it (or for `minutes`, on older sessions).
+// Ending it early sets endedAt, which only stops new people getting in. A student with their own time has their own window: their own
 // start (or the regular one), and the length times their multiplier.
 const regularEnded = (r) => !!r.endedAt || r.open === false;
 function regularWindow(r) {
@@ -283,12 +301,12 @@ function windowOf(room, email) {
   if (!o) return { ...reg, own: false, multiplier: 1, ended: regularEnded(room) };
   const start = o.startAt || reg.start;
   const multiplier = o.multiplier || 1;
-  return { start, end: room.minutes ? start + Math.round(room.minutes * multiplier * 60000) : null, own: true, multiplier, ended: false };
+  return { start, end: start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000), own: true, multiplier, ended: false };
 }
 function stateAt(win, now) {
   if (win.ended) return 'ended';
   if (now < win.start) return 'upcoming';
-  if (win.end && now >= win.end) return 'ended';
+  if (now >= (win.end || win.start + MAX_OPEN_MS)) return 'ended';
   return 'running';
 }
 
@@ -305,7 +323,7 @@ function roomSummary(room) {
   const state = stateAt({ ...reg, ended: regularEnded(room) }, Date.now());
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running', state, createdAt: room.createdAt,
-    classId: room.classId || null, startAt: reg.start, endAt: reg.end, minutes: room.minutes || null,
+    classId: room.classId || null, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
@@ -315,7 +333,7 @@ function roomSummary(room) {
 
 // An assignment as one student sees it: only their own place in it, and
 // their own window (which may differ from everyone else's).
-function studentView(room, sub, email) {
+function studentView(room, sub, email, prefs) {
   const me = room.students[sub] || null;
   const win = windowOf(room, lower(email));
   const now = Date.now();
@@ -324,6 +342,7 @@ function studentView(room, sub, email) {
     code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running',
     state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier, minutes: room.minutes || null, now,
     teacherName: room.teacher.name || room.teacher.email,
+    prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
     submittedAt: me ? me.submittedAt || 0 : 0,
@@ -678,7 +697,7 @@ async function routeLuddite(event, method, path, info) {
       if (expected) { entry.decidedAt = Date.now(); entry.via = 'class'; }
       return { ...r, students: { ...r.students, [me.sub]: entry } };
     });
-    return respond(200, { room: studentView(room, me.sub, me.email) });
+    return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
   // GET /luddite/assignment?code= -- a student's place in the assignment
@@ -686,7 +705,7 @@ async function routeLuddite(event, method, path, info) {
   if (path === '/luddite/assignment' && method === 'GET') {
     const room = await getRoom(cleanCode(q.code));
     if (isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
-    return respond(200, { room: studentView(room, me.sub, me.email) });
+    return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
   // PUT /luddite/event { code, type: 'left' | 'writing' | 'idle', words }
@@ -704,7 +723,7 @@ async function routeLuddite(event, method, path, info) {
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
     if (!room) throw new HttpError(404, 'no_room');
-    return respond(200, { room: studentView(room, me.sub, me.email) });
+    return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
   // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
@@ -763,7 +782,7 @@ async function routeLuddite(event, method, path, info) {
       submissions: [submission, ...(r.submissions || [])],
       students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, writing: false } }
     }));
-    return respond(200, { room: studentView(saved, me.sub, me.email) });
+    return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
   }
 
   if (!isTeacher) return respond(403, { error: 'teachers_only' });
@@ -778,9 +797,18 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, {
       assignments: rooms.map(roomSummary),
       classes: await classesOf(state),
+      prefs: cleanPrefs(state && state.prefs),
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
+  }
+
+  // PUT /luddite/prefs { spellcheck, lockOnLeave, blockPaste, showCount, autoHandIn }
+  // -- what students get while writing, for all of this teacher's sessions.
+  if (path === '/luddite/prefs' && method === 'PUT') {
+    const prefs = cleanPrefs(body);
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), prefs }));
+    return respond(200, { prefs });
   }
 
   // ---- Classes ----
@@ -927,16 +955,16 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/assignments { title, classId, startAt, minutes } -- make an
-  // assignment with a fresh two-word Entry Phrase. It needs a name that says
-  // what it is. startAt (ms; omitted = now) and minutes are its regular
-  // window; classId (optional) is the class let in on its own.
+  // PUT /luddite/assignments { title, prompt, classId, startAt } -- make a
+  // writing session with a fresh two-word Entry Phrase. It needs a name that
+  // says what it is. startAt (ms; omitted = now) is when it starts and the
+  // teacher ends it; prompt (optional) is shown to students at the top of
+  // the writing page; classId (optional) is the class let in on its own.
   if (path === '/luddite/assignments' && method === 'PUT') {
     const teacher = { ...me, name: await displayNameOf(info, role) };
     const title = String(body.title || '').trim().slice(0, 80);
     if (!title) throw new HttpError(400, 'need_title');
-    const minutes = Math.floor(Number(body.minutes) || 45);
-    if (minutes < 5 || minutes > MAX_MINUTES) throw new HttpError(400, 'bad_minutes');
+    const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
     const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
     const cls = body.classId ? await getClass(body.classId, me, role) : null;
     let room = null;
@@ -945,7 +973,7 @@ async function routeLuddite(event, method, path, info) {
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, minutes, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, prompt, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -983,10 +1011,10 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now() };
       else if (body.action === 'schedule') {
         const startAt = Math.floor(Number(body.startAt));
-        const minutes = Math.floor(Number(body.minutes) || r.minutes || 45);
-        if (!(startAt > 0) || minutes < 5 || minutes > MAX_MINUTES) throw new HttpError(400, 'bad_time');
-        return { ...r, open: true, endedAt: null, startAt, minutes };
+        if (!(startAt > 0)) throw new HttpError(400, 'bad_time');
+        return { ...r, open: true, endedAt: null, startAt };
       }
+      else if (body.action === 'prompt') return { ...r, prompt: String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS) };
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
         if (!title) throw new HttpError(400, 'need_title');
@@ -994,7 +1022,6 @@ async function routeLuddite(event, method, path, info) {
       }
       else if (body.action === 'own') {
         if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
-        if (!r.minutes) throw new HttpError(409, 'no_length');
         const multiplier = Math.min(4, Math.max(1, Math.round((Number(body.multiplier) || 1) * 4) / 4));
         const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : null;
         return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, setAt: Date.now() } } };
