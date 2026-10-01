@@ -322,6 +322,8 @@
   .item.click { cursor: pointer; }
   .item.click:hover .who b { text-decoration: underline; }
   .item .who { flex: 1; min-width: 200px; }
+  .item .acts { flex-basis: 100%; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn.done, .btn.done:hover:not(:disabled) { background: var(--rule); border-color: var(--rule); color: var(--muted); }
   .item .who b { font-weight: 600; display: block; }
   .item .who span { color: var(--muted); font-size: 13px; word-break: break-word; }
   .pill { font-size: 12px; padding: 2px 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule); color: var(--muted); white-space: nowrap; }
@@ -3195,16 +3197,18 @@
       if (s.submittedAt) row.appendChild(el('span', 'pill good', 'Handed in ' + clock(s.submittedAt)));
       var ol = ownLabel(room, (s.email || '').toLowerCase());
       if (ol) row.appendChild(el('span', 'pill own', ol));
-      var ob = ownButton(room, (s.email || '').toLowerCase(), who(s.name, s.email));
-      if (ob) row.appendChild(ob);
-      // Grading is what comes next for a handed-in paper, so it's the big button.
+      // The buttons always sit on a row of their own, under the name and tags; grading comes first.
+      var acts = el('div', 'acts');
       var paper = (room.submissions || []).filter(function (x) { return x.sub === s.sub && x.stored; })[0];
-      if (paper) row.appendChild(button('Grade', 'btn grade', function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); }));
-      if (s.lockedOut && !s.handedIn) row.appendChild(button('Let them back in', 'btn grade', function () { roomAction('unlock', [s.sub]); }));
-      if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
-      row.appendChild(button('Remove', 'btn small danger', async function () {
+      if (paper) acts.appendChild(gradeButton(paper));
+      if (s.lockedOut && !s.handedIn) acts.appendChild(button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); }));
+      if (s.handedIn) acts.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
+      var ob = ownButton(room, (s.email || '').toLowerCase(), who(s.name, s.email));
+      if (ob) acts.appendChild(ob);
+      acts.appendChild(button('Remove', 'btn small danger', async function () {
         if (await ask({ title: 'Take ' + who(s.name, s.email) + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
       }));
+      row.appendChild(acts);
     });
 
     // The class list: who hasn't come in yet, and who has their own time.
@@ -3246,22 +3250,22 @@
       if (x.late) row.appendChild(el('span', 'pill warn', 'Late'));
       if (x.grade) row.appendChild(el('span', 'pill gradepill', x.grade));
       if (x.auto) row.appendChild(el('span', 'pill', 'Handed in when the session ended'));
-      if (x.returnedAt) row.appendChild(el('span', 'pill good', 'Handed back'));
-      else if (x.marked) row.appendChild(el('span', 'pill good', 'Marked'));
-      if (x.stored && x.marked && !x.returnedAt) row.appendChild(button('Hand back', 'btn small ghost', async function () {
+      if (x.marked && !x.returnedAt) row.appendChild(el('span', 'pill good', 'Marked'));
+      if (x.driveError && !x.link) row.appendChild(el('span', 'pill warn', 'Not in Drive'));
+      var acts = el('div', 'acts');
+      if (x.stored) acts.appendChild(gradeButton(x));
+      if (x.stored && x.marked && !x.returnedAt) acts.appendChild(button('Hand back', 'btn small ghost', async function () {
         try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
       }));
-      if (x.stored) row.appendChild(button('Grade', 'btn grade', function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); }));
       if (x.link) {
         var a = el('a', 'btn small ghost', 'Open in Drive');
         a.href = x.link;
         a.target = '_blank';
         a.rel = 'noopener';
         a.style.textDecoration = 'none';
-        row.appendChild(a);
-      } else if (x.driveError) {
-        row.appendChild(el('span', 'pill warn', 'Not in Drive'));
+        acts.appendChild(a);
       }
+      row.appendChild(acts);
       list.appendChild(row);
     });
 
@@ -3269,6 +3273,15 @@
     fill('removedList', removed, '', function (s, row) {
       row.appendChild(button('Let back in', 'btn small ghost', function () { roomAction('admit', [s.sub]); }));
     });
+  }
+
+  // Grade, or once the paper's been handed back, a greyed "Handed back" that still opens it.
+  function gradeButton(paper) {
+    var open = function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); };
+    if (!paper.returnedAt) return button('Grade', 'btn small', open);
+    var b = button('Handed back', 'btn small done', open);
+    b.title = 'Handed back to the student. Click to open it.';
+    return b;
   }
 
   function fill(id, people, emptyText, addControls) {
