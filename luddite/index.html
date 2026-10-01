@@ -507,6 +507,13 @@
   .topright { position: fixed; top: 12px; right: 12px; z-index: 40; display: flex; gap: 8px; }
   .topright button { font: 600 14px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--ink); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
   .topright button:hover { background: var(--hover); }
+  .acctswitch { position: fixed; left: 12px; bottom: 12px; z-index: 40; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 24px);
+    background: var(--card); border: 1.5px solid var(--edge); border-radius: 999px; padding: 5px 6px 5px 14px; font: 600 12px var(--ui); color: var(--muted); }
+  .acctswitch .k { letter-spacing: .06em; text-transform: uppercase; }
+  .acctswitch button { font: 600 13px var(--ui); color: var(--ink); background: none; border: 1.5px solid transparent; border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .acctswitch button:hover { background: var(--hover); }
+  .acctswitch button.on { border-color: var(--ink); cursor: default; }
+  .acctswitch button.off { color: var(--muted); }
   .menu { position: relative; }
   .menu > summary { list-style: none; }
   .menu .pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 12px; padding: 4px; }
@@ -997,6 +1004,9 @@
   <button id="prefsBtn" type="button">Settings</button>
 </div>
 
+<!-- Jake's own test accounts: one click to switch between them (only shown to those accounts) -->
+<div class="acctswitch no-print" id="acctSwitch" hidden><span class="k">Testing as</span><span id="acctList"></span></div>
+
 <!-- Teacher: settings (saved as you change them) -->
 <div class="overlay no-print" id="prefsBox" hidden>
   <div class="box">
@@ -1126,6 +1136,11 @@
   var GOOGLE_CLIENT_ID = '522963753495-m1qigb1q8ct9rmmrh56fkv7r3hs2psap.apps.googleusercontent.com';
   var API = 'https://2zzmrvoptttg6stc5cfjdsz3za0cryjt.lambda-url.us-east-1.on.aws'; // luddite-api (luddite-backend/), Luddite's own server
   var AUTH_KEY = 'luddite.auth.v1';
+  // Jake's test accounts. Signed in as one of them, a switcher at the bottom
+  // left swaps between them in one click, using each one's own saved session
+  // (each signs in with Google once on this browser). Nobody else sees it.
+  var TEST_ACCOUNTS = ['jake.goldwasser@gmail.com', 'jake_goldwasser@horacemann.org', 'nymets892@gmail.com'];
+  var TEST_KEY = 'luddite.testAccounts.v1';
   var POLL_WAITING_MS = 3000;   // student in the waiting room
   var POLL_ROOM_MS = 3000;      // teacher looking at a room
   var POLL_DASH_MS = 10000;     // teacher looking at the room list
@@ -1324,6 +1339,45 @@
     // Settings sits on the teacher pages (not over the marking bar, which has its own Hide names).
     syncAnonBtn();
     $('topRight').hidden = !(isTeacher && !previewing && ['dashScreen', 'roomScreen', 'classScreen', 'studentScreen'].indexOf(id) !== -1);
+    drawSwitcher(id);
+  }
+
+  // ---- Switching between Jake's test accounts ----
+  function isTester(email) { return TEST_ACCOUNTS.indexOf((email || '').toLowerCase()) !== -1; }
+  function testTokens() { try { return JSON.parse(load(TEST_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function liveToken(t) { var x = t ? decodeJwtPayload(t).exp : 0; return !!(x && x * 1000 > Date.now()); }
+  function drawSwitcher(id) {
+    // Never over the writing or locked screens (switching away would lock the page).
+    var on = isTester(me.email) && ['writeScreen', 'lockScreen', 'signInScreen'].indexOf(id) === -1;
+    $('acctSwitch').hidden = !on;
+    if (!on) return;
+    var tokens = testTokens(), list = $('acctList');
+    list.innerHTML = '';
+    TEST_ACCOUNTS.forEach(function (email) {
+      var cur = email === me.email.toLowerCase();
+      var b = button(email.split('@')[0] + (email.indexOf('gmail') === -1 ? ' (' + email.split('@')[1].split('.')[0] + ')' : ''),
+        cur ? 'on' : liveToken(tokens[email]) ? '' : 'off', function () { if (!cur) switchTo(email); });
+      b.type = 'button';
+      b.title = cur ? 'Signed in as ' + email : liveToken(tokens[email]) ? 'Switch to ' + email : 'Sign in as ' + email + ' once; after that it switches in one click';
+      list.appendChild(b);
+    });
+  }
+  function switchTo(email) {
+    var t = testTokens()[email];
+    if (!$('markScreen').hidden) flushMarks();
+    stopHeartbeat();
+    stopPoll();
+    previewing = false;
+    roomCode = ''; roomInfo = null;
+    ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) { $(id).hidden = true; });
+    if (liveToken(t)) { authToken = t; store(AUTH_KEY, t); start(); return; }
+    // Not signed in on this browser yet: Google, with that account suggested.
+    authToken = null;
+    store(AUTH_KEY, null);
+    me = { email: '', name: '', role: '' };
+    isTeacher = false;
+    showSignIn(email);
+    $('signInNote').textContent = 'Sign in as ' + email + '. After this once, switching to it is one click.';
   }
 
   // Calls fn now and then every ms until the screen changes. Later calls
@@ -1380,6 +1434,7 @@
     store(AUTH_KEY, authToken);
     me = data.luddite;
     isTeacher = me.role === 'owner' || me.role === 'teacher';
+    if (isTester(me.email)) { var tt = testTokens(); tt[me.email.toLowerCase()] = authToken; store(TEST_KEY, JSON.stringify(tt)); }
     each('.who-email', function (n) { n.textContent = me.email; });
 
     var linked = new URLSearchParams(location.search).get('room') || '';
@@ -1420,11 +1475,14 @@
   }
   each('[data-signout]', function (b) { b.addEventListener('click', signOut); });
 
-  function showSignIn() {
+  function showSignIn(hint) {
     show('signInScreen');
+    $('signInNote').textContent = '';
     (function wait(n) {
       if (window.google && google.accounts && google.accounts.id) {
-        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCredential, use_fedcm_for_prompt: true, itp_support: true });
+        var opts = { client_id: GOOGLE_CLIENT_ID, callback: handleCredential, use_fedcm_for_prompt: true, itp_support: true };
+        if (typeof hint === 'string') opts.login_hint = hint;
+        google.accounts.id.initialize(opts);
         google.accounts.id.renderButton($('gsiBtn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with' });
         return;
       }
