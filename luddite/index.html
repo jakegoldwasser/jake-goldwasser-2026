@@ -935,7 +935,7 @@
   <div class="card">
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
-      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out, or right-click them to comment. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
+      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out (Delete again takes the cross-out back), or right-click them to comment. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
@@ -1024,7 +1024,6 @@
 
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
-  <button type="button" data-tool="strike">Cross out</button>
   <button type="button" data-tool="insert">Write here</button>
 </div>
 <div class="markpop no-print" id="markPop" hidden>
@@ -3192,11 +3191,6 @@
     if (!b || !toolRange) return;
     var t = b.dataset.tool, r = toolRange;
     hideTools();
-    if (t === 'strike') {
-      addMark({ type: 'strike', start: r.start, end: r.end });
-      window.getSelection().removeAllRanges();
-      return;
-    }
     openPop(null, { type: t, start: r.start, end: t === 'insert' ? r.start : r.end }, r.rect);
   });
 
@@ -3226,6 +3220,31 @@
     if (r.start >= r.end) return;
     var already = piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
     if (!already) newMark({ type: 'strike', start: r.start, end: r.end });
+  }
+  // Takes the cross-out off these words, keeping it on any crossed-out words either side.
+  function unstrikeRange(r) {
+    r = trimRange(r);
+    piece.marks.slice().forEach(function (m) {
+      if (m.type !== 'strike' || m.end <= r.start || m.start >= r.end) return;
+      var left = trimRange({ start: m.start, end: r.start }), right = trimRange({ start: r.end, end: m.end });
+      piece.marks = piece.marks.filter(function (x) { return x !== m; });
+      if (left.start < left.end) newMark({ type: 'strike', start: left.start, end: left.end });
+      if (right.start < right.end) newMark({ type: 'strike', start: right.start, end: right.end });
+    });
+  }
+  function isStruck(r) {
+    r = trimRange(r);
+    return r.start < r.end && piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
+  }
+  // The cross-out the caret sits just after (Backspace) or just before (Delete), spaces aside.
+  function strikeBeside(p, back) {
+    var found = null;
+    piece.marks.forEach(function (m) {
+      if (m.type !== 'strike') return;
+      var gap = back ? piece.text.slice(m.end, p) : piece.text.slice(p, m.start);
+      if ((back ? m.end <= p : m.start >= p) && !/\S/.test(gap) && (!found || (back ? m.end > found.end : m.start < found.start))) found = m;
+    });
+    return found;
   }
   function caretAfter(node) {
     var r = document.createRange();
@@ -3309,8 +3328,9 @@
       return;
     }
     if (t.indexOf('delete') !== 0) return; // Enter, undo, formatting: nothing
+    // Delete or Backspace on words crosses them out; again on crossed-out words takes it back.
     if (!s.collapsed) {
-      strikeRange(s);
+      if (isStruck(s)) unstrikeRange(s); else strikeRange(s);
       drawPiece();
       queueSave();
       caretAtOffset(s.end);
@@ -3327,6 +3347,15 @@
       queueSave();
       var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
       if (node) caretAfter(node); else caretAtOffset(s.start);
+      return;
+    }
+    // Backspace right after a cross-out (or Delete right before one) takes the cross-out back.
+    var back = t.indexOf('Backward') !== -1, st = strikeBeside(s.start, back);
+    if (st) {
+      piece.marks = piece.marks.filter(function (x) { return x !== st; });
+      drawPiece();
+      queueSave();
+      caretAtOffset(s.start);
     }
   });
   // Keyboards that compose characters can't be stopped beforehand; redraw
