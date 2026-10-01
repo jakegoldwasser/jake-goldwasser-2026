@@ -849,6 +849,13 @@ async function routeLuddite(event, method, path, info) {
 
   // ---- Teachers ----
 
+  // PUT /luddite/rubrics { rubrics } -- this teacher's saved rubrics, all at once.
+  if (path === '/luddite/rubrics' && method === 'PUT') {
+    const rubrics = (Array.isArray(body.rubrics) ? body.rubrics : []).slice(0, 30).map(cleanRubric).filter(Boolean);
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), rubrics }));
+    return respond(200, { rubrics });
+  }
+
   // GET /luddite/assignments -- this teacher's assignments (newest first) and classes.
   if (path === '/luddite/assignments' && method === 'GET') {
     const { state } = await readItem('luddite:teacher:' + me.sub);
@@ -858,6 +865,7 @@ async function routeLuddite(event, method, path, info) {
       assignments: rooms.map(roomSummary),
       classes: await classesOf(state),
       prefs: cleanPrefs(state && state.prefs),
+      rubrics: (state && state.rubrics) || [],
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
@@ -943,10 +951,12 @@ async function routeLuddite(event, method, path, info) {
 
   // GET /luddite/sub?id= -- one piece with its marks, for its teacher.
   if (path === '/luddite/sub' && method === 'GET') {
-    return respond(200, { sub: await ownSub(q.id, me, role) });
+    const piece = await ownSub(q.id, me, role);
+    const { state: room } = await readItem('luddite:room:' + piece.code);
+    return respond(200, { sub: piece, roomRubric: (room && room.rubric) || null });
   }
 
-  // PUT /luddite/marks { id, marks, endComment } -- the teacher's comments,
+  // PUT /luddite/marks { id, marks, endComment, grade, rubric, rubricScores } -- the teacher's comments,
   // cross-outs and insertions, all anchored to character offsets in the
   // (never-changing) text.
   if (path === '/luddite/marks' && method === 'PUT') {
@@ -954,8 +964,10 @@ async function routeLuddite(event, method, path, info) {
     const marks = cleanMarks(body.marks, piece.text.length);
     const endComment = String(body.endComment || '').slice(0, 8000);
     const grade = String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    const rubric = body.rubric === undefined ? piece.rubric || null : cleanRubric(body.rubric);
+    const rubricScores = cleanScores(body.rubricScores === undefined ? piece.rubricScores : body.rubricScores, rubric);
     const saved = await mutate('luddite:sub:' + piece.id, (x) => {
-      const next = { ...x, marks, endComment, grade, markedAt: Date.now() };
+      const next = { ...x, marks, endComment, grade, rubric, rubricScores, markedAt: Date.now() };
       if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
       return next;
     });
@@ -1114,6 +1126,7 @@ async function routeLuddite(event, method, path, info) {
         if (!(startAt > 0)) throw new HttpError(400, 'bad_time');
         return { ...r, open: true, endedAt: null, startAt };
       }
+      else if (body.action === 'rubric') return { ...r, rubric: body.rubric ? cleanRubric(body.rubric) : null };
       else if (body.action === 'prompt') return { ...r, prompt: String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS) };
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
@@ -1266,6 +1279,32 @@ async function handInFor(room, code, me, s, text, label, auto) {
   return saved;
 }
 
+// A rubric: skills down the side, the teacher's own levels across the top
+// (each cell can describe that level), and optionally each skill's share of
+// the grade in percent.
+function cleanRubric(x) {
+  if (!x || typeof x !== 'object') return null;
+  const str = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const levels = (Array.isArray(x.levels) ? x.levels : []).slice(0, 6).map((l) => str(l, 40) || 'Level');
+  if (levels.length < 2) return null;
+  const weighted = !!x.weighted;
+  const rows = (Array.isArray(x.rows) ? x.rows : []).slice(0, 25).map((row) => ({
+    skill: str(row && row.skill, 200),
+    cells: levels.map((_, i) => str(row && Array.isArray(row.cells) ? row.cells[i] : '', 400)),
+    ...(weighted ? { weight: Math.max(0, Math.min(100, Math.round(Number(row && row.weight) || 0))) } : {})
+  })).filter((row) => row.skill);
+  if (!rows.length) return null;
+  const id = /^[a-z0-9]{6,16}$/.test(String(x.id || '')) ? String(x.id) : randomUUID().replace(/-/g, '').slice(0, 12);
+  return { id, name: str(x.name, 80) || 'Rubric', levels, weighted, rows };
+}
+function cleanScores(scores, rubric) {
+  if (!rubric) return [];
+  return rubric.rows.map((_, i) => {
+    const v = Math.floor(Number(Array.isArray(scores) ? scores[i] : -1));
+    return v >= 0 && v < rubric.levels.length ? v : -1;
+  });
+}
+
 function viewedMs(paper) { return (paper.view && paper.view.ms) || 0; }
 // A handed-back paper as its student sees it: the grade only once they've
 // spent GRADE_AFTER_MS with the comments.
@@ -1274,6 +1313,8 @@ function studentPaper(x) {
   return {
     id: x.id, roomTitle: x.roomTitle, name: x.name, email: x.email, at: x.at, words: x.words, text: x.text,
     marks: x.marks || [], endComment: x.endComment || '', returnedAt: x.returnedAt,
+    // The rubric counts as part of the grade, so it shows with it.
+    rubric: ready ? x.rubric || null : null, rubricScores: ready ? x.rubricScores || [] : [],
     viewedMs: seen, gradeAfterMs: GRADE_AFTER_MS, gradeReady: ready, grade: ready ? x.grade || '' : ''
   };
 }
