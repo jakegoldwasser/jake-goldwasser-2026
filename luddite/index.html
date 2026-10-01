@@ -172,6 +172,11 @@
     background: color-mix(in srgb, var(--paper) 90%, transparent); }
   .overlay .box { background: var(--card); border-radius: 16px; padding: 24px 24px 22px; box-shadow: inset 0 0 0 2px var(--ink); width: 100%; max-width: 560px; text-align: left; }
   .overlay h2 { font: 400 24px Literata, Georgia, serif; margin: 0 0 4px; }
+  #askBox { z-index: 60; padding-top: 18vh; }
+  #askBox .box { max-width: 460px; }
+  .asktext { margin: 8px 0 0; white-space: pre-wrap; color: var(--ink); line-height: 1.5; }
+  .asktext:empty { display: none; }
+  .askfield { width: 100%; margin-top: 14px; }
   .timeleft.low { color: var(--lock); font-weight: 600; }
   .stamp { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
   .roomcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 12px;
@@ -333,12 +338,12 @@
     border-left: 2px solid var(--pen); background: var(--pen-wash); border-radius: 0 6px 6px 0; cursor: pointer; white-space: pre-wrap; word-wrap: break-word; }
   .mnote .n { margin-right: 4px; }
   .mnote.on { box-shadow: 0 0 0 2px var(--pen); }
-  .gradebox { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .gradebox { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
   .gradebox label { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .gradebox input { width: 9em; font: 600 20px Literata, Georgia, serif; color: var(--pen); background: transparent; border: 0; border-radius: 10px;
     box-shadow: inset 0 0 0 1px var(--rule); padding: 6px 12px; text-align: center; }
   .gradebox input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
-  .gradeprint { display: none; font: 600 14pt Literata, Georgia, serif; color: var(--pen); }
+  .gradeprint { display: none; font: 600 14pt Literata, Georgia, serif; color: var(--pen); margin-top: 12px; }
   .fmtbtn { min-width: 34px; padding: 6px 0; border: 0; border-radius: 8px; background: none; box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); font: 17px Literata, Georgia, serif; cursor: pointer; }
   .fmtbtn.on { background: var(--pen); color: var(--accent-ink); box-shadow: none; }
   .endwrap { grid-column: 1 / -1; margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 14px; }
@@ -599,7 +604,12 @@
      the text. Only the lines themselves (and their numbers) take clicks; a
      wide invisible stroke under each line makes it easy to hit. */
   #sheet { position: relative; }
-  .arrows { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+  /* The drawing shares the paper's grid cell, so its coordinates start at the
+     text's own corner: whatever sits above the text (the grade box on screen,
+     the printed grade) can't shift the arrows off their words. */
+  #paper { grid-column: 1; grid-row: 2; }
+  #margin { grid-column: 2; grid-row: 2; }
+  .arrows { grid-column: 1; grid-row: 2; position: relative; align-self: stretch; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
   .arrows .line { fill: none; stroke: var(--pen); stroke-width: 2; stroke-linecap: round; }
   .arrows .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
   .arrows .tail { fill: var(--pen); }
@@ -626,6 +636,8 @@
   .sheet.printing { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; border-radius: 0; width: 6.95in; }
   .sheet.printing .paper { font-size: 11.5pt; line-height: 1.7; }
   .sheet.printing .mnote { font-size: 10.5pt; }
+  .sheet.printing .gradebox { display: none; }
+  .sheet.printing .gradeprint.has { display: block; }
   @media print {
     @page { margin: 0.75in; }
     body { background: #fff !important; color: #000; }
@@ -949,8 +961,6 @@
     </div>
     <div class="sheet" id="sheet">
       <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span>
-        <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false" placeholder="e.g. 92 or A−"></div>
-        <div class="gradeprint" id="gradePrint"></div>
       </div>
       <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
@@ -960,6 +970,8 @@
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
         <div class="endprint" id="endPrint"></div>
+        <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false"></div>
+        <div class="gradeprint" id="gradePrint"></div>
       </div>
     </div>
   </div>
@@ -1041,6 +1053,20 @@
   </div>
 </div>
 
+<!-- Luddite's own pop-up for questions, warnings and short answers (ask()), in place of the browser's -->
+<div class="overlay no-print" id="askBox" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+    <h2 id="askTitle"></h2>
+    <p class="asktext" id="askText"></p>
+    <input class="field wide askfield" id="askInput" autocomplete="off" hidden>
+    <textarea class="field promptfield askfield" id="askArea" maxlength="4000" hidden></textarea>
+    <div class="row" style="justify-content:flex-end; margin-top:18px">
+      <button class="btn small ghost" id="askNo" type="button">Cancel</button>
+      <button class="btn small" id="askYes" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- Teacher: the Entry Phrase and link (under More on a writing session) -->
 <div class="overlay no-print" id="phraseBox" hidden>
   <div class="box">
@@ -1050,7 +1076,7 @@
       <span class="link" id="roomLink"></span>
       <button class="btn small" id="copyLinkBtn">Copy link</button>
     </div>
-    <div class="row" style="justify-content:flex-end; margin-top:18px"><button class="btn small" id="phraseClose" type="button">Done</button></div>
+    <div class="row" style="justify-content:flex-end; margin-top:18px"><button class="btn small ghost" id="phraseCancel" type="button" hidden>Cancel</button><button class="btn small" id="phraseClose" type="button">Done</button></div>
   </div>
 </div>
 
@@ -1137,6 +1163,34 @@
   }
   function store(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) {} }
   function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+
+  // Luddite's own pop-up, in place of the browser's alert/confirm/prompt.
+  // ask({ title, text, ok, cancel, danger, input: 'line' | 'area', value })
+  // resolves true/false, or for an input the text typed (null on Cancel).
+  var askDone = null;
+  function ask(o) {
+    if (askDone) askDone(false);
+    var field = o.input === 'area' ? $('askArea') : o.input ? $('askInput') : null;
+    $('askTitle').textContent = o.title || '';
+    $('askText').textContent = o.text || '';
+    $('askInput').hidden = field !== $('askInput');
+    $('askArea').hidden = field !== $('askArea');
+    if (field) { field.value = o.value || ''; field.placeholder = o.placeholder || ''; }
+    $('askYes').textContent = o.ok || 'OK';
+    $('askYes').className = 'btn small' + (o.danger ? ' danger' : '');
+    $('askNo').textContent = o.cancel || 'Cancel';
+    $('askNo').hidden = o.cancel === false;
+    $('askBox').hidden = false;
+    setTimeout(function () { if (field) { field.focus(); field.select(); } else $('askYes').focus(); }, 0);
+    return new Promise(function (resolve) {
+      askDone = function (yes) {
+        askDone = null;
+        $('askBox').hidden = true;
+        resolve(field ? (yes ? field.value : null) : !!yes);
+      };
+    });
+  }
+  function tell(title, text) { return ask({ title: title, text: text, ok: 'OK', cancel: false }); }
   function decodeJwtPayload(token) {
     try {
       var part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -1464,7 +1518,7 @@
       if (e.message !== 'not_started') store(roomKey(), null);
       roomCode = '';
       // Teachers have no join screen; they go back Home and are told why.
-      if (isTeacher) { showDash(); alert(joinError(e, code).replace(' If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.', '')); return; }
+      if (isTeacher) { showDash(); tell('Couldn’t open that', joinError(e, code).replace(' If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.', '')); return; }
       await loadMine();
       showJoin(joinError(e, code));
     }
@@ -1581,8 +1635,8 @@
     if (!data.room.handedIn) showReady();
   }
 
-  $('newPageBtn').addEventListener('click', function () {
-    if (!confirm('Clear the page? This can’t be undone.')) return;
+  $('newPageBtn').addEventListener('click', async function () {
+    if (!await ask({ title: 'Clear the page?', text: 'Everything on it is gone for good. This can’t be undone.', ok: 'Clear the page', danger: true })) return;
     store(textKey(), null);
     store(leavesKey(), null);
     showReady();
@@ -1591,7 +1645,7 @@
   $('submitBtn').addEventListener('click', async function () {
     var text = load(textKey()) || '';
     if (!text.trim()) return;
-    if (!confirm('Hand this in to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '? After you hand it in, you can’t keep writing unless your teacher lets you back in.')) return;
+    if (!await ask({ title: 'Hand this in to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '?', text: 'After you hand it in, you can’t keep writing unless your teacher lets you back in.', ok: 'Hand in' })) return;
     var btn = $('submitBtn');
     btn.disabled = true;
     btn.textContent = 'Handing in…';
@@ -1732,7 +1786,7 @@
       startHeartbeat();
       startTimer();
     }).catch(function () {
-      alert('Luddite needs full screen to work. Allow it and try again.');
+      tell('Luddite needs full screen', 'Allow it and try again.');
     });
   }
   $('startBtn').addEventListener('click', enterWriting);
@@ -2019,11 +2073,11 @@
     return new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
   $('changeNameBtn').addEventListener('click', async function () {
-    var name = prompt('What should students see you as? For example, Ms. Smith', displayName);
+    var name = await ask({ title: 'What should students see you as?', input: 'line', value: displayName, placeholder: 'For example, Ms. Smith', ok: 'Save' });
     if (!name || !name.trim()) return;
     try {
       setDisplayName((await api('/luddite/me', { displayName: name.trim() })).displayName);
-    } catch (e) { alert('Couldn’t save that. Try again.'); }
+    } catch (e) { tell('Couldn’t save that', 'Try again.'); }
   });
   $('dashLink').addEventListener('click', showDash);
   $('backToDash').addEventListener('click', showDash);
@@ -2064,6 +2118,7 @@
   });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || writing) return;
+    if (!$('askBox').hidden) return; // the pop-up on top closes first
     ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) { $(id).hidden = true; });
     if ($('roomMenu')) $('roomMenu').open = false;
   });
@@ -2179,12 +2234,12 @@
   }
 
   async function deleteRoom(r) {
-    if (!confirm('Delete the writing session “' + r.title + '”?\n\nIt comes off your list and nobody can join it. Work already handed in stays under Student work (and in your Drive).')) return;
+    if (!await ask({ title: 'Delete “' + r.title + '”?', text: 'It comes off your list and nobody can join it. Work already handed in stays under Student work (and in your Drive).', ok: 'Delete', danger: true })) return;
     try {
       await api('/luddite/assignment', { code: r.code, action: 'delete' });
       lastDrawn = '';
       await loadRooms();
-    } catch (e) { alert('Couldn’t delete that. Try again.'); }
+    } catch (e) { tell('Couldn’t delete that', 'Try again.'); }
   }
 
   // ---- Starting a writing session ----
@@ -2352,7 +2407,7 @@
       w.appendChild(el('b', null, who('', email)));
       row.appendChild(w);
       row.appendChild(button('Remove', 'linkish', async function () {
-        if (!confirm('Take ' + who('', email) + ' off this class list?')) return;
+        if (!await ask({ title: 'Take ' + who('', email) + ' off this class list?', ok: 'Remove', danger: true })) return;
         await classAction('remove', { emails: [email] });
       }));
       box.appendChild(row);
@@ -2367,7 +2422,7 @@
       openedClass = data['class'] || openedClass;
       drawClassScreen();
       return true;
-    } catch (e) { alert('Couldn’t save that change. Try again.'); }
+    } catch (e) { tell('Couldn’t save that change', 'Try again.'); }
   }
   wireEmailFile($('classAddFile'), $('classAddEmails'), $('classAddNote'));
   $('classAddForm').addEventListener('submit', async function (e) {
@@ -2380,11 +2435,11 @@
   });
   $('classBack').addEventListener('click', showDash);
   $('classRenameBtn').addEventListener('click', async function () {
-    var n = prompt('Class name', openedClass.name);
+    var n = await ask({ title: 'Rename the class', input: 'line', value: openedClass.name, ok: 'Save' });
     if (n && n.trim()) await classAction('rename', { name: n.trim() });
   });
-  $('classDeleteBtn').addEventListener('click', function () {
-    if (confirm('Delete the class “' + openedClass.name + '”? Writing sessions that used it keep working for people already in them, but its list stops letting anyone in on their own.')) classAction('delete');
+  $('classDeleteBtn').addEventListener('click', async function () {
+    if (await ask({ title: 'Delete the class “' + openedClass.name + '”?', text: 'Writing sessions that used it keep working for people already in them, but its list stops letting anyone in on their own.', ok: 'Delete', danger: true })) classAction('delete');
   });
 
   // ---- Google Drive, where handed-in work goes ----
@@ -2411,7 +2466,7 @@
   }
 
   function connectDrive() {
-    if (!(window.google && google.accounts && google.accounts.oauth2)) { alert('Google didn’t load. Reload the page and try again.'); return; }
+    if (!(window.google && google.accounts && google.accounts.oauth2)) { tell('Google didn’t load', 'Reload the page and try again.'); return; }
     google.accounts.oauth2.initCodeClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'openid email https://www.googleapis.com/auth/drive.file',
@@ -2422,7 +2477,7 @@
         try {
           await api('/luddite/drive', { code: resp.code });
         } catch (e) {
-          alert(e.message === 'drive_not_granted' ? 'Luddite needs the Google Drive box ticked. Try again and leave it on.'
+          tell('Couldn’t connect Google Drive', e.message === 'drive_not_granted' ? 'Luddite needs the Google Drive box ticked. Try again and leave it on.'
             : e.message === 'drive_no_refresh' ? 'Google didn’t give Luddite lasting access. Remove Luddite at myaccount.google.com/permissions, then connect again.'
             : e.message === 'drive_not_configured' ? 'Drive isn’t set up on the server yet.'
             : 'Couldn’t connect Google Drive. Try again.');
@@ -2445,7 +2500,7 @@
       row.appendChild(who);
       var rm = el('button', 'linkish', 'Remove');
       rm.addEventListener('click', async function () {
-        if (!confirm('Stop ' + t.email + ' from making writing sessions? Their existing ones stay.')) return;
+        if (!await ask({ title: 'Stop ' + t.email + ' from making writing sessions?', text: 'Their existing ones stay.', ok: 'Remove', danger: true })) return;
         loadTeachers(await api('/luddite/teachers', { remove: t.email }));
       });
       row.appendChild(rm);
@@ -2488,7 +2543,7 @@
   $('teacherClassBtn').addEventListener('click', async function () {
     var note = $('teacherClassNote');
     var NAME = 'UD English Teachers';
-    if (classes.some(function (c) { return c.name === NAME; }) && !confirm('You already have a class called “' + NAME + '”. Make another one?')) return;
+    if (classes.some(function (c) { return c.name === NAME; }) && !await ask({ title: 'You already have a class called “' + NAME + '”', text: 'Make another one?', ok: 'Make another' })) return;
     note.hidden = false;
     try {
       var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
@@ -2585,7 +2640,7 @@
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
     $('roomWhen').textContent = whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : ' · No class');
-    if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; }
+    if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
     $('roomCode').textContent = room.codeLabel || room.code;
@@ -2633,8 +2688,8 @@
       var paper = (room.submissions || []).filter(function (x) { return x.sub === s.sub && x.stored; })[0];
       if (paper) row.appendChild(button('Grade', 'btn grade', function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); }));
       if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
-      row.appendChild(button('Remove', 'btn small danger', function () {
-        if (confirm('Take ' + who(s.name, s.email) + ' out of this writing session?')) roomAction('remove', [s.sub]);
+      row.appendChild(button('Remove', 'btn small danger', async function () {
+        if (await ask({ title: 'Take ' + who(s.name, s.email) + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
       }));
     });
 
@@ -2713,29 +2768,29 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
-  $('openCloseBtn').addEventListener('click', function () {
+  $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
-      if (!confirm('End “' + teacherRoom.title + '” now?\n\nNobody new can get in. Students already writing can finish and hand in.')) return;
+      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Nobody new can get in. Students already writing can finish and hand in.', ok: 'End it now', danger: true })) return;
       roomAction('close');
     } else {
       roomAction('startNow');
     }
   });
   $('renameBtn').addEventListener('click', async function () {
-    var t = prompt('What is this writing session? Name it for the work.', teacherRoom.title);
+    var t = await ask({ title: 'Rename this writing session', text: 'Name it for the work.', input: 'line', value: teacherRoom.title, ok: 'Save' });
     if (!t || !t.trim()) return;
     await roomAction('rename', [], { title: t.trim() });
   });
-  $('deleteRoomBtn').addEventListener('click', function () {
-    if (confirm('Delete “' + teacherRoom.title + '”? It leaves your list and nobody can join it. Work already handed in stays in your Drive.')) roomAction('delete');
+  $('deleteRoomBtn').addEventListener('click', async function () {
+    if (await ask({ title: 'Delete “' + teacherRoom.title + '”?', text: 'It leaves your list and nobody can join it. Work already handed in stays in your Drive.', ok: 'Delete', danger: true })) roomAction('delete');
   });
   $('copyLinkBtn').addEventListener('click', function () {
     var link = joinLink(teacherRoom);
     (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () {
       $('copyLinkBtn').textContent = 'Copied';
       setTimeout(function () { $('copyLinkBtn').textContent = 'Copy link'; }, 1500);
-    }).catch(function () { prompt('Copy this link:', link); });
+    }).catch(function () { ask({ title: 'Copy this link', input: 'line', value: link, ok: 'Done', cancel: false }); });
   });
 
   // ---- Picking a time: a writing session's, or one student's own ----
@@ -2814,9 +2869,22 @@
   });
   $('timeBtn').addEventListener('click', openSessionTime);
   $('phraseBtn').addEventListener('click', function () { $('phraseBox').hidden = false; });
-  $('phraseClose').addEventListener('click', function () { $('phraseBox').hidden = true; });
-  $('promptBtn').addEventListener('click', function () {
-    var t = prompt('The prompt students see pinned at the top of their writing page. Leave it empty for none.', teacherRoom.prompt || '');
+  $('phraseClose').addEventListener('click', function () { $('phraseBox').hidden = true; $('phraseCancel').hidden = true; });
+  // A casual session that was just started can be taken back before anyone uses it.
+  $('phraseCancel').addEventListener('click', function () {
+    $('phraseBox').hidden = true;
+    $('phraseCancel').hidden = true;
+    roomAction('delete');
+  });
+  $('askYes').addEventListener('click', function () { if (askDone) askDone(true); });
+  $('askNo').addEventListener('click', function () { if (askDone) askDone(false); });
+  $('askBox').addEventListener('click', function (e) { if (e.target === $('askBox') && askDone) askDone(false); });
+  $('askBox').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (askDone) askDone(false); }
+    else if (e.key === 'Enter' && e.target.id !== 'askArea' && e.target.tagName !== 'BUTTON') { e.preventDefault(); if (askDone) askDone(true); }
+  });
+  $('promptBtn').addEventListener('click', async function () {
+    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'area', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', ok: 'Save' });
     if (t === null) return;
     roomAction('prompt', [], { prompt: t.trim() });
   });
@@ -3022,8 +3090,8 @@
     }
     return null;
   }
-  // The sheet's inside corner, which the drawing's coordinates start from.
-  function sheetBox() { var sh = $('sheet'), r = sh.getBoundingClientRect(); return { left: r.left + sh.clientLeft, top: r.top + sh.clientTop }; }
+  // The drawing's corner (the same as the text's), which its coordinates start from.
+  function sheetBox() { var r = $('arrows').getBoundingClientRect(); return { left: r.left, top: r.top }; }
   function arrowGeometry(m, box) {
     var tailAt = m.head === 'start' ? m.end : m.start, headAt = m.head === 'start' ? m.start : m.end;
     var a = pointRect(tailAt), b = pointRect(headAt);
