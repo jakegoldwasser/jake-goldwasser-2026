@@ -447,7 +447,9 @@
   .tag { border: 0; background: var(--rule); color: var(--ink); border-radius: 999px; padding: 1px 10px; box-shadow: none; font-size: 12.5px; font-weight: 600; }
   .tag.warnTag { background: var(--tomato-tint); color: var(--tomato-deep); }
   .classcard { border: 1.5px solid var(--edge); border-left: 1.5px solid var(--edge); border-radius: 14px; box-shadow: none; background: var(--card); }
-  .classcard.click { cursor: pointer; }
+  .classcard.click, .rcard.click { cursor: pointer; }
+  .rcard.click:hover { background: var(--hover); }
+  .rcard .chev { font: 400 28px/1 var(--ui); color: var(--muted); }
   .classcard.click:hover { background: var(--hover); }
   .classcard .chev { font: 400 28px/1 var(--ui); color: var(--muted); }
   /* "Make a new class" is just a plus; it turns into a minus while the form is open. */
@@ -2001,14 +2003,14 @@
   }
 
   function sessionCard(r) {
-    var card = el('div', 'rcard ' + r.state);
+    var card = el('div', 'rcard click ' + r.state);
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
     var top = el('div', 'top');
     var ttl = el('div', 'ttl');
-    ttl.appendChild(el('div', 'chip ' + r.state, stateLabel(r.state, r)));
     ttl.appendChild(el('h4', null, r.title));
     ttl.appendChild(el('div', 'stampline', whenRange(r)));
     top.appendChild(ttl);
-    top.appendChild(button(r.state === 'ended' ? 'Read the papers (' + r.submissions + ') →' : 'Open →', 'btn go', function () { openRoom(r.code); }));
     card.appendChild(top);
     var facts = el('div', 'facts');
     var cn = r.classId ? classNameOf(r.classId) : '';
@@ -2021,12 +2023,9 @@
     del.addEventListener('click', function () { deleteRoom(r); });
     facts.appendChild(del);
     card.appendChild(facts);
-    if (r.state !== 'ended') {
-      var pl = el('div', 'phraseline');
-      pl.appendChild(el('span', 'k', 'Entry Phrase'));
-      pl.appendChild(el('span', 'phrase', r.codeLabel));
-      card.appendChild(pl);
-    }
+    // The whole card opens the writing session; Delete inside it only deletes.
+    card.addEventListener('click', function (e) { if (!e.target.closest('button, a')) openRoom(r.code); });
+    card.addEventListener('keydown', function (e) { if (e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRoom(r.code); } });
     return card;
   }
 
@@ -2109,7 +2108,6 @@
       info.appendChild(el('h4', null, c.name));
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students')));
       card.appendChild(info);
-      card.appendChild(el('span', 'chev', '\u203A'));
       card.addEventListener('click', function () { openClass(c.id); });
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openClass(c.id); } });
       box.appendChild(card);
