@@ -8,35 +8,50 @@
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,400..900,0..100,0..1;1,9..144,400..900,0..100,0..1&family=Literata:ital,opsz,wght@0,7..72,400;1,7..72,400&family=Special+Elite&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
+  /* Concept: a school composition notebook marked up with highlighters.
+     Cream paper, navy-black ink, and four marker colors (sun yellow, tomato,
+     sky blue, mint), each with a -deep for text on light and a -tint for
+     fills. Boxes are rounded with bulky 3-4px ink outlines. The teacher's pen
+     stays green and red still means locked or a warning. */
   :root {
-    --paper: #f7f4ee;
-    --ink: #1f1d1a;
-    --muted: #7a746a;
-    --rule: #e2ddd3;
-    --accent: #1f1d1a;
-    --accent-ink: #f7f4ee;
-    --lock: #b3261e;
-    --ok: #2f6b3a;
-    --card: #ffffff;
-    --pen: #2f6b3a;      /* the teacher's green pen (red is for the lock) */
-    --pen-wash: #e3f0e3;
+    --paper: #fbf3df;
+    --ink: #1d2340;
+    --muted: #5d6280;
+    --rule: #e0d4b4;
+    --accent: #1d2340;
+    --accent-ink: #fbf3df;
+    --card: #fffdf5;
+    --sun: #ffd23f;   --sun-deep: #8a5d00;   --sun-tint: #fff0a6;
+    --tomato: #ef5b3f; --tomato-deep: #c23a1f; --tomato-tint: #ffd9cd;
+    --sky: #4aa8ff;   --sky-deep: #1b64b8;   --sky-tint: #d6ebff;
+    --mint: #3ccf91;  --mint-deep: #13784f;  --mint-tint: #c9f4e0;
+    --lock: #c23a1f;
+    --ok: #13784f;
+    --pen: #1f7a45;      /* the teacher's green pen (red is for the lock) */
+    --pen-wash: #dcf2e1;
+    --display: Fraunces, Georgia, serif;
+    --ui: 'Bricolage Grotesque', system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #171614;
-      --ink: #e9e5dc;
-      --muted: #8f897e;
-      --rule: #2e2c28;
-      --accent: #e9e5dc;
-      --accent-ink: #171614;
-      --lock: #ef8a80;
-      --ok: #8fc79a;
-      --card: #201e1b;
-      --pen: #8fc79a;
-      --pen-wash: #1f3326;
+      --paper: #151934;
+      --ink: #f6ecd2;
+      --muted: #a4a8c6;
+      --rule: #2d3358;
+      --accent: #f6ecd2;
+      --accent-ink: #151934;
+      --card: #1e2347;
+      --sun: #ffd23f;   --sun-deep: #ffd23f;   --sun-tint: #4a4220;
+      --tomato: #ff7a60; --tomato-deep: #ff8f78; --tomato-tint: #4d2a2b;
+      --sky: #6bb9ff;   --sky-deep: #8ec9ff;   --sky-tint: #233a5e;
+      --mint: #4fe0a3;  --mint-deep: #7beab9;  --mint-tint: #1e4a43;
+      --lock: #ff8f78;
+      --ok: #7beab9;
+      --pen: #8fd9a6;
+      --pen-wash: #1f3a2b;
     }
   }
   * { box-sizing: border-box; }
@@ -44,7 +59,7 @@
   body {
     background: var(--paper);
     color: var(--ink);
-    font: 15px/1.5 Inter, system-ui, sans-serif;
+    font: 15px/1.5 var(--ui);
     -webkit-font-smoothing: antialiased;
   }
   [hidden] { display: none !important; }
@@ -136,9 +151,40 @@
   .rcard .state.on { color: var(--ok); }
   .rcard .badge { background: var(--lock); color: #fff; border-radius: 999px; padding: 3px 12px; font-weight: 600; font-size: 14px; }
   .rcard .del { margin-left: auto; }
-  .permrow { display: flex; gap: 12px; align-items: flex-start; margin-top: 18px; font-size: 16px; line-height: 1.45; cursor: pointer; }
-  .permrow[hidden] { display: none; } /* display:flex above would otherwise beat the hidden attribute */
-  .permrow input { margin-top: 4px; width: 20px; height: 20px; flex: none; }
+  /* Picking a time: the Horace Mann day as a row of period buttons. */
+  .picker { margin-top: 10px; }
+  .picker .when { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .picker input[type=date], .picker input[type=time] { font: 500 15px Inter, system-ui, sans-serif; color: var(--ink); background: var(--card); border: 0;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 30%, transparent); border-radius: 10px; padding: 9px 12px; }
+  .periods { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: stretch; }
+  .pbtn { display: flex; flex-direction: column; align-items: center; min-width: 64px; padding: 7px 8px; border: 0; border-radius: 10px; cursor: pointer;
+    background: var(--card); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); font-family: inherit; }
+  .pbtn b { font: 400 22px/1.1 Literata, Georgia, serif; }
+  .pbtn span { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .pbtn:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .pbtn.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+  .pbtn.on span { color: var(--accent-ink); opacity: .8; }
+  .pbreak { display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 11.5px; color: var(--muted); padding: 0 6px;
+    border-left: 2px dotted var(--rule); border-right: 2px dotted var(--rule); }
+  .seg { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { border: 0; border-radius: 999px; padding: 7px 16px; font: 500 14px Inter, system-ui, sans-serif; cursor: pointer; color: var(--ink);
+    background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+  .formrow { margin-top: 18px; }
+  .formrow > .lbl { margin-bottom: 8px; }
+  select.field { border-radius: 12px; appearance: auto; }
+  .tbox-preview { margin: 14px 0 0; font-size: 15px; }
+  .classcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 4px 12px 12px 4px;
+    box-shadow: inset 0 0 0 1px var(--rule); border-left: 8px solid var(--rule); padding: 14px 18px; margin-top: 10px; }
+  .classcard .info { flex: 1; min-width: 200px; }
+  .classcard h4 { font: 400 20px Literata, Georgia, serif; margin: 0; }
+  .classcard .meta { color: var(--muted); font-size: 13px; }
+  .tag { display: inline-block; font-size: 12.5px; font-weight: 600; background: var(--paper); box-shadow: inset 0 0 0 1px var(--rule); border-radius: 6px; padding: 1px 8px; }
+  .overlay { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow-y: auto;
+    background: color-mix(in srgb, var(--paper) 90%, transparent); }
+  .overlay .box { background: var(--card); border-radius: 16px; padding: 24px 24px 22px; box-shadow: inset 0 0 0 2px var(--ink); width: 100%; max-width: 560px; text-align: left; }
+  .overlay h2 { font: 400 24px Literata, Georgia, serif; margin: 0 0 4px; }
+  .timeleft.low { color: var(--lock); font-weight: 600; }
   .stamp { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
   .roomcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 12px;
     box-shadow: inset 0 0 0 1px var(--rule); padding: 14px 16px; margin-bottom: 10px; }
@@ -337,6 +383,126 @@
   .piece .kind { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
   .studentsearch { margin-bottom: 6px; }
 
+
+  /* ---- The skin: fonts, and boxes with bulky outlines. Kept in one block,
+     after the rules above, so it wins them and the print rules below win it. ---- */
+  h3.sect, .head h2, .rcard h4, .classcard h4, .lbl.big, .piece h4, .sheethead b, .handin h2, .overlay h2, .grouphead,
+  .joinbox .bigcode, .rcard .phraseline .phrase, #lockScreen h2, .pbtn b {
+    font-family: var(--display);
+    font-variation-settings: 'SOFT' 100, 'WONK' 1;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  /* The wordmark is set in Special Elite, a typewriter face, to match the paper-and-ink idea. */
+  .wordmark { font-family: 'Special Elite', 'Courier New', monospace; font-weight: 400; letter-spacing: 0; font-size: clamp(44px, 9vw, 60px); line-height: 1; }
+  /* A highlighter swipe under the wordmark. */
+  .wordmark { display: inline-block; background: linear-gradient(transparent 62%, var(--sun) 62%, var(--sun) 92%, transparent 92%); padding: 0 6px; margin-left: -6px; }
+  .sub { font-size: 17px; }
+  .fine, .help { font-size: 14px; }
+  [class*="pill"], .btn, .chip, .tag, .seg button, h3, .phraselbl, .joinlbl, .lbl { font-family: var(--ui); }
+
+  .btn { border: 3px solid var(--ink); font-weight: 600; transition: transform .15s, background .15s, box-shadow .15s; }
+  .btn:hover:not(:disabled) { filter: none; transform: translateY(-2px); box-shadow: 0 3px 0 var(--sun); }
+  .btn.ghost { background: var(--card); color: var(--ink); box-shadow: none; }
+  .btn.ghost:hover:not(:disabled) { background: var(--sun-tint); box-shadow: 0 3px 0 var(--sun); }
+  .btn.danger { color: var(--tomato-deep); border-color: var(--tomato-deep); box-shadow: none; background: var(--card); }
+  .btn.danger:hover:not(:disabled) { background: var(--tomato-tint); box-shadow: 0 3px 0 var(--tomato); }
+  .btn.small { padding: 5px 14px; }
+  .linkish { text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  .linkish:hover { background: var(--sun-tint); color: var(--ink); }
+
+  .field { border-radius: 14px; box-shadow: none; border: 3px solid var(--ink); background: var(--card); }
+  .field:focus { box-shadow: 0 0 0 4px var(--sun); }
+  .field.wide { border-radius: 16px; box-shadow: none; border: 3px solid var(--ink); }
+  .field.wide:focus { box-shadow: 0 0 0 4px var(--sun); }
+  .editwrap .field { box-shadow: none; }
+  .field.codeword { border-radius: 999px; font-family: var(--display); font-weight: 600; }
+  .picker input[type=date], .picker input[type=time] { border: 3px solid var(--ink); box-shadow: none; border-radius: 12px; }
+
+  /* The centered screens (sign in, join, wait, ready) are each one boxed card. */
+  .screen:not(.page) > .card { background: var(--card); border: 4px solid var(--ink); border-radius: 28px; padding: 34px 28px 28px; }
+  #lockScreen > .card { border-color: var(--tomato-deep); background: var(--tomato-tint); }
+  .handin .card, .overlay .box { border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); background: var(--card); }
+  .handin .card { border-radius: 24px; }
+  .overlay .box { border-radius: 24px; box-shadow: 8px 8px 0 var(--ink); }
+
+  .dashtop { border-bottom: 6px solid var(--ink); padding-bottom: 14px; }
+  h3.sect { font-size: 32px; font-weight: 800; border-bottom: 5px solid var(--ink); margin-top: 52px; }
+  h3 { color: var(--ink); font-size: 13px; font-weight: 700; margin-top: 30px; padding-bottom: 6px; border-bottom: 3px solid var(--ink); }
+  .newroom { border: 3px solid var(--ink); border-radius: 18px; box-shadow: none; }
+  .newroombox > .newroom { border: 4px solid var(--ink); border-top: 0; border-radius: 0 0 20px 20px; box-shadow: none; }
+  .bigstart { background: var(--sun); color: var(--ink); border: 4px solid var(--ink); border-radius: 22px; font-family: var(--display); font-variation-settings: 'SOFT' 100, 'WONK' 1; font-weight: 800; font-size: 26px; transition: transform .15s; }
+  .bigstart:hover { filter: none; transform: translateY(-2px); background: var(--sun-tint); }
+  details[open] > .bigstart { border-radius: 22px 22px 0 0; }
+  .more { border-top: 4px solid var(--ink); }
+  .more > summary { font-weight: 600; }
+
+  /* Writing sessions: three groups, each with its own marker color. */
+  .grouphead { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 800; margin: 30px 0 0; padding-bottom: 6px; border-bottom: 5px solid var(--ink); }
+  .grouphead .dot { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--ink); background: var(--sky); flex: none; }
+  .grouphead.running .dot { background: var(--mint); }
+  .grouphead.upcoming .dot { background: var(--sun); }
+  .grouphead.ended .dot { background: var(--sky); }
+  .grouphead .n { font-family: var(--ui); font-weight: 500; font-size: 20px; color: var(--muted); }
+  .groupnote { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .rcard { border: 3px solid var(--ink); border-radius: 20px; box-shadow: none; padding: 18px 20px 16px 26px; margin-top: 14px; position: relative; overflow: hidden; }
+  .rcard::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; background: var(--sky); border-right: 3px solid var(--ink); }
+  .rcard.running::before { background: var(--mint); }
+  .rcard.upcoming::before { background: var(--sun); }
+  .rcard.live { border-left-color: var(--ink); }
+  .rcard h4 { font-size: 26px; font-weight: 800; margin-top: 8px; }
+  .rcard .phraseline { border-top: 3px dashed var(--ink); }
+  .rcard .phraseline .phrase { font-size: 28px; font-weight: 700; }
+  .rcard .badge { background: var(--tomato); color: #fff; border: 2.5px solid var(--ink); }
+  .rcard .btn.go { font-size: 17px; }
+  .chip { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 12px; border-radius: 999px; border: 2.5px solid var(--ink); background: var(--sky-tint); color: var(--sky-deep); }
+  .chip.running { background: var(--mint-tint); color: var(--mint-deep); }
+  .chip.upcoming { background: var(--sun-tint); color: var(--sun-deep); }
+  .stamp.chip { font-size: 13px; margin: 8px 0 6px; }
+  .tag { border: 2px solid var(--ink); background: var(--sun-tint); color: var(--ink); border-radius: 999px; padding: 1px 12px; box-shadow: none; }
+  .classcard { border: 3px solid var(--ink); border-left: 14px solid var(--sky); border-radius: 18px; box-shadow: none; }
+
+  /* People and papers: one boxed row each. */
+  .item { border: 3px solid var(--ink); border-radius: 16px; padding: 10px 16px; margin-top: 10px; background: var(--card); }
+  .item.click:hover { background: var(--sun-tint); }
+  .item .who b { font-weight: 700; font-size: 16px; }
+  .empty { border: 3px dashed var(--rule); border-radius: 16px; padding: 14px 16px; margin-top: 10px; }
+  .pill { border: 2px solid var(--ink); box-shadow: none; color: var(--ink); font-weight: 600; font-size: 12.5px; background: var(--card); }
+  .pill.good { background: var(--mint-tint); color: var(--mint-deep); }
+  .pill.warn { background: var(--tomato-tint); color: var(--tomato-deep); }
+  .pill.own { background: var(--sun-tint); color: var(--sun-deep); }
+  .notice { border: 3px solid var(--ink); border-radius: 16px; box-shadow: none; background: var(--sun-tint); }
+  .notice.warn { border-color: var(--tomato-deep); background: var(--tomato-tint); }
+  .joinbox { border: 4px solid var(--ink); border-radius: 22px; box-shadow: none; background: var(--sun-tint); }
+  .joinbox .bigcode { font-size: 42px; font-weight: 800; }
+
+  /* Times and periods */
+  .pbtn { border: 3px solid var(--ink); box-shadow: none; border-radius: 14px; transition: transform .15s; }
+  .pbtn:hover { box-shadow: none; background: var(--sun-tint); transform: translateY(-2px); }
+  .pbtn.on { background: var(--ink); color: var(--accent-ink); }
+  .pbreak { border-color: var(--ink); }
+  .seg button { border: 3px solid var(--ink); box-shadow: none; font-weight: 600; transition: transform .15s; }
+  .seg button:hover { background: var(--sun-tint); }
+  .seg button.on { background: var(--ink); color: var(--accent-ink); }
+  .tbox-preview { background: var(--mint-tint); border: 3px solid var(--ink); border-radius: 14px; padding: 10px 14px; }
+  .tbox-preview:empty { display: none; }
+
+  /* Hiding names: one button, always in the same corner, and a band across the top while it's on. */
+  .anonbtn { position: fixed; top: 12px; right: 12px; z-index: 40; font: 700 14px var(--ui); color: var(--ink); background: var(--card); border: 3px solid var(--ink);
+    border-radius: 999px; padding: 8px 18px; cursor: pointer; transition: transform .15s; }
+  .anonbtn:hover { transform: translateY(-2px); background: var(--sun-tint); }
+  .anonbtn.on { background: var(--sun); }
+  body.is-anon::before { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 8px; background: var(--sun); border-bottom: 3px solid var(--ink); z-index: 39; }
+  .sheet, .piece { border-radius: 18px; }
+  .sheet { border: 3px solid var(--ink); box-shadow: none; }
+  .piece { border: 3px solid var(--ink); border-top-width: 3px; padding: 16px 18px; margin-top: 12px; background: var(--card); }
+  .marktools, .markpop { border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+  .preview-bar { border: 3px solid var(--ink); box-shadow: none; }
+  .timeleft { font-weight: 600; }
+  .timeleft.low { color: var(--lock); }
+  @media (max-width: 560px) { .anonbtn { top: 8px; right: 8px; padding: 6px 12px; font-size: 13px; } .dashtop { padding-top: 34px; } }
+
   /* Printing: just the page itself, at a fixed width so the margin notes
      line up with what they're about (see .printing, set on beforeprint). */
   .sheet.printing { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; border-radius: 0; width: 6.95in; }
@@ -346,7 +512,8 @@
     @page { margin: 0.75in; }
     body { background: #fff !important; color: #000; }
     :root { --paper: #fff; --ink: #000; --card: #fff; --rule: #ccc; --pen: #2f6b3a; --pen-wash: #e8f3e8; --muted: #555; }
-    .no-print, .markbar, .marktools, .markpop, #previewBar { display: none !important; }
+    .no-print, .markbar, .marktools, .markpop, #previewBar, .anonbtn { display: none !important; }
+    body.is-anon::before { display: none; }
     .screen { display: block !important; padding: 0 !important; min-height: 0 !important; }
     .screen[hidden] { display: none !important; }
     #markScreen .card, #studentScreen .card { max-width: none; }
@@ -374,10 +541,14 @@
   </div>
 </section>
 
-<!-- Student: enter a room's Entry Phrase -->
+<!-- Student: your writing sessions, or type an Entry Phrase -->
 <section class="screen" id="joinScreen" hidden>
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
+    <div id="mineBox" hidden style="margin-bottom:26px">
+      <label class="joinlbl">Your writing sessions</label>
+      <div id="mineList"></div>
+    </div>
     <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
     <label class="joinlbl" for="joinCode">Entry Phrase</label>
     <form class="row" id="joinForm" style="justify-content:center">
@@ -389,14 +560,14 @@
   </div>
 </section>
 
-<!-- Student: waiting room (also room closed / removed) -->
+<!-- Student: waiting room (also writing session ended / removed) -->
 <section class="screen" id="waitScreen" hidden>
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
     <p class="sub" id="waitRoom"></p>
     <p id="waitMsg"><span class="pulse"></span>Waiting for your teacher to let you in&hellip;</p>
     <p class="fine">This page opens by itself once you&rsquo;re in.</p>
-    <p class="fine"><span class="who-email"></span> &middot; <button class="linkish" id="leaveRoomBtn">Leave this room</button> &middot; <button class="linkish" data-signout>Sign out</button></p>
+    <p class="fine"><span class="who-email"></span> &middot; <button class="linkish" id="leaveRoomBtn">Leave this writing session</button> &middot; <button class="linkish" data-signout>Sign out</button></p>
   </div>
 </section>
 
@@ -405,6 +576,7 @@
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
     <p class="sub" id="readyRoom"></p>
+    <p class="sub" id="readyWindow" hidden></p>
     <p class="sub">Writing opens full screen. Leaving it &mdash; another tab, another app, or Esc &mdash; locks the page<span id="readyTells"></span>. Copying and pasting are off.</p>
     <div class="row">
       <button class="btn" id="startBtn">Start writing</button>
@@ -418,7 +590,7 @@
       <span class="who-email"></span>
       <span id="newPageWrap" hidden> &middot; <button class="linkish" id="newPageBtn">Clear the page</button></span>
       <span id="dashWrap" hidden> &middot; <button class="linkish" id="dashLink">Home</button></span>
-      <span id="leaveWrap" hidden> &middot; <button class="linkish" id="leaveRoomBtn2">Leave this room</button></span>
+      <span id="leaveWrap" hidden> &middot; <button class="linkish" id="leaveRoomBtn2">Leave this writing session</button></span>
       &middot; <button class="linkish" data-signout>Sign out</button>
     </p>
   </div>
@@ -432,6 +604,7 @@
   <div class="bar">
     <div class="left">
       <span id="count">0 words</span>
+      <span id="timeLeft" class="timeleft"></span>
       <span id="leaves"></span>
     </div>
   </div>
@@ -468,35 +641,82 @@
     </div>
     <div id="driveBox"></div>
 
-    <!-- 1. What teachers do most: start a room -->
+    <!-- 1. What teachers do most: start a writing session -->
     <details class="newroombox" id="newRoomBox">
-      <summary class="bigstart"><span class="plus" aria-hidden="true">+</span> Start a new room</summary>
+      <summary class="bigstart"><span class="plus" aria-hidden="true">+</span> Start a new writing session</summary>
       <div class="newroom">
         <form id="newRoomForm">
-          <label class="lbl big" for="newRoomTitle">What is this room for?</label>
-          <p class="help">Name it for the assignment, like &ldquo;Period 3 &mdash; Hamlet essay&rdquo;. Today&rsquo;s date and time are added for you.</p>
-          <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the assignment name here" aria-label="Room name" autocomplete="off">
-          <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your rooms apart.</p>
-          <label class="permrow" id="permRow" hidden><input type="checkbox" id="newRoomPerm"> <span><b>Permanent room.</b> Students can come back to the work they started. When you close it, it gets a new Entry Phrase for next time.</span></label>
-          <button class="btn huge" type="submit">Create the room</button>
+          <label class="lbl big" for="newRoomTitle">What is this writing session?</label>
+          <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
+          <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
+
+          <div class="formrow" id="classRow">
+            <label class="lbl" for="newRoomClass">Class <span class="hint">&mdash; everyone on its list is let in on their own once it starts</span></label>
+            <select class="field wide" id="newRoomClass" style="font-size:16px; padding:11px 14px"></select>
+          </div>
+
+          <div class="formrow">
+            <label class="lbl">When does it start?</label>
+            <div class="seg" id="whenSeg">
+              <button type="button" class="on" data-when="now">Right now</button>
+              <button type="button" data-when="later">At a set time</button>
+            </div>
+            <div id="newRoomPicker" hidden></div>
+          </div>
+
+          <div class="formrow">
+            <label class="lbl">How long?</label>
+            <div class="seg" id="lenSeg">
+              <button type="button" class="on" data-min="45">One period (45 min)</button>
+              <button type="button" data-min="95">Double period (95 min)</button>
+              <button type="button" data-min="custom">Other</button>
+            </div>
+            <input class="field" id="newRoomMinutes" type="number" min="5" max="300" value="60" hidden aria-label="Minutes" style="width:7em; margin-left:8px; border-radius:10px"> <span id="newRoomMinLbl" hidden>minutes</span>
+          </div>
+          <p class="fine warn" id="newRoomWhenNote" hidden></p>
+          <button class="btn huge" type="submit">Create the writing session</button>
         </form>
       </div>
     </details>
 
-    <!-- 2. Their rooms -->
-    <h3 class="sect">Your rooms <span id="roomCount"></span></h3>
+    <!-- 2. Their writing sessions -->
+    <h3 class="sect">Your writing sessions <span id="roomCount"></span></h3>
     <div id="roomList"></div>
-    <p class="help">Deleting a room only takes it off this list. Work students handed in is kept under Student work, below.</p>
+    <p class="help">Deleting a writing session only takes it off this list. Work students handed in is kept under Student work, below.</p>
+
+    <!-- 2b. Classes -->
+    <h3 class="sect">Classes <span id="classCount"></span></h3>
+    <p class="help">A class is a list of email addresses. Give a writing session a class and everyone on the list is let in on their own when it starts.</p>
+    <div id="classList"></div>
+    <details class="more" id="newClassBox">
+      <summary>Make a new class</summary>
+      <div class="newroom">
+        <form id="newClassForm">
+          <label class="lbl" for="newClassName">Class name</label>
+          <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off" style="font-size:16px">
+          <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="hint">&mdash; paste a list (names, commas and &lt;brackets&gt; are fine), or upload a .csv or .txt file</span></label>
+          <textarea class="field" id="newClassEmails" rows="4" style="border-radius:14px; resize:vertical; font-size:14px; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
+          <div class="row" style="justify-content:flex-start; margin-top:8px">
+            <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
+          </div>
+          <p class="fine" id="newClassFound" style="margin-top:8px"></p>
+          <button class="btn" type="submit" style="margin-top:6px">Make the class</button>
+        </form>
+      </div>
+    </details>
 
     <!-- 3. Student work -->
     <h3 class="sect">Student work</h3>
     <p class="help">Everyone who has handed work in to you. Click a name to see and mark up their papers.</p>
-    <input class="field wide studentsearch" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student">
+    <div class="row" style="justify-content:flex-start; margin-bottom:6px">
+      <select class="field" id="studentClass" aria-label="Show students from" style="font-size:15px" hidden></select>
+      <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
+    </div>
     <div id="studentList"></div>
 
     <!-- 4. Less common things, tucked away -->
     <details class="more">
-      <summary>Join another teacher&rsquo;s room to write</summary>
+      <summary>Join another teacher&rsquo;s writing session to write</summary>
       <div class="newroom">
         <label class="lbl" for="teacherJoinCode">Their Entry Phrase <span class="hint">&mdash; the two words they gave you</span></label>
         <form class="row" id="teacherJoinForm" style="justify-content:flex-start">
@@ -507,9 +727,9 @@
       </div>
     </details>
     <details class="more" id="teachersSection" hidden>
-      <summary>Teachers who can open rooms</summary>
+      <summary>Teachers who can make writing sessions</summary>
       <div class="newroom">
-        <p class="help" style="margin-top:0">Anyone listed here can open rooms. You and your other address always can.</p>
+        <p class="help" style="margin-top:0">Anyone listed here can make classes and writing sessions. You and your other address always can.</p>
         <label class="lbl" for="addTeacherEmail">Add teachers <span class="hint">&mdash; paste one address or a whole list; names, commas and &lt;brackets&gt; are fine</span></label>
         <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
           <textarea class="field grow" id="addTeacherEmail" rows="2" style="border-radius:14px; resize:vertical; font-size:14px"
@@ -518,6 +738,9 @@
         </form>
         <p class="fine" id="addTeacherNote" hidden></p>
         <div id="teacherList" style="margin-top:14px"></div>
+        <p class="help" style="margin-top:18px">Make a class of everyone listed here (and you), called &ldquo;UD English Teachers&rdquo;. It goes in the account you&rsquo;re signed in with, so do this once in each account.</p>
+        <button class="btn small" id="teacherClassBtn" type="button">Make the &ldquo;UD English Teachers&rdquo; class</button>
+        <p class="fine" id="teacherClassNote" hidden></p>
       </div>
     </details>
 
@@ -525,14 +748,15 @@
   </div>
 </section>
 
-<!-- Teacher: one room -->
+<!-- Teacher: one writing session -->
 <section class="screen page" id="roomScreen" hidden>
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div><h2 id="roomTitle"></h2><p class="stamp" id="roomStamp"></p></div>
+      <div><h2 id="roomTitle"></h2><p class="stamp" id="roomStamp"></p><p class="stamp" id="roomWhen"></p></div>
       <div class="row">
-        <button class="btn small ghost" id="renameBtn" hidden>Rename</button>
+        <button class="btn small ghost" id="renameBtn">Rename</button>
+        <button class="btn small ghost" id="timeBtn">Change time</button>
         <button class="btn small ghost" id="previewBtn">See what students see</button>
         <button class="btn small ghost" id="openCloseBtn"></button>
       </div>
@@ -542,24 +766,61 @@
       <span class="link" id="roomLink"></span>
       <button class="btn small" id="copyLinkBtn">Copy link</button>
     </div>
+    <p class="fine" id="phraseNote" style="margin-top:8px">Anyone can use this phrase, even if they&rsquo;re not in the class; they wait in the waiting room until you let them in. People on the class list are let in on their own.</p>
     <div id="roomDrive"></div>
 
-    <h3><span>Waiting room</span> <button class="btn small" id="admitAllBtn">Let everyone in</button></h3>
-    <div id="waitingList"></div>
+    <div id="roomBody">
+      <div id="secWaiting" style="order:2">
+        <h3><span>Waiting room</span> <button class="btn small" id="admitAllBtn">Let everyone in</button></h3>
+        <div id="waitingList"></div>
+      </div>
 
-    <h3>In the room</h3>
-    <div id="admittedList"></div>
+      <div id="secIn" style="order:3">
+        <h3>In this writing session</h3>
+        <div id="admittedList"></div>
+      </div>
 
-    <h3>Handed in</h3>
-    <div id="submissionList"></div>
+      <div id="notHereSection" style="order:4" hidden>
+        <h3><span id="notHereTitle">On the class list, not here yet</span></h3>
+        <div id="notHereList"></div>
+      </div>
 
-    <div id="removedSection" hidden>
-      <h3>Removed</h3>
-      <div id="removedList"></div>
+      <div id="secPapers" style="order:5">
+        <h3><span id="papersTitle">Handed in</span></h3>
+        <div id="submissionList"></div>
+      </div>
+
+      <div id="removedSection" style="order:6" hidden>
+        <h3>Removed</h3>
+        <div id="removedList"></div>
+      </div>
     </div>
 
     <p class="fine" id="roomNote"></p>
-    <p class="fine" style="margin-top:28px"><button class="btn small danger" id="deleteRoomBtn">Delete this room</button></p>
+    <p class="fine" style="margin-top:28px"><button class="btn small danger" id="deleteRoomBtn">Delete this writing session</button></p>
+  </div>
+</section>
+
+<!-- Teacher: one class -->
+<section class="screen page" id="classScreen" hidden>
+  <div class="card">
+    <p style="margin:0 0 10px"><button class="btn small ghost" id="classBack">&larr; Home</button></p>
+    <div class="head">
+      <div><h2 id="className"></h2><p class="stamp" id="classCountLine"></p></div>
+      <div class="row"><button class="btn small ghost" id="classRenameBtn">Rename</button></div>
+    </div>
+    <h3>Add students</h3>
+    <form id="classAddForm">
+      <textarea class="field" id="classAddEmails" rows="3" style="border-radius:14px; resize:vertical; font-size:14px; width:100%" placeholder="Paste addresses here, or upload a file below"></textarea>
+      <div class="row" style="justify-content:flex-start; margin-top:8px">
+        <input type="file" id="classAddFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
+        <button class="btn small" type="submit">Add</button>
+      </div>
+      <p class="fine" id="classAddNote" hidden></p>
+    </form>
+    <h3>On the list</h3>
+    <div id="classRoster"></div>
+    <p class="fine" style="margin-top:28px"><button class="btn small danger" id="classDeleteBtn">Delete this class</button></p>
   </div>
 </section>
 
@@ -605,6 +866,9 @@
   </div>
 </section>
 
+<!-- One button hides every student's name on every teacher page (and in print). -->
+<button class="anonbtn no-print" id="anonBtn" type="button" hidden aria-pressed="false"></button>
+
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
   <button type="button" data-tool="strike">Cross out</button>
@@ -621,22 +885,48 @@
   </div>
 </div>
 
+<!-- Teacher: pick a time (a writing session's, or one student's own) -->
+<div class="overlay no-print" id="timeBox" hidden>
+  <div class="box">
+    <h2 id="tbTitle"></h2>
+    <p class="help" id="tbHelp" style="margin-top:2px"></p>
+    <div id="tbStartRow">
+      <div class="seg" id="tbStartSeg">
+        <button type="button" data-start="same" class="on">Same start as everyone</button>
+        <button type="button" data-start="own">A different time</button>
+      </div>
+    </div>
+    <div id="tbPicker"></div>
+    <div id="tbLenRow" class="formrow">
+      <label class="lbl" id="tbLenLbl"></label>
+      <div class="seg" id="tbMultSeg"></div>
+    </div>
+    <p class="tbox-preview" id="tbPreview"></p>
+    <p class="fine warn" id="tbNote" hidden></p>
+    <div class="row" style="justify-content:flex-end; margin-top:18px">
+      <button class="linkish" id="tbRemove" hidden>Take away their own time</button>
+      <span style="flex:1"></span>
+      <button class="btn small ghost" id="tbCancel" type="button">Cancel</button>
+      <button class="btn small" id="tbSave" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Shown over the student screens while a teacher previews them -->
 <div class="preview-bar" id="previewBar" hidden>
   <span>Student view:</span>
   <button class="linkish" data-preview="waitScreen">Waiting room</button>
   <button class="linkish" data-preview="readyScreen">Let in (ready to write)</button>
   <span>&middot;</span>
-  <button class="linkish" id="exitPreviewBtn">Back to the room</button>
+  <button class="linkish" id="exitPreviewBtn">Back to the writing session</button>
 </div>
 
 <script>
 (function () {
   'use strict';
 
-  // Same Google OAuth client and Lambda as the site's other tools; the
-  // Lambda's /luddite/* routes (cloud-sync-backend/index.mjs) run rooms,
-  // waiting rooms, live status and Drive submissions.
+  // The Lambda's /luddite/* routes (luddite-backend/index.mjs) run
+  // writing sessions, classes, waiting rooms, live status and Drive submissions.
   // Luddite's own Google app (Google Cloud project "Luddite"); Bookbug keeps its own.
   var GOOGLE_CLIENT_ID = '522963753495-m1qigb1q8ct9rmmrh56fkv7r3hs2psap.apps.googleusercontent.com';
   var API = 'https://2zzmrvoptttg6stc5cfjdsz3za0cryjt.lambda-url.us-east-1.on.aws'; // luddite-api (luddite-backend/), Luddite's own server
@@ -657,7 +947,9 @@
   var mode = 'room';
   var roomCode = '';
   var roomInfo = null;   // the student's view of their room, from the server
-  var teacherRoom = null; // the room a teacher has open
+  var teacherRoom = null; // the writing session a teacher has open
+  var teacherRoster = null; // its class's list of addresses, if it has a class
+  var skew = 0;          // server clock minus this device's clock, from the last answer
 
   function $(id) { return document.getElementById(id); }
   function each(sel, fn) { Array.prototype.forEach.call(document.querySelectorAll(sel), fn); }
@@ -675,8 +967,106 @@
       return JSON.parse(decodeURIComponent(escape(atob(part))));
     } catch (e) { return {}; }
   }
+  function nowMs() { return Date.now() + skew; }
+  function noteNow(serverNow) { if (serverNow) skew = serverNow - Date.now(); }
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
   function clock(t) { return new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+  function dayClock(t) { return new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
+  // "8:25 AM" today, "Thu, Oct 1, 8:25 AM" on another day.
+  function whenLabel(t) { return sameDay(t, Date.now()) ? clock(t) : dayClock(t); }
+  function minLeft(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60);
+    return (m >= 60 ? Math.floor(m / 60) + ':' + ('0' + (m % 60)).slice(-2) : m) + ':' + ('0' + (s % 60)).slice(-2);
+  }
+
+  // ---------------------------------------------------------------------
+  // The Horace Mann day: periods A-H, 45 minutes each with 5 between,
+  // starting 8:25 and ending 3:15, with a break from 10:00 to 10:20.
+  // Letters run in order through the day (the real day rotates them; for
+  // another order, pick "Other time").
+  // ---------------------------------------------------------------------
+  var DAY = { start: 8 * 60 + 25, classMin: 45, passMin: 5, breakAt: 10 * 60, breakMin: 20, letters: 'ABCDEFGH' };
+  var PERIODS = (function () {
+    var out = [], t = DAY.start;
+    for (var i = 0; i < DAY.letters.length; i++) {
+      out.push({ letter: DAY.letters.charAt(i), start: t, end: t + DAY.classMin });
+      t += DAY.classMin;
+      t += t === DAY.breakAt ? DAY.breakMin : DAY.passMin;
+    }
+    return out;
+  })();
+  function hm(min, ampm) {
+    var h = Math.floor(min / 60), m = min % 60, h12 = h % 12 || 12;
+    return h12 + ':' + ('0' + m).slice(-2) + (ampm ? (h < 12 ? ' AM' : ' PM') : '');
+  }
+  // Which periods a stretch of the day touches, e.g. a 1.5x sitting that runs into the next one.
+  function periodsTouched(startMs, endMs) {
+    var d0 = new Date(startMs); d0.setHours(0, 0, 0, 0);
+    var a = (startMs - d0.getTime()) / 60000, b = (endMs - d0.getTime()) / 60000;
+    return PERIODS.filter(function (p) { return p.start < b && p.end > a; }).map(function (p) { return p.letter; });
+  }
+  function dateValue(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  // A date plus a period button (or an "other time"), giving a start in ms.
+  // get() is null until both are chosen; onChange fires on every change.
+  function makePicker(host, onChange) {
+    host.innerHTML = '';
+    var box = el('div', 'picker');
+    var when = el('div', 'when');
+    var date = el('input'); date.type = 'date'; date.value = dateValue(new Date()); date.setAttribute('aria-label', 'Day');
+    when.appendChild(date);
+    box.appendChild(when);
+    var row = el('div', 'periods');
+    var picked = -2, buttons = [];
+    PERIODS.forEach(function (p, i) {
+      if (i > 0 && PERIODS[i - 1].end === DAY.breakAt) {
+        var br = el('div', 'pbreak');
+        br.appendChild(el('span', null, 'Break'));
+        br.appendChild(el('span', null, hm(DAY.breakAt) + '\u2013' + hm(DAY.breakAt + DAY.breakMin)));
+        row.appendChild(br);
+      }
+      var b = el('button', 'pbtn');
+      b.type = 'button';
+      b.appendChild(el('b', null, p.letter));
+      b.appendChild(el('span', null, hm(p.start) + '\u2013' + hm(p.end)));
+      b.addEventListener('click', function () { pick(i); });
+      buttons.push(b);
+      row.appendChild(b);
+    });
+    box.appendChild(row);
+    var other = el('div', 'when'); other.style.marginTop = '10px';
+    other.appendChild(el('span', 'fine', 'Other time:')); other.lastChild.style.margin = '0';
+    var time = el('input'); time.type = 'time'; time.setAttribute('aria-label', 'Other time');
+    other.appendChild(time);
+    box.appendChild(other);
+    host.appendChild(box);
+    function pick(i) {
+      picked = i;
+      buttons.forEach(function (b, j) { b.classList.toggle('on', j === i); });
+      if (i >= 0) time.value = '';
+      if (onChange) onChange();
+    }
+    date.addEventListener('input', function () { if (onChange) onChange(); });
+    time.addEventListener('input', function () { picked = -1; buttons.forEach(function (b) { b.classList.remove('on'); }); if (onChange) onChange(); });
+    function minutes() { return picked >= 0 ? PERIODS[picked].start : (time.value ? Number(time.value.slice(0, 2)) * 60 + Number(time.value.slice(3, 5)) : null); }
+    return {
+      get: function () {
+        var m = minutes();
+        if (m == null || !date.value) return null;
+        var p = date.value.split('-');
+        return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), Math.floor(m / 60), m % 60, 0, 0).getTime();
+      },
+      // Select the period (or other time) a moment falls on.
+      set: function (ms) {
+        var d = new Date(ms);
+        date.value = dateValue(d);
+        var m = d.getHours() * 60 + d.getMinutes();
+        var i = PERIODS.findIndex(function (p) { return p.start === m; });
+        if (i >= 0) pick(i); else { time.value = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); picked = -1; buttons.forEach(function (b) { b.classList.remove('on'); }); }
+      }
+    };
+  }
   function ago(t) {
     var s = Math.max(0, Math.round((Date.now() - t) / 1000));
     if (s < 60) return 'just now';
@@ -687,7 +1077,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'markScreen', 'studentScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -701,6 +1091,8 @@
     // writing or locked screens, which stay exactly as students get them.
     $('previewBar').hidden = !(previewing && (id === 'waitScreen' || id === 'readyScreen'));
     each('[data-preview]', function (b) { b.classList.toggle('on', b.getAttribute('data-preview') === id); });
+    // The hide-names button belongs to the teacher pages only.
+    $('anonBtn').hidden = !(isTeacher && !previewing && ['dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen'].indexOf(id) !== -1);
   }
 
   // Calls fn now and then every ms until the screen changes. Later calls
@@ -763,15 +1155,24 @@
     if (linked) history.replaceState(null, '', location.pathname);
     if (isTeacher) {
       if (!linked) { showDash(); return; }
-      // Their own room opens as its teacher; anyone else's, they join to write.
-      api('/luddite/room?code=' + encodeURIComponent(linked)).then(function (d) {
+      // Their own writing session opens as its teacher; anyone else's, they join to write.
+      api('/luddite/assignment?code=' + encodeURIComponent(linked)).then(function (d) {
         if (d.room && d.room.students) openRoom(linked); else teacherJoin(linked);
       }).catch(function () { showDash(); });
       return;
     }
     mode = 'room';
-    roomCode = linked || load(roomKey()) || '';
-    if (roomCode) joinRoom(roomCode); else showJoin();
+    // A link goes straight to its writing session. Otherwise the student's own
+    // writing sessions (their classes', and ones with their own time) are looked
+    // up: one that's running opens by itself.
+    if (linked) { roomCode = linked; joinRoom(linked); return; }
+    var saved = load(roomKey()) || '';
+    var list = await loadMine();
+    var running = list.filter(function (a) { return a.state === 'running' && a.status !== 'removed'; });
+    if (running.length === 1) { roomCode = running[0].code; joinRoom(running[0].code); return; }
+    if (running.length > 1) { showJoin(); return; }
+    roomCode = saved;
+    if (saved) joinRoom(saved, true); else showJoin();
   }
 
   function signOut() {
@@ -806,9 +1207,52 @@
   // "Mr. Goldwasser, September 29, 2:45 PM" already says whose room it is.
   function roomLine(r) { return r.title.indexOf(r.teacherName) !== -1 ? r.title : r.title + ' · ' + r.teacherName; }
 
+  var mineList = [];
+  async function loadMine() {
+    try {
+      var d = await api('/luddite/mine');
+      noteNow(d.now);
+      mineList = d.assignments || [];
+    } catch (e) { mineList = []; }
+    return mineList;
+  }
+
+  // The student's own writing sessions on the join screen: running ones to enter,
+  // coming ones with a countdown. While any are coming, the page checks back
+  // and opens one by itself when it starts.
+  function drawMine() {
+    var box = $('mineList');
+    box.innerHTML = '';
+    $('mineBox').hidden = !mineList.length;
+    mineList.forEach(function (a) {
+      var row = el('div', 'item');
+      var who = el('div', 'who');
+      who.appendChild(el('b', null, a.title));
+      var line = a.state === 'running'
+        ? a.teacherName + (a.endAt ? ' \u00b7 until ' + whenLabel(a.endAt) : '') + (a.own && a.multiplier > 1 ? ' \u00b7 extra time' : '')
+        : a.teacherName + ' \u00b7 opens ' + whenLabel(a.startAt) + (a.own ? ' (your own time)' : '');
+      who.appendChild(el('span', null, line));
+      row.appendChild(who);
+      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Open' : 'Enter', 'btn small', function () { roomCode = a.code; joinRoom(a.code); }));
+      else row.appendChild(el('span', 'pill', 'Not started'));
+      box.appendChild(row);
+    });
+  }
+  async function pollMine() {
+    await loadMine();
+    drawMine();
+    var running = mineList.filter(function (a) { return a.state === 'running' && a.status !== 'removed'; });
+    if (running.length === 1) { roomCode = running[0].code; joinRoom(running[0].code); return; }
+    if (!mineList.some(function (a) { return a.state === 'upcoming'; })) stopPoll();
+  }
+
   function showJoin(note) {
     $('joinNote').textContent = note || '';
     show('joinScreen');
+    drawMine();
+    // Check back while something is coming (the screen's own polling stops when it changes).
+    if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000);
+    else if (!mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000); } });
     $('joinCode').focus();
   }
 
@@ -819,19 +1263,29 @@
     joinRoom(code);
   });
 
-  async function joinRoom(code) {
+  function joinError(e, code) {
+    return e.message === 'no_room' ? 'No writing session has the Entry Phrase “' + code + '”. Check the spelling and try again.'
+      : e.message === 'room_closed' ? 'That writing session has ended. If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.'
+      : e.message === 'not_started' ? 'That writing session hasn’t started yet. Try again when it does.'
+      : 'Couldn’t reach the server. Try again.';
+  }
+
+  // resume: this is the writing session the student was last in, reopened on its
+  // own. If it has ended and they've handed in, start fresh at the join screen.
+  async function joinRoom(code, resume) {
     try {
       var data = await api('/luddite/join', { code: code });
+      noteNow(data.room.now);
+      if (resume && data.room.state === 'ended' && data.room.handedIn) { store(roomKey(), null); roomCode = ''; showJoin(); return; }
       roomCode = data.room.code;
       store(roomKey(), roomCode);
       onRoomUpdate(data.room);
     } catch (e) {
       if (e.message === 'signed_out') return;
-      store(roomKey(), null);
+      if (e.message !== 'not_started') store(roomKey(), null);
       roomCode = '';
-      showJoin(e.message === 'no_room' ? 'No room has the Entry Phrase “' + code + '”. Check the spelling and try again.'
-        : e.message === 'room_closed' ? 'That room is closed. If your teacher has a new Entry Phrase for you, type it above; work you were in the middle of is kept.'
-        : 'Couldn’t reach the server. Try again.');
+      await loadMine();
+      showJoin(joinError(e, code));
     }
   }
 
@@ -845,9 +1299,9 @@
     }
     $('waitRoom').textContent = roomLine(room);
     if (room.status === 'removed') {
-      $('waitMsg').textContent = 'Your teacher took you out of this room.';
+      $('waitMsg').textContent = 'Your teacher took you out of this writing session.';
     } else if (!room.open && room.status !== 'waiting') {
-      $('waitMsg').textContent = 'This room is closed.';
+      $('waitMsg').textContent = 'This writing session has ended.';
     } else {
       $('waitMsg').innerHTML = '<span class="pulse"></span>Waiting for your teacher to let you in&hellip;';
     }
@@ -858,7 +1312,8 @@
   }
 
   async function pollWaiting() {
-    var data = await api('/luddite/room?code=' + encodeURIComponent(roomCode));
+    var data = await api('/luddite/assignment?code=' + encodeURIComponent(roomCode));
+    noteNow(data.room.now);
     onRoomUpdate(data.room);
   }
 
@@ -883,8 +1338,8 @@
       if (e.message === 'signed_out') return;
       showDash();
       note.hidden = false;
-      note.textContent = e.message === 'no_room' ? 'No room has the Entry Phrase “' + code + '”. Check the spelling.'
-        : e.message === 'room_closed' ? 'That room is closed.' : 'Couldn’t reach the server. Try again.';
+      note.textContent = e.message === 'no_room' ? 'No writing session has the Entry Phrase “' + code + '”. Check the spelling.'
+        : e.message === 'room_closed' ? 'That writing session has ended.' : e.message === 'not_started' ? 'That writing session hasn’t started yet.' : 'Couldn’t reach the server. Try again.';
     }
   }
   $('teacherJoinForm').addEventListener('submit', function (e) {
@@ -899,9 +1354,7 @@
   // Ready screen
   // ---------------------------------------------------------------------
   function scope() { return mode === 'solo' ? 'solo' : roomCode; }
-  // A permanent room's draft is kept under its series, so it survives the
-  // room's Entry Phrase changing; the lock-out count stays with each session.
-  function textKey() { return 'luddite.text.' + me.email + '.' + (mode === 'room' && roomInfo && roomInfo.seriesId ? roomInfo.seriesId : scope()); }
+  function textKey() { return 'luddite.text.' + me.email + '.' + scope(); }
   function leavesKey() { return 'luddite.leaves.' + me.email + '.' + scope(); }
 
   function showReady() {
@@ -911,6 +1364,14 @@
     $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
     $('readyRoom').hidden = !inRoom;
     $('readyTells').textContent = inRoom ? ', and your teacher sees each time' : '';
+    // When it runs, and whether this student's time is up.
+    var timed = inRoom && roomInfo && roomInfo.endAt && !previewing;
+    var over = !!(timed && nowMs() >= roomInfo.endAt);
+    $('readyWindow').hidden = !timed;
+    if (timed) {
+      $('readyWindow').textContent = over ? 'Time is up for this writing session.'
+        : (roomInfo.own && roomInfo.multiplier > 1 ? 'You have extra time: until ' : 'Until ') + clock(roomInfo.endAt) + '.';
+    }
     $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
     $('submitBtn').hidden = !inRoom;
     $('submitBtn').disabled = !has || previewing;
@@ -920,7 +1381,7 @@
     $('leaveWrap').hidden = !inRoom || previewing;
     var fsOk = canFs() || fsExempt();
     $('noFullscreen').hidden = fsOk;
-    $('startBtn').disabled = !fsOk;
+    $('startBtn').disabled = !fsOk || over;
     var leaves = Number(load(leavesKey()) || 0);
     $('lastSession').hidden = !has;
     $('lastSession').textContent = plural(wordCount(text), 'word', 'words') + ' so far' + (leaves ? ' · left the page ' + plural(leaves, 'time', 'times') : '');
@@ -947,7 +1408,7 @@
 
   // While handed in, watch for the teacher letting them back in to write.
   async function pollRelease() {
-    var data = await api('/luddite/room?code=' + encodeURIComponent(roomCode));
+    var data = await api('/luddite/assignment?code=' + encodeURIComponent(roomCode));
     roomInfo = data.room;
     if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
     if (!data.room.handedIn) showReady();
@@ -991,7 +1452,7 @@
   function handInError(e) {
     return e.message === 'already_handed_in' ? 'You’ve already handed this in. Ask your teacher to let you back in to keep working.'
         : e.message === 'teacher_no_drive' ? 'Your teacher hasn’t connected Google Drive yet, so this can’t be handed in. Your writing is safe here; try again later.'
-        : e.message === 'not_admitted' ? 'You’re not in this room anymore, so this can’t be handed in.'
+        : e.message === 'not_admitted' ? 'You’re not in this writing session anymore, so this can’t be handed in.'
         : e.message === 'drive_revoked' ? 'Your teacher’s Google Drive connection has stopped working. Tell your teacher; your writing is safe here.'
         : 'Couldn’t hand it in. Your writing is safe here; try again.';
   }
@@ -1000,6 +1461,7 @@
       code: roomCode, text: text, words: wordCount(text),
       label: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     });
+    noteNow(data.room.now);
     roomInfo = data.room;
   }
 
@@ -1023,7 +1485,37 @@
   // 'writing' (with the word count, every HEARTBEAT_MS) or 'idle'.
   function report(type) {
     if (mode !== 'room' || previewing || !roomCode) return;
-    api('/luddite/event', { code: roomCode, type: type, words: wordCount(shadow) }).catch(function () {});
+    api('/luddite/event', { code: roomCode, type: type, words: wordCount(shadow) }).then(function (d) {
+      noteNow(d.room.now);
+      if (roomInfo && d.room.endAt) roomInfo.endAt = d.room.endAt; // a changed time reaches students writing now
+    }).catch(function () {});
+  }
+
+  // A timed writing session counts down on the writing page and hands the
+  // paper in by itself when this student's time is up.
+  var timeTimer = null, timeUpBusy = false;
+  function startTimer() {
+    stopTimer();
+    tickTimer();
+    timeTimer = setInterval(tickTimer, 1000);
+  }
+  function stopTimer() { clearInterval(timeTimer); timeTimer = null; $('timeLeft').textContent = ''; }
+  function tickTimer() {
+    if (!writing || mode !== 'room' || previewing || !roomInfo || !roomInfo.endAt) { $('timeLeft').textContent = ''; return; }
+    var left = roomInfo.endAt - nowMs();
+    $('timeLeft').textContent = left > 0 ? minLeft(left) + ' left' : 'Time is up';
+    $('timeLeft').classList.toggle('low', left <= 5 * 60000);
+    if (left <= 0) timeUp();
+  }
+  async function timeUp() {
+    if (timeUpBusy) return;
+    timeUpBusy = true;
+    save();
+    var text = load(textKey()) || shadow;
+    $('handinBox').hidden = true;
+    if (text.trim() && !(roomInfo && roomInfo.handedIn)) { try { await handIn(text); } catch (e) { /* the Hand in button is still there, marked late */ } }
+    timeUpBusy = false;
+    finishWriting(showReady);
   }
   var heartbeat = null;
   function startHeartbeat() { stopHeartbeat(); report('writing'); heartbeat = setInterval(function () { if (!locked) report('writing'); }, HEARTBEAT_MS); }
@@ -1047,6 +1539,7 @@
 
   function enterWriting() {
     if (mode === 'room' && roomInfo && roomInfo.handedIn && !previewing) { showReady(); return; }
+    if (mode === 'room' && !previewing && roomInfo && roomInfo.endAt && nowMs() >= roomInfo.endAt) { showReady(); return; }
     requestFs().then(function () {
       writing = true;
       locked = false;
@@ -1058,6 +1551,7 @@
       pad.focus();
       pad.setSelectionRange(pad.value.length, pad.value.length);
       startHeartbeat();
+      startTimer();
     }).catch(function () {
       alert('Luddite needs full screen to work. Allow it and try again.');
     });
@@ -1096,6 +1590,7 @@
     save();
     writing = false;
     stopHeartbeat();
+    stopTimer();
     report('idle');
     try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
     var exit = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen && document.webkitExitFullscreen());
@@ -1243,7 +1738,44 @@
     poll(loadRooms, POLL_DASH_MS);
   }
 
-  // ---- Rooms are named for the assignment; the date and time are a stamp ----
+  // ---- Hiding names: one button, every teacher page ----
+  // In anonymous mode each address gets a short stable label ("Student K7Q"),
+  // the same on every page and in print, so work can be read or marked
+  // without knowing whose it is, and the same student can still be followed
+  // across the year. Nothing is stored differently; it's only how names are drawn.
+  var anon = load('luddite.anon') === '1';
+  function aliasOf(email) {
+    var str = 'luddite:' + (me.email || '') + ':' + String(email || '').toLowerCase(), h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return 'Student ' + ('000' + h.toString(36).toUpperCase()).slice(-3);
+  }
+  function who(name, email) { return anon ? aliasOf(email) : (name || email || ''); }
+  function addr(email) { return anon ? '' : email; }
+  function syncAnonBtn() {
+    var b = $('anonBtn');
+    b.textContent = anon ? 'Names hidden · Show names' : 'Hide names';
+    b.classList.toggle('on', anon);
+    b.setAttribute('aria-pressed', anon ? 'true' : 'false');
+    document.body.classList.toggle('is-anon', anon);
+  }
+  $('anonBtn').addEventListener('click', function () {
+    anon = !anon;
+    store('luddite.anon', anon ? '1' : null);
+    syncAnonBtn();
+    redrawTeacher();
+  });
+  // Redraw whichever teacher page is showing, with names shown or hidden.
+  function redrawTeacher() {
+    lastDrawn = '';
+    if (!$('dashScreen').hidden) { loadRooms(); drawStudents(); }
+    else if (!$('roomScreen').hidden) { loadRoom(); }
+    else if (!$('classScreen').hidden) { drawClassScreen(); }
+    else if (!$('studentScreen').hidden) { if (studentShown) openStudent(studentShown); }
+    else if (!$('markScreen').hidden && piece) { showPieceHead(); }
+  }
+  syncAnonBtn();
+
+  // ---- Writing sessions are named for the work; the date and time are a stamp ----
   var displayName = '';
   function setDisplayName(name) {
     displayName = name;
@@ -1268,74 +1800,286 @@
     showReady();
   });
 
-  var features = {};
+  // When a session runs, from its server-side summary or the whole item.
+  function sessionWindow(r) {
+    var start = r.startAt || r.createdAt;
+    var end = r.minutes ? start + r.minutes * 60000 : (r.endAt || null);
+    return { start: start, end: end };
+  }
+  function whenRange(r) {
+    var w = sessionWindow(r);
+    var day = sameDay(w.start, Date.now()) ? 'Today' : new Date(w.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return day + ' · ' + clock(w.start) + (w.end ? '–' + clock(w.end) : '') + (r.minutes ? ' (' + r.minutes + ' min)' : '');
+  }
+  function stateLabel(state, r) {
+    var w = sessionWindow(r);
+    return state === 'running' ? '● Happening now'
+      : state === 'upcoming' ? '◔ Coming up · starts ' + whenLabel(w.start)
+      : '✓ Past · ended ' + (r.endedAt ? whenLabel(r.endedAt) : w.end ? whenLabel(w.end) : '');
+  }
+  function classNameOf(id) {
+    var c = classes.filter(function (x) { return x.id === id; })[0];
+    return c ? c.name : '';
+  }
+
+  var classes = [];
   async function loadRooms() {
-    var data = await api('/luddite/rooms');
+    var data = await api('/luddite/assignments');
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
-    // Permanent rooms and Rename need the newer server; until it reports them, don't offer them.
-    features = data.features || {};
-    $('permRow').hidden = !features.permanent;
+    classes = data.classes || [];
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
-    var list = $('roomList');
-    list.innerHTML = '';
-    $('roomCount').textContent = data.rooms.length ? '(' + data.rooms.length + ')' : '';
-    if (!data.rooms.length) {
-      list.appendChild(el('div', 'empty', 'No rooms yet. Press the big \u201cStart a new room\u201d button above.'));
+    fillClassSelects();
+    drawClasses();
+    drawSessions(data.assignments);
+  }
+
+  // Three clear groups: what's happening now, what's coming, what's over.
+  function drawSessions(list) {
+    var box = $('roomList');
+    box.innerHTML = '';
+    $('roomCount').textContent = list.length ? '(' + list.length + ')' : '';
+    if (!list.length) {
+      box.appendChild(el('div', 'empty', 'No writing sessions yet. Press the big “Start a new writing session” button above.'));
       if (!loadRooms.seen) $('newRoomBox').open = true;
       loadRooms.seen = true;
       return;
     }
     loadRooms.seen = true;
-    data.rooms.forEach(function (r) {
-      var card = el('div', 'rcard' + (r.open ? ' live' : ''));
-      var top = el('div', 'top');
-      var ttl = el('div', 'ttl');
-      ttl.appendChild(el('h4', null, r.title));
-      ttl.appendChild(el('div', 'stampline', 'Opened ' + stampOf(r.createdAt) + (r.permanent ? ' \u00b7 Permanent room' : '')));
-      top.appendChild(ttl);
-      top.appendChild(button('Go to this room \u2192', 'btn go', function () { openRoom(r.code); }));
-      card.appendChild(top);
+    var groups = [
+      ['running', 'Happening now', 'Students can write in these right now.'],
+      ['upcoming', 'Coming up', 'Not started yet. Their class is let in on its own when they start.'],
+      ['ended', 'Past', 'Over. Open one to read and mark up what the class handed in.']
+    ];
+    groups.forEach(function (g) {
+      var items = list.filter(function (r) { return r.state === g[0]; });
+      if (!items.length) return;
+      items.sort(function (a, b) { return g[0] === 'upcoming' ? a.startAt - b.startAt : b.startAt - a.startAt; });
+      var h = el('h4', 'grouphead ' + g[0]);
+      h.appendChild(el('span', 'dot'));
+      h.appendChild(document.createTextNode(g[1] + ' '));
+      h.appendChild(el('span', 'n', '(' + items.length + ')'));
+      box.appendChild(h);
+      box.appendChild(el('p', 'groupnote', g[2]));
+      items.forEach(function (r) { box.appendChild(sessionCard(r)); });
+    });
+  }
+
+  function sessionCard(r) {
+    var card = el('div', 'rcard ' + r.state);
+    var top = el('div', 'top');
+    var ttl = el('div', 'ttl');
+    ttl.appendChild(el('div', 'chip ' + r.state, stateLabel(r.state, r)));
+    ttl.appendChild(el('h4', null, r.title));
+    ttl.appendChild(el('div', 'stampline', whenRange(r)));
+    top.appendChild(ttl);
+    top.appendChild(button(r.state === 'ended' ? 'Read the papers (' + r.submissions + ') →' : 'Open →', 'btn go', function () { openRoom(r.code); }));
+    card.appendChild(top);
+    var facts = el('div', 'facts');
+    var cn = r.classId ? classNameOf(r.classId) : '';
+    facts.appendChild(el('span', 'tag', cn ? 'Class: ' + cn : 'No class'));
+    facts.appendChild(el('span', null, plural(r.admitted, 'student', 'students') + ' in'));
+    facts.appendChild(el('span', null, r.submissions + ' handed in'));
+    if (r.ownCount) facts.appendChild(el('span', null, plural(r.ownCount, 'own time', 'own times')));
+    if (r.waiting) facts.appendChild(el('span', 'badge', r.waiting + (r.waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
+    var del = el('button', 'linkish del', 'Delete');
+    del.addEventListener('click', function () { deleteRoom(r); });
+    facts.appendChild(del);
+    card.appendChild(facts);
+    if (r.state !== 'ended') {
       var pl = el('div', 'phraseline');
       pl.appendChild(el('span', 'k', 'Entry Phrase'));
       pl.appendChild(el('span', 'phrase', r.codeLabel));
       card.appendChild(pl);
-      var facts = el('div', 'facts');
-      facts.appendChild(el('span', 'state' + (r.open ? ' on' : ''), r.open ? '\u25CF Open \u2014 students can join'
-        : r.permanent && !r.nextCode ? '\u25CB Not open yet' : '\u25CB Closed'));
-      facts.appendChild(el('span', null, plural(r.admitted, 'student', 'students') + ' in'));
-      facts.appendChild(el('span', null, r.submissions + ' handed in'));
-      if (r.waiting) facts.appendChild(el('span', 'badge', r.waiting + (r.waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
-      var del = el('button', 'linkish del', 'Delete this room');
-      del.addEventListener('click', function () { deleteRoom(r); });
-      facts.appendChild(del);
-      card.appendChild(facts);
-      list.appendChild(card);
-    });
+    }
+    return card;
   }
 
   async function deleteRoom(r) {
-    if (!confirm('Delete the room “' + r.title + '”?\n\nIt comes off your list and nobody can join it. Work already handed in stays under Students (and in your Drive).')) return;
+    if (!confirm('Delete the writing session “' + r.title + '”?\n\nIt comes off your list and nobody can join it. Work already handed in stays under Student work (and in your Drive).')) return;
     try {
-      await api('/luddite/room', { code: r.code, action: 'delete' });
+      await api('/luddite/assignment', { code: r.code, action: 'delete' });
       lastDrawn = '';
       await loadRooms();
-    } catch (e) { alert('Couldn’t delete that room. Try again.'); }
+    } catch (e) { alert('Couldn’t delete that. Try again.'); }
   }
+
+  // ---- Starting a writing session ----
+  var newPicker = null, newWhen = 'now', newMinutes = 45;
+  function fillClassSelects() {
+    var sel = $('newRoomClass'), keep = sel.value;
+    sel.innerHTML = '';
+    var none = el('option', null, classes.length ? 'No class (students use the Entry Phrase)' : 'No classes yet — make one below');
+    none.value = '';
+    sel.appendChild(none);
+    classes.forEach(function (c) { var o = el('option', null, c.name + ' (' + c.count + ')'); o.value = c.id; sel.appendChild(o); });
+    sel.value = keep;
+    var f = $('studentClass'), fk = f.value;
+    f.innerHTML = '';
+    var all = el('option', null, 'All my students'); all.value = '';
+    f.appendChild(all);
+    classes.forEach(function (c) { var o = el('option', null, c.name); o.value = c.id; f.appendChild(o); });
+    f.value = fk;
+    f.hidden = !classes.length;
+  }
+  function segPick(seg, attr, fn) {
+    each('#' + seg + ' button', function (b) {
+      b.addEventListener('click', function () {
+        each('#' + seg + ' button', function (x) { x.classList.toggle('on', x === b); });
+        fn(b.getAttribute(attr));
+      });
+    });
+  }
+  segPick('whenSeg', 'data-when', function (v) {
+    newWhen = v;
+    $('newRoomPicker').hidden = v !== 'later';
+    if (v === 'later' && !newPicker) newPicker = makePicker($('newRoomPicker'));
+  });
+  segPick('lenSeg', 'data-min', function (v) {
+    var custom = v === 'custom';
+    $('newRoomMinutes').hidden = !custom;
+    $('newRoomMinLbl').hidden = !custom;
+    newMinutes = custom ? Number($('newRoomMinutes').value) || 60 : Number(v);
+    if (custom) $('newRoomMinutes').focus();
+  });
+  $('newRoomMinutes').addEventListener('input', function () { newMinutes = Number($('newRoomMinutes').value) || 0; });
 
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     var title = $('newRoomTitle').value.trim();
+    var note = $('newRoomWhenNote');
+    note.hidden = true;
     $('newRoomNote').hidden = !!title;
     if (!title) { $('newRoomTitle').focus(); return; }
+    var startAt = null;
+    if (newWhen === 'later') {
+      startAt = newPicker && newPicker.get();
+      if (!startAt) { note.textContent = 'Pick a day and a period (or another time).'; note.hidden = false; return; }
+      if (startAt + newMinutes * 60000 < Date.now()) { note.textContent = 'That time is already over. Pick a later one.'; note.hidden = false; return; }
+    }
+    if (newMinutes < 5 || newMinutes > 300) { note.textContent = 'Length should be between 5 and 300 minutes.'; note.hidden = false; return; }
     try {
-      var data = await api('/luddite/rooms', { title: title, permanent: !$('permRow').hidden && $('newRoomPerm').checked });
+      var data = await api('/luddite/assignments', { title: title, classId: $('newRoomClass').value || null, startAt: startAt, minutes: newMinutes });
       $('newRoomTitle').value = '';
-      $('newRoomPerm').checked = false;
       openRoom(data.room.code);
-    } catch (err) {}
+    } catch (err) {
+      if (err.message === 'signed_out') return;
+      note.textContent = 'Couldn’t make it. Try again.'; note.hidden = false;
+    }
   });
   $('newRoomTitle').addEventListener('input', function () { if ($('newRoomTitle').value.trim()) $('newRoomNote').hidden = true; });
+
+  // ---- Classes: a list of email addresses ----
+  function drawClasses() {
+    var box = $('classList');
+    box.innerHTML = '';
+    $('classCount').textContent = classes.length ? '(' + classes.length + ')' : '';
+    if (!classes.length) box.appendChild(el('div', 'empty', 'No classes yet.'));
+    classes.forEach(function (c) {
+      var card = el('div', 'classcard');
+      var info = el('div', 'info');
+      info.appendChild(el('h4', null, c.name));
+      info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students')));
+      card.appendChild(info);
+      card.appendChild(button('Open the list →', 'btn small ghost', function () { openClass(c.id); }));
+      box.appendChild(card);
+    });
+  }
+
+  // Reads a picked .csv/.txt file, adds its addresses to the box, and says how many are in it.
+  function wireEmailFile(fileInput, textarea, foundEl) {
+    function count() {
+      var n = extractEmails(textarea.value).length;
+      if (foundEl) foundEl.textContent = n ? 'Found ' + plural(n, 'email address', 'email addresses') + '.' : '';
+    }
+    textarea.addEventListener('input', count);
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        textarea.value = (textarea.value ? textarea.value + '\n' : '') + String(r.result || '');
+        fileInput.value = '';
+        count();
+      };
+      r.readAsText(f);
+    });
+  }
+  wireEmailFile($('newClassFile'), $('newClassEmails'), $('newClassFound'));
+  $('newClassForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var name = $('newClassName').value.trim();
+    var emails = extractEmails($('newClassEmails').value);
+    var found = $('newClassFound');
+    if (!name) { found.className = 'fine warn'; found.textContent = 'Give the class a name first.'; $('newClassName').focus(); return; }
+    if (!emails.length) { found.className = 'fine warn'; found.textContent = 'No email addresses found yet. Paste some or upload a file.'; return; }
+    try {
+      var data = await api('/luddite/classes', { name: name, emails: emails });
+      $('newClassName').value = ''; $('newClassEmails').value = ''; found.textContent = '';
+      $('newClassBox').open = false;
+      openClass(data['class'].id);
+    } catch (err) {
+      if (err.message === 'signed_out') return;
+      found.className = 'fine warn';
+      found.textContent = err.message === 'too_many_emails' ? 'That’s more than 400 addresses; split it into two classes.' : 'Couldn’t make the class. Try again.';
+    }
+  });
+
+  var openedClass = null;
+  async function openClass(id) {
+    show('classScreen');
+    $('className').textContent = '';
+    $('classRoster').innerHTML = '';
+    try { openedClass = (await api('/luddite/class?id=' + encodeURIComponent(id)))['class']; }
+    catch (e) { if (e.message !== 'signed_out') showDash(); return; }
+    drawClassScreen();
+  }
+  function drawClassScreen() {
+    if (!openedClass) return;
+    $('className').textContent = openedClass.name;
+    $('classCountLine').textContent = plural(openedClass.emails.length, 'student', 'students') + ' on the list';
+    var box = $('classRoster');
+    box.innerHTML = '';
+    openedClass.emails.slice().sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who('', email)));
+      row.appendChild(w);
+      row.appendChild(button('Remove', 'linkish', async function () {
+        if (!confirm('Take ' + who('', email) + ' off this class list?')) return;
+        await classAction('remove', { emails: [email] });
+      }));
+      box.appendChild(row);
+    });
+  }
+  async function classAction(action, extra) {
+    try {
+      var body = { id: openedClass.id, action: action };
+      Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+      var data = await api('/luddite/class', body);
+      if (action === 'delete') { lastDrawn = ''; showDash(); return; }
+      openedClass = data['class'] || openedClass;
+      drawClassScreen();
+      return true;
+    } catch (e) { alert('Couldn’t save that change. Try again.'); }
+  }
+  wireEmailFile($('classAddFile'), $('classAddEmails'), $('classAddNote'));
+  $('classAddForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var emails = extractEmails($('classAddEmails').value);
+    var note = $('classAddNote');
+    note.hidden = false;
+    if (!emails.length) { note.className = 'fine warn'; note.textContent = 'No email addresses found.'; return; }
+    if (await classAction('add', { emails: emails })) { $('classAddEmails').value = ''; note.className = 'fine good'; note.textContent = 'Added.'; }
+  });
+  $('classBack').addEventListener('click', showDash);
+  $('classRenameBtn').addEventListener('click', async function () {
+    var n = prompt('Class name', openedClass.name);
+    if (n && n.trim()) await classAction('rename', { name: n.trim() });
+  });
+  $('classDeleteBtn').addEventListener('click', function () {
+    if (confirm('Delete the class “' + openedClass.name + '”? Writing sessions that used it keep working for people already in them, but its list stops letting anyone in on their own.')) classAction('delete');
+  });
 
   // ---- Google Drive, where handed-in work goes ----
   function renderDrive(box, drive) {
@@ -1394,7 +2138,7 @@
       row.appendChild(who);
       var rm = el('button', 'linkish', 'Remove');
       rm.addEventListener('click', async function () {
-        if (!confirm('Stop ' + t.email + ' from opening rooms? Their existing rooms stay.')) return;
+        if (!confirm('Stop ' + t.email + ' from making writing sessions? Their existing ones stay.')) return;
         loadTeachers(await api('/luddite/teachers', { remove: t.email }));
       });
       row.appendChild(rm);
@@ -1433,34 +2177,55 @@
   // ?room=starry-whale -- readable, and the server ignores the dash.
   function joinLink(room) { return location.origin + location.pathname + '?room=' + (room.codeLabel || room.code).toLowerCase().replace(/\s+/g, '-'); }
 
+  // Owners: one class of everyone who can make writing sessions.
+  $('teacherClassBtn').addEventListener('click', async function () {
+    var note = $('teacherClassNote');
+    var NAME = 'UD English Teachers';
+    if (classes.some(function (c) { return c.name === NAME; }) && !confirm('You already have a class called “' + NAME + '”. Make another one?')) return;
+    note.hidden = false;
+    try {
+      var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
+      note.className = 'fine good';
+      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Classes.';
+      lastDrawn = '';
+      loadRooms();
+    } catch (e) { note.className = 'fine warn'; note.textContent = 'Couldn’t make it. Try again.'; }
+  });
+
   function openRoom(code) {
     previewing = false;
     teacherRoom = { code: code };
+    teacherRoster = null;
     $('roomTitle').textContent = '';
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
-    ['waitingList', 'admittedList', 'submissionList'].forEach(function (id) { $(id).innerHTML = ''; });
+    ['waitingList', 'admittedList', 'submissionList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
     show('roomScreen');
     poll(loadRoom, POLL_ROOM_MS);
   }
 
   async function loadRoom() {
     try {
-      var data = await api('/luddite/room?code=' + encodeURIComponent(teacherRoom.code));
-      if (!data.room.students) { showDash(); return; } // not this teacher's room
+      var data = await api('/luddite/assignment?code=' + encodeURIComponent(teacherRoom.code));
+      if (!data.room.students) { showDash(); return; } // not this teacher's writing session
       teacherRoom = data.room;
+      teacherRoster = data.roster || null;
       renderRoom(data.room, data.drive);
     } catch (e) {
       if (e.message === 'no_room') showDash();
     }
   }
 
-  async function roomAction(action, subs, title) {
+  async function roomAction(action, subs, extra) {
     try {
-      var data = await api('/luddite/room', { code: teacherRoom.code, action: action, subs: subs || [], title: title });
+      var body = { code: teacherRoom.code, action: action, subs: subs || [] };
+      Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+      var data = await api('/luddite/assignment', body);
       teacherRoom = data.room;
-      if (action === 'delete') { showDash(); return; }
+      if (action === 'delete') { showDash(); return true; }
+      lastDrawn = '';
       loadRoom();
+      return true;
     } catch (e) {
       $('roomNote').textContent = 'Couldn’t save that change. Try again.';
     }
@@ -1478,34 +2243,63 @@
   }
   function isLive(s) { return !!(s.writing && s.lastSeen && Date.now() - s.lastSeen < HEARTBEAT_MS * 2.5); }
 
+  function roomState(room) {
+    var w = sessionWindow(room), now = Date.now();
+    if (room.endedAt || room.open === false) return 'ended';
+    if (now < w.start) return 'upcoming';
+    if (w.end && now >= w.end) return 'ended';
+    return 'running';
+  }
+
   function renderRoom(room, drive) {
     var live = Object.keys(room.students).filter(function (sub) { return isLive(room.students[sub]); });
-    if (changed([room, drive, live])) drawRoom(room, drive);
+    // The state flips with the clock, so it's part of what decides a redraw.
+    if (changed([room, drive, live, roomState(room), teacherRoster])) drawRoom(room, drive);
     each('[data-asked]', function (n) { n.textContent = 'asked ' + ago(Number(n.getAttribute('data-asked'))); });
   }
 
+  function ownLabel(room, email) {
+    var o = room.own && room.own[email];
+    if (!o) return '';
+    var parts = [];
+    if (o.startAt) parts.push(whenLabel(o.startAt));
+    if (o.multiplier > 1) parts.push(o.multiplier + '× time');
+    return 'Own time: ' + (parts.join(' · ') || 'same');
+  }
+  function ownButton(room, email, name) {
+    if (!room.minutes) return null;
+    return button(room.own && room.own[email] ? 'Change own time' : 'Own time', 'btn small ghost', function () { openOwnTime(email, name); });
+  }
+
   function drawRoom(room, drive) {
+    var state = roomState(room);
+    var cn = room.classId && teacherRoster ? teacherRoster.name : '';
     $('roomTitle').textContent = room.title;
-    $('renameBtn').hidden = !features.rename;
-    $('roomStamp').textContent = (room.permanent ? 'Permanent room · ' : '') + 'Opened ' + stampOf(room.createdAt);
+    var chip = $('roomStamp');
+    chip.textContent = stateLabel(state, room);
+    chip.className = 'chip ' + state;
+    $('roomWhen').textContent = whenRange(room) + (cn ? ' · Class: ' + cn : ' · No class');
+    $('timeBtn').hidden = false;
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
-    // A permanent room's Close starts its next session under a new phrase; a
-    // closed one's phrase never works again, so it points to the next one.
-    $('openCloseBtn').textContent = room.open ? (room.permanent ? 'Close for today' : 'Close the room')
-      : room.nextCode ? 'Go to the next Entry Phrase' : room.permanent ? 'Open the room' : 'Reopen the room';
+    $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
+    $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : '');
+    $('phraseNote').hidden = state === 'ended';
     renderDrive($('roomDrive'), drive);
-    $('roomNote').textContent = room.open ? '' : room.nextCode ? 'This room is closed. Its next Entry Phrase is “' + room.nextLabel + '” (opens as its own room, closed until you open it). Students already in can finish and hand in; nobody can get back in with this phrase.'
-      : room.permanent ? 'This room is closed until you open it. Give students the Entry Phrase above once it’s open.'
-      : 'This room is closed: nobody new can ask to join. Students already in can keep writing and hand in.';
+    $('roomNote').textContent = state === 'ended' ? 'This writing session is over: nobody new can get in. Students already in can finish and hand in, and what they handed in is below.'
+      : state === 'upcoming' ? 'This hasn’t started. ' + (teacherRoster ? 'The class is let in on its own when it does.' : 'The Entry Phrase starts working then.') : '';
+    // A past session is for reading what was handed in, so its papers come first.
+    $('secPapers').style.order = state === 'ended' ? '0' : '5';
+    $('secWaiting').style.order = state === 'ended' ? '6' : '2';
 
     var students = Object.keys(room.students).map(function (sub) { var s = room.students[sub]; s.sub = sub; return s; });
+    var byName = function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); };
     var waiting = students.filter(function (s) { return s.status === 'waiting'; }).sort(function (a, b) { return a.requestedAt - b.requestedAt; });
-    var admitted = students.filter(function (s) { return s.status === 'admitted'; }).sort(function (a, b) { return (a.name || a.email).localeCompare(b.name || b.email); });
+    var admitted = students.filter(function (s) { return s.status === 'admitted'; }).sort(byName);
     var removed = students.filter(function (s) { return s.status === 'removed'; });
 
     $('admitAllBtn').hidden = waiting.length < 2;
-    fill('waitingList', waiting, 'Nobody’s waiting. Give students the Entry Phrase or link above; they’ll show up here.', function (s, row) {
+    fill('waitingList', waiting, 'Nobody’s waiting. Anyone who types the Entry Phrase and isn’t on the class list shows up here.', function (s, row) {
       var asked = el('span', 'pill');
       asked.setAttribute('data-asked', s.requestedAt);
       row.appendChild(asked);
@@ -1520,26 +2314,55 @@
       if (s.words) row.appendChild(el('span', 'pill', plural(s.words, 'word', 'words')));
       if (s.leaves) row.appendChild(el('span', 'pill warn', 'Left the page ' + s.leaves + '×'));
       if (s.submittedAt) row.appendChild(el('span', 'pill good', 'Handed in ' + clock(s.submittedAt)));
+      var ol = ownLabel(room, (s.email || '').toLowerCase());
+      if (ol) row.appendChild(el('span', 'pill own', ol));
+      var ob = ownButton(room, (s.email || '').toLowerCase(), who(s.name, s.email));
+      if (ob) row.appendChild(ob);
       if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small', function () { roomAction('release', [s.sub]); }));
       row.appendChild(button('Remove', 'btn small danger', function () {
-        if (confirm('Take ' + (s.name || s.email) + ' out of the room?')) roomAction('remove', [s.sub]);
+        if (confirm('Take ' + who(s.name, s.email) + ' out of this writing session?')) roomAction('remove', [s.sub]);
       }));
     });
 
+    // The class list: who hasn't come in yet, and who has their own time.
+    var inEmails = {};
+    students.forEach(function (s) { if (s.email) inEmails[s.email.toLowerCase()] = 1; });
+    var notHere = teacherRoster ? teacherRoster.emails.filter(function (e) { return !inEmails[e]; }) : [];
+    $('notHereSection').hidden = !teacherRoster;
+    if (teacherRoster) {
+      $('notHereTitle').textContent = 'On the class list, not here yet (' + notHere.length + ')';
+      var nl = $('notHereList');
+      nl.innerHTML = '';
+      if (!notHere.length) nl.appendChild(el('div', 'empty', 'Everyone on the list has come in.'));
+      notHere.sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
+        var row = el('div', 'item');
+        var w = el('div', 'who');
+        w.appendChild(el('b', null, who('', email)));
+        row.appendChild(w);
+        var ol = ownLabel(room, email);
+        if (ol) row.appendChild(el('span', 'pill own', ol));
+        var ob = ownButton(room, email, who('', email));
+        if (ob) row.appendChild(ob);
+        nl.appendChild(row);
+      });
+    }
+
     var subs = room.submissions || [];
+    $('papersTitle').textContent = 'Handed in (' + subs.length + ')';
     var list = $('submissionList');
     list.innerHTML = '';
     if (!subs.length) list.appendChild(el('div', 'empty', 'Nothing handed in yet.'));
-    subs.forEach(function (x) {
+    subs.slice().sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); }).forEach(function (x) {
       var row = el('div', 'item');
-      var who = el('div', 'who');
-      who.appendChild(el('b', null, x.name || x.email));
-      who.appendChild(el('span', null, new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) +
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who(x.name, x.email)));
+      w.appendChild(el('span', null, new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) +
         ' · ' + plural(x.words, 'word', 'words') + ' · left the page ' + plural(x.leaves, 'time', 'times')));
-      row.appendChild(who);
+      row.appendChild(w);
+      if (x.late) row.appendChild(el('span', 'pill warn', 'Late'));
       if (x.marked) row.appendChild(el('span', 'pill good', 'Marked'));
       if (x.stored) row.appendChild(button('Mark up', 'btn small', function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); }));
-      if (x.link) {
+      if (x.link && !anon) {
         var a = el('a', 'btn small ghost', 'Open in Drive');
         a.href = x.link;
         a.target = '_blank';
@@ -1564,10 +2387,10 @@
     if (!people.length) { if (emptyText) list.appendChild(el('div', 'empty', emptyText)); return; }
     people.forEach(function (s) {
       var row = el('div', 'item');
-      var who = el('div', 'who');
-      who.appendChild(el('b', null, s.name || s.email));
-      who.appendChild(el('span', null, s.email));
-      row.appendChild(who);
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who(s.name, s.email)));
+      if (!anon) w.appendChild(el('span', null, s.email));
+      row.appendChild(w);
       addControls(s, row);
       list.appendChild(row);
     });
@@ -1575,23 +2398,19 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
-  $('openCloseBtn').addEventListener('click', async function () {
-    if (teacherRoom.open && teacherRoom.permanent) {
-      if (!confirm('Close “' + teacherRoom.title + '” for today?\n\nThis phrase stops working. Everyone who was in keeps their place and their draft; you\u2019ll get a new Entry Phrase for the next session, to give out when you\u2019re ready.')) return;
-      try {
-        var data = await api('/luddite/room', { code: teacherRoom.code, action: 'close', subs: [] });
-        if (data.next) { openRoom(data.next.code); return; }
-        teacherRoom = data.room; loadRoom();
-      } catch (e) { $('roomNote').textContent = 'Couldn’t close it. Try again.'; }
-      return;
+  $('openCloseBtn').addEventListener('click', function () {
+    var state = roomState(teacherRoom);
+    if (state === 'running') {
+      if (!confirm('End “' + teacherRoom.title + '” now?\n\nNobody new can get in. Students already writing can finish and hand in.')) return;
+      roomAction('close');
+    } else {
+      roomAction('startNow');
     }
-    if (teacherRoom.nextCode) { openRoom(teacherRoom.nextCode); return; }
-    roomAction(teacherRoom.open ? 'close' : 'open');
   });
   $('renameBtn').addEventListener('click', async function () {
-    var t = prompt('What is this room for? Name it for the assignment.', teacherRoom.title);
+    var t = prompt('What is this writing session? Name it for the work.', teacherRoom.title);
     if (!t || !t.trim()) return;
-    await roomAction('rename', [], t.trim());
+    await roomAction('rename', [], { title: t.trim() });
   });
   $('deleteRoomBtn').addEventListener('click', function () {
     if (confirm('Delete “' + teacherRoom.title + '”? It leaves your list and nobody can join it. Work already handed in stays in your Drive.')) roomAction('delete');
@@ -1604,11 +2423,106 @@
     }).catch(function () { prompt('Copy this link:', link); });
   });
 
+  // ---- Picking a time: a writing session's, or one student's own ----
+  // Own time = a different start, extra time (a multiple of the session's
+  // length), or both. Everyone else keeps the regular time.
+  var tb = null;
+  function tbPreview() {
+    var room = teacherRoom, out = $('tbPreview');
+    var minutes = tb.mode === 'own' ? room.minutes * tb.mult : tb.minutes;
+    var start = tb.mode === 'own' && !tb.useOwn ? sessionWindow(room).start : tb.picker.get();
+    if (!start || !minutes) { out.textContent = ''; return; }
+    var end = start + Math.round(minutes * 60000);
+    var touched = periodsTouched(start, end);
+    out.innerHTML = '';
+    out.appendChild(el('b', null, (tb.mode === 'own' ? 'They take it ' : 'It runs ') + dayClock(start) + ' – ' + clock(end)));
+    out.appendChild(document.createTextNode(' (' + Math.round(minutes) + ' min' + (touched.length ? ', periods ' + touched.join(', ') : '') + ')'));
+  }
+  function tbSegs(values, current, fn, customLabel) {
+    var seg = $('tbMultSeg');
+    seg.innerHTML = '';
+    var matched = values.some(function (v) { return v[0] === current; });
+    values.forEach(function (v) {
+      var b = el('button', matched && v[0] === current ? 'on' : '', v[1]);
+      b.type = 'button';
+      b.addEventListener('click', function () { each('#tbMultSeg button', function (x) { x.classList.toggle('on', x === b); }); inp.hidden = true; fn(v[0]); tbPreview(); });
+      seg.appendChild(b);
+    });
+    var inp = el('input', 'field'); inp.type = 'number'; inp.step = 'any'; inp.style.cssText = 'width:6.5em;border-radius:10px;padding:7px 10px'; inp.hidden = matched;
+    inp.value = matched ? '' : current;
+    var ob = el('button', matched ? '' : 'on', customLabel); ob.type = 'button';
+    ob.addEventListener('click', function () { each('#tbMultSeg button', function (x) { x.classList.toggle('on', x === ob); }); inp.hidden = false; inp.focus(); if (inp.value) { fn(Number(inp.value)); tbPreview(); } });
+    inp.addEventListener('input', function () { fn(Number(inp.value) || 0); tbPreview(); });
+    seg.appendChild(ob); seg.appendChild(inp);
+  }
+  function showTimeBox() { $('tbNote').hidden = true; $('timeBox').hidden = false; }
+  function openOwnTime(email, name) {
+    var room = teacherRoom, o = (room.own || {})[email];
+    tb = { mode: 'own', email: email, mult: o ? o.multiplier : 1, useOwn: !!(o && o.startAt), picker: null };
+    $('tbTitle').textContent = 'Own time for ' + name;
+    $('tbHelp').textContent = 'Everyone else keeps the regular time. Pick a different start, extra time, or both.';
+    $('tbStartRow').hidden = false;
+    $('tbRemove').hidden = !o;
+    each('#tbStartSeg button', function (b) { b.classList.toggle('on', (b.getAttribute('data-start') === 'own') === tb.useOwn); });
+    tb.picker = makePicker($('tbPicker'), tbPreview);
+    if (o && o.startAt) tb.picker.set(o.startAt);
+    $('tbPicker').hidden = !tb.useOwn;
+    $('tbLenLbl').textContent = 'Extra time (this writing session is ' + room.minutes + ' min)';
+    tbSegs([[1, 'Same'], [1.5, '1.5×'], [2, '2×']], tb.mult, function (v) { tb.mult = v; }, 'Other');
+    tbPreview();
+    showTimeBox();
+  }
+  function openSessionTime() {
+    var room = teacherRoom, w = sessionWindow(room);
+    tb = { mode: 'session', minutes: room.minutes || 45, picker: null };
+    $('tbTitle').textContent = 'When does this writing session run?';
+    $('tbHelp').textContent = 'Changing it reopens the session if it had ended. People with their own start keep it.';
+    $('tbStartRow').hidden = true;
+    $('tbRemove').hidden = true;
+    tb.picker = makePicker($('tbPicker'), tbPreview);
+    tb.picker.set(w.start);
+    $('tbPicker').hidden = false;
+    $('tbLenLbl').textContent = 'How long (minutes)';
+    tbSegs([[45, '45'], [95, '95']], tb.minutes, function (v) { tb.minutes = v; }, 'Other');
+    tbPreview();
+    showTimeBox();
+  }
+  each('#tbStartSeg button', function (b) {
+    b.addEventListener('click', function () {
+      tb.useOwn = b.getAttribute('data-start') === 'own';
+      each('#tbStartSeg button', function (x) { x.classList.toggle('on', x === b); });
+      $('tbPicker').hidden = !tb.useOwn;
+      tbPreview();
+    });
+  });
+  $('timeBtn').addEventListener('click', openSessionTime);
+  $('tbCancel').addEventListener('click', function () { $('timeBox').hidden = true; });
+  $('tbSave').addEventListener('click', async function () {
+    var note = $('tbNote');
+    note.hidden = true;
+    var ok;
+    if (tb.mode === 'own') {
+      var start = tb.useOwn ? tb.picker.get() : null;
+      if (tb.useOwn && !start) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }
+      if (tb.mult < 1 || tb.mult > 4) { note.textContent = 'Extra time should be between 1× and 4×.'; note.hidden = false; return; }
+      ok = await roomAction('own', [], { email: tb.email, startAt: start, multiplier: tb.mult });
+    } else {
+      var at = tb.picker.get();
+      if (!at) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }
+      if (tb.minutes < 5 || tb.minutes > 300) { note.textContent = 'Length should be between 5 and 300 minutes.'; note.hidden = false; return; }
+      ok = await roomAction('schedule', [], { startAt: at, minutes: tb.minutes });
+    }
+    if (ok) $('timeBox').hidden = true;
+  });
+  $('tbRemove').addEventListener('click', async function () {
+    if (await roomAction('unown', [], { email: tb.email })) $('timeBox').hidden = true;
+  });
+
   // ---- See what students see ----
   $('previewBtn').addEventListener('click', function () {
     previewing = true;
     mode = 'room';
-    roomInfo = { title: teacherRoom.title, teacherName: teacherRoom.teacher ? teacherRoom.teacher.name : displayName, open: true, status: 'waiting' };
+    roomInfo = { title: teacherRoom.title, teacherName: teacherRoom.teacher ? teacherRoom.teacher.name : displayName, open: true, state: 'running', status: 'waiting' };
     previewScreen('waitScreen');
   });
   function previewScreen(id) {
@@ -1647,11 +2561,7 @@
       return;
     }
     piece.marks = piece.marks || [];
-    $('markWho').textContent = piece.name || piece.email;
-    $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
-      ' · ' + plural(piece.words, 'word', 'words');
-    $('markDrive').hidden = !piece.link;
-    if (piece.link) $('markDrive').href = piece.link;
+    showPieceHead();
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
     $('markGrade').value = piece.grade || '';
@@ -1659,6 +2569,15 @@
     typeB = typeI = false; syncFmt();
     drawPiece();
     window.scrollTo(0, 0);
+  }
+  // The paper's heading: whose it is (or an alias, with names hidden) and which writing session.
+  function showPieceHead() {
+    $('markWho').textContent = who(piece.name, piece.email);
+    $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
+      ' · ' + plural(piece.words, 'word', 'words');
+    // The Drive copy has the student's name on it, so it's not offered while names are hidden.
+    $('markDrive').hidden = !piece.link || anon;
+    if (piece.link) $('markDrive').href = piece.link;
   }
   $('markBack').addEventListener('click', function () { flushMarks(); hideTools(); closePop(); (markBackTo || showDash)(); });
 
@@ -2104,7 +3023,7 @@
   $('markPrint').addEventListener('click', function () {
     hideTools(); closePop();
     var prev = document.title;
-    document.title = (piece.name || piece.email) + ' — ' + piece.roomTitle;
+    document.title = who(piece.name, piece.email) + ' — ' + piece.roomTitle;
     beforePrint();
     window.print();
     document.title = prev;
@@ -2120,19 +3039,28 @@
     drawStudents();
   }
   $('studentSearch').addEventListener('input', drawStudents);
+  // Show only one class's students: its list, fetched when picked.
+  var classFilter = null;
+  $('studentClass').addEventListener('change', async function () {
+    var id = $('studentClass').value;
+    classFilter = null;
+    if (id) { try { classFilter = (await api('/luddite/class?id=' + encodeURIComponent(id)))['class'].emails; } catch (e) {} }
+    drawStudents();
+  });
   function drawStudents() {
     var q = $('studentSearch').value.trim().toLowerCase();
     var list = $('studentList');
     list.innerHTML = '';
-    $('studentSearch').hidden = students.length < 8;
-    var shown = students.filter(function (x) { return !q || (x.name + ' ' + x.email).toLowerCase().indexOf(q) !== -1; });
+    var pool = students.filter(function (x) { return !classFilter || classFilter.indexOf(x.email) !== -1; });
+    var shown = pool.filter(function (x) { return !q || (who(x.name, x.email) + ' ' + addr(x.email)).toLowerCase().indexOf(q) !== -1; });
+    shown.sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
     if (!shown.length) { list.appendChild(el('div', 'empty', students.length ? 'No one matches.' : 'Nobody has handed anything in yet.')); return; }
     shown.forEach(function (x) {
       var row = el('div', 'item click');
-      var who = el('div', 'who');
-      who.appendChild(el('b', null, x.name || x.email));
-      who.appendChild(el('span', null, x.email + ' · ' + plural(x.count, 'paper', 'papers') + ' · last ' + new Date(x.last).toLocaleDateString([], { month: 'short', day: 'numeric' })));
-      row.appendChild(who);
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who(x.name, x.email)));
+      w.appendChild(el('span', null, (anon ? '' : x.email + ' · ') + plural(x.count, 'paper', 'papers') + ' · last ' + new Date(x.last).toLocaleDateString([], { month: 'short', day: 'numeric' })));
+      row.appendChild(w);
       row.addEventListener('click', function () { openStudent(x.email); });
       list.appendChild(row);
     });
@@ -2148,16 +3076,18 @@
     var data;
     try { data = await api('/luddite/student?email=' + encodeURIComponent(email)); }
     catch (e) { $('studentMeta').textContent = 'Couldn’t load this student.'; return; }
-    $('studentName').textContent = data.student.name || data.student.email;
+    $('studentName').textContent = who(data.student.name, data.student.email);
     var comments = data.pieces.reduce(function (n, p) { return n + p.marks.filter(function (m) { return m.type !== 'strike'; }).length + (p.endComment ? 1 : 0); }, 0);
-    $('studentMeta').textContent = data.student.email + ' · ' + plural(data.pieces.length, 'paper', 'papers') + ' · ' + plural(comments, 'comment', 'comments');
+    var first = data.pieces.length ? data.pieces[data.pieces.length - 1].at : 0;
+    $('studentMeta').textContent = (anon ? '' : data.student.email + ' · ') + 'Everything handed in: ' + plural(data.pieces.length, 'paper', 'papers') +
+      (first ? ' since ' + new Date(first).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }) : '') + ' · ' + plural(comments, 'comment', 'comments');
     var list = $('pieceList');
     data.pieces.forEach(function (p) {
       var box = el('div', 'piece');
       var head = el('div', 'row');
       var h = el('div');
       h.style.flex = '1';
-      h.appendChild(el('h4', null, p.roomTitle || 'Untitled room'));
+      h.appendChild(el('h4', null, p.roomTitle || 'Untitled writing session'));
       h.appendChild(el('div', 'meta', new Date(p.at).toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) +
         (p.words ? ' · ' + plural(p.words, 'word', 'words') : '') + (p.grade ? ' · Grade: ' + p.grade : '')));
       head.appendChild(h);

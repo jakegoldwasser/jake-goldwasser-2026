@@ -1,7 +1,7 @@
 # Luddite backend
 
-The AWS Lambda behind Luddite (`/luddite/` on the site): rooms, waiting rooms,
-hand-ins, mark-up and Google Drive. It is Luddite's alone. It has its own
+The AWS Lambda behind Luddite (`/luddite/` on the site): writing sessions, classes,
+waiting rooms, hand-ins, mark-up and Google Drive. It is Luddite's alone. It has its own
 function, its own DynamoDB table and its own secrets, and shares nothing with
 Bookbug (`cloud-sync-backend/`). Source: `index.mjs`, one file, no build step.
 
@@ -45,6 +45,8 @@ It only copies (never deletes), and is safe to run twice. Sessions signed by the
 old function won't be valid here, so everyone signs in once more.
 
 ## Deploying a change
+
+This version renames the routes (`/luddite/assignment(s)`, `/luddite/class(es)`, `/luddite/mine`); the old `/room(s)` ones still work for pages loaded before the change. Deploy the Lambda first, then the page. No new table or permissions are needed.
 
 Replace the function's `index.mjs` with this folder's and click **Deploy**.
 

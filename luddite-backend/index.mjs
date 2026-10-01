@@ -1,8 +1,8 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual, randomUUID, randomBytes } from 'node:crypto';
 
-// The AWS Lambda behind Luddite (/luddite/ on the site): rooms, waiting
-// rooms, hand-ins, mark-up and Google Drive. It is Luddite's alone: its own
+// The AWS Lambda behind Luddite (/luddite/ on the site): assignments,
+// classes, waiting rooms, hand-ins, mark-up and Google Drive. It is Luddite's alone: its own
 // function, its own DynamoDB table and its own secrets, sharing nothing
 // with Bookbug (cloud-sync-backend/). See README.md for setting it up.
 // One file, no build step.
@@ -77,19 +77,32 @@ function verifySession(token) {
 }
 
 // ---------------------------------------------------------------------
-// Luddite (/luddite/ on the site): a locked-down writing room.
+// Luddite (/luddite/ on the site): a locked-down writing page.
 //
 // OWNER_EMAILS run the site and choose who counts as a teacher. A teacher
-// opens rooms; each room has its own join code, waiting room and
-// submission box. Students sign in with Google, enter a code, wait to be
-// admitted, write, and submit -- the submission becomes a Google Doc in
-// that room's teacher's Google Drive (see the Drive section below).
+// makes classes (a list of email addresses) and assignments. An assignment
+// has a two-word Entry Phrase anyone can use (through the waiting room), a
+// start time and a length; students on its class's list are let in on their
+// own once it has started. A teacher can give one student their own time
+// (a different start, extra time, or both). Students sign in with Google,
+// write, and hand in -- the paper becomes a Google Doc in that assignment's
+// teacher's Google Drive (see the Drive section below).
+//
+// (Assignments are still stored under the older key name `luddite:room:`;
+// the stored data wasn't renamed.)
 //
 // Items in Luddite's own table (partition key `pk`):
 //   luddite:teachers        { emails: { [email]: { addedAt } } }
-//   luddite:teacher:<sub>   { rooms: [code, ...] }  newest first
+//   luddite:teacher:<sub>   { rooms: [code, ...], classes: [id, ...] }  newest first
+//   luddite:class:<id>      { id, name, teacher: { sub, email, name }, emails: [...],
+//                             assignments: [code, ...] newest first, createdAt }
+//   luddite:mine:<email>    { classes: [id, ...], own: [code, ...] }: how a
+//                           student's login finds their assignments (their
+//                           classes' assignments, and ones with their own time)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
-//                             open, createdAt, students: { [sub]: {...} },
+//                             classId, startAt, minutes, endedAt, open,
+//                             own: { [email]: { startAt, multiplier } },
+//                             createdAt, students: { [sub]: {...} },
 //                             submissions: [...] }
 //   luddite:drive:<sub>     { refreshToken, email, rootId, roomFolders }
 //   luddite:sub:<id>        one handed-in piece, kept so its teacher can mark
@@ -119,6 +132,14 @@ const MAX_STORED_CHARS = 250000;
 const MAX_MARKS = 600;
 const MAX_MARK_CHARS = 60000; // all of one piece's comments together
 const MAX_ITEM_BYTES = 390000;
+const MAX_CLASS_EMAILS = 400;
+const MAX_CLASS_ASSIGNMENTS = 30; // a class keeps this many of its newest assignments
+const MINE_ASSIGNMENTS_PER_CLASS = 8; // a login looks at each class's newest few
+const MAX_MINUTES = 300;
+const UPCOMING_HORIZON_MS = 48 * 60 * 60 * 1000;
+// A paper handed in this long after a student's time ran out is marked late.
+const LATE_GRACE_MS = 2 * 60 * 1000;
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // What students see the owners as until they pick something else.
 const OWNER_DISPLAY_NAME = 'Mr. Goldwasser';
 
@@ -246,25 +267,62 @@ function ownsRoom(room, info, role) {
   return room.teacher.sub === info.sub || role === 'owner';
 }
 
-// A room as its teacher sees it on the dashboard list.
+// ---- When an assignment runs ----
+// The regular window is startAt (or, for the first rooms, createdAt) for
+// `minutes`. Closing it early sets endedAt, which only stops new people
+// getting in. A student with their own time has their own window: their own
+// start (or the regular one), and the length times their multiplier.
+const regularEnded = (r) => !!r.endedAt || r.open === false;
+function regularWindow(r) {
+  const start = r.startAt || r.createdAt;
+  return { start, end: r.minutes ? start + r.minutes * 60000 : null };
+}
+function windowOf(room, email) {
+  const reg = regularWindow(room);
+  const o = room.own && room.own[email];
+  if (!o) return { ...reg, own: false, multiplier: 1, ended: regularEnded(room) };
+  const start = o.startAt || reg.start;
+  const multiplier = o.multiplier || 1;
+  return { start, end: room.minutes ? start + Math.round(room.minutes * multiplier * 60000) : null, own: true, multiplier, ended: false };
+}
+function stateAt(win, now) {
+  if (win.ended) return 'ended';
+  if (now < win.start) return 'upcoming';
+  if (win.end && now >= win.end) return 'ended';
+  return 'running';
+}
+
+async function onRoster(room, email) {
+  if (!room.classId) return false;
+  const { state } = await readItem('luddite:class:' + room.classId);
+  return !!(state && state.emails.includes(email));
+}
+
+// An assignment as its teacher sees it on Home.
 function roomSummary(room) {
   const students = Object.values(room.students || {});
+  const reg = regularWindow(room);
+  const state = stateAt({ ...reg, ended: regularEnded(room) }, Date.now());
   return {
-    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open, createdAt: room.createdAt,
-    permanent: !!room.permanent, nextCode: room.nextCode || null, nextLabel: room.nextLabel || null,
+    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running', state, createdAt: room.createdAt,
+    classId: room.classId || null, startAt: reg.start, endAt: reg.end, minutes: room.minutes || null,
+    ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
     submissions: (room.submissions || []).length
   };
 }
 
-// A room as one student sees it: only their own place in it.
-function studentView(room, sub) {
+// An assignment as one student sees it: only their own place in it, and
+// their own window (which may differ from everyone else's).
+function studentView(room, sub, email) {
   const me = room.students[sub] || null;
+  const win = windowOf(room, lower(email));
+  const now = Date.now();
+  const state = stateAt(win, now);
   return {
-    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: room.open,
-    // A permanent room's drafts stay put on a student's device across its changing codes.
-    seriesId: room.permanent ? room.seriesId || room.code : null,
+    code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running',
+    state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier, minutes: room.minutes || null, now,
     teacherName: room.teacher.name || room.teacher.email,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
@@ -273,6 +331,48 @@ function studentView(room, sub) {
     handedIn: !!(me && me.handedIn)
   };
 }
+
+// ---- Classes ----
+// A class is a list of email addresses. Each address gets a luddite:mine
+// item naming its classes, which is how that student's login finds the
+// class's assignments.
+function cleanEmails(list) {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach((e) => {
+    // "Jane Smith <jane@school.org>" counts as jane@school.org.
+    const found = String(e || '').match(/[^\s<>,;"']+@[^\s<>,;"']+\.[^\s<>,;"']+/);
+    const x = found ? lower(found[0]) : '';
+    if (EMAIL_RE.test(x) && !seen.has(x)) { seen.add(x); out.push(x); }
+  });
+  return out;
+}
+
+async function inBatches(items, fn) {
+  for (let i = 0; i < items.length; i += 10) await Promise.all(items.slice(i, i + 10).map(fn));
+}
+
+async function indexClass(classId, add, remove) {
+  await inBatches(add, (email) => mutate('luddite:mine:' + email, (m) => {
+    const classes = (m && m.classes) || [];
+    return classes.includes(classId) ? undefined : { ...(m || {}), classes: [classId, ...classes] };
+  }));
+  await inBatches(remove, (email) => mutate('luddite:mine:' + email, (m) => {
+    const classes = (m && m.classes) || [];
+    return classes.includes(classId) ? { ...m, classes: classes.filter((c) => c !== classId) } : undefined;
+  }));
+}
+
+async function getClass(id, me, role) {
+  const key = String(id || '');
+  if (!/^[a-f0-9]{12}$/.test(key)) throw new HttpError(404, 'no_class');
+  const { state } = await readItem('luddite:class:' + key);
+  if (!state || state.deletedAt) throw new HttpError(404, 'no_class');
+  if (state.teacher.sub !== me.sub && role !== 'owner') throw new HttpError(403, 'not_your_class');
+  return state;
+}
+
+const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt });
 
 // ---- Drive ----
 // A teacher connects Drive once from the dashboard: the page gets a
@@ -500,6 +600,8 @@ async function handleLuddite(event, method, path, info) {
 }
 
 async function routeLuddite(event, method, path, info) {
+  // Pages loaded before assignments existed still ask for /rooms.
+  path = path.replace(/^\/luddite\/rooms$/, '/luddite/assignments').replace(/^\/luddite\/room$/, '/luddite/assignment');
   const q = event.queryStringParameters || {};
   const body = method === 'PUT' ? readJsonBody(event) : {};
   if (!body) return respond(400, { error: 'Invalid JSON body' });
@@ -515,31 +617,76 @@ async function routeLuddite(event, method, path, info) {
 
   // ---- Students (anyone signed in) ----
 
-  // PUT /luddite/join { code } -- ask into a room's waiting room.
-  if (path === '/luddite/join' && method === 'PUT') {
-    const code = cleanCode(body.code);
-    const room = await mutate('luddite:room:' + code, (r) => {
-      if (!r) throw new HttpError(404, 'no_room');
-      const s = r.students[me.sub];
-      // A permanent room's code only works while that day's room is open,
-      // even for students who were in yesterday.
-      if (r.permanent && !r.open) throw new HttpError(403, 'room_closed');
-      if (s) {
-        if (s.email === me.email && s.name === me.name) return undefined;
-        return { ...r, students: { ...r.students, [me.sub]: { ...s, email: me.email, name: me.name } } };
-      }
-      if (!r.open) throw new HttpError(403, 'room_closed');
-      return { ...r, students: { ...r.students, [me.sub]: { email: me.email, name: me.name, status: 'waiting', requestedAt: Date.now(), leaves: 0, words: 0 } } };
+  // GET /luddite/mine -- the assignments this student's login should find:
+  // those of the classes they're on, and any they have their own time for,
+  // that are running now or start within two days.
+  if (path === '/luddite/mine' && method === 'GET') {
+    const em = lower(me.email);
+    const now = Date.now();
+    const { state: mine } = await readItem('luddite:mine:' + em);
+    const codes = new Set((mine && mine.own) || []);
+    const viaClass = new Set();
+    const classes = await Promise.all(((mine && mine.classes) || []).map((id) => readItem('luddite:class:' + id)));
+    classes.forEach(({ state: c }) => {
+      if (!c || c.deletedAt || !c.emails.includes(em)) return;
+      (c.assignments || []).slice(0, MINE_ASSIGNMENTS_PER_CLASS).forEach((code) => { codes.add(code); viaClass.add(code); });
     });
-    return respond(200, { room: studentView(room, me.sub) });
+    const rooms = await Promise.all([...codes].map((c) => readItem('luddite:room:' + c)));
+    const list = [];
+    rooms.forEach(({ state: r }) => {
+      if (!r || r.deletedAt) return;
+      if (!viaClass.has(r.code) && !(r.own && r.own[em])) return;
+      const s = r.students[me.sub];
+      if (s && s.status === 'removed') return;
+      const win = windowOf(r, em);
+      const state = stateAt(win, now);
+      if (state === 'ended' || (state === 'upcoming' && win.start - now > UPCOMING_HORIZON_MS)) return;
+      list.push({
+        code: r.code, codeLabel: r.codeLabel || r.code, title: r.title, teacherName: r.teacher.name || r.teacher.email,
+        state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier,
+        status: s ? s.status : 'none', handedIn: !!(s && s.handedIn)
+      });
+    });
+    list.sort((a, b) => (a.state === b.state ? a.startAt - b.startAt : a.state === 'running' ? -1 : 1));
+    return respond(200, { assignments: list, now });
   }
 
-  // GET /luddite/room?code= -- a student's place in the room (polled while
-  // waiting), or the whole room for its teacher (polled on the dashboard).
-  if (path === '/luddite/room' && method === 'GET') {
+  // PUT /luddite/join { code } -- go into an assignment. Someone on its
+  // class's list (or with their own time for it) is let straight in once it
+  // has started; anyone else with the Entry Phrase asks into the waiting room.
+  if (path === '/luddite/join' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const em = lower(me.email);
+    const before = await getRoom(code);
+    const rostered = await onRoster(before, em);
+    const room = await mutate('luddite:room:' + code, (r) => {
+      if (!r || r.deletedAt) throw new HttpError(404, 'no_room');
+      const expected = !!(rostered || (r.own && r.own[em]));
+      const win = windowOf(r, em);
+      const state = stateAt(win, Date.now());
+      const s = r.students[me.sub];
+      if (s) {
+        let next = s;
+        if (s.email !== me.email || s.name !== me.name) next = { ...next, email: me.email, name: me.name };
+        // Added to the class (or given their own time) after asking in: now let in.
+        if (s.status === 'waiting' && expected && state === 'running') next = { ...next, status: 'admitted', decidedAt: Date.now(), via: 'class' };
+        return next === s ? undefined : { ...r, students: { ...r.students, [me.sub]: next } };
+      }
+      if (state === 'upcoming') { const e = new HttpError(403, 'not_started'); e.detail = win.start; throw e; }
+      if (state === 'ended') throw new HttpError(403, 'room_closed');
+      const entry = { email: me.email, name: me.name, status: expected ? 'admitted' : 'waiting', requestedAt: Date.now(), leaves: 0, words: 0 };
+      if (expected) { entry.decidedAt = Date.now(); entry.via = 'class'; }
+      return { ...r, students: { ...r.students, [me.sub]: entry } };
+    });
+    return respond(200, { room: studentView(room, me.sub, me.email) });
+  }
+
+  // GET /luddite/assignment?code= -- a student's place in the assignment
+  // (polled while waiting), or the whole thing for its teacher.
+  if (path === '/luddite/assignment' && method === 'GET') {
     const room = await getRoom(cleanCode(q.code));
-    if (isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub) });
-    return respond(200, { room: studentView(room, me.sub) });
+    if (isTeacher && ownsRoom(room, info, role)) return respond(200, { room, drive: await driveStatus(room.teacher.sub), roster: await rosterOf(room) });
+    return respond(200, { room: studentView(room, me.sub, me.email) });
   }
 
   // PUT /luddite/event { code, type: 'left' | 'writing' | 'idle', words }
@@ -557,7 +704,7 @@ async function routeLuddite(event, method, path, info) {
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
     if (!room) throw new HttpError(404, 'no_room');
-    return respond(200, { room: studentView(room, me.sub) });
+    return respond(200, { room: studentView(room, me.sub, me.email) });
   }
 
   // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
@@ -579,7 +726,7 @@ async function routeLuddite(event, method, path, info) {
     try {
       file = await saveToDrive(room, {
         name: who + ' — ' + label,
-        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), room ' + room.title + ' (' + code + '). ' +
+        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), assignment ' + room.title + ' (' + code + '). ' +
           words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
         text
       });
@@ -591,8 +738,9 @@ async function routeLuddite(event, method, path, info) {
     if (!file && !stored) throw new HttpError(409, driveError);
     const at = Date.now();
     const id = file ? file.id : 'l' + randomUUID();
+    const win = windowOf(room, lower(me.email));
     const submission = { id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-      link: file ? file.webViewLink : null, stored, driveError, marked: 0 };
+      link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS) };
     if (stored) {
       await mutate('luddite:sub:' + id, () => ({
         id, code, roomTitle: room.title, teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
@@ -615,24 +763,92 @@ async function routeLuddite(event, method, path, info) {
       submissions: [submission, ...(r.submissions || [])],
       students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, writing: false } }
     }));
-    return respond(200, { room: studentView(saved, me.sub) });
+    return respond(200, { room: studentView(saved, me.sub, me.email) });
   }
 
   if (!isTeacher) return respond(403, { error: 'teachers_only' });
 
   // ---- Teachers ----
 
-  // GET /luddite/rooms -- this teacher's rooms, newest first.
-  if (path === '/luddite/rooms' && method === 'GET') {
+  // GET /luddite/assignments -- this teacher's assignments (newest first) and classes.
+  if (path === '/luddite/assignments' && method === 'GET') {
     const { state } = await readItem('luddite:teacher:' + me.sub);
     const codes = (state && state.rooms) || [];
-    const rooms = (await Promise.all(codes.map((c) => readItem('luddite:room:' + c)))).map((r) => r.state).filter(Boolean);
+    const rooms = (await Promise.all(codes.map((c) => readItem('luddite:room:' + c)))).map((r) => r.state).filter((r) => r && !r.deletedAt);
     return respond(200, {
-      rooms: rooms.map(roomSummary),
-      features: { permanent: true, rename: true }, // lets the page offer these only once this code is deployed
+      assignments: rooms.map(roomSummary),
+      classes: await classesOf(state),
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
+  }
+
+  // ---- Classes ----
+
+  // GET /luddite/classes -- this teacher's classes.
+  if (path === '/luddite/classes' && method === 'GET') {
+    const { state } = await readItem('luddite:teacher:' + me.sub);
+    return respond(200, { classes: await classesOf(state) });
+  }
+
+  // PUT /luddite/classes { name, emails } -- make a class from a list of
+  // addresses. { name, fromTeachers: true } (owners only) makes one of
+  // everyone who can open assignments, the owners included.
+  if (path === '/luddite/classes' && method === 'PUT') {
+    const name = String(body.name || '').trim().slice(0, 80);
+    if (!name) throw new HttpError(400, 'need_name');
+    let emails;
+    if (body.fromTeachers) {
+      if (role !== 'owner') throw new HttpError(403, 'owners_only');
+      const { state } = await readItem('luddite:teachers');
+      emails = cleanEmails([...OWNER_EMAILS, ...Object.keys((state && state.emails) || {})]);
+    } else {
+      emails = cleanEmails(body.emails);
+    }
+    if (!emails.length) throw new HttpError(400, 'no_emails');
+    if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
+    const id = randomBytes(6).toString('hex');
+    const teacher = { ...me, name: await displayNameOf(info, role) };
+    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now() }));
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [id, ...((t && t.classes) || [])] }));
+    await indexClass(id, emails, []);
+    return respond(200, { class: made });
+  }
+
+  // GET /luddite/class?id= -- one class, with its addresses.
+  if (path === '/luddite/class' && method === 'GET') {
+    return respond(200, { class: await getClass(q.id, me, role) });
+  }
+
+  // PUT /luddite/class { id, action: rename | add | remove | delete, name, emails }
+  if (path === '/luddite/class' && method === 'PUT') {
+    const cls = await getClass(body.id, me, role);
+    const emails = cleanEmails(body.emails);
+    let added = [], removed = [];
+    const saved = await mutate('luddite:class:' + cls.id, (c) => {
+      if (!c || c.deletedAt) throw new HttpError(404, 'no_class');
+      if (body.action === 'rename') {
+        const name = String(body.name || '').trim().slice(0, 80);
+        if (!name) throw new HttpError(400, 'need_name');
+        return { ...c, name };
+      }
+      if (body.action === 'add') {
+        added = emails.filter((e) => !c.emails.includes(e));
+        if (c.emails.length + added.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
+        return added.length ? { ...c, emails: [...c.emails, ...added] } : undefined;
+      }
+      if (body.action === 'remove') {
+        removed = emails.filter((e) => c.emails.includes(e));
+        return removed.length ? { ...c, emails: c.emails.filter((e) => !removed.includes(e)) } : undefined;
+      }
+      if (body.action === 'delete') { removed = c.emails.slice(); return { ...c, emails: [], deletedAt: Date.now() }; }
+      throw new HttpError(400, 'bad_action');
+    });
+    await indexClass(cls.id, added, removed);
+    if (body.action === 'delete') {
+      await mutate('luddite:teacher:' + cls.teacher.sub, (t) => ({ ...(t || {}), classes: ((t && t.classes) || []).filter((c) => c !== cls.id) }));
+    }
+    return respond(200, { class: saved });
   }
 
   // ---- Marking up handed-in work ----
@@ -711,22 +927,25 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/rooms { title, permanent } -- open a new room with a fresh two-word code.
-  // A room needs a name that says what the assignment is. A permanent room
-  // is a standing room: closing it hands out a new Entry Phrase for the next
-  // session, and everyone who was in keeps their place (and their draft).
-  if (path === '/luddite/rooms' && method === 'PUT') {
+  // PUT /luddite/assignments { title, classId, startAt, minutes } -- make an
+  // assignment with a fresh two-word Entry Phrase. It needs a name that says
+  // what it is. startAt (ms; omitted = now) and minutes are its regular
+  // window; classId (optional) is the class let in on its own.
+  if (path === '/luddite/assignments' && method === 'PUT') {
     const teacher = { ...me, name: await displayNameOf(info, role) };
     const title = String(body.title || '').trim().slice(0, 80);
     if (!title) throw new HttpError(400, 'need_title');
-    const permanent = !!body.permanent;
+    const minutes = Math.floor(Number(body.minutes) || 45);
+    if (minutes < 5 || minutes > MAX_MINUTES) throw new HttpError(400, 'bad_minutes');
+    const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
+    const cls = body.classId ? await getClass(body.classId, me, role) : null;
     let room = null;
     for (let i = 0; i < 12 && !room; i++) {
       const { code, codeLabel } = newRoomCode();
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title, teacher, open: true, createdAt: Date.now(), students: {}, submissions: [], ...(permanent ? { permanent: true, seriesId: code } : {}) };
+          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, minutes, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -734,15 +953,21 @@ async function routeLuddite(event, method, path, info) {
     }
     if (!room) throw new HttpError(503, 'busy');
     await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || {}), rooms: [room.code, ...((t && t.rooms) || [])] }));
+    if (cls) {
+      await mutate('luddite:class:' + cls.id, (c) => ({ ...c, assignments: [room.code, ...(c.assignments || [])].slice(0, MAX_CLASS_ASSIGNMENTS) }));
+    }
     return respond(200, { room });
   }
 
-  // PUT /luddite/room { code, action, subs } -- admit | admitAll | remove |
-  // release (let a student who handed in keep writing) | close | open |
-  // delete (delete only takes it off the teacher's list).
-  if (path === '/luddite/room' && method === 'PUT') {
+  // PUT /luddite/assignment { code, action, subs, ... } -- admit | admitAll |
+  // remove | release (let a student who handed in keep writing) | close (stop
+  // new people getting in) | startNow (also reopens one that has ended) |
+  // schedule { startAt, minutes } | rename { title } | own { email, startAt,
+  // multiplier } | unown { email } | delete (only takes it off the teacher's list).
+  if (path === '/luddite/assignment' && method === 'PUT') {
     const code = cleanCode(body.code);
     const subs = Array.isArray(body.subs) ? body.subs : [];
+    const ownEmail = lower(body.email);
     const room = await mutate('luddite:room:' + code, (r) => {
       if (!r) throw new HttpError(404, 'no_room');
       if (!ownsRoom(r, info, role)) throw new HttpError(403, 'not_your_room');
@@ -754,46 +979,40 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'admitAll') Object.keys(students).forEach((sub) => { if (students[sub].status === 'waiting') set(sub, 'admitted'); });
       else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, releasedAt: Date.now() }; });
-      else if (body.action === 'close') return { ...r, open: false };
-      else if (body.action === 'open') {
-        if (r.nextCode) throw new HttpError(409, 'rotated'); // that room's code has moved on
-        return { ...r, open: true };
+      else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
+      else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now() };
+      else if (body.action === 'schedule') {
+        const startAt = Math.floor(Number(body.startAt));
+        const minutes = Math.floor(Number(body.minutes) || r.minutes || 45);
+        if (!(startAt > 0) || minutes < 5 || minutes > MAX_MINUTES) throw new HttpError(400, 'bad_time');
+        return { ...r, open: true, endedAt: null, startAt, minutes };
       }
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
         if (!title) throw new HttpError(400, 'need_title');
         return { ...r, title };
       }
-      else if (body.action === 'delete') return { ...r, open: false, deletedAt: Date.now() };
+      else if (body.action === 'own') {
+        if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
+        if (!r.minutes) throw new HttpError(409, 'no_length');
+        const multiplier = Math.min(4, Math.max(1, Math.round((Number(body.multiplier) || 1) * 4) / 4));
+        const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : null;
+        return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, setAt: Date.now() } } };
+      }
+      else if (body.action === 'unown') {
+        const own = { ...(r.own || {}) };
+        delete own[ownEmail];
+        return { ...r, own };
+      }
+      else if (body.action === 'delete') return { ...r, open: false, endedAt: Date.now(), deletedAt: Date.now() };
       else throw new HttpError(400, 'bad_action');
       return { ...r, students };
     });
-    // Closing a permanent room starts the next session under a new code:
-    // everyone who was in is still in (already let in, nothing handed in),
-    // but it stays closed until the teacher opens it, so the new phrase
-    // can be held back until the next day.
-    let next = null;
-    if (body.action === 'close' && room.permanent && !room.nextCode) {
-      const carry = {};
-      Object.entries(room.students || {}).forEach(([sub, st]) => {
-        if (st.status === 'admitted') carry[sub] = { email: st.email, name: st.name, status: 'admitted', leaves: 0, words: 0, decidedAt: Date.now() };
-        else if (st.status === 'removed') carry[sub] = { ...st };
+    if (body.action === 'own') {
+      await mutate('luddite:mine:' + ownEmail, (m) => {
+        const own = (m && m.own) || [];
+        return own.includes(code) ? undefined : { ...(m || {}), own: [code, ...own].slice(0, 60) };
       });
-      for (let i = 0; i < 12 && !next; i++) {
-        const { code: nc, codeLabel } = newRoomCode();
-        try {
-          next = await mutate('luddite:room:' + nc, (r2) => {
-            if (r2) throw new HttpError(409, 'code_taken');
-            return { code: nc, codeLabel, title: room.title, teacher: room.teacher, open: false, createdAt: Date.now(), students: carry, submissions: [], permanent: true, seriesId: room.seriesId || room.code };
-          });
-        } catch (e) {
-          if (e.message !== 'code_taken') throw e;
-        }
-      }
-      if (!next) throw new HttpError(503, 'busy');
-      await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: [next.code, ...((t && t.rooms) || [])] }));
-      const done = await mutate('luddite:room:' + code, (r) => ({ ...r, nextCode: next.code, nextLabel: next.codeLabel }));
-      return respond(200, { room: done, next: roomSummary(next) });
     }
     if (body.action === 'delete') {
       await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
@@ -837,6 +1056,20 @@ async function routeLuddite(event, method, path, info) {
   }
 
   return respond(404, { error: 'Not found' });
+}
+
+// A teacher's classes, newest first.
+async function classesOf(teacherState) {
+  const ids = (teacherState && teacherState.classes) || [];
+  const list = await Promise.all(ids.map((id) => readItem('luddite:class:' + id)));
+  return list.map((x) => x.state).filter((c) => c && !c.deletedAt).map(classSummary);
+}
+
+// The addresses on an assignment's class, so its teacher can see who hasn't come in.
+async function rosterOf(room) {
+  if (!room.classId) return null;
+  const { state } = await readItem('luddite:class:' + room.classId);
+  return state && !state.deletedAt ? { id: state.id, name: state.name, emails: state.emails } : null;
 }
 
 async function driveStatus(teacherSub) {
