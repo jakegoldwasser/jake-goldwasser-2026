@@ -121,6 +121,9 @@ function verifySession(token) {
 // which needs no permission beyond the GetItem/PutItem the role has.
 // ---------------------------------------------------------------------
 const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.com'];
+// Jake's test accounts: leaving the page doesn't lock them out until a
+// teacher lets them back in, so he can try things without getting stuck.
+const TEST_EMAILS = [...OWNER_EMAILS, 'nymets892@gmail.com'];
 // The Luddite Google app's client secret, for turning a teacher's one-time
 // Drive consent into a lasting refresh token (Configuration -> Environment
 // variables in the Lambda console). Without it, Drive can't be connected.
@@ -363,6 +366,8 @@ function studentView(room, sub, email, prefs) {
     prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
+    // Left the page while writing: locked out until the teacher lets them back in.
+    lockedOut: !!(me && me.lockedOut),
     submittedAt: me ? me.submittedAt || 0 : 0,
     // Handing in is final: no more writing until the teacher releases them.
     handedIn: !!(me && me.handedIn)
@@ -759,9 +764,10 @@ async function routeLuddite(event, method, path, info) {
       const s = r && r.students[me.sub];
       if (!s || s.status !== 'admitted') return undefined;
       const next = { ...s, lastSeen: Date.now() };
-      // `away` means locked out right now, until they go back to writing.
-      if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false });
-      if (body.type === 'writing' || body.type === 'idle') Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
+      // `away` means off the page right now. `lockedOut` keeps them off it
+      // until the teacher lets them back in (the room's 'unlock' action).
+      if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
+      if ((body.type === 'writing' || body.type === 'idle') && !s.lockedOut) Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
       if (Number.isFinite(body.words)) next.words = Math.max(0, Math.floor(body.words));
       return { ...r, students: { ...r.students, [me.sub]: next } };
     });
@@ -1034,7 +1040,8 @@ async function routeLuddite(event, method, path, info) {
   }
 
   // PUT /luddite/assignment { code, action, subs, ... } -- admit | admitAll |
-  // remove | release (let a student who handed in keep writing) | close (stop
+  // remove | release (let a student who handed in keep writing) | unlock (let
+  // one who left the page back in to write) | close (stop
   // new people getting in) | startNow (also reopens one that has ended) |
   // schedule { startAt, minutes } | rename { title } | own { email, startAt,
   // multiplier } | unown { email } | delete (only takes it off the teacher's list).
@@ -1052,6 +1059,7 @@ async function routeLuddite(event, method, path, info) {
       if (body.action === 'admit') subs.forEach((sub) => set(sub, 'admitted'));
       else if (body.action === 'admitAll') Object.keys(students).forEach((sub) => { if (students[sub].status === 'waiting') set(sub, 'admitted'); });
       else if (body.action === 'remove') subs.forEach((sub) => set(sub, 'removed'));
+      else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, unlockedAt: Date.now() }; });
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
       else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now() };

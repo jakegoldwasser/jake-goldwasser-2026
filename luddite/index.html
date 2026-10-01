@@ -772,6 +772,7 @@
   <div class="card">
     <h2>Locked</h2>
     <p class="sub" id="lockWhy"></p>
+    <p class="sub" id="lockWait" hidden></p>
     <button class="btn" id="resumeBtn">Go back to full screen</button>
     <p class="fine" id="lockCount"></p>
   </div>
@@ -1681,8 +1682,23 @@
       $('startBtn').hidden = false;
     }
     $('leaveBigBtn').hidden = !handedIn;
+    // Left the page last time: no writing until the teacher lets them back in.
+    var lockedOut = inRoom && !handedIn && roomInfo && roomInfo.lockedOut && !previewing && !isTester(me.email);
+    if (lockedOut) {
+      $('startBtn').disabled = true;
+      $('submitNote').hidden = false;
+      $('submitNote').className = 'fine warn';
+      $('submitNote').textContent = 'You left the page while writing, so you’re locked out. Ask your teacher to let you back in; this page opens again by itself when they do.';
+    }
     show('readyScreen');
     if (handedIn) poll(pollRelease, POLL_WAITING_MS);
+    else if (lockedOut) poll(pollReadyUnlock, POLL_WAITING_MS);
+  }
+  async function pollReadyUnlock() {
+    var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
+    roomInfo = data.room;
+    if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
+    if (!data.room.lockedOut) showReady();
   }
 
   // While handed in, watch for the teacher letting them back in to write.
@@ -1754,11 +1770,12 @@
   // Tells the teacher what's happening: 'left' (the page locked),
   // 'writing' (with the word count, every HEARTBEAT_MS) or 'idle'.
   function report(type) {
-    if (mode !== 'room' || previewing || !roomCode) return;
-    api('/luddite/event', { code: roomCode, type: type, words: wordCount(shadow) }).then(function (d) {
+    if (mode !== 'room' || previewing || !roomCode) return Promise.resolve(null);
+    return api('/luddite/event', { code: roomCode, type: type, words: wordCount(shadow) }).then(function (d) {
       noteNow(d.room.now);
-      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; if (writing) drawPrompt(); }
-    }).catch(function () {});
+      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; if (writing) drawPrompt(); }
+      return d.room;
+    }).catch(function () { return null; });
   }
 
   // The prompt is pinned above the writing until the student closes it (it
@@ -1826,6 +1843,7 @@
 
   function enterWriting() {
     if (mode === 'room' && roomInfo && roomInfo.handedIn && !previewing) { showReady(); return; }
+    if (mode === 'room' && roomInfo && roomInfo.lockedOut && !previewing && !isTester(me.email)) { showReady(); return; }
     if (mode === 'room' && !previewing && roomInfo && roomInfo.endAt && nowMs() >= roomInfo.endAt) { showReady(); return; }
     requestFs().then(function () {
       writing = true;
@@ -1855,14 +1873,36 @@
     save();
     var n = Number(load(leavesKey()) || 0) + 1;
     if (!previewing) store(leavesKey(), String(n));
-    report('left');
     $('lockWhy').textContent = reason + ' at ' + clock(Date.now()) + '.';
     $('lockCount').textContent = 'Left the page ' + plural(n, 'time', 'times') + ' this paper' + (mode === 'room' ? '. Your teacher can see this.' : '.');
     pad.blur();
+    // In a writing session, only the teacher can let them back in (the
+    // server says so); on your own, or on Jake's test accounts, it's one click.
+    var held = mode === 'room' && !previewing && !isTester(me.email);
+    $('resumeBtn').hidden = held;
+    $('lockWait').hidden = !held;
+    $('lockWait').textContent = 'Ask your teacher to let you back in. This page opens again by itself when they do.';
     show('lockScreen');
+    report('left').then(function (room) {
+      if (!locked) return;
+      if (room && room.lockedOut) poll(pollUnlock, POLL_WAITING_MS);
+      else letBackIn();
+    });
+  }
+  function letBackIn() {
+    $('lockWait').hidden = false;
+    $('lockWait').textContent = mode === 'room' && !previewing && !isTester(me.email) ? 'Your teacher let you back in.' : '';
+    $('lockWait').hidden = !$('lockWait').textContent;
+    $('resumeBtn').hidden = false;
+  }
+  async function pollUnlock() {
+    var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
+    if (roomInfo) roomInfo.lockedOut = data.room.lockedOut;
+    if (!data.room.lockedOut) { stopPoll(); letBackIn(); }
   }
 
   $('resumeBtn').addEventListener('click', function () {
+    if ($('resumeBtn').hidden) return;
     requestFs().then(function () {
       locked = false;
       updateLeaves();
@@ -1936,26 +1976,26 @@
   function stop(e) { e.preventDefault(); e.stopPropagation(); }
   var clip = '', insertingClip = false;
   function padSelection() { return pad.value.slice(pad.selectionStart, pad.selectionEnd); }
-  document.addEventListener('copy', function (e) {
-    if (!writing || !P().blockPaste) return;
-    stop(e);
-    if (e.target === pad && !locked && padSelection()) clip = padSelection();
-  }, true);
-  document.addEventListener('cut', function (e) {
-    if (!writing || !P().blockPaste) return;
-    stop(e);
-    if (e.target !== pad || locked || !padSelection()) return;
+  function clipCopy() { if (!locked && padSelection()) clip = padSelection(); }
+  function clipCut() {
+    if (locked || !padSelection()) return;
     clip = padSelection();
     if (!document.execCommand('delete')) insertAtCaret('', 0);
-  }, true);
-  document.addEventListener('paste', function (e) {
-    if (!writing || !P().blockPaste) return;
-    stop(e);
-    if (e.target !== pad || locked || !clip) return;
+  }
+  function clipPaste() {
+    if (locked || !clip) return;
     insertingClip = true;
     if (!document.execCommand('insertText', false, clip)) insertAtCaret(clip, 0);
     insertingClip = false;
-  }, true);
+  }
+  var CLIP_DO = { copy: clipCopy, cut: clipCut, paste: clipPaste };
+  ['copy', 'cut', 'paste'].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (!writing || !P().blockPaste) return;
+      stop(e);
+      if (e.target === pad) CLIP_DO[type]();
+    }, true);
+  });
   ['drop', 'dragstart', 'dragover'].forEach(function (type) {
     document.addEventListener(type, function (e) { if (writing && P().blockPaste) stop(e); }, true);
   });
@@ -1975,6 +2015,13 @@
     if (!writing) return;
     var k = (e.key || '').toLowerCase();
     if ((e.metaKey || e.ctrlKey) && BLOCKED_KEYS[k] && !{ c: 1, v: 1, x: 1 }[k]) return stop(e);
+    // Cmd/Ctrl+C, X, V: done here rather than left to the browser, which in
+    // locked full screen (keyboard lock) never turns them into copy and paste.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && { c: 1, v: 1, x: 1 }[k] && P().blockPaste) {
+      stop(e);
+      if (e.target === pad) (k === 'c' ? clipCopy : k === 'x' ? clipCut : clipPaste)();
+      return;
+    }
     if (/^f\d+$/.test(k)) return stop(e);
     if (k === 'escape') return stop(e);
     // Tab indents instead of moving focus out of the page; Shift+Tab takes
@@ -2733,7 +2780,8 @@
 
     fill('admittedList', admitted, 'Nobody’s in yet.', function (s, row) {
       var live = isLive(s);
-      if (s.away) row.appendChild(el('span', 'pill warn', 'Locked out now'));
+      if (s.lockedOut) row.appendChild(el('span', 'pill warn', 'Locked out'));
+      else if (s.away) row.appendChild(el('span', 'pill warn', 'Off the page now'));
       else row.appendChild(el('span', 'pill' + (live ? ' good' : ''), live ? 'Writing' : 'Not writing'));
       if (s.words) row.appendChild(el('span', 'pill', plural(s.words, 'word', 'words')));
       if (s.leaves) row.appendChild(el('span', 'pill warn', 'Left the page ' + s.leaves + '×'));
@@ -2745,6 +2793,7 @@
       // Grading is what comes next for a handed-in paper, so it's the big button.
       var paper = (room.submissions || []).filter(function (x) { return x.sub === s.sub && x.stored; })[0];
       if (paper) row.appendChild(button('Grade', 'btn grade', function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); }));
+      if (s.lockedOut && !s.handedIn) row.appendChild(button('Let them back in', 'btn grade', function () { roomAction('unlock', [s.sub]); }));
       if (s.handedIn) row.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
       row.appendChild(button('Remove', 'btn small danger', async function () {
         if (await ask({ title: 'Take ' + who(s.name, s.email) + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
