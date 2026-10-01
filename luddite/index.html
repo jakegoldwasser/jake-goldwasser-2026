@@ -190,6 +190,11 @@
   .roomcard .acts { display: flex; gap: 8px; align-items: center; }
   .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
   .readyacts { margin-top: 12px; }
+  .gradewait { margin: 4px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--sun-tint); color: var(--ink); font-size: 15px; }
+  .pill.gradepill { background: var(--card); color: var(--pen); border: 1.5px solid var(--pen); font-weight: 700; }
+  .gradewait b { font-family: var(--display); font-size: 20px; color: var(--pen); }
+  #backList .item { cursor: pointer; text-align: left; }
+  #markHandBack.on { background: var(--card); color: var(--ink); border-color: var(--ink); }
   .pill.flag { background: var(--tomato-tint); color: var(--tomato-deep); font-weight: 700; }
   #readyScreen #submitNote { margin: 14px 0 4px; font-size: 15px; }
   .acctline { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; }
@@ -706,6 +711,10 @@
       <label class="joinlbl">Your writing sessions</label>
       <div id="mineList"></div>
     </div>
+    <div id="backBox" hidden style="margin-bottom:26px">
+      <label class="joinlbl">Handed back to you</label>
+      <div id="backList"></div>
+    </div>
     <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
     <label class="joinlbl" for="joinCode">Entry Phrase</label>
     <form class="row" id="joinForm" style="justify-content:center">
@@ -903,6 +912,7 @@
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="previewBtn">See what students see</button>
+            <button type="button" id="handBackAllBtn">Hand back all papers</button>
           </div>
         </details>
       </div>
@@ -964,6 +974,18 @@
 </section>
 
 <!-- Teacher: every paper of a session, or of one student, together, to print -->
+<!-- Student: a handed-back paper, with the teacher's comments (the grade after five minutes with them) -->
+<section class="screen page" id="backScreen" hidden>
+  <div class="card">
+    <div class="markbar">
+      <button class="btn ghost" id="backHome">&larr; Home</button>
+      <span class="grow"></span>
+    </div>
+    <p class="gradewait" id="backTimer"></p>
+    <div id="backPaper"></div>
+  </div>
+</section>
+
 <section class="screen page" id="printScreen" hidden>
   <div class="card">
     <div class="markbar">
@@ -988,7 +1010,8 @@
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
       <span class="savestate" id="markSaved"></span>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
-      <button class="btn small" id="markPrint">Print</button>
+      <button class="btn small" id="markHandBack" type="button">Hand back</button>
+      <button class="btn small ghost" id="markPrint">Print</button>
     </div>
     <div class="sheet" id="sheet">
       <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span>
@@ -1167,7 +1190,7 @@
   var POLL_WAITING_MS = 3000;   // student in the waiting room
   var POLL_ROOM_MS = 3000;      // teacher looking at a room
   var POLL_DASH_MS = 10000;     // teacher looking at the room list
-  var HEARTBEAT_MS = 30000;     // student writing: word count for the teacher
+  var HEARTBEAT_MS = 15000;     // student writing: word count for the teacher
   // iPhones can't go full screen. These accounts may write there anyway
   // (for testing on a phone); leaving the tab or app still locks the page.
   var NO_FULLSCREEN_OK = ['nymets892@gmail.com'];
@@ -1345,7 +1368,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'backScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -1564,11 +1587,82 @@
     $('joinNote').textContent = note || '';
     show('joinScreen');
     drawMine();
+    loadReturned();
     // Check back while something is coming (the screen's own polling stops when it changes).
     if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000);
     else if (!mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000); } });
     $('joinCode').focus();
   }
+
+  // ---- Handed back: the teacher's comments, then (after five minutes with them) the grade ----
+  async function loadReturned() {
+    var data;
+    try { data = await api('/luddite/returned'); } catch (e) { return; }
+    var list = $('backList');
+    list.innerHTML = '';
+    $('backBox').hidden = !data.papers.length;
+    data.papers.forEach(function (p) {
+      var row = el('div', 'item click');
+      row.tabIndex = 0;
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, p.roomTitle || 'Writing'));
+      w.appendChild(el('span', null, 'Handed back ' + new Date(p.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
+      row.appendChild(w);
+      row.appendChild(button('Read the comments', 'btn small', function () { openBack(p.id); }));
+      row.addEventListener('click', function (e) { if (!e.target.closest('button')) openBack(p.id); });
+      list.appendChild(row);
+    });
+  }
+  var backId = null, backPaper = null, backTick = null, backSeenAt = 0;
+  async function openBack(id) {
+    backId = id;
+    show('backScreen');
+    $('backPaper').innerHTML = '';
+    $('backTimer').textContent = 'Loading…';
+    try { backPaper = (await api('/luddite/mypaper?id=' + encodeURIComponent(id))).paper; }
+    catch (e) { $('backTimer').textContent = 'Couldn’t load this paper. Try again.'; return; }
+    drawBack(true);
+    poll(pingBack, 15000);
+    clearInterval(backTick);
+    backTick = setInterval(drawBackTimer, 1000);
+  }
+  function backReading() { return !$('backScreen').hidden && !document.hidden && document.hasFocus(); }
+  // Tell the server they're still reading (only while the page is in front).
+  async function pingBack() {
+    if (!backId || !backReading()) return;
+    var was = backPaper && backPaper.gradeReady;
+    backPaper = (await api('/luddite/mypaper', { id: backId })).paper;
+    backSeenAt = Date.now();
+    if (backPaper.gradeReady && !was) { drawBack(false); stopPoll(); }
+    drawBackTimer();
+  }
+  function drawBack(first) {
+    var p = backPaper;
+    $('backPaper').innerHTML = '';
+    $('backPaper').appendChild(staticPaper(Object.assign({}, p, { grade: '' }))); // the grade shows once, above
+    backSeenAt = Date.now();
+    drawBackTimer();
+    if (first) window.scrollTo(0, 0);
+  }
+  function drawBackTimer() {
+    var p = backPaper;
+    if (!p) return;
+    var box = $('backTimer');
+    box.innerHTML = '';
+    if (p.gradeReady) {
+      if (p.grade) { box.appendChild(document.createTextNode('Grade: ')); box.appendChild(el('b', null, p.grade)); }
+      else box.textContent = 'Your teacher hasn’t given this a grade.';
+      return;
+    }
+    var left = p.gradeAfterMs - p.viewedMs - (backReading() ? Math.min(Date.now() - backSeenAt, 15000) : 0);
+    var mins = Math.max(1, Math.ceil(left / 60000));
+    box.textContent = 'Read your teacher’s comments first. Your grade appears after five minutes with them' +
+      (left > 0 ? ': about ' + plural(mins, 'minute', 'minutes') + ' to go' : '') + (backReading() ? '.' : ' (the clock runs only while this page is in front of you).');
+  }
+  $('backHome').addEventListener('click', function () {
+    clearInterval(backTick); backId = null; backPaper = null;
+    if (isTeacher) showDash(); else showJoin();
+  });
 
   $('joinForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1836,6 +1930,12 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; if (writing) drawPrompt(); }
+      // The teacher ended the session: hand in now, with everything written
+      // (replacing the copy Luddite handed in from the last backup).
+      if (roomInfo && writing && !locked && (d.room.autoHandedIn || (d.room.state === 'ended' && !d.room.own && P().autoHandIn))) {
+        roomInfo.handedIn = d.room.handedIn; roomInfo.autoHandedIn = d.room.autoHandedIn;
+        timeUp();
+      }
       return d.room;
     }).catch(function () { return null; });
   }
@@ -1875,7 +1975,7 @@
     save();
     var text = load(textKey()) || shadow;
     $('handinBox').hidden = true;
-    if (text.trim() && !(roomInfo && roomInfo.handedIn)) { try { await handIn(text); } catch (e) { /* the Hand in button is still there, marked late */ } }
+    if (text.trim() && !(roomInfo && roomInfo.handedIn && !roomInfo.autoHandedIn)) { try { await handIn(text); } catch (e) { /* the Hand in button is still there, marked late */ } }
     timeUpBusy = false;
     finishWriting(showReady);
   }
@@ -2949,7 +3049,13 @@
         ' · ' + plural(x.words, 'word', 'words') + ' · left the page ' + plural(x.leaves, 'time', 'times')));
       row.appendChild(w);
       if (x.late) row.appendChild(el('span', 'pill warn', 'Late'));
-      if (x.marked) row.appendChild(el('span', 'pill good', 'Marked'));
+      if (x.grade) row.appendChild(el('span', 'pill gradepill', x.grade));
+      if (x.auto) row.appendChild(el('span', 'pill', 'Handed in when the session ended'));
+      if (x.returnedAt) row.appendChild(el('span', 'pill good', 'Handed back'));
+      else if (x.marked) row.appendChild(el('span', 'pill good', 'Marked'));
+      if (x.stored && x.marked && !x.returnedAt) row.appendChild(button('Hand back', 'btn small ghost', async function () {
+        try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+      }));
       if (x.stored) row.appendChild(button('Grade', 'btn grade', function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); }));
       if (x.link) {
         var a = el('a', 'btn small ghost', 'Open in Drive');
@@ -2990,7 +3096,7 @@
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
-      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Nobody new can get in. Students already writing can finish and hand in.', ok: 'End it now', danger: true })) return;
+      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written. Students on a schedule of their own keep going.', ok: 'End it and hand in', danger: true })) return;
       roomAction('close');
     } else {
       roomAction('startNow');
@@ -3109,6 +3215,17 @@
   });
   // Choosing something from the More menu closes it.
   each('#roomMenu .pop button', function (b) { b.addEventListener('click', function () { $('roomMenu').open = false; }); });
+  // Hand back every paper in the session that hasn't been yet (the newest from each student).
+  $('handBackAllBtn').addEventListener('click', async function () {
+    var due = latestPerStudent(teacherRoom.submissions).filter(function (x) { return x.stored && !x.returnedAt; });
+    if (!due.length) { tell('Nothing to hand back', 'Every paper in this session has been handed back already.'); return; }
+    var unmarked = due.filter(function (x) { return !x.marked && !x.grade; }).length;
+    if (!await ask({ title: 'Hand back ' + plural(due.length, 'paper', 'papers') + '?',
+      text: 'Students can then read your comments, and see their grade after five minutes with them.' + (unmarked ? ' ' + plural(unmarked, 'paper has', 'papers have') + ' no comments or grade yet.' : ''),
+      ok: 'Hand back' })) return;
+    try { await handBack(due.map(function (x) { return x.id; }), true); lastDrawn = ''; loadRoom(); }
+    catch (e) { tell('Couldn’t hand them back', 'Try again.'); }
+  });
   // A click anywhere outside an open menu closes it.
   document.addEventListener('click', function (e) {
     each('details.menu[open]', function (d) { if (!d.contains(e.target)) d.open = false; });
@@ -3196,7 +3313,30 @@
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
     if (piece.link) $('markDrive').href = piece.link;
+    drawHandBack();
   }
+  function drawHandBack() {
+    var b = $('markHandBack'), back = !!piece.returnedAt;
+    b.textContent = back ? 'Handed back ✓' : 'Hand back';
+    b.classList.toggle('on', back);
+    var mins = Math.floor(((piece.view && piece.view.ms) || 0) / 60000);
+    b.title = back ? 'Handed back ' + clock(piece.returnedAt) + (piece.view ? '. They’ve read it for ' + plural(mins, 'minute', 'minutes') + '.' : '. They haven’t opened it yet.') + ' Click to take it back.' : 'Let the student read your comments (and, after five minutes with them, the grade)';
+  }
+  async function handBack(ids, back) {
+    var data = await api('/luddite/handback', { ids: ids, back: back });
+    return data.done;
+  }
+  $('markHandBack').addEventListener('click', async function () {
+    if (!piece) return;
+    var back = !piece.returnedAt;
+    if (!back && !await ask({ title: 'Take this paper back?', text: 'The student won’t see your comments until you hand it back again.', ok: 'Take it back' })) return;
+    flushMarks();
+    try {
+      var done = await handBack([piece.id], back);
+      if (done[0]) piece.returnedAt = done[0].returnedAt;
+      drawHandBack();
+    } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+  });
   $('markBack').addEventListener('click', function () { flushMarks(); hideTools(); closePop(); (markBackTo || showDash)(); });
 
   // Everything that gets a numbered note in the margin: comments and arrows,
