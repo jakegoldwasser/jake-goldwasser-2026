@@ -3021,12 +3021,14 @@
     var tailAt = m.head === 'start' ? m.end : m.start, headAt = m.head === 'start' ? m.start : m.end;
     var a = pointRect(tailAt), b = pointRect(headAt);
     if (!a || !b) return null;
-    var x1 = a.x - box.left, y1 = a.top + a.h / 2 - box.top, x2 = b.x - box.left, y2 = b.top + b.h / 2 - box.top;
+    return arcBetween(a.x - box.left, a.top + a.h / 2 - box.top, b.x - box.left, b.top + b.h / 2 - box.top);
+  }
+  function arcBetween(x1, y1, x2, y2) {
     var dx = x2 - x1, dy = y2 - y1, d = Math.sqrt(dx * dx + dy * dy) || 1;
     // Bow out to the left of the page for a line that runs down or up it, upward for one along a line.
     var nx = -dy / d, ny = dx / d;
     if (Math.abs(dy) < 6 ? ny > 0 : nx > 0) { nx = -nx; ny = -ny; }
-    var k = Math.max(26, Math.min(110, d * 0.28));
+    var k = Math.max(30, Math.min(140, d * 0.35));
     var cx = (x1 + x2) / 2 + nx * k, cy = (y1 + y2) / 2 + ny * k;
     return { x1: x1, y1: y1, x2: x2, y2: y2, cx: cx, cy: cy, mx: 0.25 * x1 + 0.5 * cx + 0.25 * x2, my: 0.25 * y1 + 0.5 * cy + 0.25 * y2 };
   }
@@ -3059,13 +3061,14 @@
       svg.appendChild(grp);
     });
   }
-  // While dragging: a dashed straight line from the start point to the pointer.
+  // While dragging: a dashed arc, bowed the way the arrow will be, from the start point to the pointer.
   function drawDraft(from, x, y) {
     var svg = $('arrows'), box = sheetBox(), a = pointRect(from);
     var old = svg.querySelector('.draft');
     if (old) old.parentNode.removeChild(old);
     if (!a) return;
-    svg.appendChild(svgEl('line', { class: 'draft', x1: a.x - box.left, y1: a.top + a.h / 2 - box.top, x2: x - box.left, y2: y - box.top }));
+    var g = arcBetween(a.x - box.left, a.top + a.h / 2 - box.top, x - box.left, y - box.top);
+    svg.appendChild(svgEl('path', { class: 'draft', d: 'M' + g.x1 + ',' + g.y1 + ' Q' + g.cx + ',' + g.cy + ' ' + g.x2 + ',' + g.y2, 'marker-end': 'url(#arrowhead)' }));
   }
   function clearDraft() { var d = $('arrows').querySelector('.draft'); if (d) d.parentNode.removeChild(d); }
   // The character offset under a point on screen, or null off the text.
@@ -3086,13 +3089,15 @@
     if (!piece || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
     var o = pointOffset(e.clientX, e.clientY);
     if (o === null) return;
-    drag = { from: o, x: e.clientX, y: e.clientY, moved: false, menu: null };
+    drag = { from: o, last: o, x: e.clientX, y: e.clientY, moved: false, menu: null };
     if (e.button === 0) e.preventDefault(); // Control-drag shouldn't select text
   });
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
     if (!drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 12) return;
     if (!drag.moved) { drag.moved = true; hideTools(); }
+    var o = pointOffset(e.clientX, e.clientY);
+    if (o !== null) drag.last = o; // letting go off the text (a margin, between lines) uses the last spot over it
     drawDraft(drag.from, e.clientX, e.clientY);
   });
   document.addEventListener('mouseup', function (e) {
@@ -3104,10 +3109,13 @@
     swallowMenu = true;
     setTimeout(function () { swallowMenu = false; }, 400);
     var to = pointOffset(e.clientX, e.clientY);
-    if (to === null || to === d.from) return;
+    if (to === null) to = d.last;
+    if (to === d.from) return;
     window.getSelection().removeAllRanges();
-    openPop(null, { type: 'arrow', start: Math.min(d.from, to), end: Math.max(d.from, to), head: to > d.from ? 'end' : 'start' },
-      { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 });
+    // The arrow is drawn as soon as it's let go; the box after it is only for an optional comment.
+    var m = { type: 'arrow', start: Math.min(d.from, to), end: Math.max(d.from, to), head: to > d.from ? 'end' : 'start' };
+    addMark(m);
+    openPop(m, null, { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 });
   });
   window.addEventListener('resize', function () { if (!$('markScreen').hidden) layoutNotes(); });
 
