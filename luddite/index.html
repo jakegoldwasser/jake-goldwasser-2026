@@ -35,7 +35,7 @@
     --mint: #7C8B45;  --mint-deep: #4A5628;  --mint-tint: #E6EBD3;
     --lock: #8B3A2B;
     --ok: #4A5628;
-    --pen: #2E6B34;      /* the teacher's green pen (rust is for the lock) */
+    --pen: #0E9440;      /* the teacher's green pen, bright enough to stand off the student's black (rust is for the lock) */
     --pen-wash: #DDEBD8;
     --display: Literata, Georgia, 'Times New Roman', serif;
     --ui: 'Bricolage Grotesque', system-ui, sans-serif;
@@ -191,6 +191,44 @@
   .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
   .readyacts { margin-top: 12px; }
   .gradewait { margin: 4px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--sun-tint); color: var(--ink); font-size: 15px; }
+  /* A student reading a handed-back paper: the marking page, read-only. */
+  body.reading #markScreen .markbar > :not(#markBack):not(.grow) { display: none !important; }
+  body.reading #markScreen .markbar .grow .q { display: none; }
+  body.reading .gradebox, body.reading #endComment, body.reading .endwrap > label, body.reading .gradeprint { display: none !important; }
+  body.reading .endprint { display: block; font-size: 16px; }
+  body.reading .endprint:not(:empty)::before { content: 'End comment'; display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  body.reading .paper { cursor: default; }
+  body.reading .mnote, body.reading .paper .ins, body.reading .arrowsvg .hit, body.reading .arrowsvg .lab { cursor: default; }
+  #readBanner { margin: 0 0 14px; }
+  /* Rubrics: on the marking page, and in their editor under Settings. */
+  .rubricwrap:empty { display: none; }
+  .rubricwrap { margin-top: 18px; }
+  .rubrichead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .rubrichead .t { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .rubrichead .score { margin-left: auto; font: 600 15px var(--ui); color: var(--pen); }
+  .rtable { width: 100%; border-collapse: separate; border-spacing: 0; font: 400 14px/1.35 var(--ui); }
+  .rtable th, .rtable td { border: 1px solid var(--edge); padding: 7px 9px; vertical-align: top; text-align: left; }
+  .rtable th { font-weight: 600; background: var(--paper); }
+  .rtable td.skill { font-weight: 600; width: 22%; }
+  .rtable td.w, .rtable th.w { width: 8%; text-align: center; white-space: nowrap; }
+  .rtable td.cell { cursor: pointer; color: var(--muted); }
+  .rtable td.cell:hover { background: var(--hover); }
+  .rtable td.cell.on { background: var(--pen-wash); color: var(--ink); box-shadow: inset 0 0 0 2px var(--pen); }
+  body.reading .rtable td.cell { cursor: default; }
+  body.reading .rtable td.cell:hover:not(.on) { background: none; }
+  .rubricpick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  @media print { .rtable td.cell.on { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .rubricpick { display: none; } }
+  #rubricList .ritem { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
+  #rubricList .ritem b { flex: 1; font: 600 15px var(--ui); }
+  #rubricBox .box { max-width: 980px; }
+  .redit { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .redit th, .redit td { border: 1px solid var(--edge); padding: 4px; vertical-align: top; }
+  .redit input, .redit textarea { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: 400 14px/1.35 var(--ui); color: var(--ink); padding: 4px; resize: vertical; }
+  .redit th input { font-weight: 600; }
+  .redit textarea { min-height: 52px; }
+  .redit .x { background: none; border: 0; color: var(--muted); cursor: pointer; font: 400 16px var(--ui); }
+  .redit td.w, .redit th.w { width: 70px; }
+  .reditbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
   .pill.gradepill { background: var(--card); color: var(--pen); border: 1.5px solid var(--pen); font-weight: 700; }
   .gradewait b { font-family: var(--display); font-size: 20px; color: var(--pen); }
   #backList .item { cursor: pointer; text-align: left; }
@@ -335,7 +373,7 @@
   .paper:focus { outline: none; }
   .paper .hl { background: var(--pen-wash); border-bottom: 1.5px solid var(--pen); cursor: pointer; }
   .paper .strike { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; cursor: pointer; }
-  .paper .ins { color: var(--pen); cursor: pointer; white-space: pre-wrap; } /* same face and size as the student's words */
+  .paper .ins { color: var(--pen); cursor: pointer; white-space: pre-wrap; font-family: var(--ui); font-size: .94em; font-weight: 500; } /* the teacher's words: sans, so they never pass for the student's */
   .paper .ins .b { font-weight: 600; }
   .paper .ins .i { font-style: italic; }
   .paper .ins::before { content: '‸'; font-weight: 600; margin-right: 1px; }
@@ -671,7 +709,7 @@
   @media print {
     @page { margin: 0.75in; }
     body { background: #fff !important; color: #000; }
-    :root { --paper: #fff; --ink: #000; --card: #fff; --rule: #ccc; --pen: #2f6b3a; --pen-wash: #e8f3e8; --muted: #555; }
+    :root { --paper: #fff; --ink: #000; --card: #fff; --rule: #ccc; --pen: #0b8a3a; --pen-wash: #e3f5e8; --muted: #555; }
     .no-print, .markbar, .marktools, .markpop, #previewBar, .topright { display: none !important; }
     body.is-anon::before { display: none; }
     .screen { display: block !important; padding: 0 !important; min-height: 0 !important; }
@@ -901,7 +939,7 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><p class="stamp" id="roomPromptLine" style="max-width:56ch"></p></div>
+      <div><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><p class="stamp" id="roomPromptLine" style="max-width:56ch"></p><p class="stamp" id="roomRubricLine" hidden></p></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -912,6 +950,7 @@
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="previewBtn">See what students see</button>
+            <button type="button" id="rubricBtn">Rubric…</button>
             <button type="button" id="handBackAllBtn">Hand back all papers</button>
           </div>
         </details>
@@ -974,18 +1013,6 @@
 </section>
 
 <!-- Teacher: every paper of a session, or of one student, together, to print -->
-<!-- Student: a handed-back paper, with the teacher's comments (the grade after five minutes with them) -->
-<section class="screen page" id="backScreen" hidden>
-  <div class="card">
-    <div class="markbar">
-      <button class="btn ghost" id="backHome">&larr; Home</button>
-      <span class="grow"></span>
-    </div>
-    <p class="gradewait" id="backTimer"></p>
-    <div id="backPaper"></div>
-  </div>
-</section>
-
 <section class="screen page" id="printScreen" hidden>
   <div class="card">
     <div class="markbar">
@@ -1013,6 +1040,7 @@
       <button class="btn small" id="markHandBack" type="button">Hand back</button>
       <button class="btn small ghost" id="markPrint">Print</button>
     </div>
+    <p class="gradewait" id="readBanner" hidden></p>
     <div class="sheet" id="sheet">
       <div class="sheethead"><b id="markWho"></b><span id="markMeta"></span>
       </div>
@@ -1023,6 +1051,7 @@
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
         <div class="endprint" id="endPrint"></div>
+        <div class="rubricwrap" id="rubricWrap"></div>
         <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false"></div>
         <div class="gradeprint" id="gradePrint"></div>
       </div>
@@ -1063,6 +1092,11 @@
       <span class="segctl" data-pref="lockOnLeave"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can cut, copy and paste within their own writing, but pasting, dropping or auto-inserting anything from elsewhere is refused.">?</span></span>
       <span class="segctl" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
+    <div class="switchrow" style="display:block">
+      <span class="nm">Rubrics <span class="q" tabindex="0" data-tip="Skills down the side, your own levels across the top, and optionally each skill's share of the grade. Apply one to a writing session from its More menu, or from the marking page.">?</span></span>
+      <div id="rubricList"></div>
+      <button class="btn small ghost" type="button" id="newRubricBtn" style="margin-top:8px">+ New rubric</button>
+    </div>
     <div class="switchrow"><span class="nm">Show students a word count</span>
       <span class="segctl" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Hand in by itself when own time ends <span class="q" tabindex="0" data-tip="For a student with their own time: when it runs out, their paper is handed in automatically. Off: the clock just says Time is up.">?</span></span>
@@ -1116,9 +1150,30 @@
     <p class="asktext" id="askText"></p>
     <input class="field wide askfield" id="askInput" autocomplete="off" hidden>
     <textarea class="field promptfield askfield" id="askArea" maxlength="4000" hidden></textarea>
+    <select class="field wide askfield" id="askSelect" hidden></select>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
       <button class="btn small ghost" id="askNo" type="button">Cancel</button>
       <button class="btn small" id="askYes" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Teacher: making or changing a rubric (from Settings) -->
+<div class="overlay no-print" id="rubricBox" hidden>
+  <div class="box">
+    <h2 id="reTitle">New rubric</h2>
+    <input class="field wide" id="reName" maxlength="80" placeholder="Rubric name, e.g. Argument essay" aria-label="Rubric name" style="margin-top:10px">
+    <label class="fine" style="display:flex; gap:8px; align-items:center; justify-content:flex-start; margin-top:10px"><input type="checkbox" id="reWeighted"> Each skill counts for a percent of the grade</label>
+    <div style="overflow-x:auto"><table class="redit" id="reTable"></table></div>
+    <div class="reditbar">
+      <button class="btn small ghost" type="button" id="reAddRow">+ Skill</button>
+      <button class="btn small ghost" type="button" id="reAddLevel">+ Level</button>
+      <span class="fine" id="reTotal" style="margin:0"></span>
+    </div>
+    <p class="fine warn" id="reNote" hidden></p>
+    <div class="row" style="justify-content:flex-end; margin-top:16px">
+      <button class="btn small ghost" type="button" id="reCancel">Cancel</button>
+      <button class="btn small" type="button" id="reSave">Save rubric</button>
     </div>
   </div>
 </div>
@@ -1231,18 +1286,23 @@
   var askDone = null;
   function ask(o) {
     if (askDone) askDone(false);
-    var field = o.input === 'area' ? $('askArea') : o.input ? $('askInput') : null;
+    var field = o.input === 'area' ? $('askArea') : o.input === 'select' ? $('askSelect') : o.input ? $('askInput') : null;
+    $('askSelect').hidden = field !== $('askSelect');
+    if (o.input === 'select') {
+      $('askSelect').innerHTML = '';
+      (o.options || []).forEach(function (x) { var op = el('option', null, x.label); op.value = x.value; $('askSelect').appendChild(op); });
+    }
     $('askTitle').textContent = o.title || '';
     $('askText').textContent = o.text || '';
     $('askInput').hidden = field !== $('askInput');
     $('askArea').hidden = field !== $('askArea');
-    if (field) { field.value = o.value || ''; field.placeholder = o.placeholder || ''; }
+    if (field) { field.value = o.value || (o.input === 'select' && o.options && o.options[0] ? o.options[0].value : ''); if (o.input !== 'select') field.placeholder = o.placeholder || ''; }
     $('askYes').textContent = o.ok || 'OK';
     $('askYes').className = 'btn small' + (o.danger ? ' danger' : '');
     $('askNo').textContent = o.cancel || 'Cancel';
     $('askNo').hidden = o.cancel === false;
     $('askBox').hidden = false;
-    setTimeout(function () { if (field) { field.focus(); field.select(); } else $('askYes').focus(); }, 0);
+    setTimeout(function () { if (field) { field.focus(); if (o.input !== 'select') field.select(); } else $('askYes').focus(); }, 0);
     return new Promise(function (resolve) {
       askDone = function (yes) {
         askDone = null;
@@ -1368,7 +1428,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'backScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -1613,41 +1673,69 @@
       list.appendChild(row);
     });
   }
+  // A handed-back paper opens on the marking page itself, read-only
+  // (`reading`), so the comments, arrows and cross-outs look just as the
+  // teacher left them. A banner above counts down to the grade.
+  var reading = false;
   var backId = null, backPaper = null, backTick = null, backSeenAt = 0;
   async function openBack(id) {
     backId = id;
-    show('backScreen');
-    $('backPaper').innerHTML = '';
-    $('backTimer').textContent = 'Loading…';
+    reading = true;
+    document.body.classList.add('reading');
+    markBackTo = leaveReading;
+    $('markBack').innerHTML = '&larr; Home';
+    show('markScreen');
+    $('paper').contentEditable = 'false';
+    $('paper').textContent = 'Loading…';
+    $('margin').innerHTML = '';
+    $('rubricWrap').innerHTML = '';
+    $('readBanner').hidden = false;
+    $('readBanner').textContent = '';
     try { backPaper = (await api('/luddite/mypaper?id=' + encodeURIComponent(id))).paper; }
-    catch (e) { $('backTimer').textContent = 'Couldn’t load this paper. Try again.'; return; }
-    drawBack(true);
+    catch (e) { $('paper').textContent = 'Couldn’t load this paper. Try again.'; return; }
+    piece = Object.assign({}, backPaper, { marks: backPaper.marks || [], grade: '' });
+    roomRubric = null;
+    showPieceHead();
+    $('endComment').value = piece.endComment || '';
+    $('endPrint').textContent = piece.endComment || '';
+    $('markGrade').value = '';
+    showGradePrint();
+    drawPiece();
+    renderRubric();
+    backSeenAt = Date.now();
+    drawBackTimer();
+    window.scrollTo(0, 0);
     poll(pingBack, 15000);
     clearInterval(backTick);
     backTick = setInterval(drawBackTimer, 1000);
   }
-  function backReading() { return !$('backScreen').hidden && !document.hidden && document.hasFocus(); }
+  function leaveReading() {
+    clearInterval(backTick);
+    backId = null; backPaper = null; piece = null;
+    reading = false;
+    document.body.classList.remove('reading');
+    $('readBanner').hidden = true;
+    $('paper').contentEditable = 'true';
+    if (isTeacher) showDash(); else showJoin();
+  }
+  function backReading() { return reading && !$('markScreen').hidden && !document.hidden && document.hasFocus(); }
   // Tell the server they're still reading (only while the page is in front).
   async function pingBack() {
     if (!backId || !backReading()) return;
     var was = backPaper && backPaper.gradeReady;
     backPaper = (await api('/luddite/mypaper', { id: backId })).paper;
     backSeenAt = Date.now();
-    if (backPaper.gradeReady && !was) { drawBack(false); stopPoll(); }
+    if (backPaper.gradeReady && !was && piece) {
+      piece.rubric = backPaper.rubric; piece.rubricScores = backPaper.rubricScores;
+      renderRubric();
+      stopPoll();
+    }
     drawBackTimer();
-  }
-  function drawBack(first) {
-    var p = backPaper;
-    $('backPaper').innerHTML = '';
-    $('backPaper').appendChild(staticPaper(Object.assign({}, p, { grade: '' }))); // the grade shows once, above
-    backSeenAt = Date.now();
-    drawBackTimer();
-    if (first) window.scrollTo(0, 0);
   }
   function drawBackTimer() {
     var p = backPaper;
-    if (!p) return;
-    var box = $('backTimer');
+    if (!p || !reading) return;
+    var box = $('readBanner');
     box.innerHTML = '';
     if (p.gradeReady) {
       if (p.grade) { box.appendChild(document.createTextNode('Grade: ')); box.appendChild(el('b', null, p.grade)); }
@@ -1659,10 +1747,6 @@
     box.textContent = 'Read your teacher’s comments first. Your grade appears after five minutes with them' +
       (left > 0 ? ': about ' + plural(mins, 'minute', 'minutes') + ' to go' : '') + (backReading() ? '.' : ' (the clock runs only while this page is in front of you).');
   }
-  $('backHome').addEventListener('click', function () {
-    clearInterval(backTick); backId = null; backPaper = null;
-    if (isTeacher) showDash(); else showJoin();
-  });
 
   $('joinForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -2411,9 +2495,117 @@
   ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) {
     $(id).addEventListener('click', function (e) { if (e.target === $(id)) $(id).hidden = true; });
   });
+
+  // ---- Rubrics: made and kept under Settings ----
+  function drawRubricList() {
+    var list = $('rubricList');
+    list.innerHTML = '';
+    if (!rubrics.length) list.appendChild(el('p', 'fine', 'No rubrics yet.'));
+    rubrics.forEach(function (rb) {
+      var row = el('div', 'ritem');
+      row.appendChild(el('b', null, rb.name));
+      row.appendChild(button('Edit', 'linkish', function () { editRubric(rb); }));
+      row.appendChild(button('Delete', 'linkish', async function () {
+        if (!await ask({ title: 'Delete the rubric “' + rb.name + '”?', text: 'Papers already marked with it keep their rubric.', ok: 'Delete', danger: true })) return;
+        saveRubrics(rubrics.filter(function (x) { return x !== rb; }));
+      }));
+      list.appendChild(row);
+    });
+  }
+  async function saveRubrics(next) {
+    try { rubrics = (await api('/luddite/rubrics', { rubrics: next })).rubrics; drawRubricList(); return true; }
+    catch (e) { tell('Couldn’t save the rubrics', 'Try again.'); return false; }
+  }
+  var editing = null;
+  function editRubric(rb) {
+    editing = rb ? JSON.parse(JSON.stringify(rb)) : { name: '', weighted: false, levels: ['Beginning', 'Developing', 'Proficient', 'Exemplary'],
+      rows: [{ skill: '', cells: [] }, { skill: '', cells: [] }, { skill: '', cells: [] }] };
+    $('reTitle').textContent = rb ? 'Edit rubric' : 'New rubric';
+    $('reName').value = editing.name;
+    $('reWeighted').checked = !!editing.weighted;
+    $('reNote').hidden = true;
+    drawRubricEditor();
+    $('rubricBox').hidden = false;
+    $('reName').focus();
+  }
+  function drawRubricEditor() {
+    var e = editing, t = $('reTable');
+    t.innerHTML = '';
+    var hr = el('tr');
+    hr.appendChild(el('th', null, 'Skill'));
+    e.levels.forEach(function (l, j) {
+      var th = el('th');
+      var inp = el('input'); inp.value = l; inp.maxLength = 40; inp.setAttribute('aria-label', 'Level ' + (j + 1));
+      inp.addEventListener('input', function () { e.levels[j] = inp.value; });
+      th.appendChild(inp);
+      if (e.levels.length > 2) {
+        var x = el('button', 'x', '×'); x.type = 'button'; x.title = 'Remove this level';
+        x.addEventListener('click', function () { e.levels.splice(j, 1); e.rows.forEach(function (row) { row.cells.splice(j, 1); }); drawRubricEditor(); });
+        th.appendChild(x);
+      }
+      hr.appendChild(th);
+    });
+    if (e.weighted) hr.appendChild(el('th', 'w', '% of grade'));
+    hr.appendChild(el('th'));
+    t.appendChild(hr);
+    e.rows.forEach(function (row, i) {
+      var tr = el('tr');
+      var sk = el('td'), sa = el('textarea'); sa.value = row.skill; sa.placeholder = 'Skill'; sa.maxLength = 200;
+      sa.addEventListener('input', function () { row.skill = sa.value; });
+      sk.appendChild(sa); tr.appendChild(sk);
+      e.levels.forEach(function (l, j) {
+        var td = el('td'), ta = el('textarea'); ta.value = row.cells[j] || ''; ta.placeholder = 'What this looks like (optional)'; ta.maxLength = 400;
+        ta.addEventListener('input', function () { row.cells[j] = ta.value; });
+        td.appendChild(ta); tr.appendChild(td);
+      });
+      if (e.weighted) {
+        var wd = el('td', 'w'), wi = el('input'); wi.type = 'number'; wi.min = 0; wi.max = 100; wi.value = row.weight || ''; wi.placeholder = '%';
+        wi.addEventListener('input', function () { row.weight = Number(wi.value) || 0; drawRubricTotal(); });
+        wd.appendChild(wi); tr.appendChild(wd);
+      }
+      var xd = el('td');
+      if (e.rows.length > 1) {
+        var x = el('button', 'x', '×'); x.type = 'button'; x.title = 'Remove this skill';
+        x.addEventListener('click', function () { e.rows.splice(i, 1); drawRubricEditor(); });
+        xd.appendChild(x);
+      }
+      tr.appendChild(xd);
+      t.appendChild(tr);
+    });
+    $('reAddLevel').disabled = e.levels.length >= 6;
+    drawRubricTotal();
+  }
+  function drawRubricTotal() {
+    var e = editing;
+    if (!e.weighted) { $('reTotal').textContent = ''; return; }
+    var total = e.rows.reduce(function (n, row) { return n + (row.weight || 0); }, 0);
+    $('reTotal').textContent = 'Total: ' + total + '%' + (total === 100 ? '' : ' (should add up to 100%)');
+    $('reTotal').className = 'fine' + (total === 100 ? '' : ' warn');
+  }
+  $('newRubricBtn').addEventListener('click', function () { editRubric(null); });
+  $('reAddRow').addEventListener('click', function () { editing.rows.push({ skill: '', cells: [] }); drawRubricEditor(); });
+  $('reAddLevel').addEventListener('click', function () { if (editing.levels.length < 6) { editing.levels.push('Level ' + (editing.levels.length + 1)); drawRubricEditor(); } });
+  $('reWeighted').addEventListener('change', function () { editing.weighted = $('reWeighted').checked; drawRubricEditor(); });
+  $('reName').addEventListener('input', function () { editing.name = $('reName').value; });
+  $('reCancel').addEventListener('click', function () { $('rubricBox').hidden = true; });
+  $('rubricBox').addEventListener('click', function (e) { if (e.target === $('rubricBox')) $('rubricBox').hidden = true; });
+  $('reSave').addEventListener('click', async function () {
+    var e = editing, note = $('reNote');
+    e.name = $('reName').value.trim();
+    e.rows = e.rows.filter(function (row) { return row.skill.trim(); });
+    if (!e.name) { note.textContent = 'Give the rubric a name.'; note.hidden = false; return; }
+    if (!e.rows.length) { note.textContent = 'Add at least one skill.'; note.hidden = false; e.rows.push({ skill: '', cells: [] }); drawRubricEditor(); return; }
+    var next = rubrics.slice(), i = next.findIndex(function (x) { return e.id && x.id === e.id; });
+    if (i === -1) next.push(e); else next[i] = e;
+    if (await saveRubrics(next)) {
+      $('rubricBox').hidden = true;
+      if (!$('markScreen').hidden && piece && !reading) renderRubric();
+    }
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || writing) return;
     if (!$('askBox').hidden) return; // the pop-up on top closes first
+    if (!$('rubricBox').hidden) { $('rubricBox').hidden = true; return; }
     ['prefsBox', 'phraseBox', 'timeBox'].forEach(function (id) { $(id).hidden = true; });
     if ($('roomMenu')) $('roomMenu').open = false;
   });
@@ -2449,6 +2641,7 @@
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
     classes = data.classes || [];
     if (data.prefs) teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs);
+    if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
     fillClassSelects();
@@ -2959,6 +3152,8 @@
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
+    $('roomRubricLine').textContent = room.rubric ? 'Rubric: ' + room.rubric.name : '';
+    $('roomRubricLine').hidden = !room.rubric;
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
@@ -3215,6 +3410,11 @@
   });
   // Choosing something from the More menu closes it.
   each('#roomMenu .pop button', function (b) { b.addEventListener('click', function () { $('roomMenu').open = false; }); });
+  $('rubricBtn').addEventListener('click', async function () {
+    var rb = await chooseRubric(teacherRoom.rubric);
+    if (rb === undefined) return;
+    try { await applyRubric(teacherRoom.code, rb); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); }
+  });
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
     var due = latestPerStudent(teacherRoom.submissions).filter(function (x) { return x.stored && !x.returnedAt; });
@@ -3285,12 +3485,19 @@
 
   async function openMark(id, back) {
     markBackTo = back || showDash;
+    reading = false;
+    document.body.classList.remove('reading');
+    $('readBanner').hidden = true;
+    $('paper').contentEditable = 'true';
+    $('markBack').innerHTML = '&larr; Back';
     show('markScreen');
     $('paper').textContent = 'Loading…';
     $('margin').innerHTML = '';
     $('markSaved').textContent = '';
     try {
-      piece = (await api('/luddite/sub?id=' + encodeURIComponent(id))).sub;
+      var got = await api('/luddite/sub?id=' + encodeURIComponent(id));
+      piece = got.sub;
+      roomRubric = got.roomRubric || null;
     } catch (e) {
       $('paper').textContent = e.message === 'no_sub' ? 'This paper was handed in before Luddite kept copies. Open it in Drive instead.' : 'Couldn’t load this paper.';
       return;
@@ -3303,6 +3510,7 @@
     showGradePrint();
     typeB = typeI = false; syncFmt();
     drawPiece();
+    renderRubric();
     window.scrollTo(0, 0);
   }
   // The paper's heading: whose it is (or an alias, with names hidden) and which writing session.
@@ -3551,7 +3759,7 @@
   // because a Mac sends the right-click before the drag.
   var drag = null, swallowMenu = false;
   $('paper').addEventListener('mousedown', function (e) {
-    if (!piece || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
+    if (!piece || reading || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
     var o = pointOffset(e.clientX, e.clientY);
     if (o === null) return;
     drag = { from: o, last: o, x: e.clientX, y: e.clientY, moved: false, menu: null };
@@ -3617,6 +3825,7 @@
     return { start: Math.min(a, b), end: Math.max(a, b), rect: r.getBoundingClientRect(), collapsed: r.collapsed };
   }
   function showTools() {
+    if (reading) return;
     if ($('markScreen').hidden || !$('markPop').hidden) return;
     var s = selectionInPaper();
     if (!s || s.collapsed) { hideTools(); return; }
@@ -3894,6 +4103,7 @@
     return q.length > 60 ? q.slice(0, 57) + '…' : q;
   }
   function openPop(mark, draft, rect) {
+    if (reading) return;
     popMark = mark; popDraft = draft;
     var m = mark || draft;
     var pop = $('markPop');
@@ -3958,6 +4168,91 @@
     queueSave();
   });
 
+  // ---- Rubrics on the marking page ----
+  var rubrics = [];       // this teacher's saved rubrics (Settings)
+  var roomRubric = null;  // the rubric the paper's writing session uses
+  function activeRubric() { return reading ? piece && piece.rubric : (piece && piece.rubric) || roomRubric; }
+  // Each skill scores its level out of the top level, weighted by its percent;
+  // skills not marked yet are left out (and the score says so).
+  function rubricPercent(rb, scores) {
+    if (!rb || !rb.weighted || !scores) return null;
+    var total = 0, got = 0, n = 0;
+    rb.rows.forEach(function (row, i) {
+      if (scores[i] >= 0) { n++; total += row.weight || 0; got += (row.weight || 0) * (scores[i] + 1) / rb.levels.length; }
+    });
+    return n && total ? { pct: Math.round(got / total * 100), done: n === rb.rows.length, n: n } : null;
+  }
+  function renderRubric() {
+    var box = $('rubricWrap');
+    box.innerHTML = '';
+    if (!piece) return;
+    var rb = activeRubric();
+    if (!rb) {
+      if (reading || !rubrics.length) return;
+      var pick = el('div', 'rubricpick');
+      pick.appendChild(el('span', 'fine', 'No rubric for this session.'));
+      pick.appendChild(button('Use a rubric…', 'btn small ghost', function () { pickRubricFor(piece.code); }));
+      box.appendChild(pick);
+      return;
+    }
+    var scores = piece.rubricScores && piece.rubricScores.length === rb.rows.length ? piece.rubricScores : rb.rows.map(function () { return -1; });
+    var head = el('div', 'rubrichead');
+    head.appendChild(el('span', 't', 'Rubric: ' + rb.name));
+    if (!reading) head.appendChild(button('Change', 'linkish', function () { pickRubricFor(piece.code); }));
+    var pct = rubricPercent(rb, scores);
+    if (pct) head.appendChild(el('span', 'score', 'Rubric score: ' + pct.pct + '%' + (pct.done ? '' : ' (' + pct.n + ' of ' + rb.rows.length + ' skills so far)')));
+    box.appendChild(head);
+    var t = el('table', 'rtable'), thead = el('thead'), hr = el('tr');
+    hr.appendChild(el('th', null, 'Skill'));
+    rb.levels.forEach(function (l) { hr.appendChild(el('th', null, l)); });
+    if (rb.weighted) hr.appendChild(el('th', 'w', '% of grade'));
+    thead.appendChild(hr); t.appendChild(thead);
+    var tb = el('tbody');
+    rb.rows.forEach(function (row, i) {
+      var tr = el('tr');
+      tr.appendChild(el('td', 'skill', row.skill));
+      rb.levels.forEach(function (l, j) {
+        var td = el('td', 'cell' + (scores[i] === j ? ' on' : ''), row.cells[j] || '');
+        td.title = l;
+        if (!reading) td.addEventListener('click', function () {
+          if (!piece.rubric) piece.rubric = rb;
+          piece.rubricScores = scores.slice();
+          piece.rubricScores[i] = scores[i] === j ? -1 : j;
+          renderRubric();
+          queueSave();
+        });
+        tr.appendChild(td);
+      });
+      if (rb.weighted) tr.appendChild(el('td', 'w', (row.weight || 0) + '%'));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    box.appendChild(t);
+  }
+  // Pick one of the saved rubrics (or none) for a writing session.
+  async function chooseRubric(current) {
+    if (!rubrics.length) { tell('No rubrics yet', 'Make one under Settings, then come back to use it.'); return undefined; }
+    var v = await ask({ title: 'Rubric for this session', text: 'Every paper in the session is marked against it.', input: 'select',
+      options: [{ value: '', label: 'No rubric' }].concat(rubrics.map(function (x) { return { value: x.id, label: x.name }; })),
+      value: current ? current.id : '', ok: 'Use it' });
+    if (v === null) return undefined;
+    return rubrics.filter(function (x) { return x.id === v; })[0] || null;
+  }
+  async function applyRubric(code, rb) {
+    var data = await api('/luddite/assignment', { code: code, action: 'rubric', rubric: rb });
+    if (teacherRoom && teacherRoom.code === code) teacherRoom = data.room;
+    return data.room.rubric || null;
+  }
+  async function pickRubricFor(code) {
+    var rb = await chooseRubric(activeRubric());
+    if (rb === undefined) return;
+    if (piece && piece.rubricScores && piece.rubricScores.some(function (x) { return x >= 0; }) && (!rb || !piece.rubric || rb.id !== piece.rubric.id)) {
+      if (!await ask({ title: 'Change the rubric?', text: 'The levels you picked on this paper are cleared.', ok: 'Change it' })) return;
+    }
+    try { roomRubric = await applyRubric(code, rb); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); return; }
+    if (piece) { piece.rubric = roomRubric; piece.rubricScores = []; queueSave(); renderRubric(); }
+  }
+
   function showGradePrint() {
     var g = (piece && piece.grade || '').trim();
     $('gradePrint').textContent = g ? 'Grade: ' + g : '';
@@ -3970,6 +4265,7 @@
   });
 
   function queueSave() {
+    if (reading) return;
     $('markSaved').textContent = 'Saving…';
     clearTimeout(markSaveTimer);
     markSaveTimer = setTimeout(saveMarks, 700);
@@ -3980,7 +4276,7 @@
     if (!piece) return;
     var p = piece;
     try {
-      await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '' });
+      await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
       if (p === piece) $('markSaved').textContent = 'Saved';
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
