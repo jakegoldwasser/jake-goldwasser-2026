@@ -301,7 +301,7 @@
   .preview-bar .linkish.on { color: var(--ink); text-decoration: none; font-weight: 600; }
 
   /* ---- Marking up a handed-in piece ---- */
-  #markScreen .card, #studentScreen .card { max-width: 1040px; }
+  #markScreen .card, #studentScreen .card, #printScreen .card { max-width: 1040px; }
   .markbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; }
   .markbar .grow { flex: 1; }
   .markhint { color: var(--muted); font-size: 13px; }
@@ -518,6 +518,15 @@
   .timeleft.low { color: var(--lock); }
   @media (max-width: 560px) { .topright { top: 8px; right: 8px; } .dashtop { padding-top: 36px; } }
 
+  /* One paper in the print-all view: heading, the paper with its marks, then its comments. */
+  .pp { border: 1.5px solid var(--rule); border-radius: 14px; background: var(--card); padding: 22px 26px; margin-top: 14px; }
+  .pp .pphead b { font: 600 20px var(--display); display: block; }
+  .pp .pphead span { color: var(--muted); font-size: 13px; }
+  .pp .paper { margin-top: 14px; cursor: default; }
+  .pp .pgrade { color: var(--pen); font: 600 14pt var(--display); margin-top: 8px; }
+  .pp .pnotes { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 10px; color: var(--pen); font-size: 14px; }
+  .pp .pnotes p { margin: 4px 0; }
+  .pp .pend { color: var(--pen); white-space: pre-wrap; margin-top: 12px; }
   /* Printing: just the page itself, at a fixed width so the margin notes
      line up with what they're about (see .printing, set on beforeprint). */
   .sheet.printing { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; border-radius: 0; width: 6.95in; }
@@ -531,7 +540,9 @@
     body.is-anon::before { display: none; }
     .screen { display: block !important; padding: 0 !important; min-height: 0 !important; }
     .screen[hidden] { display: none !important; }
-    #markScreen .card, #studentScreen .card { max-width: none; }
+    #markScreen .card, #studentScreen .card, #printScreen .card { max-width: none; }
+    .pp { break-after: page; break-inside: auto; border: 0 !important; padding: 0 !important; }
+    .pp:last-child { break-after: auto; }
     .sheet { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; width: 6.95in; }
     .paper { font-size: 11.5pt; line-height: 1.7; }
     .mnote { font-size: 10.5pt; }
@@ -792,7 +803,7 @@
       </div>
 
       <div id="secPapers" style="order:5">
-        <h3><span id="papersTitle">Handed in</span></h3>
+        <h3><span id="papersTitle">Handed in</span> <button class="btn small ghost" id="printAllRoom" hidden>Print all papers</button></h3>
         <div id="submissionList"></div>
       </div>
 
@@ -827,6 +838,20 @@
     <h3>On the list</h3>
     <div id="classRoster"></div>
     <p class="fine" style="margin-top:28px"><button class="btn small danger" id="classDeleteBtn">Delete this class</button></p>
+  </div>
+</section>
+
+<!-- Teacher: every paper of a session, or of one student, together, to print -->
+<section class="screen page" id="printScreen" hidden>
+  <div class="card">
+    <div class="markbar">
+      <button class="linkish" id="printBack">&larr; Back</button>
+      <span class="grow"></span>
+      <span class="savestate" id="printStatus"></span>
+      <button class="btn small" id="printGo" disabled>Print</button>
+    </div>
+    <div class="head"><h2 id="printTitle"></h2></div>
+    <div id="printBody"></div>
   </div>
 </section>
 
@@ -865,7 +890,8 @@
     <div class="markbar">
       <button class="linkish" id="studentBack">&larr; Home</button>
       <span class="grow"></span>
-      <button class="btn small" id="studentPrint">Print</button>
+      <button class="btn small ghost" id="studentPrint">Print comments only</button>
+      <button class="btn small" id="studentPrintAll">Print all papers</button>
     </div>
     <div class="head"><h2 id="studentName"></h2></div>
     <p class="fine" id="studentMeta" style="margin:0 0 12px"></p>
@@ -1111,7 +1137,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -2411,6 +2437,7 @@
 
     var subs = room.submissions || [];
     $('papersTitle').textContent = 'Handed in (' + subs.length + ')';
+    $('printAllRoom').hidden = !subs.some(function (x) { return x.stored; });
     var list = $('submissionList');
     list.innerHTML = '';
     if (!subs.length) list.appendChild(el('div', 'empty', 'Nothing handed in yet.'));
@@ -3136,7 +3163,7 @@
     });
   }
 
-  var studentShown = '';
+  var studentShown = '', studentPieceIds = [];
   async function openStudent(email) {
     studentShown = email;
     show('studentScreen');
@@ -3152,6 +3179,8 @@
     $('studentMeta').textContent = (data.student.email + ' · ') + 'Everything handed in: ' + plural(data.pieces.length, 'paper', 'papers') +
       (first ? ' since ' + new Date(first).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }) : '') + ' · ' + plural(comments, 'comment', 'comments');
     var list = $('pieceList');
+    studentPieceIds = data.pieces.filter(function (p) { return !p.missing; }).map(function (p) { return p.id; }).reverse(); // oldest first
+    $('studentPrintAll').hidden = !studentPieceIds.length;
     data.pieces.forEach(function (p) {
       var box = el('div', 'piece');
       var head = el('div', 'row');
@@ -3191,11 +3220,103 @@
     if (!data.pieces.length) list.appendChild(el('div', 'empty', 'Nothing yet.'));
   }
   $('studentBack').addEventListener('click', showDash);
+  $('studentPrintAll').addEventListener('click', function () {
+    var ids = studentPieceIds.slice();
+    openPrintAll(ids, $('studentName').textContent + ': all papers', function () { openStudent(studentShown); }, true);
+  });
   $('studentPrint').addEventListener('click', function () {
     var prev = document.title;
     document.title = $('studentName').textContent + ' — comments';
     window.print();
     document.title = prev;
+  });
+
+  // ---------------------------------------------------------------------
+  // Printing every paper of a session, or of one student, together
+  // ---------------------------------------------------------------------
+  // Each paper is fetched and drawn as a plain page: the student's words with
+  // the teacher's marks in place (green writing-in, crossed-out words, noted
+  // words highlighted with a number), then the numbered comments, the end
+  // comment and the grade. One paper to a printed page.
+  function staticPaper(p) {
+    var box = el('div', 'pp');
+    var head = el('div', 'pphead');
+    head.appendChild(el('b', null, who(p.name, p.email)));
+    head.appendChild(el('span', null, (p.roomTitle || '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
+    box.appendChild(head);
+    if (p.grade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
+    var text = p.text, marks = p.marks || [];
+    var margins = marks.filter(function (m) { return m.type === 'margin'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    var num = {};
+    margins.forEach(function (m, i) { num[m.id] = i + 1; });
+    var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
+    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
+    var paper = el('div', 'paper');
+    pts.forEach(function (pt, i) {
+      margins.forEach(function (m) { if (m.end === pt) paper.appendChild(el('sup', 'mnum', String(num[m.id]))); });
+      marks.forEach(function (m) {
+        if (m.type !== 'insert' || m.start !== pt) return;
+        var ins = el('span', 'ins');
+        fmtRuns(m).forEach(function (r) { ins.appendChild(el('span', (r.f === 'b' || r.f === 'x' ? 'b ' : '') + (r.f === 'i' || r.f === 'x' ? 'i' : ''), r.t)); });
+        paper.appendChild(ins);
+      });
+      var next = pts[i + 1];
+      if (next === undefined || next === pt) return;
+      var on = marks.filter(function (m) { return m.type !== 'insert' && m.start <= pt && m.end >= next; });
+      var cls = (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl' : '');
+      paper.appendChild(el('span', cls.trim(), text.slice(pt, next)));
+    });
+    box.appendChild(paper);
+    if (margins.length) {
+      var notes = el('div', 'pnotes');
+      margins.forEach(function (m) {
+        var q = text.slice(m.start, m.end).replace(/\s+/g, ' ').trim();
+        notes.appendChild(el('p', null, '[' + num[m.id] + '] “' + (q.length > 80 ? q.slice(0, 77) + '…' : q) + '” — ' + m.note));
+      });
+      box.appendChild(notes);
+    }
+    if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
+    return box;
+  }
+
+  var printBackTo = null;
+  async function openPrintAll(ids, title, back, oneStudent) {
+    printBackTo = back;
+    show('printScreen');
+    $('printTitle').textContent = title;
+    $('printBody').innerHTML = '';
+    $('printGo').disabled = true;
+    $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
+    if (!ids.length) { $('printBody').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
+    var done = 0, drawn = [];
+    for (var i = 0; i < ids.length; i += 6) {
+      var batch = await Promise.all(ids.slice(i, i + 6).map(function (id) {
+        return api('/luddite/sub?id=' + encodeURIComponent(id)).then(function (d) { return d.sub; }).catch(function () { return null; });
+      }));
+      batch.forEach(function (p) { done++; if (p) drawn.push(p); });
+      $('printStatus').textContent = 'Loading ' + done + ' of ' + ids.length + '…';
+    }
+    // By student's name for a whole session; oldest first for one student's year.
+    if (!oneStudent) drawn.sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
+    else drawn.sort(function (a, b) { return a.at - b.at; });
+    drawn.forEach(function (p) { $('printBody').appendChild(staticPaper(p)); });
+    var missing = ids.length - drawn.length;
+    $('printStatus').textContent = plural(drawn.length, 'paper', 'papers') + (missing ? ' (' + missing + ' couldn’t be loaded)' : '');
+    $('printGo').disabled = !drawn.length;
+    window.scrollTo(0, 0);
+  }
+  $('printBack').addEventListener('click', function () { (printBackTo || showDash)(); });
+  $('printGo').addEventListener('click', function () {
+    var prev = document.title;
+    document.title = $('printTitle').textContent;
+    window.print();
+    document.title = prev;
+  });
+  $('printAllRoom').addEventListener('click', function () {
+    var room = teacherRoom;
+    var ids = (room.submissions || []).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });
+    openPrintAll(ids, room.title + ': ' + plural(ids.length, 'paper', 'papers'), function () { openRoom(room.code); });
   });
 
   // ---------------------------------------------------------------------
