@@ -744,6 +744,12 @@
       </div>
     </details>
 
+    <div class="row" style="justify-content:flex-start; margin-top:12px">
+      <button class="btn ghost" id="casualBtn" type="button">Casual session</button>
+      <span class="q" tabindex="0" data-tip="Starts right now. Anyone with the Entry Phrase can write: no name, no class, no waiting room.">?</span>
+      <span class="fine" id="casualNote" hidden></span>
+    </div>
+
     <!-- 2. Their writing sessions -->
     <h3 class="sect">Your writing sessions <span id="roomCount"></span> <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past, in that order. Deleting a session only takes it off this list; work students handed in stays under Student work.">?</span></h3>
     <div id="roomList"></div>
@@ -2024,7 +2030,7 @@
     card.appendChild(top);
     var facts = el('div', 'facts');
     var cn = r.classId ? classNameOf(r.classId) : '';
-    facts.appendChild(el('span', 'tag', cn ? 'Class: ' + cn : 'No class'));
+    facts.appendChild(el('span', 'tag', r.casual ? 'Casual' : cn ? 'Class: ' + cn : 'No class'));
     facts.appendChild(el('span', null, plural(r.admitted, 'student', 'students') + ' in'));
     facts.appendChild(el('span', null, r.submissions + ' handed in'));
     if (r.ownCount) facts.appendChild(el('span', null, plural(r.ownCount, 'own time', 'own times')));
@@ -2101,6 +2107,21 @@
       if (err.message === 'signed_out') return;
       note.textContent = 'Couldn’t make it. Try again.'; note.hidden = false;
     }
+  });
+  // A casual session: no name, no class; starts now and shows its Entry Phrase to hand out.
+  var phraseNext = false;
+  $('casualBtn').addEventListener('click', async function () {
+    var btn = $('casualBtn');
+    btn.disabled = true;
+    try {
+      var data = await api('/luddite/assignments', { casual: true });
+      phraseNext = true;
+      openRoom(data.room.code);
+    } catch (err) {
+      if (err.message === 'signed_out') return;
+      $('casualNote').hidden = false;
+      $('casualNote').textContent = 'Couldn’t start it. Try again.';
+    } finally { btn.disabled = false; }
   });
   $('newRoomTitle').addEventListener('input', function () { if ($('newRoomTitle').value.trim()) $('newRoomNote').hidden = true; });
 
@@ -2416,7 +2437,8 @@
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = whenRange(room) + (cn ? ' · Class: ' + cn : ' · No class');
+    $('roomWhen').textContent = whenRange(room) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : ' · No class');
+    if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
     $('roomCode').textContent = room.codeLabel || room.code;

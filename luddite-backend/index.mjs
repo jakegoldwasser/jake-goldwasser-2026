@@ -100,7 +100,7 @@ function verifySession(token) {
 //                           student's login finds their assignments (their
 //                           classes' assignments, and ones with their own time)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
-//                             classId, startAt, prompt, endedAt, open,
+//                             classId, casual, startAt, prompt, endedAt, open,
 //                             own: { [email]: { startAt, multiplier } },
 //                             createdAt, students: { [sub]: {...} },
 //                             submissions: [...] }
@@ -323,7 +323,7 @@ function roomSummary(room) {
   const state = stateAt({ ...reg, ended: regularEnded(room) }, Date.now());
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: room.title, open: state === 'running', state, createdAt: room.createdAt,
-    classId: room.classId || null, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
+    classId: room.classId || null, casual: !!room.casual, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
@@ -680,7 +680,7 @@ async function routeLuddite(event, method, path, info) {
     const rostered = await onRoster(before, em);
     const room = await mutate('luddite:room:' + code, (r) => {
       if (!r || r.deletedAt) throw new HttpError(404, 'no_room');
-      const expected = !!(rostered || (r.own && r.own[em]));
+      const expected = !!(rostered || r.casual || (r.own && r.own[em]));
       const win = windowOf(r, em);
       const state = stateAt(win, Date.now());
       const s = r.students[me.sub];
@@ -962,18 +962,20 @@ async function routeLuddite(event, method, path, info) {
   // the writing page; classId (optional) is the class let in on its own.
   if (path === '/luddite/assignments' && method === 'PUT') {
     const teacher = { ...me, name: await displayNameOf(info, role) };
-    const title = String(body.title || '').trim().slice(0, 80);
+    // A casual session needs no name or class: anyone with its Entry Phrase is let straight in.
+    const casual = !!body.casual;
+    const title = String(body.title || '').trim().slice(0, 80) || (casual ? 'Casual session' : '');
     if (!title) throw new HttpError(400, 'need_title');
     const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
     const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
-    const cls = body.classId ? await getClass(body.classId, me, role) : null;
+    const cls = body.classId && !casual ? await getClass(body.classId, me, role) : null;
     let room = null;
     for (let i = 0; i < 12 && !room; i++) {
       const { code, codeLabel } = newRoomCode();
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, prompt, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title, teacher, classId: cls ? cls.id : null, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
