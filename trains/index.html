@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- Transparent status bar: the page's dark background shows through behind the time/battery icons. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0c0e">
+<!-- A personal board, not part of the site's pages: kept out of search results. -->
+<meta name="robots" content="noindex">
+<title>72nd Street Trains</title>
+<style>
+/* Layout: one panel per direction (Uptown, Downtown), each with the 1/2/3 trains and then the B/C trains, clock bar on top. Dark by design. */
+:root {
+  --bg: #0b0c0e;
+  --panel: #15171b;
+  --rule: #2a2d33;
+  --fg: #f4f4f1;
+  --muted: #8c9099;
+  --soon: #ffd23f;
+  --gone: #4b4f57;
+  --red: #ee352e;
+  --orange: #ff6319;
+  --blue: #0039a6;
+  --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+  /* Row text is sized from the screen's width AND height, so the eight rows in
+     a panel fill it on a wide TV, a laptop or a phone without running over. */
+  --row: clamp(18px, min(3.6vw, 5.6vh), 72px);
+}
+@media (orientation: portrait) {
+  :root { --row: clamp(16px, min(6.2vw, 3.3vh), 60px); }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 2vh;
+  overflow: hidden;
+}
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid var(--fg);
+  padding-bottom: 1vh;
+}
+.where { font-size: clamp(16px, 2.6vw, 30px); font-weight: 700; letter-spacing: -0.01em; }
+.clock { font-size: clamp(22px, 4.4vw, 52px); font-weight: 700; font-variant-numeric: tabular-nums; }
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+}
+@media (orientation: portrait) {
+  main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+}
+.panel {
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 2vh 2vw;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.panel h2 {
+  margin: 0 0 1.2vh;
+  font-size: calc(var(--row) * 1.45);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+/* One group per line set (1/2/3, then B/C), split by a thin rule; the bullets
+   say which lines. Each group's rows spread evenly down its half of the panel,
+   so there's no empty band under them. */
+.group { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--rule); padding: 0.6vh 0; }
+.rows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; overflow: hidden; }
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.55em;
+  font-size: var(--row);
+  line-height: 1.1;
+}
+.row .dest { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.row .mins { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.row .mins small { font-size: 0.45em; font-weight: 400; color: var(--muted); margin-left: 0.2em; letter-spacing: 0.02em; }
+.row.soon .mins { color: var(--soon); }
+.row.missed { color: var(--gone); }
+.row.missed .mins, .row.missed .mins small { color: var(--gone); }
+.row.missed .bullet { opacity: 0.35; }
+.bullet {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.3em; height: 1.3em; border-radius: 50%;
+  font-weight: 700; font-size: 0.85em; color: #fff; flex: none;
+}
+.bullet.r1, .bullet.r2, .bullet.r3 { background: var(--red); }
+.bullet.rB { background: var(--orange); }
+.bullet.rC { background: var(--blue); }
+.empty { color: var(--muted); font-size: calc(var(--row) * 0.6); margin: auto 0; }
+footer {
+  display: flex; justify-content: space-between; gap: 16px;
+  font-size: clamp(11px, 1.3vw, 15px); color: var(--muted);
+}
+footer .warn { color: var(--soon); }
+footer[hidden] { display: none; } /* display:flex above would otherwise beat the hidden attribute */
+</style>
+</head>
+<body>
+<header>
+  <div class="where">71st &amp; Columbus</div>
+  <div class="clock" id="clock">--:--</div>
+</header>
+
+<main id="board"></main>
+
+<footer>
+  <span id="status">Loading train times&hellip;</span>
+</footer>
+
+<script>
+// ---------- Settings you might want to change ----------
+var CONFIG = {
+  refreshSeconds: 30,      // how often to pull new data from the MTA
+  perDirection: 4,         // trains shown per line set (1/2/3, B/C) in each direction
+  hideWithinMinutes: 2,    // trains this close (or closer) can't be caught, so they're left off
+  // If the MTA ever blocks direct browser access, put a CORS proxy prefix here,
+  // e.g. "https://your-proxy.example.com/?url=" (the feed URL is appended, encoded).
+  proxy: ""
+};
+
+var FEED_BASE = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/";
+
+var STATIONS = [
+  {
+    name: "72 St &amp; Broadway",
+    routes: ["1", "2", "3"],
+    walk: 5,                         // minutes from 71st & Columbus
+    stop: "123",                     // GTFS stop ID (N = uptown, S = downtown)
+    feeds: ["nyct%2Fgtfs"]
+  },
+  {
+    name: "72 St &amp; Central Park W",
+    routes: ["B", "C"],
+    walk: 3,
+    stop: "A22",
+    feeds: ["nyct%2Fgtfs-ace", "nyct%2Fgtfs-bdfm"]
+  }
+];
+
+// Terminal stop IDs to readable destinations. Anything not listed falls back to "Uptown"/"Downtown".
+var DEST = {
+  "101": "Van Cortlandt Park", "115": "137 St", "120": "96 St", "142": "South Ferry",
+  "201": "Wakefield-241 St", "247": "Flatbush Av", "257": "New Lots Av", "301": "Harlem-148 St",
+  "A09": "168 St", "A12": "145 St", "A55": "Euclid Av",
+  "D03": "Bedford Park Blvd", "D40": "Brighton Beach"
+};
+
+// ---------- Minimal GTFS-realtime (protobuf) reader ----------
+// Reads only the fields we need: trip route, stop IDs and arrival times.
+function Reader(buf) { this.b = buf; this.p = 0; this.end = buf.length; }
+Reader.prototype.varint = function () {
+  var result = 0, mult = 1, byte;
+  do {
+    byte = this.b[this.p++];
+    result += (byte & 0x7f) * mult;
+    mult *= 128;
+  } while (byte & 0x80);
+  return result;
+};
+Reader.prototype.skip = function (wire) {
+  if (wire === 0) this.varint();
+  else if (wire === 1) this.p += 8;
+  else if (wire === 2) { var n = this.varint(); this.p += n; }
+  else if (wire === 5) this.p += 4;
+  else throw new Error("Unsupported wire type " + wire);
+};
+Reader.prototype.sub = function () {
+  var len = this.varint();
+  var r = new Reader(this.b);
+  r.p = this.p; r.end = this.p + len;
+  this.p += len;
+  return r;
+};
+Reader.prototype.str = function () {
+  var len = this.varint(), s = "";
+  for (var i = 0; i < len; i++) s += String.fromCharCode(this.b[this.p + i]);
+  this.p += len;
+  return s;
+};
+function eachField(r, fn) {
+  while (r.p < r.end) {
+    var tag = r.varint();
+    var field = Math.floor(tag / 8), wire = tag & 7;
+    if (!fn(field, wire)) r.skip(wire);
+  }
+}
+function readEventTime(r) {
+  var t = 0;
+  eachField(r, function (f, w) { if (f === 2 && w === 0) { t = r.varint(); return true; } return false; });
+  return t;
+}
+function readStopTimeUpdate(r) {
+  var u = { stop: "", arr: 0, dep: 0 };
+  eachField(r, function (f, w) {
+    if (f === 4 && w === 2) { u.stop = r.str(); return true; }
+    if (f === 2 && w === 2) { u.arr = readEventTime(r.sub()); return true; }
+    if (f === 3 && w === 2) { u.dep = readEventTime(r.sub()); return true; }
+    return false;
+  });
+  return u;
+}
+function readTrip(r) {
+  var t = { route: "" };
+  eachField(r, function (f, w) { if (f === 5 && w === 2) { t.route = r.str(); return true; } return false; });
+  return t;
+}
+function readTripUpdate(r) {
+  var tu = { route: "", stops: [] };
+  eachField(r, function (f, w) {
+    if (f === 1 && w === 2) { tu.route = readTrip(r.sub()).route; return true; }
+    if (f === 2 && w === 2) { tu.stops.push(readStopTimeUpdate(r.sub())); return true; }
+    return false;
+  });
+  return tu;
+}
+function parseFeed(bytes) {
+  var r = new Reader(bytes), trips = [];
+  eachField(r, function (f, w) {
+    if (f === 2 && w === 2) {
+      var e = r.sub();
+      eachField(e, function (ef, ew) {
+        if (ef === 3 && ew === 2) { trips.push(readTripUpdate(e.sub())); return true; }
+        return false;
+      });
+      return true;
+    }
+    return false;
+  });
+  return trips;
+}
+
+// ---------- Data ----------
+var arrivals = {};   // key "stop|N" -> [{route, time, dest}]
+var lastOk = 0;
+var lastError = "";
+
+function arrivalsFor(trips, station) {
+  var out = { N: [], S: [] };
+  trips.forEach(function (trip) {
+    if (station.routes.indexOf(trip.route) === -1) return;
+    var last = trip.stops.length ? trip.stops[trip.stops.length - 1].stop : "";
+    for (var i = 0; i < trip.stops.length; i++) {
+      var s = trip.stops[i];
+      if (s.stop === station.stop + "N" || s.stop === station.stop + "S") {
+        var dir = s.stop.slice(-1);
+        if (last === s.stop) return;               // train ends here; not boardable
+        var term = last.slice(0, -1);
+        out[dir].push({
+          route: trip.route,
+          time: s.arr || s.dep,
+          dest: DEST[term] || (dir === "N" ? "Uptown" : "Downtown")
+        });
+        return;
+      }
+    }
+  });
+  return out;
+}
+
+function fetchFeed(path) {
+  var url = FEED_BASE + path;
+  if (CONFIG.proxy) url = CONFIG.proxy + encodeURIComponent(url);
+  return fetch(url, { cache: "no-store" }).then(function (res) {
+    if (!res.ok) throw new Error("MTA returned " + res.status);
+    return res.arrayBuffer();
+  }).then(function (buf) { return parseFeed(new Uint8Array(buf)); });
+}
+
+function refresh() {
+  var paths = [];
+  STATIONS.forEach(function (st) { st.feeds.forEach(function (f) { if (paths.indexOf(f) === -1) paths.push(f); }); });
+  Promise.all(paths.map(function (p) {
+    return fetchFeed(p).then(function (t) { return { path: p, trips: t }; }, function (err) { return { path: p, error: err }; });
+  })).then(function (results) {
+    var byPath = {}, failed = 0;
+    results.forEach(function (res) { if (res.error) failed++; else byPath[res.path] = res.trips; });
+    STATIONS.forEach(function (st) {
+      var trips = [];
+      st.feeds.forEach(function (f) { if (byPath[f]) trips = trips.concat(byPath[f]); });
+      var a = arrivalsFor(trips, st);
+      if (st.feeds.some(function (f) { return byPath[f]; })) {
+        arrivals[st.stop + "|N"] = a.N;
+        arrivals[st.stop + "|S"] = a.S;
+      }
+    });
+    if (failed < results.length) lastOk = Date.now();
+    lastError = failed ? (failed === results.length
+      ? "Can't reach the MTA right now. Retrying every " + CONFIG.refreshSeconds + " seconds."
+      : "Some lines didn't update. Retrying.") : "";
+    render();
+  });
+}
+
+// ---------- Display ----------
+function pad(n) { return n < 10 ? "0" + n : "" + n; }
+function clockText(d) {
+  var h = d.getHours() % 12 || 12;
+  return h + ":" + pad(d.getMinutes());
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+function rowsHtml(list, walk) {
+  var now = Date.now() / 1000;
+  // Judged by the minutes shown, so nothing reading "2 min" or less appears.
+  var upcoming = (list || []).filter(function (a) { return Math.floor((a.time - now) / 60) > CONFIG.hideWithinMinutes; })
+    .sort(function (a, b) { return a.time - b.time; })
+    .slice(0, CONFIG.perDirection);
+  if (!upcoming.length) return '<div class="empty">No catchable trains right now</div>';
+  return upcoming.map(function (a) {
+    var mins = Math.max(0, Math.floor((a.time - now) / 60));
+    var cls = "row";
+    if (mins < walk) cls += " missed";
+    else if (mins <= walk + 2) cls += " soon";
+    var minsText = mins === 0 ? "Now" : mins + "<small>min</small>";
+    return '<div class="' + cls + '"><span class="bullet r' + esc(a.route) + '">' + esc(a.route) + '</span>' +
+      '<span class="dest">' + esc(a.dest) + '</span><span class="mins">' + minsText + '</span></div>';
+  }).join("");
+}
+
+function render() {
+  var now = new Date();
+  document.getElementById("clock").textContent = clockText(now);
+
+  document.getElementById("board").innerHTML = [["N", "Uptown"], ["S", "Downtown"]].map(function (d) {
+    return '<section class="panel"><h2>' + d[1] + '</h2>' + STATIONS.map(function (st) {
+      return '<div class="group"><div class="rows">' + rowsHtml(arrivals[st.stop + "|" + d[0]], st.walk) + '</div></div>';
+    }).join("") + '</section>';
+  }).join("");
+
+  var status = document.getElementById("status");
+  if (lastError) {
+    status.className = "warn";
+    status.textContent = lastError + (lastOk ? " Last update " + clockText(new Date(lastOk)) + "." : "");
+  } else if (lastOk) {
+    // A working board says nothing down here; only problems are shown.
+    status.className = "";
+    status.textContent = "";
+  }
+  status.parentNode.hidden = !status.textContent; // no empty strip at the bottom
+}
+
+render();
+refresh();
+setInterval(refresh, CONFIG.refreshSeconds * 1000);
+setInterval(render, 5000);
+// Reload once a night to pick up any changes and clear memory on old devices.
+setInterval(function () { var d = new Date(); if (d.getHours() === 4 && d.getMinutes() === 0) location.reload(); }, 60000);
+</script>
+</body>
+</html>
