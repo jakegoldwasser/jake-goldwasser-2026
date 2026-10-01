@@ -132,6 +132,10 @@ const MAX_SUBMISSION_CHARS = 400000;
 // A DynamoDB item tops out at 400 KB, so a piece is kept for marking up only
 // if its text fits with room to spare for the teacher's marks.
 const MAX_STORED_CHARS = 250000;
+// A handed-back paper's grade shows only after the student has spent this
+// long with the comments open in front of them (counted by the server).
+const GRADE_AFTER_MS = 5 * 60 * 1000;
+const VIEW_PING_MAX_MS = 45 * 1000;
 const MAX_MARKS = 600;
 const MAX_MARK_CHARS = 60000; // all of one piece's comments together
 const MAX_ITEM_BYTES = 390000;
@@ -370,6 +374,8 @@ function studentView(room, sub, email, prefs) {
     leaves: me ? me.leaves || 0 : 0,
     // Left the page while writing: locked out until the teacher lets them back in.
     lockedOut: !!(me && me.lockedOut),
+    // Luddite handed in for them when the session ended; their page sends its own copy.
+    autoHandedIn: !!(me && me.autoHandedIn),
     // Asked the teacher to unlock them (after handing in, or after a lock-out).
     askedAt: me ? me.askedAt || 0 : 0,
     submittedAt: me ? me.submittedAt || 0 : 0,
@@ -793,68 +799,49 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { draft: state ? { text: state.text, at: state.at } : null });
   }
 
+  // ---- Handed back: a student reading their teacher's comments ----
+
+  // GET /luddite/returned -- this student's handed-back papers, newest first.
+  if (path === '/luddite/returned' && method === 'GET') {
+    const { state: mine } = await readItem('luddite:mine:' + lower(me.email));
+    const items = await Promise.all(((mine && mine.returned) || []).map((id) => readItem('luddite:sub:' + id)));
+    const papers = items.map((x) => x.state).filter((x) => x && x.returnedAt && x.sub === me.sub)
+      .map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS }))
+      .sort((a, b) => b.returnedAt - a.returnedAt);
+    return respond(200, { papers });
+  }
+
+  // GET /luddite/mypaper?id= -- one handed-back paper with its comments.
+  // PUT /luddite/mypaper { id } -- "still reading": counts toward the grade.
+  if (path === '/luddite/mypaper' && (method === 'GET' || method === 'PUT')) {
+    const id = String((method === 'GET' ? q.id : body.id) || '');
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) throw new HttpError(404, 'no_sub');
+    let paper = (await readItem('luddite:sub:' + id)).state;
+    if (!paper || !paper.returnedAt || paper.sub !== me.sub) throw new HttpError(404, 'no_sub');
+    if (method === 'PUT') {
+      paper = await mutate('luddite:sub:' + id, (x) => {
+        const now = Date.now(), v = x.view || { ms: 0, last: 0 };
+        const gap = now - (v.last || 0);
+        return { ...x, view: { ms: (v.ms || 0) + (gap > 0 && gap <= VIEW_PING_MAX_MS ? gap : 0), last: now } };
+      });
+    }
+    return respond(200, { paper: studentPaper(paper) });
+  }
+
   // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
   if (path === '/luddite/submit' && method === 'PUT') {
     const code = cleanCode(body.code);
     const room = await getRoom(code);
     const s = room.students[me.sub];
     if (!s || s.status !== 'admitted') throw new HttpError(403, 'not_admitted');
-    if (s.handedIn) throw new HttpError(409, 'already_handed_in');
+    // (A hand-in Luddite made for them when the session ended can still be
+    // replaced once, by their own with everything they'd written.)
+    if (s.handedIn && !s.autoHandedIn) throw new HttpError(409, 'already_handed_in');
     const text = String(body.text || '');
     if (!text.trim()) throw new HttpError(400, 'empty');
     if (text.length > MAX_SUBMISSION_CHARS) throw new HttpError(413, 'too_long');
-    const words = (text.trim().match(/\S+/g) || []).length;
     const label = String(body.label || '').replace(/[\r\n\/\\]/g, ' ').slice(0, 60) || new Date().toISOString().slice(0, 16);
-    const who = me.name || me.email;
-    // Drive is where the teacher keeps it; Luddite keeps its own copy to
-    // mark up. A Drive hiccup (or no Drive yet) no longer loses the piece.
-    let file = null, driveError = null;
-    try {
-      file = await saveToDrive(room, {
-        name: who + ' — ' + label,
-        description: 'Submitted through Luddite by ' + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
-          words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
-        text
-      });
-    } catch (e) {
-      if (!(e instanceof HttpError)) throw e;
-      driveError = e.message;
-    }
-    const stored = text.length <= MAX_STORED_CHARS;
-    if (!file && !stored) throw new HttpError(409, driveError);
-    const at = Date.now();
-    const id = file ? file.id : 'l' + randomUUID();
-    const win = windowOf(room, lower(me.email));
-    // A new hand-in replaces this student's earlier one in the session. The
-    // earlier ones aren't deleted: their copies stay, listed in `replaces`.
-    const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
-    const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]);
-    const submission = { id, sub: me.sub, email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-      link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS),
-      ...(replaces.length ? { replaces } : {}) };
-    if (stored) {
-      await mutate('luddite:sub:' + id, () => ({
-        id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
-        label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '',
-        ...(replaces.length ? { replaces } : {})
-      }));
-      const email = me.email.toLowerCase();
-      await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
-        email, name: me.name || (t && t.name) || '',
-        subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || []).filter((x) => !replaces.includes(x.id))]
-      }));
-      await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
-        const students = { ...((t && t.students) || {}) };
-        const prev = students[email] || { count: 0 };
-        students[email] = { name: me.name || prev.name || '', last: at, count: prev.count + (earlier.length ? 0 : 1) };
-        return { ...(t || { rooms: [] }), students };
-      });
-    }
-    const saved = await mutate('luddite:room:' + code, (r) => ({
-      ...r,
-      submissions: [submission, ...(r.submissions || []).filter((x) => x.sub !== me.sub)],
-      students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, writing: false } }
-    }));
+    const saved = await handInFor(room, code, me, s, text, label, false);
     return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
   }
 
@@ -979,12 +966,39 @@ async function routeLuddite(event, method, path, info) {
     await mutate('luddite:room:' + piece.code, (r) => {
       if (!r) return undefined;
       const i = (r.submissions || []).findIndex((x) => x.id === piece.id);
-      if (i === -1 || r.submissions[i].marked === count) return undefined;
+      if (i === -1 || (r.submissions[i].marked === count && (r.submissions[i].grade || '') === grade)) return undefined;
       const submissions = r.submissions.slice();
-      submissions[i] = { ...submissions[i], marked: count };
+      submissions[i] = { ...submissions[i], marked: count, grade };
       return { ...r, submissions };
     }).catch(() => {});
     return respond(200, { ok: true, markedAt: saved.markedAt });
+  }
+
+  // PUT /luddite/handback { ids, back } -- hand papers back to their students
+  // (back: false takes them back). Marks can still be changed afterwards.
+  if (path === '/luddite/handback' && method === 'PUT') {
+    const ids = (Array.isArray(body.ids) ? body.ids : []).slice(0, 200);
+    const back = body.back !== false;
+    const done = [];
+    await inBatches(ids, async (id) => {
+      const piece = await ownSub(id, me, role);
+      const at = back ? Date.now() : null;
+      await mutate('luddite:sub:' + piece.id, (x) => ({ ...x, returnedAt: at }));
+      await mutate('luddite:mine:' + lower(piece.email), (m) => {
+        const list = ((m && m.returned) || []).filter((x) => x !== piece.id);
+        return { ...(m || {}), returned: back ? [piece.id, ...list].slice(0, 200) : list };
+      });
+      await mutate('luddite:room:' + piece.code, (r) => {
+        if (!r) return undefined;
+        const i = (r.submissions || []).findIndex((x) => x.id === piece.id);
+        if (i === -1) return undefined;
+        const submissions = r.submissions.slice();
+        submissions[i] = { ...submissions[i], returnedAt: at };
+        return { ...r, submissions };
+      }).catch(() => {});
+      done.push({ id: piece.id, returnedAt: at });
+    });
+    return respond(200, { done });
   }
 
   // GET /luddite/students -- everyone who has handed work in to this teacher.
@@ -1130,6 +1144,21 @@ async function routeLuddite(event, method, path, info) {
     if (body.action === 'delete') {
       await mutate('luddite:teacher:' + room.teacher.sub, (t) => ({ ...(t || {}), rooms: ((t && t.rooms) || []).filter((c) => c !== code) }));
     }
+    // Ending a session hands in for everyone still writing in it (from the
+    // backup of their writing), except students on a schedule of their own.
+    // Their own page then hands in again with everything up to the last
+    // keystroke, replacing this copy.
+    if (body.action === 'close') {
+      const open = Object.entries(room.students).filter(([, st]) => st.status === 'admitted' && !st.handedIn && !(room.own && room.own[lower(st.email)]));
+      await inBatches(open, async ([sub, st]) => {
+        const { state: draft } = await readItem('luddite:draft:' + code + ':' + sub);
+        if (!draft || !String(draft.text || '').trim()) return;
+        const fresh = await getRoom(code);
+        await handInFor(fresh, code, { sub, email: st.email, name: st.name }, fresh.students[sub], String(draft.text).slice(0, MAX_SUBMISSION_CHARS), 'Handed in at the end', true)
+          .catch((e) => console.warn('auto hand-in failed', sub, e.message));
+      });
+      if (open.length) return respond(200, { room: await getRoom(code) });
+    }
     return respond(200, { room });
   }
 
@@ -1179,6 +1208,76 @@ async function classesOf(teacherState) {
 }
 
 // The addresses on an assignment's class, so its teacher can see who hasn't come in.
+// Hands one student's writing in: Drive (when connected), Luddite's own copy
+// to mark up, the teacher's student list, and the room. `auto` when Luddite
+// does it for them because the session ended while they were writing.
+async function handInFor(room, code, me, s, text, label, auto) {
+  const words = (text.trim().match(/\S+/g) || []).length;
+  const who = me.name || me.email;
+  // Drive is where the teacher keeps it; Luddite keeps its own copy to
+  // mark up. A Drive hiccup (or no Drive yet) no longer loses the piece.
+  let file = null, driveError = null;
+  try {
+    file = await saveToDrive(room, {
+      name: who + ' — ' + label,
+      description: (auto ? 'Handed in by Luddite when the session ended, for ' : 'Submitted through Luddite by ') + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
+        words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
+      text
+    });
+  } catch (e) {
+    if (!(e instanceof HttpError)) throw e;
+    driveError = e.message;
+  }
+  const stored = text.length <= MAX_STORED_CHARS;
+  if (!file && !stored) throw new HttpError(409, driveError);
+  const at = Date.now();
+  const id = file ? file.id : 'l' + randomUUID();
+  const win = windowOf(room, lower(me.email));
+  // A new hand-in replaces this student's earlier one in the session. The
+  // earlier ones aren't deleted: their copies stay, listed in `replaces`.
+  const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
+  const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]);
+  const submission = { id, sub: me.sub, ...(auto ? { auto: true } : {}), email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
+    link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS),
+    ...(replaces.length ? { replaces } : {}) };
+  if (stored) {
+    await mutate('luddite:sub:' + id, () => ({
+      id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
+      label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '',
+      ...(replaces.length ? { replaces } : {})
+    }));
+    const email = me.email.toLowerCase();
+    await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
+      email, name: me.name || (t && t.name) || '',
+      subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || []).filter((x) => !replaces.includes(x.id))]
+    }));
+    await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
+      const students = { ...((t && t.students) || {}) };
+      const prev = students[email] || { count: 0 };
+      students[email] = { name: me.name || prev.name || '', last: at, count: prev.count + (earlier.length ? 0 : 1) };
+      return { ...(t || { rooms: [] }), students };
+    });
+  }
+  const saved = await mutate('luddite:room:' + code, (r) => ({
+    ...r,
+    submissions: [submission, ...(r.submissions || []).filter((x) => x.sub !== me.sub)],
+    students: { ...r.students, [me.sub]: { ...r.students[me.sub], submittedAt: submission.at, submissions: (r.students[me.sub].submissions || 0) + 1, words, handedIn: true, autoHandedIn: !!auto, askedAt: 0, writing: false } }
+  }));
+  return saved;
+}
+
+function viewedMs(paper) { return (paper.view && paper.view.ms) || 0; }
+// A handed-back paper as its student sees it: the grade only once they've
+// spent GRADE_AFTER_MS with the comments.
+function studentPaper(x) {
+  const seen = viewedMs(x), ready = seen >= GRADE_AFTER_MS;
+  return {
+    id: x.id, roomTitle: x.roomTitle, name: x.name, email: x.email, at: x.at, words: x.words, text: x.text,
+    marks: x.marks || [], endComment: x.endComment || '', returnedAt: x.returnedAt,
+    viewedMs: seen, gradeAfterMs: GRADE_AFTER_MS, gradeReady: ready, grade: ready ? x.grade || '' : ''
+  };
+}
+
 // The latest backup of a student's writing in one session. If the writing
 // suddenly shrinks by more than half (a glitch, or a wiped page), the copy
 // before it is kept too, as `prev`.
