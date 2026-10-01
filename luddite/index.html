@@ -8,13 +8,13 @@
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Special+Elite&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Rokkitt:wght@600&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   /* Concept: a clean sheet of writing paper with umber ink, the same family as
      Bookbug (the readability benchmark) but quieter. Light paper, dark ink, one
      moss-green accent for the main button, and earthy tints used only for small
-     status labels. Three type families in two weights: Special Elite for the
+     status labels. Three type families in two weights: Rokkitt (a slab serif) for the
      wordmark, Literata for headings and the students' own writing, and Bricolage
      Grotesque for everything else. Outlines are thin. */
   :root {
@@ -377,8 +377,8 @@
   .joinbox .bigcode, .rcard .phraseline .phrase, #lockScreen h2, .pbtn b, .newroombox > summary {
     font-family: var(--display); font-weight: 600; letter-spacing: 0; text-wrap: balance;
   }
-  /* The wordmark is set in Special Elite, a typewriter face, to match the paper-and-ink idea. */
-  .wordmark { font-family: 'Special Elite', 'Courier New', monospace; font-weight: 400; letter-spacing: 0; font-size: clamp(40px, 8vw, 52px); line-height: 1; background: none; }
+  /* The wordmark is set in Rokkitt, a slab serif, to match the paper-and-ink idea. */
+  .wordmark { font-family: Rokkitt, Rockwell, 'Roboto Slab', Georgia, serif; font-weight: 600; letter-spacing: 0; font-size: clamp(44px, 9vw, 58px); line-height: 1; background: none; }
   .sub { font-size: clamp(15px, 2vw, 16px); }
   .fine { font-size: 14px; }
   [class*="pill"], .btn, .chip, .tag, .seg button, h3, .phraselbl, .joinlbl, .lbl, .k { font-family: var(--ui); }
@@ -792,6 +792,7 @@
         <details class="menu" id="roomMenu">
           <summary class="btn small ghost">More &#9662;</summary>
           <div class="pop">
+            <button type="button" id="phraseBtn">Entry Phrase and link</button>
             <button type="button" id="renameBtn">Rename</button>
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="timeBtn">Change the start time</button>
@@ -800,12 +801,6 @@
         </details>
       </div>
     </div>
-    <div class="joinbox">
-      <span class="phrase"><span class="phraselbl">Entry Phrase <span class="q" tabindex="0" data-tip="Anyone can use this phrase, even if they are not in the class; they wait in the waiting room until you let them in. People on the class list are let in on their own.">?</span></span><span class="bigcode" id="roomCode"></span></span>
-      <span class="link" id="roomLink"></span>
-      <button class="btn small" id="copyLinkBtn">Copy link</button>
-    </div>
-    <div id="roomDrive"></div>
 
     <div id="roomBody">
       <div id="secWaiting" style="order:2">
@@ -976,6 +971,20 @@
     <span style="flex:1"></span>
     <button class="btn small ghost" id="popCancel">Cancel</button>
     <button class="btn small" id="popSave">Save</button>
+  </div>
+</div>
+
+<!-- Teacher: the Entry Phrase and link (under More on a writing session) -->
+<div class="overlay no-print" id="phraseBox" hidden>
+  <div class="box">
+    <h2>Entry Phrase</h2>
+    <div class="joinbox" style="margin-top:12px">
+      <span class="phrase"><span class="phraselbl">Entry Phrase <span class="q" tabindex="0" data-tip="Anyone can use this phrase, even if they are not in the class; they wait in the waiting room until you let them in. People on the class list are let in on their own.">?</span></span><span class="bigcode" id="roomCode"></span></span>
+      <span class="link" id="roomLink"></span>
+      <button class="btn small" id="copyLinkBtn">Copy link</button>
+    </div>
+    <div id="roomDrive"></div>
+    <div class="row" style="justify-content:flex-end; margin-top:18px"><button class="btn small" id="phraseClose" type="button">Done</button></div>
   </div>
 </div>
 
@@ -1648,6 +1657,7 @@
     requestFs().then(function () {
       writing = true;
       locked = false;
+      $('doneBtn').textContent = mode === 'room' && !previewing ? 'Hand in' : 'Done';
       pad.spellcheck = P().spellcheck !== 'off';
       $('count').hidden = !P().showCount;
       pad.value = previewing ? '' : load(textKey()) || '';
@@ -2629,6 +2639,8 @@
     });
   });
   $('timeBtn').addEventListener('click', openSessionTime);
+  $('phraseBtn').addEventListener('click', function () { $('phraseBox').hidden = false; });
+  $('phraseClose').addEventListener('click', function () { $('phraseBox').hidden = true; });
   $('promptBtn').addEventListener('click', function () {
     var t = prompt('The prompt students see pinned at the top of their writing page. Leave it empty for none.', teacherRoom.prompt || '');
     if (t === null) return;
@@ -2661,8 +2673,10 @@
   $('previewBtn').addEventListener('click', function () {
     previewing = true;
     mode = 'room';
-    roomInfo = { title: teacherRoom.title, teacherName: teacherRoom.teacher ? teacherRoom.teacher.name : displayName, open: true, state: 'running', status: 'waiting' };
-    previewScreen('waitScreen');
+    roomInfo = { title: teacherRoom.title, teacherName: teacherRoom.teacher ? teacherRoom.teacher.name : displayName, open: true, state: 'running', status: 'admitted',
+      prompt: teacherRoom.prompt || '', prefs: teacherPrefs, code: teacherRoom.code };
+    roomCode = teacherRoom.code;
+    enterWriting(); // the writing page itself, with the prompt, as a student gets it; Done comes back
   });
   function previewScreen(id) {
     if (id === 'readyScreen') { showReady(); return; }
