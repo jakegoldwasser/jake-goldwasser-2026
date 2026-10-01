@@ -618,24 +618,27 @@
   /* Arrows: the teacher's green pen, drawn over the page between two points in
      the text. Only the lines themselves (and their numbers) take clicks; a
      wide invisible stroke under each line makes it easy to hit. */
+  /* Each arrow is its own small drawing, placed over the sheet just where
+     it goes. (One drawing the height of the whole paper can't be split
+     across printed pages, so it pushed the paper off the first page.) */
   #sheet { position: relative; }
-  /* The drawing shares the paper's grid cell, so its coordinates start at the
-     text's own corner: whatever sits above the text (the grade box on screen,
-     the printed grade) can't shift the arrows off their words. */
   #paper { grid-column: 1; grid-row: 2; }
   #margin { grid-column: 2; grid-row: 2; }
-  .arrows { grid-column: 1; grid-row: 2; position: relative; align-self: stretch; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
-  .arrows .line { fill: none; stroke: var(--pen); stroke-width: 2; stroke-linecap: round; }
-  .arrows .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
-  .arrows .tail { fill: var(--pen); }
-  .arrows .lab circle { fill: var(--card); stroke: var(--pen); stroke-width: 1.5; }
-  .arrows .lab text { fill: var(--pen); font: 600 11px var(--ui); text-anchor: middle; dominant-baseline: central; }
-  .arrows .lab { pointer-events: all; cursor: pointer; }
-  .arrows .on .line { stroke-width: 3.5; }
-  .arrows.dragging, .arrows.dragging * { pointer-events: none !important; } /* so the text under the pointer is found, not an arrow already there */
-  .arrows .draft { fill: none; stroke: var(--pen); stroke-width: 2; stroke-dasharray: 5 5; }
+  .arrowsvg { position: absolute; overflow: visible; pointer-events: none; z-index: 2; }
+  .arrowsvg .line { fill: none; stroke: var(--pen); stroke-width: 2; stroke-linecap: round; }
+  .arrowsvg .head { fill: var(--pen); }
+  .arrowsvg .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+  .arrowsvg .tail { fill: var(--pen); }
+  .arrowsvg .leader { fill: none; stroke: var(--pen); stroke-width: 1.5; stroke-dasharray: 0.1 5; stroke-linecap: round; opacity: .8; }
+  .arrowsvg .lab circle { fill: var(--card); stroke: var(--pen); stroke-width: 1.5; }
+  .arrowsvg .lab text { fill: var(--pen); font: 600 11px var(--ui); text-anchor: middle; dominant-baseline: central; }
+  .arrowsvg .lab { pointer-events: all; cursor: pointer; }
+  .arrowsvg .on .line { stroke-width: 3.5; }
+  .arrowsvg .on .leader { opacity: 1; stroke-width: 2.5; }
+  .sheet.dragging .arrowsvg, .sheet.dragging .arrowsvg * { pointer-events: none !important; } /* so the text under the pointer is found, not an arrow already there */
+  .arrowsvg .draft { fill: none; stroke: var(--pen); stroke-width: 2; stroke-dasharray: 5 5; }
   .mnote .arw { margin-right: 4px; }
-  @media print { .arrows .line, .arrows .tail, .arrows .lab { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media print { .arrowsvg .line, .arrowsvg .head, .arrowsvg .tail, .arrowsvg .lab, .arrowsvg .leader { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
   /* One paper in the print-all view: heading, the paper with its marks, then its comments. */
   .pp { border: 1.5px solid var(--rule); border-radius: 14px; background: var(--card); padding: 22px 26px; margin-top: 14px; }
@@ -985,8 +988,7 @@
       </div>
       <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
-      <!-- Arrows drawn between two points in the text (right-drag), over the page -->
-      <svg class="arrows" id="arrows" aria-hidden="true"></svg>
+      <!-- Arrows (right-drag between two points in the text) are drawn over the sheet by drawArrows() -->
       <div class="endwrap">
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
@@ -3303,8 +3305,8 @@
     }
     return null;
   }
-  // The drawing's corner (the same as the text's), which its coordinates start from.
-  function sheetBox() { var r = $('arrows').getBoundingClientRect(); return { left: r.left, top: r.top }; }
+  // The sheet's inside corner, which the drawings are placed from.
+  function sheetBox() { var sh = $('sheet'), r = sh.getBoundingClientRect(); return { left: r.left + sh.clientLeft, top: r.top + sh.clientTop }; }
   function arrowGeometry(m, box) {
     var tailAt = m.head === 'start' ? m.end : m.start, headAt = m.head === 'start' ? m.start : m.end;
     var a = pointRect(tailAt), b = pointRect(headAt);
@@ -3320,24 +3322,51 @@
     var cx = (x1 + x2) / 2 + nx * k, cy = (y1 + y2) / 2 + ny * k;
     return { x1: x1, y1: y1, x2: x2, y2: y2, cx: cx, cy: cy, mx: 0.25 * x1 + 0.5 * cx + 0.25 * x2, my: 0.25 * y1 + 0.5 * cy + 0.25 * y2 };
   }
+  // One small drawing, sized to what's in it: `parts` are SVG elements in
+  // sheet coordinates, `pts` the points that bound them.
+  function placeSvg(pts, parts, cls) {
+    var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; }), pad = 14;
+    var x0 = Math.min.apply(null, xs) - pad, y0 = Math.min.apply(null, ys) - pad;
+    var w = Math.max.apply(null, xs) + pad - x0, h = Math.max.apply(null, ys) + pad - y0;
+    var svg = svgEl('svg', { class: 'arrowsvg' + (cls ? ' ' + cls : ''), width: w, height: h, viewBox: x0 + ' ' + y0 + ' ' + w + ' ' + h, 'aria-hidden': 'true' });
+    svg.style.left = x0 + 'px';
+    svg.style.top = y0 + 'px';
+    parts.forEach(function (p) { svg.appendChild(p); });
+    $('sheet').appendChild(svg);
+    return svg;
+  }
+  function curvePath(g) { return 'M' + g.x1 + ',' + g.y1 + ' Q' + g.cx + ',' + g.cy + ' ' + g.x2 + ',' + g.y2; }
+  // The arrowhead, pointing along the curve's last stretch.
+  function headPath(g) {
+    var ux = g.x2 - g.cx, uy = g.y2 - g.cy, n = Math.sqrt(ux * ux + uy * uy) || 1;
+    ux /= n; uy /= n;
+    var bx = g.x2 - ux * 10, by = g.y2 - uy * 10, px = -uy * 4.5, py = ux * 4.5;
+    return 'M' + g.x2 + ',' + g.y2 + ' L' + (bx + px) + ',' + (by + py) + ' L' + (bx - px) + ',' + (by - py) + ' Z';
+  }
   function drawArrows() {
-    var svg = $('arrows');
-    if (!svg || !piece) return;
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    each('#sheet > .arrowsvg:not(.draftsvg)', function (n) { n.parentNode.removeChild(n); });
+    if (!piece) return;
     var box = sheetBox();
-    var defs = svgEl('defs');
-    var mk = svgEl('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' });
-    mk.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 z', fill: 'var(--pen)', style: 'fill: var(--pen)' }));
-    defs.appendChild(mk);
-    svg.appendChild(defs);
     piece.marks.forEach(function (m) {
       if (m.type !== 'arrow') return;
       var g = arrowGeometry(m, box);
       if (!g) return;
-      var d = 'M' + g.x1 + ',' + g.y1 + ' Q' + g.cx + ',' + g.cy + ' ' + g.x2 + ',' + g.y2;
+      var d = curvePath(g);
+      var parts = [], pts = [[g.x1, g.y1], [g.x2, g.y2], [g.cx, g.cy], [g.mx - 10, g.my - 10], [g.mx + 10, g.my + 10]];
+      // A dotted leader from the arrow's number to its note in the margin.
+      var note = $('margin').querySelector('.mnote[data-mark="' + m.id + '"]');
+      if (note) {
+        var nr = note.getBoundingClientRect(), lx = nr.left - box.left - 2, ly = nr.top - box.top + 14;
+        var ddx = lx - g.mx, ddy = ly - g.my, dl = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+        if (dl > 14) {
+          parts.push(svgEl('path', { d: 'M' + (g.mx + ddx / dl * 11) + ',' + (g.my + ddy / dl * 11) + ' L' + lx + ',' + ly, class: 'leader' }));
+          pts.push([lx, ly]);
+        }
+      }
       var grp = svgEl('g', { 'data-mark': m.id });
       grp.appendChild(svgEl('path', { d: d, class: 'hit' }));
-      grp.appendChild(svgEl('path', { d: d, class: 'line', 'marker-end': 'url(#arrowhead)' }));
+      grp.appendChild(svgEl('path', { d: d, class: 'line' }));
+      grp.appendChild(svgEl('path', { d: headPath(g), class: 'head' }));
       grp.appendChild(svgEl('circle', { cx: g.x1, cy: g.y1, r: 2.5, class: 'tail' }));
       var lab = svgEl('g', { class: 'lab' });
       lab.appendChild(svgEl('circle', { cx: g.mx, cy: g.my, r: 9 }));
@@ -3346,19 +3375,19 @@
       lab.appendChild(t);
       grp.appendChild(lab);
       grp.addEventListener('click', function (e) { e.stopPropagation(); hideTools(); openPop(m, null, lab.getBoundingClientRect()); });
-      svg.appendChild(grp);
+      parts.forEach(function (p) { grp.insertBefore(p, grp.firstChild); });
+      placeSvg(pts, [grp]);
     });
   }
   // While dragging: a dashed arc, bowed the way the arrow will be, from the start point to the pointer.
   function drawDraft(from, x, y) {
-    var svg = $('arrows'), box = sheetBox(), a = pointRect(from);
-    var old = svg.querySelector('.draft');
-    if (old) old.parentNode.removeChild(old);
+    clearDraft();
+    var box = sheetBox(), a = pointRect(from);
     if (!a) return;
     var g = arcBetween(a.x - box.left, a.top + a.h / 2 - box.top, x - box.left, y - box.top);
-    svg.appendChild(svgEl('path', { class: 'draft', d: 'M' + g.x1 + ',' + g.y1 + ' Q' + g.cx + ',' + g.cy + ' ' + g.x2 + ',' + g.y2, 'marker-end': 'url(#arrowhead)' }));
+    placeSvg([[g.x1, g.y1], [g.x2, g.y2], [g.cx, g.cy]], [svgEl('path', { class: 'draft', d: curvePath(g) }), svgEl('path', { class: 'head', d: headPath(g) })], 'draftsvg');
   }
-  function clearDraft() { var d = $('arrows').querySelector('.draft'); if (d) d.parentNode.removeChild(d); }
+  function clearDraft() { each('#sheet > .draftsvg', function (n) { n.parentNode.removeChild(n); }); }
   // The character offset under a point on screen, or null off the text.
   function pointOffset(x, y) {
     var node, off;
@@ -3383,7 +3412,7 @@
   document.addEventListener('mousemove', function (e) {
     if (!drag) return;
     if (!drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 12) return;
-    if (!drag.moved) { drag.moved = true; hideTools(); $('arrows').classList.add('dragging'); }
+    if (!drag.moved) { drag.moved = true; hideTools(); $('sheet').classList.add('dragging'); }
     var o = pointOffset(e.clientX, e.clientY);
     if (o !== null) drag.last = o; // letting go off the text (a margin, between lines) uses the last spot over it
     drawDraft(drag.from, e.clientX, e.clientY);
@@ -3393,7 +3422,7 @@
     var d = drag;
     drag = null;
     clearDraft();
-    $('arrows').classList.remove('dragging');
+    $('sheet').classList.remove('dragging');
     if (!d.moved) { if (d.menu) rightClick(d.menu); return; }
     swallowMenu = true;
     setTimeout(function () { swallowMenu = false; }, 400);
@@ -3736,14 +3765,14 @@
     if (y + pop.offsetHeight > window.innerHeight - 12) y = Math.max(12, rect.top - pop.offsetHeight - 8);
     pop.style.left = x + 'px';
     pop.style.top = y + 'px';
-    each('.paper .on, .mnote.on, .arrows .on', function (n) { n.classList.remove('on'); });
+    each('.paper .on, .mnote.on, .arrowsvg .on', function (n) { n.classList.remove('on'); });
     if (mark) each('[data-mark="' + mark.id + '"], .seg[data-m~="' + mark.id + '"], .seg[data-s~="' + mark.id + '"]', function (n) { n.classList.add('on'); });
     if (!$('popText').hidden) $('popText').focus();
   }
   function closePop() {
     $('markPop').hidden = true;
     popMark = popDraft = null;
-    each('.paper .on, .mnote.on, .arrows .on', function (n) { n.classList.remove('on'); });
+    each('.paper .on, .mnote.on, .arrowsvg .on', function (n) { n.classList.remove('on'); });
   }
   $('popCancel').addEventListener('click', closePop);
   $('popSave').addEventListener('click', savePop);
