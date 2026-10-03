@@ -487,6 +487,26 @@
   /* Indented prose paragraphs, as on the page (see tagProseLines). */
   .is-para-indent > div:not(.ed-image):not(.is-full-out):not(.is-break) { text-indent: var(--para-indent, 2.5em); }
   .is-para-indent > .is-break { text-align: center; }
+  /* A series' parts in Poem View: each marker reads as a heading inside the
+     poem, and every part after the first shows where its new page begins. */
+  .poem-text > .is-part { font-weight: 600; letter-spacing: 0.04em; }
+  .poem-text > .is-later-part { position: relative; margin-top: 1.6em; padding-top: 0.9em; border-top: 1px dashed var(--line); }
+  .poem-text > .is-later-part::before {
+    content: 'New page'; position: absolute; top: -0.75em; right: 0; padding: 0 6px;
+    font: 500 10.5px/1.4 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-faint); background: var(--surface); pointer-events: none; user-select: none;
+  }
+  .tier-group-head {
+    display: flex; align-items: center; gap: 8px; margin: 22px 0 8px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14px; color: var(--ink);
+  }
+  .tier-group-head:first-child { margin-top: 4px; }
+  .tiers-view .poem-grip { visibility: hidden; }
+  .tier-group-count { margin-left: auto; font-weight: 500; font-size: 12px; color: var(--ink-faint); }
+  .tier-group-empty { padding: 6px 2px 4px; font-size: 13px; color: var(--ink-faint); }
+  .series-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
+  .poem-compact-row .series-tag { margin-left: auto; }
+  .poem-compact-row .series-tag + .tier-pill { margin-left: 8px; }
 
   /* An image sits in the text as its own centered, uneditable line
      (saved as "[image N]"). The × shows on hover, or always on touch. */
@@ -2561,6 +2581,7 @@
             <div class="poems-count" id="poemsCount"></div>
             <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
               <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 10h12"/><path d="M4 6h6" stroke-width="1.2"/></svg><span class="vs-label">Section View</span></button>
+              <button type="button" data-view="tiers" title="Poems grouped by tier, to see what needs work" hidden><span class="vs-label">Tier View</span></button>
               <button type="button" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
               <button type="button" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
             </div>
@@ -3007,6 +3028,7 @@
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+  <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <button type="button" role="menuitem" data-action="move">Move to another book…</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
 </div>
@@ -4737,6 +4759,118 @@
     return best;
   }
 
+  // ---- Section detection ----
+  // A section title in a manuscript is usually nothing but a marker on a
+  // page of its own: a Roman numeral ("II"), a number, a spelled-out
+  // number, or "Part Two" / "Section 3" / "Book IV". Formatting (bold,
+  // italics) and Google Docs' {#anchor} are ignored.
+  // (The patterns live inside the function: it also runs from the
+  // repair in migrateFontKeys, before this part of the script has run.)
+  // The number a section marker stands for ("IV" 4, "Part Two" 2, "3."
+  // 3), or null when the text isn't one.
+  function markerValue(title) {
+    var t = cleanMarkdownText(stripHeadingAnchor(title)).replace(/[_*]/g, '').replace(/\s+/g, ' ').trim().replace(/[.:]$/, '');
+    if (!t) return null;
+    var n = /^(?:(?:part|section|book|movement)\s+)?(.+)$/i.exec(t)[1].trim();
+    if (/^\d{1,3}$/.test(n)) return parseInt(n, 10);
+    var words = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+    var w = words.indexOf(n.toLowerCase());
+    if (w !== -1) return w + 1;
+    if (!/^(?=[ivxlc])c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/i.test(n)) return null;
+    var vals = { i: 1, v: 5, x: 10, l: 50, c: 100 }, total = 0, s = n.toLowerCase();
+    for (var k = 0; k < s.length; k++) {
+      var v = vals[s[k]], next = vals[s[k + 1]] || 0;
+      total += v < next ? -v : v;
+    }
+    return total;
+  }
+  function isSectionMarker(title) { return markerValue(title) !== null; }
+
+  // ---- Series ----
+  // A series is one poem in numbered parts (poem.series), each part
+  // starting on a page of its own. A part begins at a line that is only
+  // a marker ("I.", "II", "3", "Part Two") standing at the top of the
+  // poem or after a blank line. The parts stay plain lines of the poem.
+  function isSeriesOn(poem, st) {
+    return !!(poem && poem.series && !isSection(poem) && bookFormOf(st || state) === 'collection');
+  }
+  // Indexes of the lines that start parts: markers standing alone (top
+  // of the poem or after a blank line) that count 1, 2, 3… in order, so a
+  // stray "I" or "C" mid-poem never starts a page.
+  function partLineIndexes(lines) {
+    var out = [], want = 1;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (typeof line !== 'string' || !line.trim() || IMAGE_LINE_RE.test(line)) continue;
+      if (i > 0 && (lines[i - 1] || '').trim() !== '') continue;
+      if (markerValue(stripFormatMarkers(line)) === want) { out.push(i); want++; }
+    }
+    return out;
+  }
+  function seriesParts(poem) { return partLineIndexes(poem.lines || []); }
+
+  // A heading line with nothing after its #s: a blank line someone styled
+  // as a heading (or spacing above a title). It is spacing, never a title.
+  function isEmptyHeadingBlock(block) {
+    var t = block.trim();
+    return /^#{1,6}[ \t]*$/.test(t) || /^#{1,6}[ \t]*(?:\*+|_+)?[ \t]*\{#[^{}]*\}$/.test(t);
+  }
+  // A Google Docs table of contents: every line a link to one of the
+  // doc's own headings ("[Far Rockaway 10](#far-rockaway)").
+  function isTocBlock(block) {
+    var lines = block.split('\n').filter(function (l) { return l.trim() !== ''; });
+    return lines.length > 0 && lines.every(function (l) { return /^\s*\[[^\]]*\]\(#[^)\s]*\)\s*$/.test(l); });
+  }
+  function headingOf(block) {
+    var first = block.split('\n')[0].trim();
+    var m = /^(#{1,6})[ \t]+([\s\S]*)$/.exec(first);
+    if (!m) return null;
+    var title = cleanMarkdownText(stripHeadingAnchor(m[2])).replace(/\s+/g, ' ').trim();
+    return title ? { level: m[1].length, title: title } : null;
+  }
+  // Does the block at i hold no text of its own -- the next thing after
+  // it (skipping blank lines) is another title, or the end of the doc?
+  function holdsNoText(blocks, i) {
+    for (var j = i + 1; j < blocks.length; j++) {
+      if (blocks[j].trim() === '') continue;
+      return !!headingOf(blocks[j]);
+    }
+    return true;
+  }
+  // Whether the block at i is a section title. Three ways to be one:
+  // 1. a heading at a larger level than the poem titles (H1 parts over
+  //    H2 poems) -- the doc's own hierarchy;
+  // 2. a heading with no text under it that is a section marker ("II"),
+  //    at any level -- Desert News puts "I"–"IV" in Heading 4 under
+  //    Heading 1 poems, each on a page of its own;
+  // 3. a heading at another level than the poem titles, with no text
+  //    under it, short enough to be a title; or a plain paragraph that is
+  //    only a section marker, standing alone just before a title.
+  // A marker *with* text under it ("II" inside a numbered sequence poem)
+  // stays part of its poem.
+  function sectionTitleAt(blocks, i, entryLevel) {
+    var block = blocks[i];
+    var h = headingOf(block);
+    if (h) {
+      if (entryLevel !== null && h.level < entryLevel) return h.title;
+      if (!holdsNoText(blocks, i)) return null;
+      if (isSectionMarker(h.title)) return h.title;
+      if (entryLevel !== null && h.level !== entryLevel && h.title.length <= 60) return h.title;
+      return null;
+    }
+    var lines = block.split('\n').filter(function (l) { return l.trim() !== ''; });
+    if (lines.length === 1 && isSectionMarker(lines[0]) && holdsNoText(blocks, i)) {
+      return cleanMarkdownText(lines[0]).replace(/\s+/g, ' ').trim();
+    }
+    return null;
+  }
+  // Blocks as they go into the walk: tables of contents dropped, empty
+  // headings turned into blank lines.
+  function tidyDocBlocks(blocks) {
+    return blocks.filter(function (b) { return !isTocBlock(b); })
+      .map(function (b) { return isEmptyHeadingBlock(b) ? '' : b; });
+  }
+
   // Walks the doc once for a given entryLevel (or null, meaning "every
   // heading is an entry, exactly like before section-detection
   // existed"). Split out from parseDocText so it can be re-run flat as
@@ -4767,9 +4901,16 @@
       current.lines.push(text);
     }
 
-    blocks.forEach(function (block) {
+    blocks.forEach(function (block, bi) {
       var trimmed = block.trim();
       if (trimmed === '') { if (current) pushLine(''); return; }
+
+      var sectionTitle = entryLevel === undefined ? null : sectionTitleAt(blocks, bi, entryLevel);
+      if (sectionTitle !== null) {
+        finishPoem();
+        items.push({ id: makeId(), kind: 'section', title: sectionTitle });
+        return;
+      }
 
       var firstLine = block.split('\n')[0];
       var headingMatch = /^(#{1,6})[ \t]+([\s\S]*)$/.exec(firstLine.trim()) || /^(#{1,6})[ \t]*$/.exec(firstLine.trim());
@@ -4778,11 +4919,7 @@
         var level = headingMatch[1].length;
         var titleRaw = stripHeadingAnchor(headingMatch[2] || '');
         var title = cleanMarkdownText(titleRaw).replace(/\s+/g, ' ').trim();
-        if (entryLevel !== null && level < entryLevel) {
-          items.push({ id: makeId(), kind: 'section', title: title });
-        } else {
-          startPoem(title);
-        }
+        startPoem(title);
         return;
       }
       if (/^-{3,}$/.test(trimmed)) {
@@ -4882,7 +5019,7 @@
     // a real line break so poem lines don't get run together.
     raw = raw.replace(/<br\s*\/?>/gi, '\n').replace(/\\\n/g, '\n');
     if (isScriptForm()) raw = markScriptHeadings(raw, bookFormOf(state));
-    var blocks = raw.split('\n\n');
+    var blocks = tidyDocBlocks(raw.split('\n\n'));
     var entryLevel = pickEntryHeadingLevel(blocks);
     var items = walkDocBlocks(blocks, entryLevel);
 
@@ -4896,7 +5033,7 @@
       var sectionCount = items.filter(isSection).length;
       var entryCount = items.length - sectionCount;
       if (sectionCount > 8 && sectionCount >= entryCount) {
-        items = walkDocBlocks(blocks, null);
+        items = walkDocBlocks(blocks, undefined);
       }
     }
     return items;
@@ -4979,6 +5116,16 @@
     if (!s) return s;
     if (RETIRED_FONT_KEYS[s.bodyFontChoice]) s.bodyFontChoice = RETIRED_FONT_KEYS[s.bodyFontChoice];
     if (RETIRED_FONT_KEYS[s.titleFontChoice]) s.titleFontChoice = RETIRED_FONT_KEYS[s.titleFontChoice];
+    // Imports before section detection turned a section page ("II", in a
+    // heading of its own) into a poem with that title and no text. A poem
+    // with no text whose title is only a section number is that section.
+    if (bookFormOf(s) === 'collection' && Array.isArray(s.poems)) {
+      s.poems = s.poems.map(function (p) {
+        if (!p || isSection(p) || p.tier || p.series) return p;
+        var empty = !(p.lines || []).some(function (l) { return String(l || '').trim() !== ''; });
+        return empty && isSectionMarker(p.title || '') ? { id: p.id, kind: 'section', title: cleanMarkdownText(stripHeadingAnchor(p.title)).trim() } : p;
+      });
+    }
     // Titles imported before stripHeadingAnchor kept the Google Docs anchor.
     [s.poems, s.archivedPoems, s.deletedPoems].forEach(function (list) {
       (Array.isArray(list) ? list : []).forEach(function (p) {
@@ -5196,7 +5343,14 @@
     var hangPt = verse && bodyAlign === 'left' ? sizePt * 1.5 : 0;
     var renderLines = [];
     var wasWrapped = false;
-    poem.lines.forEach(function (line) {
+    var partStarts = isSeriesOn(poem, state) ? seriesParts(poem) : [];
+    poem.lines.forEach(function (line, li) {
+      // A series part starts a new page (blank lines before it are dropped,
+      // so they can't spill a page of nothing).
+      if (partStarts.indexOf(li) !== -1) {
+        while (renderLines.length && renderLines[renderLines.length - 1].blank) renderLines.pop();
+        if (renderLines.length) renderLines.push({ pagebreak: true });
+      }
       if (line === undefined || line.trim() === '') { if (!indented) renderLines.push({ blank: true }); return; }
       if (indented && /^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) {
         renderLines.push({ blank: true }, { blank: false, text: '*   *   *', center: true, indent: 0 }, { blank: true });
@@ -5233,6 +5387,7 @@
     // doesn't fit in what's left.
     var pages = [], cur = [], used = 0, cap = firstCap;
     renderLines.forEach(function (rl) {
+      if (rl.pagebreak) { if (cur.length) { pages.push(cur); cur = []; used = 0; cap = laterCap; } return; }
       var rows = rl.rows || 1;
       if (cur.length && used + rows > cap) { pages.push(cur); cur = []; used = 0; cap = laterCap; }
       cur.push(rl); used += rows;
@@ -7700,8 +7855,16 @@
     ed.classList.toggle('is-para-indent', on);
     ed.style.setProperty('--para-indent', indentPx + 'px');
     var fullOut = true;
-    Array.prototype.forEach.call(ed.children, function (r) {
+    var texts = [], partStarts = [];
+    if (isSeriesOn(poem)) {
+      Array.prototype.forEach.call(ed.children, function (r) { texts.push(r.nodeType !== 1 ? '' : r.dataset.token ? '[image 0]' : r.textContent); });
+      partStarts = partLineIndexes(texts);
+    }
+    Array.prototype.forEach.call(ed.children, function (r, ri) {
       if (r.nodeType !== 1) return;
+      var pn = partStarts.indexOf(ri);
+      r.classList.toggle('is-part', pn !== -1);
+      r.classList.toggle('is-later-part', pn > 0);
       var t = r.dataset.token ? '' : r.textContent.trim();
       var brk = on && /^(\*\s*){3}$|^#$/.test(t);
       r.classList.toggle('is-break', brk);
@@ -8185,6 +8348,9 @@
     var poem = state.poems[index], moveBtn = entryMenu.querySelector('[data-action="move"]');
     moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
     moveBtn.textContent = 'Move ' + (poem ? formNouns().one : formNouns().section) + ' to another book…';
+    var seriesBtn = entryMenu.querySelector('[data-action="series"]');
+    seriesBtn.hidden = !poem || isSection(poem) || bookFormOf(state) !== 'collection';
+    seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -8221,6 +8387,13 @@
     if (t) pill.querySelector('.tier-pill-name').textContent = tierName(t);
     pill.title = t ? 'Tier: ' + tierName(t) + ' (click to change)' : 'Mark this poem’s tier';
     pill.setAttribute('aria-label', t ? 'Tier: ' + tierName(t) : 'Set tier');
+  }
+  function makeSeriesTag(poem) {
+    var n = seriesParts(poem).length, tag = document.createElement('span');
+    tag.className = 'series-tag';
+    tag.textContent = n > 1 ? 'Series · ' + n + ' parts' : 'Series';
+    tag.title = 'Each part starts on a new page. Change this in the ⋯ menu.';
+    return tag;
   }
   function makeTierPill(poem) {
     var pill = document.createElement('button');
@@ -8268,6 +8441,7 @@
       state.isExample = false;
       persist();
       paintTierPill(pill, poem);
+      if (tiersView) renderPoems();
     }
     poemTiers.tiers.forEach(function (t) {
       item(tierName(t), tierColor(t), poem.tier === t.id, function () { setTier(t.id); });
@@ -8297,12 +8471,26 @@
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
+    else if (item.dataset.action === 'series') toggleSeries(idx);
     else duplicatePoem(idx);
   });
   document.addEventListener('click', function (e) { if (!entryMenu.contains(e.target)) closeEntryMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeEntryMenu(); });
   window.addEventListener('scroll', closeEntryMenu, true);
   window.addEventListener('resize', closeEntryMenu);
+
+  function toggleSeries(index) {
+    var poem = state.poems[index];
+    if (!poem || isSection(poem)) return;
+    if (poem.series) delete poem.series; else poem.series = true;
+    state.isExample = false;
+    persist();
+    renderAll();
+    var n = poem.series ? seriesParts(poem).length : 0;
+    if (!poem.series) showToast('“' + (poem.title || 'Untitled') + '” is no longer a series.');
+    else if (n < 2) showToast('Now a series. Start each part with its number on a line of its own (I., II., …) and it will begin a new page.');
+    else showToast('Now a series: ' + n + ' parts, each starting a new page.');
+  }
 
   function duplicatePoem(index) {
     var src = state.poems[index];
@@ -8575,6 +8763,7 @@
       updateStats();
     });
     titleRow.appendChild(titleInput);
+    if (isSeriesOn(poem)) titleRow.appendChild(makeSeriesTag(poem));
     if (tiersShown()) titleRow.appendChild(makeTierPill(poem));
     titleRow.appendChild(makeDotsBtn(index));
 
@@ -8819,6 +9008,7 @@
 
     row.appendChild(handle);
     row.appendChild(titleBtn);
+    if (isSeriesOn(poem)) row.appendChild(makeSeriesTag(poem));
     if (tiersShown()) row.appendChild(makeTierPill(poem));
     row.appendChild(makeDotsBtn(index));
 
@@ -8939,19 +9129,25 @@
 
   var poemsViewMode = 'compact';
   var sectionsOnly = false;
+  // Tier View: poems grouped by tier (poetry, with tiers switched on).
+  var tiersView = false;
   var expandedCompactIds = {};
   // The Sections | Titles | Entries switch above the list. Titles is
   // poemsViewMode 'compact', Entries is 'full'; Sections is sectionsOnly
   // (below), available once the book has at least one section.
   var entriesViewSeg = document.getElementById('entriesViewSeg');
   function currentEntriesView() {
+    if (tiersView) return 'tiers';
     return sectionsOnly ? 'sections' : (poemsViewMode === 'compact' ? 'titles' : 'entries');
   }
   function updateEntriesViewSeg(hasSections) {
+    var tierBtn = entriesViewSeg.querySelector('[data-view="tiers"]');
+    tierBtn.hidden = !tiersShown();
+    if (tiersView && !tiersShown()) tiersView = false;
     var view = currentEntriesView();
     // A Section View that no longer applies (no sections left) falls
     // back to what the list is showing.
-    if (!formatKey || (formatKey === 'sections' && !hasSections)) formatKey = view;
+    if (!formatKey || (formatKey === 'sections' && !hasSections) || formatKey === 'tiers') formatKey = view === 'tiers' ? 'titles' : view;
     syncFormattingToView(formatKey);
     entriesViewSeg.querySelectorAll('button').forEach(function (b) {
       var on = b.dataset.view === view;
@@ -8986,8 +9182,10 @@
       return;
     }
     sectionsOnly = b.dataset.view === 'sections';
-    formatKey = b.dataset.view;
-    if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' ? 'compact' : 'full';
+    tiersView = b.dataset.view === 'tiers';
+    formatKey = tiersView ? 'titles' : b.dataset.view;
+    if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' || tiersView ? 'compact' : 'full';
+    if (tiersView) expandedCompactIds = {};
     // "Titles only" means titles only -- don't reopen whatever entry was
     // open before "Reveal All".
     if (b.dataset.view === 'titles') expandedCompactIds = {};
@@ -9280,6 +9478,44 @@
     });
   }
 
+  // Tier View: a group per tier, in the order set in Preferences, then
+  // the poems with no tier. Each poem keeps its number from the book's
+  // order; rows open the same way as in Title View, and changing a
+  // poem's tier moves it to its new group. Order within the book is
+  // changed in Title View, so rows here aren't dragged.
+  function renderTierGroups() {
+    var plan = planBooklet(state), num = 0, groups = {}, none = [];
+    poemTiers.tiers.forEach(function (t) { groups[t.id] = []; });
+    state.poems.forEach(function (poem, i) {
+      if (isSection(poem)) return;
+      num++;
+      var g = tierById(poem.tier) ? groups[poem.tier] : none;
+      g.push({ poem: poem, index: i, num: num });
+    });
+    function group(name, color, items) {
+      var head = document.createElement('div');
+      head.className = 'tier-group-head';
+      if (color) head.style.setProperty('--tier', color);
+      head.innerHTML = (color ? '<span class="tier-dot" aria-hidden="true"></span>' : '') + '<span class="tier-group-name"></span><span class="tier-group-count"></span>';
+      head.querySelector('.tier-group-name').textContent = name;
+      head.querySelector('.tier-group-count').textContent = items.length;
+      poemList.appendChild(head);
+      if (!items.length) {
+        var empty = document.createElement('div');
+        empty.className = 'tier-group-empty';
+        empty.textContent = 'No ' + formNouns().many + ' yet';
+        poemList.appendChild(empty);
+      }
+      items.forEach(function (it) {
+        var row = makeCompactRow(it.poem, it.index, plan, it.num);
+        row.draggable = false;
+        poemList.appendChild(row);
+      });
+    }
+    poemTiers.tiers.forEach(function (t) { group(tierName(t), tierColor(t), groups[t.id]); });
+    if (none.length) group('No tier', null, none);
+  }
+
   function renderPoems() {
     poemList.innerHTML = '';
     // Poetry gets Add poem above the list too, once there's a list to be
@@ -9289,10 +9525,18 @@
     if (!hasSections) sectionsOnly = false;
     updateEntriesViewSeg(hasSections);
     poemList.classList.toggle('titles-view', poemsViewMode === 'compact' && !sectionsOnly);
+    poemList.classList.toggle('tiers-view', tiersView);
     if (sectionsOnly) {
       renderSectionsOnly();
       var total = countEntries(state.poems);
       poemsCount.textContent = nounFor(total, state);
+      updateArchiveButton();
+      if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
+      return;
+    }
+    if (tiersView) {
+      renderTierGroups();
+      poemsCount.textContent = nounFor(countEntries(state.poems), state);
       updateArchiveButton();
       if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
       return;
