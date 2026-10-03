@@ -563,6 +563,38 @@
   .prefs-group[hidden] { display: none; }
   .prefs-panel > .prefs-group:first-child .prefs-group-title { border-top: none; margin-top: 0; padding-top: 0; }
   .prefs-tour { align-self: flex-start; margin-top: 8px; }
+  /* Poem tiers in Preferences: a name field per tier, its color dot, and
+     a quiet remove. */
+  .tier-edit { display: flex; flex-direction: column; gap: 4px; margin: 0 0 6px 23px; }
+  .tier-edit[hidden] { display: none; }
+  .tier-edit-list { display: flex; flex-direction: column; gap: 4px; }
+  .tier-edit-row { display: flex; align-items: center; gap: 6px; }
+  .tier-edit-row input[type="text"] { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 4px 7px; }
+  .tier-edit-remove {
+    appearance: none; background: none; border: none; color: var(--ink-faint); cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+  }
+  .tier-edit-remove:hover { color: var(--danger); }
+  .tier-add { align-self: flex-start; font-size: 12.5px; }
+  .tier-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: var(--tier, var(--ink-faint)); }
+
+  /* A poem's tier, beside its ⋯: a small pill in the tier's color. With
+     no tier it's a faint "Tier" that shows on hover (always, faintly, on
+     touch screens). */
+  .tier-pill {
+    appearance: none; display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; max-width: 11em;
+    font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; white-space: nowrap;
+    padding: 4px 8px; border-radius: 999px; cursor: pointer;
+    color: var(--tier); background: var(--surface); border: 1px solid var(--tier);
+  }
+  .tier-pill .tier-pill-name { overflow: hidden; text-overflow: ellipsis; }
+  .tier-pill.is-empty { --tier: var(--ink-faint); font-weight: 500; border-style: dashed; opacity: 0; transition: opacity .12s ease; }
+  .poem-compact-row:hover .tier-pill.is-empty, .poem-card:hover .tier-pill.is-empty,
+  .tier-pill.is-empty:focus-visible, .tier-pill.is-empty[aria-expanded="true"] { opacity: 1; }
+  @media (hover: none) { .tier-pill.is-empty { opacity: 0.6; } }
+  .poem-compact-row .tier-pill { margin-left: auto; }
+  .poem-compact-row .tier-pill + .dots-btn { margin-left: 0; }
+  #tierMenu button { display: flex; align-items: center; gap: 8px; }
   @media (max-width: 700px) { .prefs-area { justify-content: flex-start; } .prefs-panel { right: auto; left: 0; } }
 
   /* The per-entry "⋯" menu (Duplicate / Archive). One shared popover,
@@ -582,7 +614,12 @@
     padding: 9px 11px; font-size: 13.5px; font-weight: 500; color: var(--ink); cursor: pointer;
   }
   .entry-menu button:hover { background: var(--surface-2); }
-
+  /* The display: block above would otherwise beat the hidden attribute,
+     showing items a menu means to leave out (Delete on a book that isn't
+     archived, Move with no other book to move to). */
+  .entry-menu button[hidden] { display: none; }
+  .entry-menu .menu-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .entry-menu button.is-current { font-weight: 700; }
   /* Phone writing mode: focusing an entry's title or body turns that
      card itself into a full-screen editor (Notes / Google Docs style)
      instead of typing into a narrow box nested three panels deep. The
@@ -712,6 +749,13 @@
   .poem-gap-btn-section { width: auto; padding: 0 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; }
 
   .add-poem-btn { margin-top: 4px; }
+  .add-entry-top { display: flex; margin: 0 0 4px; }
+  .add-entry-top[hidden] { display: none; }
+  .add-entry-top .add-poem-btn { margin-top: 0; }
+  /* In a poetry collection both Add poem buttons (above and below the
+     list) are the same quiet ghost button. */
+  .add-poem-btn.is-subtle { font-size: 13px; color: var(--ink-faint); padding: 4px 8px; }
+  .add-poem-btn.is-subtle:hover { color: var(--accent); }
 
   .section-row {
     display: flex; align-items: center; gap: 8px; border: 2px solid var(--ink); border-radius: 8px;
@@ -1980,6 +2024,12 @@
                   <option value="54">¾ inch</option>
                   <option value="72">1 inch</option>
                 </select></label>
+              <!-- Poem tiers: the poet names them; synced with the account. -->
+              <label class="prefs-row"><input type="checkbox" id="tiersOnBox"><span>Mark poems by tier<small>In poetry collections, a label on each poem for where it stands</small></span></label>
+              <div class="tier-edit" id="tierEdit">
+                <div class="tier-edit-list" id="tierEditList"></div>
+                <button class="btn-link tier-add" id="tierAddBtn" type="button">+ Add tier</button>
+              </div>
             </div>
           </div>
           <div class="prefs-group" data-prefs-form="picture">
@@ -2517,6 +2567,11 @@
           </div>
         </div>
         <div id="poemGapTop"></div>
+        <!-- Poetry only: a second Add poem above the list, styled the
+             same as the one below it (see renderPoems). -->
+        <div class="add-entry-top" id="addPoemTopRow" hidden>
+          <button class="btn btn-ghost add-poem-btn is-subtle" id="addPoemTopBtn" type="button">+ Add entry</button>
+        </div>
         <div id="poemList"></div>
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
@@ -2944,8 +2999,11 @@
 <div class="entry-menu" id="bookMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
-  <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete permanently…</button>
+  <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete…</button>
 </div>
+
+<!-- A poem's tier: filled in by openTierMenu. -->
+<div class="entry-menu" id="tierMenu" role="menu" hidden></div>
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
@@ -3089,6 +3147,64 @@
     document.body.classList.toggle('pref-no-art-notes', !prefs.showArtNotes);
   }
   applyPrefClasses();
+
+  // ---------------------------------------------------------------------
+  // Poem tiers: the poet's own marks for where each poem stands
+  // ("Finished", "Needs revision"...). The tiers are named in Preferences
+  // and, unlike the rest of Preferences, sync with the account
+  // (`poemTiers`, stamped; the newer side wins), so a tier reads the same
+  // on every device. Each poem keeps its tier's id in `poem.tier`; a poem
+  // whose tier has been removed just shows none. Poetry collections only.
+  // ---------------------------------------------------------------------
+  var POEM_TIERS_KEY = 'bookbug.poemTiers.v1';
+  var TIER_COLORS = ['#6E7B3E', '#9C6B12', '#5C7A93', '#7A4E2B', '#8B3A2B', '#6B5A42', '#4F7A6A', '#7D5A86'];
+  function defaultPoemTiers() {
+    return { on: true, at: 0, tiers: [{ id: 'finished', name: 'Finished' }, { id: 'revise', name: 'Needs revision' }, { id: 'draft', name: 'Draft' }] };
+  }
+  function normalizePoemTiers(t) {
+    if (!t || typeof t !== 'object' || !Array.isArray(t.tiers)) return null;
+    var seen = {};
+    return {
+      on: t.on !== false,
+      at: Number(t.at) || 0,
+      tiers: t.tiers.filter(function (x) {
+        if (!x || typeof x.id !== 'string' || !x.id || seen[x.id]) return false;
+        seen[x.id] = true;
+        return true;
+      }).map(function (x) { return { id: x.id, name: String(x.name || '').slice(0, 40) }; })
+    };
+  }
+  var poemTiers = defaultPoemTiers();
+  try { poemTiers = normalizePoemTiers(JSON.parse(localStorage.getItem(POEM_TIERS_KEY) || 'null')) || poemTiers; } catch (e) {}
+  // Saves here; `changed` (a real edit) stamps it and sends it on.
+  function persistPoemTiers(changed) {
+    if (changed) poemTiers.at = Date.now();
+    try { localStorage.setItem(POEM_TIERS_KEY, JSON.stringify(poemTiers)); } catch (e) {}
+    if (changed) scheduleCloudAutosave();
+  }
+  // Only stamped tiers (ones someone has edited) go to the account, so a
+  // new device's defaults never overwrite the names chosen elsewhere.
+  function poemTiersForCloud() { return poemTiers.at ? poemTiers : undefined; }
+  // Folds the account's tiers in; says whether the account needs ours.
+  function mergePoemTiers(cloud) {
+    cloud = normalizePoemTiers(cloud);
+    if (cloud && cloud.at > poemTiers.at) {
+      poemTiers = cloud;
+      persistPoemTiers(false);
+      renderTierPrefs();
+      if (typeof renderPoems === 'function' && state && state.poems) renderPoems();
+      return false;
+    }
+    return poemTiers.at > (cloud ? cloud.at : 0);
+  }
+  function tiersShown() { return poemTiers.on && bookFormOf(state) === 'collection'; }
+  function tierById(id) { return id ? poemTiers.tiers.filter(function (t) { return t.id === id; })[0] || null : null; }
+  function tierColor(t) {
+    var i = poemTiers.tiers.indexOf(t);
+    return TIER_COLORS[(i < 0 ? 0 : i) % TIER_COLORS.length];
+  }
+  function tierName(t) { return t.name.trim() || 'Untitled tier'; }
+
   var EDITOR_ZOOM_KEY = IS_PHONE ? 'poetryBooklet.editorZoom.phone.v1' : 'poetryBooklet.editorZoom.v1';
   // The zoom control's own 0.7-2 / 100%-labeled range was rendering too
   // small at "100%" -- this constant shifts the whole scale up so what
@@ -4280,6 +4396,7 @@
       var deletedBefore = JSON.stringify(recentlyDeleted);
       mergeRecentlyDeleted(ours.recentlyDeleted);
       if (JSON.stringify(recentlyDeleted) !== deletedBefore || JSON.stringify(recentlyDeleted) !== JSON.stringify(freshDeleted(ours.recentlyDeleted))) pbChanged = true;
+      if (mergePoemTiers(ours.poemTiers)) pbChanged = true;
       var cloudOpened = ours.lastOpened || null;
       var localOpened = getLastOpened();
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
@@ -4384,7 +4501,8 @@
         body: JSON.stringify({ app: 'chapbookbuilder', data: {
           chapbooks: library, trash: trash, lastOpened: getLastOpened(),
           pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
-          cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, recentlyDeleted: freshDeleted(recentlyDeleted)
+          cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, recentlyDeleted: freshDeleted(recentlyDeleted),
+          poemTiers: poemTiersForCloud()
         } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
@@ -8047,6 +8165,7 @@
   function openEntryMenu(btn, index) {
     var reopening = entryMenuBtn === btn;
     closeEntryMenu();
+    closeTierMenu();
     if (reopening) return;
     entryMenuIndex = index;
     entryMenuBtn = btn;
@@ -8077,6 +8196,88 @@
     btn.addEventListener('click', function (e) { e.stopPropagation(); openEntryMenu(btn, index); });
     return btn;
   }
+  // ---- A poem's tier (see poemTiers) ----
+  // The pill beside a poem's ⋯ opens a short menu: each tier, No tier,
+  // and Name tiers… (Preferences). Picking one updates the pill in place.
+  var tierMenu = document.getElementById('tierMenu');
+  var tierMenuPill = null;
+  function paintTierPill(pill, poem) {
+    var t = tierById(poem.tier);
+    pill.classList.toggle('is-empty', !t);
+    pill.style.setProperty('--tier', t ? tierColor(t) : '');
+    pill.innerHTML = t ? '<span class="tier-dot" aria-hidden="true"></span><span class="tier-pill-name"></span>' : '<span class="tier-pill-name">Tier</span>';
+    if (t) pill.querySelector('.tier-pill-name').textContent = tierName(t);
+    pill.title = t ? 'Tier: ' + tierName(t) + ' (click to change)' : 'Mark this poem’s tier';
+    pill.setAttribute('aria-label', t ? 'Tier: ' + tierName(t) : 'Set tier');
+  }
+  function makeTierPill(poem) {
+    var pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'tier-pill';
+    pill.draggable = false;
+    pill.setAttribute('aria-haspopup', 'menu');
+    pill.setAttribute('aria-expanded', 'false');
+    paintTierPill(pill, poem);
+    pill.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    pill.addEventListener('click', function (e) { e.stopPropagation(); openTierMenu(pill, poem); });
+    return pill;
+  }
+  function closeTierMenu() {
+    if (tierMenu.hidden) return;
+    tierMenu.hidden = true;
+    if (tierMenuPill) tierMenuPill.setAttribute('aria-expanded', 'false');
+    tierMenuPill = null;
+  }
+  function openTierMenu(pill, poem) {
+    var reopening = tierMenuPill === pill;
+    closeTierMenu();
+    closeEntryMenu();
+    if (reopening) return;
+    tierMenuPill = pill;
+    pill.setAttribute('aria-expanded', 'true');
+    tierMenu.innerHTML = '';
+    function item(label, color, current, onPick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      if (current) b.classList.add('is-current');
+      if (color) {
+        var dot = document.createElement('span');
+        dot.className = 'tier-dot';
+        dot.style.setProperty('--tier', color);
+        b.appendChild(dot);
+      }
+      b.appendChild(document.createTextNode(label));
+      b.addEventListener('click', function (e) { e.stopPropagation(); closeTierMenu(); onPick(); });
+      tierMenu.appendChild(b);
+    }
+    function setTier(id) {
+      if (id) poem.tier = id; else delete poem.tier;
+      state.isExample = false;
+      persist();
+      paintTierPill(pill, poem);
+    }
+    poemTiers.tiers.forEach(function (t) {
+      item(tierName(t), tierColor(t), poem.tier === t.id, function () { setTier(t.id); });
+    });
+    if (tierById(poem.tier)) item('No tier', null, false, function () { setTier(null); });
+    var sep = document.createElement('div');
+    sep.className = 'menu-sep';
+    tierMenu.appendChild(sep);
+    item('Name tiers…', null, false, function () { openPrefsAtTiers(); });
+    tierMenu.hidden = false;
+    var r = pill.getBoundingClientRect();
+    var mw = tierMenu.offsetWidth, mh = tierMenu.offsetHeight;
+    tierMenu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + 'px';
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    tierMenu.style.top = top + 'px';
+  }
+  document.addEventListener('click', function (e) { if (!tierMenu.contains(e.target)) closeTierMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTierMenu(); });
+  window.addEventListener('scroll', closeTierMenu, true);
+  window.addEventListener('resize', closeTierMenu);
+
   entryMenu.addEventListener('click', function (e) {
     var item = e.target.closest('button[data-action]');
     if (!item) return;
@@ -8362,6 +8563,7 @@
       updateStats();
     });
     titleRow.appendChild(titleInput);
+    if (tiersShown()) titleRow.appendChild(makeTierPill(poem));
     titleRow.appendChild(makeDotsBtn(index));
 
     var editor = document.createElement('div');
@@ -8605,6 +8807,7 @@
 
     row.appendChild(handle);
     row.appendChild(titleBtn);
+    if (tiersShown()) row.appendChild(makeTierPill(poem));
     row.appendChild(makeDotsBtn(index));
 
     row.addEventListener('dragstart', function (e) {
@@ -9067,6 +9270,9 @@
 
   function renderPoems() {
     poemList.innerHTML = '';
+    // Poetry gets Add poem above the list too, once there's a list to be
+    // above (an empty book has just the one below).
+    document.getElementById('addPoemTopRow').hidden = bookFormOf(state) !== 'collection' || !state.poems.length;
     var hasSections = state.poems.some(isSection);
     if (!hasSections) sectionsOnly = false;
     updateEntriesViewSeg(hasSections);
@@ -9747,6 +9953,18 @@
     persist();
     renderAll();
   });
+  // Poetry: a new poem at the very top of the book, opened with its
+  // title ready to type.
+  document.getElementById('addPoemTopBtn').addEventListener('click', function () {
+    var poem = { id: makeId(), title: '', lines: [''] };
+    state.poems.unshift(poem);
+    state.isExample = false;
+    if (poemsViewMode === 'compact') expandedCompactIds[poem.id] = true;
+    persist();
+    renderAll();
+    var title = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-title');
+    if (title && !writerMQ.matches) title.focus();
+  });
   document.getElementById('addSectionBtn').addEventListener('click', function () {
     var section = makeSection('');
     state.poems.push(section);
@@ -10090,8 +10308,8 @@
   });
 
   // "⋯" book menu -- on the home grid and beside the open book's title:
-  // Duplicate, Archive / Unarchive, and (archived books only) Delete
-  // permanently.
+  // Duplicate, Archive / Unarchive, and (archived books only) Delete,
+  // which keeps the book in Recently deleted for RECOVER_DAYS.
   var bookMenu = document.getElementById('bookMenu');
   var bookMenuEntry = null;
   var bookMenuBtn = null;
@@ -10192,7 +10410,7 @@
         row.className = 'chapbook-row' + (entry.id === state.chapbookId ? ' current' : '');
         row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
           '<button class="chapbook-restore" type="button" title="Unarchive">↺</button>' +
-          '<button class="chapbook-del" type="button" title="Delete permanently">×</button>';
+          '<button class="chapbook-del" type="button" title="Delete (restorable for 7 days)">×</button>';
         row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled book';
         row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
         row.addEventListener('click', function () { loadChapbook(entry.id); });
@@ -11204,9 +11422,94 @@
       btn.setAttribute('aria-expanded', 'true');
     });
     panel.addEventListener('click', function (e) { e.stopPropagation(); });
-    document.addEventListener('click', close);
+    // A toast's Undo sits outside the panel; it shouldn't close it.
+    document.addEventListener('click', function (e) { if (!(e.target.closest && e.target.closest('.bb-toast'))) close(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { close(); btn.focus(); } });
   })();
+
+  // Poem tiers in Preferences: turn them on or off, and name, add or
+  // remove them. Every change re-draws the poem list's pills.
+  var tierEditList = document.getElementById('tierEditList');
+  var tiersOnBox = document.getElementById('tiersOnBox');
+  var tierRenameTimer = null;
+  function renderTierPrefs() {
+    tiersOnBox.checked = poemTiers.on;
+    document.getElementById('tierEdit').hidden = !poemTiers.on;
+    tierEditList.innerHTML = '';
+    poemTiers.tiers.forEach(function (t) {
+      var row = document.createElement('div');
+      row.className = 'tier-edit-row';
+      var dot = document.createElement('span');
+      dot.className = 'tier-dot';
+      dot.style.setProperty('--tier', tierColor(t));
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = 40;
+      input.value = t.name;
+      input.placeholder = 'Tier name';
+      input.setAttribute('aria-label', 'Tier name');
+      input.addEventListener('input', function () {
+        t.name = input.value;
+        persistPoemTiers(true);
+        clearTimeout(tierRenameTimer);
+        tierRenameTimer = setTimeout(refreshTierPills, 250);
+      });
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'tier-edit-remove';
+      rm.textContent = '×';
+      rm.title = 'Remove this tier';
+      rm.setAttribute('aria-label', 'Remove tier ' + tierName(t));
+      rm.addEventListener('click', function () { removeTier(t); });
+      row.append(dot, input, rm);
+      tierEditList.appendChild(row);
+    });
+  }
+  function refreshTierPills() {
+    if (state && state.poems && bookFormOf(state) === 'collection') renderPoems();
+  }
+  // Removing a tier leaves its poems with none; Undo puts it back where it
+  // was, and their marks come back with it (the poems kept the id).
+  function removeTier(t) {
+    var at = poemTiers.tiers.indexOf(t);
+    if (at < 0) return;
+    poemTiers.tiers.splice(at, 1);
+    persistPoemTiers(true);
+    renderTierPrefs();
+    refreshTierPills();
+    showToast('Removed the “' + tierName(t) + '” tier.', 'Undo', function () {
+      if (tierById(t.id)) return;
+      poemTiers.tiers.splice(Math.min(at, poemTiers.tiers.length), 0, t);
+      persistPoemTiers(true);
+      renderTierPrefs();
+      refreshTierPills();
+    });
+  }
+  tiersOnBox.addEventListener('change', function () {
+    poemTiers.on = tiersOnBox.checked;
+    persistPoemTiers(true);
+    renderTierPrefs();
+    refreshTierPills();
+  });
+  document.getElementById('tierAddBtn').addEventListener('click', function () {
+    var t = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: '' };
+    poemTiers.tiers.push(t);
+    persistPoemTiers(true);
+    renderTierPrefs();
+    var inputs = tierEditList.querySelectorAll('input');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  // From a poem's tier menu: open Preferences on the tier names.
+  function openPrefsAtTiers() {
+    var panel = document.getElementById('prefsPanel');
+    if (panel.hidden) document.getElementById('prefsBtn').click();
+    if (!poemTiers.on) { poemTiers.on = true; persistPoemTiers(true); renderTierPrefs(); }
+    var edit = document.getElementById('tierEdit');
+    edit.scrollIntoView({ block: 'nearest' });
+    var first = edit.querySelector('input');
+    if (first) first.focus();
+  }
+  renderTierPrefs();
 
   // Smart punctuation (a preference): as you type, straight quotes turn
   // curly -- opening after a space, dash or bracket, closing (and
@@ -11248,7 +11551,13 @@
   function applyFormWording() {
     var form = bookFormOf(state), f = TEXT_FORMS[form];
     document.getElementById('addPoemBtn').textContent = '+ Add ' + f.one;
+    document.getElementById('addPoemTopBtn').textContent = '+ Add ' + f.one;
     document.getElementById('addSectionBtn').textContent = '+ Add ' + f.section;
+    // Poetry: the Add poem below the list matches the one above it.
+    var poetry = form === 'collection';
+    document.getElementById('addPoemBtn').classList.toggle('btn-ghost', poetry);
+    document.getElementById('addPoemBtn').classList.toggle('is-subtle', poetry);
+    document.getElementById('addSectionBtn').classList.toggle('is-subtle', poetry);
     var seg = document.getElementById('entriesViewSeg');
     seg.querySelector('[data-view="sections"] .vs-label').textContent = Cap(f.section) + ' View';
     seg.querySelector('[data-view="sections"]').title = 'Just the ' + f.section + ' titles, to rename or reorder whole ' + f.section + 's';
@@ -12619,7 +12928,7 @@
     var row = document.createElement('div');
     row.className = 'chapbook-row' + (isPictureBookShown() && entry.id === pbId ? ' current' : '');
     row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
-      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete permanently">×</button>'
+      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete (restorable for 7 days)">×</button>'
         : '<button class="chapbook-restore" type="button" title="Archive">⤓</button>');
     row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled picture book';
     row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
@@ -16021,7 +16330,7 @@
     var row = document.createElement('div');
     row.className = 'chapbook-row' + (isCartoonShown() && entry.id === cbId ? ' current' : '');
     row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
-      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete permanently">×</button>'
+      (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete (restorable for 7 days)">×</button>'
         : '<button class="chapbook-restore" type="button" title="Archive">⤓</button>');
     row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled cartoon book';
     row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
