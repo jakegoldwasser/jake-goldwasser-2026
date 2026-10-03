@@ -4603,6 +4603,12 @@
   // stripping it -- used for body lines, which now render that markup
   // as real formatting; titles still strip it since they don't support
   // inline styling.
+  // Google Docs' markdown export ends every heading with an anchor id,
+  // "# Far Rockaway {#far-rockaway}" -- never part of the title.
+  function stripHeadingAnchor(t) {
+    return String(t || '').replace(/\s*\\?\{#[^{}]*\\?\}\s*$/, '');
+  }
+
   function cleanMarkdownText(s, keepEmphasisMarkers) {
     s = String(s || '');
     s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
@@ -4770,7 +4776,7 @@
       if (headingMatch) {
         finishPoem();
         var level = headingMatch[1].length;
-        var titleRaw = headingMatch[2] || '';
+        var titleRaw = stripHeadingAnchor(headingMatch[2] || '');
         var title = cleanMarkdownText(titleRaw).replace(/\s+/g, ' ').trim();
         if (entryLevel !== null && level < entryLevel) {
           items.push({ id: makeId(), kind: 'section', title: title });
@@ -4973,6 +4979,12 @@
     if (!s) return s;
     if (RETIRED_FONT_KEYS[s.bodyFontChoice]) s.bodyFontChoice = RETIRED_FONT_KEYS[s.bodyFontChoice];
     if (RETIRED_FONT_KEYS[s.titleFontChoice]) s.titleFontChoice = RETIRED_FONT_KEYS[s.titleFontChoice];
+    // Titles imported before stripHeadingAnchor kept the Google Docs anchor.
+    [s.poems, s.archivedPoems, s.deletedPoems].forEach(function (list) {
+      (Array.isArray(list) ? list : []).forEach(function (p) {
+        if (p && typeof p.title === 'string') p.title = stripHeadingAnchor(p.title);
+      });
+    });
     return s;
   }
 
