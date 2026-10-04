@@ -3031,6 +3031,7 @@
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <button type="button" role="menuitem" data-action="move">Move to another book…</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
+  <button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>
 </div>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -3460,21 +3461,25 @@
   // and only then is gone. Books keep theirs in `recentlyDeleted` (synced
   // with the library); things inside a book keep theirs in the book
   // (`deletedPoems`, a picture book's or cartoon book's `deleted`).
-  var RECOVER_DAYS = 7, RECOVER_MS = RECOVER_DAYS * 24 * 3600 * 1000;
-  function freshDeleted(list) {
-    var cut = Date.now() - RECOVER_MS;
+  // Poems (and every text book's entries) are kept longer, ENTRY_RECOVER_DAYS:
+  // they can be deleted straight from the book, not only from the archive.
+  // Books stay at 7 because the Lambda prunes `recentlyDeleted` at 7 too.
+  var RECOVER_DAYS = 7, ENTRY_RECOVER_DAYS = 30, DAY_MS = 24 * 3600 * 1000;
+  function freshDeleted(list, days) {
+    var cut = Date.now() - (days || RECOVER_DAYS) * DAY_MS;
     return (Array.isArray(list) ? list : []).filter(function (d) { return d && d.deletedAt > cut; });
   }
-  function daysLeftLabel(deletedAt) {
-    var days = Math.ceil((deletedAt + RECOVER_MS - Date.now()) / (24 * 3600 * 1000));
+  function daysLeftLabel(deletedAt, keepDays) {
+    var days = Math.ceil((deletedAt + (keepDays || RECOVER_DAYS) * DAY_MS - Date.now()) / DAY_MS);
     return days <= 1 ? 'Gone for good within a day' : days + ' days left';
   }
   // The Recently deleted part of an archive panel: each item's name, how
   // long it's kept, and Restore.
-  function recentlyDeletedSection(list, nameOf, onRestore) {
+  function recentlyDeletedSection(list, nameOf, onRestore, keepDays) {
+    keepDays = keepDays || RECOVER_DAYS;
     var wrap = document.createElement('div');
     wrap.className = 'recent-deleted';
-    wrap.innerHTML = '<div class="recent-deleted-head">Recently deleted</div><p class="recent-deleted-note">Kept for ' + RECOVER_DAYS + ' days, then deleted for good.</p>';
+    wrap.innerHTML = '<div class="recent-deleted-head">Recently deleted</div><p class="recent-deleted-note">Kept for ' + keepDays + ' days, then deleted for good.</p>';
     list.forEach(function (d, i) {
       var row = document.createElement('div');
       row.className = 'recent-deleted-row';
@@ -3483,7 +3488,7 @@
       name.textContent = nameOf(d);
       var left = document.createElement('span');
       left.className = 'recent-deleted-left';
-      left.textContent = daysLeftLabel(d.deletedAt);
+      left.textContent = daysLeftLabel(d.deletedAt, keepDays);
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn btn-sm';
@@ -8470,6 +8475,7 @@
     var idx = entryMenuIndex;
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
+    else if (item.dataset.action === 'delete') deletePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
     else if (item.dataset.action === 'series') toggleSeries(idx);
     else duplicatePoem(idx);
@@ -9588,7 +9594,7 @@
 
   function updateArchiveButton() {
     var n = (state.archivedPoems || []).length;
-    state.deletedPoems = freshDeleted(state.deletedPoems);
+    state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS);
     var d = state.deletedPoems.length;
     if (!n && !d) archiveOpen = false;
     syncArchivePanel({ panel: archivePanel, title: document.getElementById('archiveTitle'), label: 'Archived ' + formNouns().many,
@@ -9631,6 +9637,28 @@
     renderAll();
   }
 
+  // Delete straight from the book, skipping the archive: kept in the
+  // archive panel's Recently deleted for ENTRY_RECOVER_DAYS, and restored
+  // to the same place in the book (`from`/`at`, as spreads do).
+  async function deletePoem(index) {
+    var target = state.poems[index];
+    if (!target) return;
+    if (!entryIsEmpty(target)) {
+      var label = isSection(target)
+        ? 'the “' + sectionLabel(target) + '” ' + formNouns().section
+        : '“' + entryLabel(target) + '”';
+      var ok = await confirmDialog('Delete ' + label + '? You can restore it from Recently deleted, under the archive, for ' + ENTRY_RECOVER_DAYS + ' days.', 'Delete');
+      if (!ok) return;
+    }
+    var poem = state.poems.splice(index, 1)[0];
+    if (!poem) return;
+    delete expandedCompactIds[poem.id];
+    if (!entryIsEmpty(poem)) state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS).concat([{ deletedAt: Date.now(), poem: poem, from: 'book', at: index }]);
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+
   function restoreArchivedPoem(i) {
     var archived = state.archivedPoems || [];
     var poem = archived.splice(i, 1)[0];
@@ -9646,18 +9674,25 @@
   function renderArchiveList() {
     archiveList.innerHTML = '';
     var archived = state.archivedPoems || [];
-    state.deletedPoems = freshDeleted(state.deletedPoems);
+    state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS);
     if (state.deletedPoems.length) {
       archiveList.appendChild(recentlyDeletedSection(state.deletedPoems, function (d) {
         return (d.poem.title || (isSection(d.poem) ? 'Untitled' : entryLabel(d.poem))) + (isSection(d.poem) ? ' (' + formNouns().section + ')' : '');
       }, function (d) {
-        // Back where it was deleted from: the archive.
+        // Back where it was deleted from: its place in the book, or the archive.
         state.deletedPoems = state.deletedPoems.filter(function (x) { return x !== d; });
+        if (d.from === 'book') {
+          state.poems.splice(Math.min(typeof d.at === 'number' ? d.at : state.poems.length, state.poems.length), 0, d.poem);
+          persist();
+          renderAll();
+          renderArchiveList();
+          return;
+        }
         state.archivedPoems = (state.archivedPoems || []).concat([d.poem]);
         persist();
         renderArchiveList();
         updateArchiveButton();
-      }));
+      }, ENTRY_RECOVER_DAYS));
     }
     if (!archived.length) {
       if (!state.deletedPoems.length) archiveList.innerHTML = '<div class="status-line">Nothing archived.</div>';
@@ -9677,13 +9712,13 @@
       var deleteBtn = document.createElement('button');
       deleteBtn.className = 'btn btn-ghost btn-danger';
       deleteBtn.type = 'button';
-      deleteBtn.title = 'Delete (kept in Recently deleted for ' + RECOVER_DAYS + ' days)';
+      deleteBtn.title = 'Delete (kept in Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days)';
       deleteBtn.textContent = '×';
       deleteBtn.addEventListener('click', async function () {
-        var ok = await confirmDialog('Delete “' + (poem.title || entryLabel(poem)) + '”? You can restore it from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete');
+        var ok = await confirmDialog('Delete “' + (poem.title || entryLabel(poem)) + '”? You can restore it from Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days.', 'Delete');
         if (!ok) return;
         var gone = state.archivedPoems.splice(i, 1)[0];
-        state.deletedPoems = freshDeleted(state.deletedPoems).concat([{ deletedAt: Date.now(), poem: gone }]);
+        state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS).concat([{ deletedAt: Date.now(), poem: gone }]);
         persist();
         renderArchiveList();
         updateArchiveButton();
@@ -9698,10 +9733,10 @@
   emptyArchiveBtn.addEventListener('click', async function () {
     var archived = state.archivedPoems || [];
     if (!archived.length) return;
-    var ok = await confirmDialog('Delete all ' + archived.length + ' archived items? You can restore them from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete');
+    var ok = await confirmDialog('Delete all ' + archived.length + ' archived items? You can restore them from Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
     var now = Date.now();
-    state.deletedPoems = freshDeleted(state.deletedPoems).concat(archived.map(function (poem) { return { deletedAt: now, poem: poem }; }));
+    state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS).concat(archived.map(function (poem) { return { deletedAt: now, poem: poem }; }));
     state.archivedPoems = [];
     persist();
     renderArchiveList();
