@@ -122,7 +122,16 @@ main {
 .wx-day b { font-weight: 700; }
 .wx-day .sep { color: var(--muted); margin: 0 0.35em; }
 .wx-day .rain { color: var(--soon); }
-.row .when { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.3em; }
+/* The hour sits in a subway bullet, colored like a line by the weather:
+   N/Q/R/W yellow for sun, L/S gray for clouds or fog, A/C/E blue for rain,
+   7 purple for storms, white for snow. */
+.bullet.wx { font-variant-numeric: tabular-nums; }
+.bullet.wx.two { font-size: 0.68em; width: 1.62em; height: 1.62em; letter-spacing: -0.04em; }
+.bullet.wx-sun { background: #fccc0a; color: #000; }
+.bullet.wx-cloud { background: #808183; }
+.bullet.wx-rain { background: var(--blue); }
+.bullet.wx-storm { background: #b933ad; }
+.bullet.wx-snow { background: #f4f4f1; color: #000; }
 .row .dest small { color: var(--soon); font-size: 0.75em; margin-left: 0.35em; }
 footer {
   display: flex; justify-content: space-between; gap: 16px;
@@ -373,8 +382,15 @@ function conditionText(code) {
   if (code >= 71 && code <= 77) return "Snow";
   if (code >= 80 && code <= 82) return "Showers";
   if (code === 85 || code === 86) return "Snow showers";
-  if (code >= 95) return "Thunderstorms";
+  if (code >= 95) return "Storms";
   return "";
+}
+function conditionClass(code) {
+  if (code <= 1) return "wx-sun";
+  if (code <= 48) return "wx-cloud";
+  if (code >= 95) return "wx-storm";
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "wx-snow";
+  return "wx-rain";
 }
 function deg(t) { return Math.round(t) + "&deg;"; }
 function hourLabel(h) { return h === 12 ? "Noon" : (h % 12 || 12) + (h < 12 ? " AM" : " PM"); }
@@ -401,7 +417,9 @@ function weatherPanel() {
     var i = (hr.time || []).findIndex(function (t) { return parseInt(t.slice(11, 13), 10) === h; });
     if (i === -1) return "";
     var rain = hr.precipitation_probability ? hr.precipitation_probability[i] : 0;
-    return '<div class="row"><span class="when">' + hourLabel(h) + '</span>' +
+    var n = h % 12 || 12;
+    return '<div class="row"><span class="bullet wx ' + conditionClass(hr.weather_code[i]) + (n > 9 ? ' two' : '') +
+      '" title="' + hourLabel(h) + '">' + n + '</span>' +
       '<span class="dest">' + conditionText(hr.weather_code[i]) + (rain >= 20 ? '<small>' + rain + '%</small>' : '') + '</span>' +
       '<span class="mins">' + deg(hr.temperature_2m[i]) + '</span></div>';
   }).join("");
