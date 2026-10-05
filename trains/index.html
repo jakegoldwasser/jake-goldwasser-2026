@@ -112,6 +112,18 @@ main {
 .bullet.rB { background: var(--orange); }
 .bullet.rC { background: var(--blue); }
 .empty { color: var(--muted); font-size: calc(var(--row) * 0.6); margin: auto 0; }
+/* Morning weather (takes the Downtown panel's place 4–9 a.m.): today at a glance
+   on top, then the day's forecast by the hour in the same row style as the trains. */
+.wx-now { display: flex; align-items: center; gap: 0.5em; font-size: var(--row); margin: auto 0; }
+.wx-temp { font-size: 2.4em; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.wx-cond { font-weight: 700; line-height: 1.15; }
+.wx-sub { color: var(--muted); font-size: 0.7em; margin-top: 0.15em; font-variant-numeric: tabular-nums; }
+.wx-day { font-size: calc(var(--row) * 0.8); font-variant-numeric: tabular-nums; margin-bottom: auto; }
+.wx-day b { font-weight: 700; }
+.wx-day .sep { color: var(--muted); margin: 0 0.35em; }
+.wx-day .rain { color: var(--soon); }
+.row .when { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.3em; }
+.row .dest small { color: var(--soon); font-size: 0.75em; margin-left: 0.35em; }
 footer {
   display: flex; justify-content: space-between; gap: 16px;
   font-size: clamp(11px, 1.3vw, 15px); color: var(--muted);
@@ -140,8 +152,20 @@ var CONFIG = {
   hideWithinMinutes: 2,    // trains this close (or closer) can't be caught, so they're left off
   // If the MTA ever blocks direct browser access, put a CORS proxy prefix here,
   // e.g. "https://your-proxy.example.com/?url=" (the feed URL is appended, encoded).
-  proxy: ""
+  proxy: "",
+  // Mornings, the Downtown panel shows today's weather instead (from 4:00 up to 9:00).
+  weatherFromHour: 4,
+  weatherUntilHour: 9,
+  weatherRefreshMinutes: 15,
+  weatherHours: [9, 12, 15, 18]   // the day's forecast is shown at these hours
 };
+
+// Today's forecast for 71st & Columbus from Open-Meteo (free, no key needed).
+var WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=40.7776&longitude=-73.9790" +
+  "&current=temperature_2m,apparent_temperature,weather_code" +
+  "&hourly=temperature_2m,precipitation_probability,weather_code" +
+  "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code" +
+  "&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=1";
 
 var FEED_BASE = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/";
 
@@ -316,6 +340,75 @@ function refresh() {
   });
 }
 
+// ---------- Weather ----------
+var weather = null;      // last good forecast from Open-Meteo
+var weatherError = false;
+
+function refreshWeather() {
+  fetch(WEATHER_URL, { cache: "no-store" }).then(function (res) {
+    if (!res.ok) throw new Error("Weather returned " + res.status);
+    return res.json();
+  }).then(function (data) {
+    weather = data; weatherError = false; render();
+  }, function () {
+    weatherError = true; render();
+  });
+}
+
+function isWeatherTime(d) {
+  var h = d.getHours();
+  return h >= CONFIG.weatherFromHour && h < CONFIG.weatherUntilHour;
+}
+
+// WMO weather codes, as Open-Meteo reports them.
+function conditionText(code) {
+  if (code === 0) return "Clear";
+  if (code === 1) return "Mostly clear";
+  if (code === 2) return "Some clouds";
+  if (code === 3) return "Cloudy";
+  if (code === 45 || code === 48) return "Fog";
+  if (code >= 51 && code <= 57) return "Drizzle";
+  if (code === 66 || code === 67) return "Freezing rain";
+  if (code >= 61 && code <= 65) return code === 65 ? "Heavy rain" : "Rain";
+  if (code >= 71 && code <= 77) return "Snow";
+  if (code >= 80 && code <= 82) return "Showers";
+  if (code === 85 || code === 86) return "Snow showers";
+  if (code >= 95) return "Thunderstorms";
+  return "";
+}
+function deg(t) { return Math.round(t) + "&deg;"; }
+function hourLabel(h) { return h === 12 ? "Noon" : (h % 12 || 12) + (h < 12 ? " AM" : " PM"); }
+
+function weatherPanel() {
+  var head = '<section class="panel"><h2>Today</h2>';
+  if (!weather) {
+    return head + '<div class="group"><div class="empty">' +
+      (weatherError ? "Can't load the weather right now. Retrying." : "Loading the weather&hellip;") +
+      '</div></div></section>';
+  }
+  var cur = weather.current || {}, day = weather.daily || {}, hr = weather.hourly || {};
+  var rainMax = day.precipitation_probability_max ? day.precipitation_probability_max[0] : null;
+
+  var top = '<div class="group"><div class="wx-now"><span class="wx-temp">' + deg(cur.temperature_2m) + '</span>' +
+    '<div><div class="wx-cond">' + (conditionText(cur.weather_code) || "Now") + '</div>' +
+    '<div class="wx-sub">Feels like ' + deg(cur.apparent_temperature) + '</div></div></div>' +
+    '<div class="wx-day">High <b>' + deg(day.temperature_2m_max[0]) + '</b><span class="sep">&middot;</span>' +
+    'Low <b>' + deg(day.temperature_2m_min[0]) + '</b>' +
+    (rainMax != null ? '<span class="sep">&middot;</span><span' + (rainMax >= 30 ? ' class="rain"' : '') + '>Rain ' + rainMax + '%</span>' : '') +
+    '</div></div>';
+
+  var rows = CONFIG.weatherHours.map(function (h) {
+    var i = (hr.time || []).findIndex(function (t) { return parseInt(t.slice(11, 13), 10) === h; });
+    if (i === -1) return "";
+    var rain = hr.precipitation_probability ? hr.precipitation_probability[i] : 0;
+    return '<div class="row"><span class="when">' + hourLabel(h) + '</span>' +
+      '<span class="dest">' + conditionText(hr.weather_code[i]) + (rain >= 20 ? '<small>' + rain + '%</small>' : '') + '</span>' +
+      '<span class="mins">' + deg(hr.temperature_2m[i]) + '</span></div>';
+  }).join("");
+
+  return head + top + '<div class="group"><div class="rows">' + rows + '</div></div></section>';
+}
+
 // ---------- Display ----------
 function pad(n) { return n < 10 ? "0" + n : "" + n; }
 function clockText(d) {
@@ -346,7 +439,9 @@ function render() {
   var now = new Date();
   document.getElementById("clock").textContent = clockText(now);
 
+  var morning = isWeatherTime(now);
   document.getElementById("board").innerHTML = [["N", "Uptown"], ["S", "Downtown"]].map(function (d) {
+    if (d[0] === "S" && morning) return weatherPanel();
     return '<section class="panel"><h2>' + d[1] + '</h2>' + STATIONS.map(function (st) {
       return '<div class="group"><div class="rows">' + rowsHtml(arrivals[st.stop + "|" + d[0]], st.walk) + '</div></div>';
     }).join("") + '</section>';
@@ -368,6 +463,8 @@ render();
 refresh();
 setInterval(refresh, CONFIG.refreshSeconds * 1000);
 setInterval(render, 5000);
+refreshWeather();
+setInterval(refreshWeather, CONFIG.weatherRefreshMinutes * 60000);
 // Reload once a night to pick up any changes and clear memory on old devices.
 setInterval(function () { var d = new Date(); if (d.getHours() === 4 && d.getMinutes() === 0) location.reload(); }, 60000);
 </script>
