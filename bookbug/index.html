@@ -707,6 +707,20 @@
     }
     .poem-card.is-writing .poem-meta-row,
     .poem-card.is-writing .format-aligns { display: none; }
+    /* Previous / next entry and the formatting switch sit in fixed slots
+       left of Done, so the arrows stay put under the thumb however long
+       the title beside them is. */
+    .poem-writer-tools { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+    .poem-writer-tools button {
+      appearance: none; width: 38px; height: 36px; padding: 0; border: none; border-radius: 999px; background: none;
+      color: var(--ink-soft); font-size: 28px; line-height: 1; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .poem-writer-tools button:disabled { color: var(--line-strong); cursor: default; }
+    .poem-writer-tools .poem-writer-fmt { font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; }
+    .poem-writer-tools .poem-writer-fmt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+    /* Formatting hidden: the text runs down to the keyboard. */
+    html.writer-fmt-hidden .poem-card.is-writing .format-toolbar { display: none; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -3030,6 +3044,12 @@
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <button type="button" role="menuitem" data-action="move">Move to another book…</button>
+  <div class="menu-sep" data-send-sep></div>
+  <button type="button" role="menuitem" data-send="top">Send to top</button>
+  <button type="button" role="menuitem" data-send="section-top">Send to top of section</button>
+  <button type="button" role="menuitem" data-send="section-bottom">Send to bottom of section</button>
+  <button type="button" role="menuitem" data-send="bottom">Send to bottom</button>
+  <div class="menu-sep"></div>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>
 </div>
@@ -7588,9 +7608,15 @@
       ed.scrollTop += rect.top - box.top - ed.clientHeight / 3;
     }
   }
+  // Where the list was when the writer opened: the entry's row's
+  // distance from the top of the window, so leaving the writer puts that
+  // row (or the entry you stepped to) back in the same spot instead of
+  // at the top of the page.
+  var writingReturn = null;
   function enterWriting(card, poemId) {
     if (writingCard === card) return;
     if (writingCard) exitWriting();
+    if (!writingReturn) writingReturn = { top: card.getBoundingClientRect().top };
     writingCard = card;
     writingPoemId = poemId;
     closeEntryMenu();
@@ -7599,6 +7625,7 @@
     document.documentElement.classList.add('is-writing');
     window.scrollTo(0, 0);
     syncWriterViewport();
+    updateWriterNav(card);
     var title = card.querySelector('textarea.poem-title');
     if (title) autoGrow(title);
     requestAnimationFrame(function () {
@@ -7628,9 +7655,73 @@
     if (card.classList.contains('poem-compact-expanded') && poemList.contains(card)) {
       delete expandedCompactIds[poemId];
       renderPoems();
-      return;
     }
-    card.scrollIntoView({ block: 'center' });
+    var back = writingReturn;
+    writingReturn = null;
+    var row = poemList.querySelector('[data-poem-id="' + poemId + '"]');
+    if (!row) return;
+    var top = back ? Math.max(8, Math.min(back.top, window.innerHeight - 80)) : window.innerHeight / 3;
+    function place() { window.scrollTo(0, window.scrollY + row.getBoundingClientRect().top - top); }
+    place();
+    // iOS can nudge the page once the keyboard finishes closing.
+    requestAnimationFrame(place);
+  }
+  // The entry before / after the one being written, in book order
+  // (section titles skipped).
+  function writingNeighbor(delta) {
+    var list = state.poems, i = -1;
+    for (var k = 0; k < list.length; k++) if (list[k].id === writingPoemId) { i = k; break; }
+    if (i < 0) return null;
+    for (var j = i + delta; j >= 0 && j < list.length; j += delta) if (!isSection(list[j])) return list[j];
+    return null;
+  }
+  function updateWriterNav(card) {
+    var prev = card.querySelector('.poem-writer-prev'), next = card.querySelector('.poem-writer-next');
+    if (prev) prev.disabled = !writingNeighbor(-1);
+    if (next) next.disabled = !writingNeighbor(1);
+  }
+  // Swaps the writer over to the previous / next entry, staying full
+  // screen (and keeping the keyboard up if the text had it).
+  function stepWriting(delta) {
+    var next = writingNeighbor(delta);
+    if (!writingCard || !next) return;
+    var ed = writingCard.querySelector('.poem-text');
+    var typing = !!ed && document.activeElement === ed;
+    if (writingCard.classList.contains('poem-compact-expanded')) {
+      delete expandedCompactIds[writingPoemId];
+      expandedCompactIds[next.id] = true;
+    }
+    // Section View shows an entry only under an open section.
+    if (sectionsOnly) {
+      for (var k = state.poems.indexOf(next) - 1; k >= 0; k--) {
+        if (isSection(state.poems[k])) { expandedSectionIds[state.poems[k].id] = true; break; }
+      }
+    }
+    writingPoemId = next.id;
+    renderPoems();
+    if (!writingCard || writingCard.dataset.poemId !== next.id) return;
+    updateWriterNav(writingCard);
+    if (typing) {
+      var nextEd = writingCard.querySelector('.poem-text');
+      nextEd.focus();
+      setEditorSelection(nextEd, 0, 0);
+    }
+  }
+  var WRITER_FMT_KEY = 'bookbug.writerFormattingHidden.v1';
+  var writerFmtHidden = false;
+  try { writerFmtHidden = localStorage.getItem(WRITER_FMT_KEY) === '1'; } catch (e) {}
+  document.documentElement.classList.toggle('writer-fmt-hidden', writerFmtHidden);
+  function toggleWriterFormatting() {
+    writerFmtHidden = !writerFmtHidden;
+    try { localStorage.setItem(WRITER_FMT_KEY, writerFmtHidden ? '1' : '0'); } catch (e) {}
+    document.documentElement.classList.toggle('writer-fmt-hidden', writerFmtHidden);
+    document.querySelectorAll('.poem-writer-fmt').forEach(paintWriterFmtBtn);
+    syncWriterViewport();
+  }
+  function paintWriterFmtBtn(b) {
+    b.setAttribute('aria-pressed', writerFmtHidden ? 'false' : 'true');
+    b.title = writerFmtHidden ? 'Show formatting' : 'Hide formatting';
+    b.setAttribute('aria-label', b.title);
   }
   // Only step back through an entry this page load pushed itself. The
   // browser keeps history.state across a reload -- and iOS reloads a tab
@@ -8356,6 +8447,17 @@
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
     seriesBtn.hidden = !poem || isSection(poem) || bookFormOf(state) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
+    // Send to top / bottom of the book or of its section, each shown only
+    // where it would actually move the entry. Entries before the first
+    // section aren't in one, so they get just the book's top and bottom.
+    var targets = poem && !isSection(poem) ? sendTargets(index) : {}, anySend = false;
+    entryMenu.querySelectorAll('[data-send]').forEach(function (b) {
+      var to = targets[b.dataset.send];
+      b.hidden = typeof to !== 'number' || to === index;
+      if (!b.hidden) anySend = true;
+      if (b.dataset.send.indexOf('section') === 0) b.textContent = 'Send to ' + b.dataset.send.slice(8) + ' of ' + formNouns().section;
+    });
+    entryMenu.querySelector('[data-send-sep]').hidden = !anySend;
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -8469,7 +8571,34 @@
   window.addEventListener('scroll', closeTierMenu, true);
   window.addEventListener('resize', closeTierMenu);
 
+  // Where each Send to… item would put the entry at `index`: the book's
+  // first and last places, and (inside a section) the first and last
+  // places under that section's title.
+  function sendTargets(index) {
+    var list = state.poems, start = index, end = index;
+    while (start > 0 && !isSection(list[start - 1])) start--;
+    while (end < list.length - 1 && !isSection(list[end + 1])) end++;
+    var t = { top: 0, bottom: list.length - 1 };
+    if (start > 0) { t['section-top'] = start; t['section-bottom'] = end; }
+    return t;
+  }
+  function sendEntry(index, where) {
+    var poem = state.poems[index], to = sendTargets(index)[where];
+    if (!poem || typeof to !== 'number' || to === index) return;
+    moveItem(index, to);
+    var place = where === 'top' ? 'the top' : where === 'bottom' ? 'the bottom'
+      : (where === 'section-top' ? 'the top of its ' : 'the bottom of its ') + formNouns().section;
+    showToast('“' + entryLabel(poem) + '” is now at ' + place + '.');
+  }
+
   entryMenu.addEventListener('click', function (e) {
+    var send = e.target.closest('button[data-send]');
+    if (send) {
+      var from = entryMenuIndex;
+      closeEntryMenu();
+      sendEntry(from, send.dataset.send);
+      return;
+    }
     var item = e.target.closest('button[data-action]');
     if (!item) return;
     var idx = entryMenuIndex;
@@ -8914,7 +9043,26 @@
     doneBtn.className = 'poem-writer-done';
     doneBtn.textContent = 'Done';
     doneBtn.addEventListener('click', finishWriting);
+    var writerTools = document.createElement('div');
+    writerTools.className = 'poem-writer-tools';
+    function writerTool(cls, html, label, onClick) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = cls;
+      b.innerHTML = html;
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      // Keeps the editor (and the keyboard) focused through the tap.
+      b.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', onClick);
+      writerTools.appendChild(b);
+      return b;
+    }
+    writerTool('poem-writer-prev', '&#8249;', 'Previous ' + formNouns().one, function () { stepWriting(-1); });
+    writerTool('poem-writer-next', '&#8250;', 'Next ' + formNouns().one, function () { stepWriting(1); });
+    paintWriterFmtBtn(writerTool('poem-writer-fmt', 'Aa', '', toggleWriterFormatting));
     writerBar.appendChild(writerTitle);
+    writerBar.appendChild(writerTools);
     writerBar.appendChild(doneBtn);
 
     body.appendChild(writerBar);
@@ -8947,7 +9095,7 @@
       writingCard = card;
       card.classList.add('is-writing');
       setTimeout(function () {
-        if (writingCard === card) markWritingPath(card, true);
+        if (writingCard === card) { markWritingPath(card, true); updateWriterNav(card); }
         syncWriterViewport();
       }, 0);
     }
@@ -9001,6 +9149,8 @@
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
     titleBtn.addEventListener('click', function () {
+      // Remember the row's place before the open card pushes things around.
+      if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
       if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
       else expandedCompactIds[poem.id] = true;
       renderPoems();
