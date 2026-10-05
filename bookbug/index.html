@@ -1480,7 +1480,11 @@
   .home-shelf[data-form="novel"] { --shelf-paper: #F1DDCF; --shelf-accent: #B0532A; --shelf-ink: #2E1A12; }
   .home-shelf[data-form="essays"] { --shelf-paper: #E7DFEA; --shelf-accent: #6E4A7E; --shelf-ink: #24182A; }
   .home-shelf[data-form="picture"] { --shelf-paper: #DCE4E9; --shelf-accent: #4F6E88; --shelf-ink: #1C2934; }
-  .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px; border-top: 5px solid var(--shelf-accent); }
+  /* The books and the shelf's title share one left edge, a clear indent
+     in from New book above -- at 18px in they nearly lined up with it
+     and looked like a miss. The grip hangs out to the left of the title. */
+  .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px 42px; border-top: 5px solid var(--shelf-accent); }
+  .home-shelf .home-shelf-grip { margin-left: -30px; }
   .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; align-items: center; }
   /* One row until "See all" (fitHomeShelves marks the books past it). */
   .home-shelf:not(.is-open) .home-grid > .is-over { display: none; }
@@ -9180,12 +9184,18 @@
     // own start lands exactly where the old text started.
     var tx = from.left - to.rect.left - s * (to.left - to.rect.left);
     var ty = from.top - to.rect.top - s * (to.top - to.rect.top);
-    var timing = { duration: 280, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' };
+    // Quick, with a long soft landing (ease-out-quint): most of the move
+    // happens at once and the last stretch settles gently.
+    var timing = { duration: 200, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' };
+    // will-change keeps the title on its own layer for the glide, so the
+    // browser scales that layer instead of re-drawing the text at a new
+    // size every frame (the source of the jitter).
     toEl.style.transformOrigin = '0 0';
+    toEl.style.willChange = 'transform';
     toEl.animate([
       { transform: 'translate(' + tx + 'px, ' + ty + 'px) scale(' + s + ')' },
-      { transform: 'none' }
-    ], timing);
+      { transform: 'translate(0, 0) scale(1)' }
+    ], timing).finished.then(function () { toEl.style.willChange = ''; }, function () {});
     if (card) {
       // Clip the card to the old row's box and let it open downward, so
       // the page grows out of the row instead of popping in whole.
