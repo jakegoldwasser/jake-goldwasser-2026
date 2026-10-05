@@ -112,22 +112,16 @@ main {
 .bullet.rB { background: var(--orange); }
 .bullet.rC { background: var(--blue); }
 .empty { color: var(--muted); font-size: calc(var(--row) * 0.6); margin: auto 0; }
-/* Morning weather (takes the Downtown panel's place 4–9 a.m.): today at a glance
-   on top, then the day's forecast by the hour in the same row style as the trains. */
-.wx-now { display: flex; align-items: center; gap: 0.5em; font-size: var(--row); margin: auto 0; }
-.wx-temp { font-size: 2.4em; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
-.wx-cond { font-weight: 700; line-height: 1.15; }
-.wx-sub { color: var(--muted); font-size: 0.7em; margin-top: 0.15em; font-variant-numeric: tabular-nums; }
-.wx-day { font-size: calc(var(--row) * 0.72); white-space: nowrap; font-variant-numeric: tabular-nums; margin-bottom: auto; }
-.wx-day b { font-weight: 700; }
-.wx-day .sep { color: var(--muted); margin: 0 0.35em; }
-/* Colors carry the weather, not the clock. Temperatures run cold to hot
-   (violet at or below freezing, blue, green, yellow, orange, red); precipitation words and their
-   chances take their own color: rain blue, drizzle pale blue, freezing rain
+/* Morning weather (takes the Downtown panel's place 4–9 a.m.), drawn in the
+   board's subway language. Each hour is a countdown-clock row: a line bullet
+   holding the temperature, the conditions where a train's destination goes,
+   and the hour where its minutes go. Temperatures are colored cold to hot
+   (violet under 45°, blue, green from 60°, yellow from 65°, orange from 80°,
+   red from 85°). A chance of precipitation sits in a diamond, the subway's
+   express badge, colored by kind: rain blue, drizzle pale blue, freezing rain
    teal, snow icy cyan, storms purple, fog gray. */
-.row .when { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.72em; min-width: 3.6em; }
 .t-freeze { color: #a99cff; }
-.t-cold { color: #5aa9ff; }
+.t-cold { color: #4f97ff; }
 .t-mild { color: #6cbe45; }
 .t-warm { color: #fccc0a; }
 .t-hot { color: #ff6319; }
@@ -138,8 +132,34 @@ main {
 .p-snow { color: #8fe3ff; }
 .p-storm { color: #d36ad0; }
 .p-fog { color: var(--muted); }
-.wx-day .p-none { color: var(--fg); }
-.row .dest small { font-size: 0.75em; margin-left: 0.35em; }
+/* A temperature bullet is filled with its color; light fills (yellow) get
+   black numbers, as the N/Q/R/W do. */
+.bullet.temp { background: currentColor; width: 1.9em; height: 1.9em; font-size: 0.68em; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.bullet.temp > span { color: #fff; padding-left: 0.12em; } /* the degree sign's width, so the number sits centered */
+.bullet.temp.t-warm > span { color: #000; }
+.diamond {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 1.3em; height: 1.3em; transform: rotate(45deg); border-radius: 0.12em;
+  background: currentColor; vertical-align: middle; margin: 0 0.3em 0 0.55em;
+}
+.diamond > span { transform: rotate(-45deg); color: #fff; font-size: 0.4em; font-weight: 700; letter-spacing: -0.03em; }
+.diamond.p-snow > span, .diamond.p-drizzle > span { color: #000; }
+.row .dest.wx { display: flex; align-items: center; overflow: visible; }
+.row .dest.wx .cond { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wx-now { display: flex; align-items: center; gap: 0.45em; font-size: var(--row); margin: auto 0; }
+.wx-now .bullet.temp { font-size: 1.5em; width: 1.9em; height: 1.9em; font-weight: 800; }
+.wx-cond { font-weight: 700; line-height: 1.15; display: flex; align-items: center; }
+.wx-sub { color: var(--muted); font-size: 0.7em; margin-top: 0.2em; font-variant-numeric: tabular-nums; }
+.wx-day { display: flex; align-items: center; gap: 0.3em; font-size: calc(var(--row) * 0.75); white-space: nowrap; margin-bottom: auto; }
+.wx-day .bullet.temp { font-size: 0.85em; }
+.wx-day .gap { width: 0.6em; }
+/* Today's summary takes only the room it needs; the hours get the rest. */
+.group.wx-top { flex: none; padding: 1.2vh 0 1.6vh; display: flex; flex-direction: column; gap: 1.2vh; }
+.wx-top .wx-now, .wx-top .wx-day { margin: 0; }
+@media (orientation: portrait) {
+  .wx-now .bullet.temp { font-size: 1em; }
+  .group.wx-top { padding: 0.6vh 0 1vh; gap: 0.6vh; }
+}
 footer {
   display: flex; justify-content: space-between; gap: 16px;
   font-size: clamp(11px, 1.3vw, 15px); color: var(--muted);
@@ -393,11 +413,12 @@ function conditionText(code) {
   return "";
 }
 function tempClass(t) {
-  if (t <= 32) return "t-freeze";
-  if (t < 50) return "t-cold";
+  t = Math.round(t);
+  if (t < 45) return "t-freeze";
+  if (t < 60) return "t-cold";
   if (t < 65) return "t-mild";
   if (t < 80) return "t-warm";
-  if (t < 90) return "t-hot";
+  if (t < 85) return "t-hot";
   return "t-scorch";
 }
 // The color for a precipitation type, or "" for dry weather (no color).
@@ -410,9 +431,10 @@ function precipClass(code) {
   if (code >= 95) return "p-storm";
   return "";
 }
-function tempSpan(t, tag) { tag = tag || "span"; return '<' + tag + ' class="' + tempClass(t) + '">' + deg(t) + '</' + tag + '>'; }
+function tempSpan(t) { return '<span class="' + tempClass(t) + '">' + deg(t) + '</span>'; }
+function tempBullet(t) { return '<span class="bullet temp ' + tempClass(t) + '"><span>' + deg(t) + '</span></span>'; }
+function diamond(chance, cls) { return '<span class="diamond ' + cls + '"><span>' + chance + '%</span></span>'; }
 function deg(t) { return Math.round(t) + "&deg;"; }
-function hourLabel(h) { return h === 12 ? "Noon" : (h % 12 || 12) + (h < 12 ? " AM" : " PM"); }
 
 function weatherPanel() {
   var head = '<section class="panel"><h2>Today</h2>';
@@ -429,16 +451,15 @@ function weatherPanel() {
   var dayCode = day.weather_code ? day.weather_code[0] : 0;
   var dayP = precipClass(dayCode);
   var dayWord = { "p-snow": "Snow", "p-storm": "Storms", "p-freezing": "Freezing rain" }[dayP] || "Rain";
-  var dayRainCls = dayP && dayP !== "p-fog" ? dayP : (rainMax >= 30 ? "p-rain" : "p-none");
+  var dayRainCls = dayP && dayP !== "p-fog" ? dayP : "p-rain";
   var curP = precipClass(cur.weather_code);
 
-  var top = '<div class="group"><div class="wx-now">' +
-    '<span class="wx-temp ' + tempClass(cur.temperature_2m) + '">' + deg(cur.temperature_2m) + '</span>' +
+  var top = '<div class="group wx-top"><div class="wx-now">' + tempBullet(cur.temperature_2m) +
     '<div><div class="wx-cond' + (curP ? ' ' + curP : '') + '">' + (conditionText(cur.weather_code) || "Now") + '</div>' +
     '<div class="wx-sub">Feels like ' + tempSpan(cur.apparent_temperature) + '</div></div></div>' +
-    '<div class="wx-day">High ' + tempSpan(day.temperature_2m_max[0], "b") + '<span class="sep">&middot;</span>' +
-    'Low ' + tempSpan(day.temperature_2m_min[0], "b") +
-    (rainMax != null ? '<span class="sep">&middot;</span><span class="' + dayRainCls + '">' + dayWord + ' ' + rainMax + '%</span>' : '') +
+    '<div class="wx-day">High ' + tempBullet(day.temperature_2m_max[0]) + '<span class="gap"></span>' +
+    'Low ' + tempBullet(day.temperature_2m_min[0]) +
+    (rainMax >= 20 ? '<span class="gap"></span><span class="' + dayRainCls + '">' + dayWord + '</span>' + diamond(rainMax, dayRainCls) : '') +
     '</div></div>';
 
   var rows = CONFIG.weatherHours.map(function (h) {
@@ -447,10 +468,11 @@ function weatherPanel() {
     var code = hr.weather_code[i], p = precipClass(code);
     var rain = hr.precipitation_probability ? hr.precipitation_probability[i] : 0;
     var chanceCls = p && p !== "p-fog" ? p : "p-rain";
-    return '<div class="row"><span class="when">' + hourLabel(h) + '</span>' +
-      '<span class="dest' + (p ? ' ' + p : '') + '">' + conditionText(code) +
-      (rain >= 20 ? '<small class="' + chanceCls + '">' + rain + '%</small>' : '') + '</span>' +
-      '<span class="mins ' + tempClass(hr.temperature_2m[i]) + '">' + deg(hr.temperature_2m[i]) + '</span></div>';
+    var hour = (h % 12 || 12) + '<small>' + (h < 12 ? "AM" : "PM") + '</small>';
+    return '<div class="row">' + tempBullet(hr.temperature_2m[i]) +
+      '<span class="dest wx' + (p ? ' ' + p : '') + '"><span class="cond">' + conditionText(code) + '</span>' +
+      (rain >= 20 ? diamond(rain, chanceCls) : '') + '</span>' +
+      '<span class="mins">' + hour + '</span></div>';
   }).join("");
 
   return head + top + '<div class="group"><div class="rows">' + rows + '</div></div></section>';
