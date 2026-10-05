@@ -503,6 +503,7 @@
   .tier-group-head:first-child { margin-top: 4px; }
   .tiers-view .poem-grip { visibility: hidden; }
   .tier-group-count { margin-left: auto; font-weight: 500; font-size: 12px; color: var(--ink-faint); }
+  .open-all-btn { flex: 0 0 auto; }
   .tier-group-empty { padding: 6px 2px 4px; font-size: 13px; color: var(--ink-faint); }
   .series-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
   .poem-compact-row .series-tag { margin-left: auto; }
@@ -9691,6 +9692,9 @@
       title.addEventListener('blur', function () { row.draggable = true; });
       row.insertBefore(title, row.querySelector('.section-block-count'));
       row.querySelector('.section-block-count').textContent = nounFor(n, state);
+      if (n) row.insertBefore(makeOpenAllBtn(block.slice(1).filter(function (p) { return !isSection(p); }), function () {
+        expandedSectionIds[section.id] = true;
+      }), row.querySelector('.section-move-btn'));
       // Clicking anywhere on the bar (not its title text or its
       // buttons) shows or hides the section's entry titles, same as ▸.
       // A drag never fires click, so dragging the bar still just moves it.
@@ -9749,6 +9753,30 @@
     });
   }
 
+  // Open all / Close all on a tier's heading or a section's bar: opens
+  // every poem in it in full (Close all folds them back to titles).
+  function makeOpenAllBtn(poems, beforeOpen) {
+    var ids = poems.map(function (p) { return p.id; });
+    var allOpen = ids.every(function (id) { return expandedCompactIds[id]; });
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm open-all-btn';
+    btn.textContent = allOpen ? 'Close all' : 'Open all';
+    btn.draggable = false;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (allOpen) {
+        if (writingCard && ids.indexOf(writingPoemId) >= 0) exitWriting();
+        ids.forEach(function (id) { delete expandedCompactIds[id]; });
+      } else {
+        if (beforeOpen) beforeOpen();
+        ids.forEach(function (id) { expandedCompactIds[id] = true; });
+      }
+      renderPoems();
+    });
+    return btn;
+  }
+
   // Tier View: a group per tier, in the order set in Preferences, then
   // the poems with no tier. Each poem keeps its number from the book's
   // order; rows open the same way as in Title View, and changing a
@@ -9770,6 +9798,7 @@
       head.innerHTML = (color ? '<span class="tier-dot" aria-hidden="true"></span>' : '') + '<span class="tier-group-name"></span><span class="tier-group-count"></span>';
       head.querySelector('.tier-group-name').textContent = name;
       head.querySelector('.tier-group-count').textContent = items.length;
+      if (items.length) head.appendChild(makeOpenAllBtn(items.map(function (it) { return it.poem; })));
       poemList.appendChild(head);
       if (!items.length) {
         var empty = document.createElement('div');
