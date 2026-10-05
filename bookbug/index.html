@@ -9233,10 +9233,7 @@
       // poemList click handler shows it in the preview. The phone has no
       // preview beside the list, so a tap there opens straight away.
       if (!writerMQ.matches && selectedCompactId !== poem.id) {
-        var prev = poemList.querySelector('.poem-compact-row.is-selected');
-        if (prev) prev.classList.remove('is-selected');
-        selectedCompactId = poem.id;
-        row.classList.add('is-selected');
+        selectCompactRow(poem.id);
         return;
       }
       // Remember the row's place before the open card pushes things around.
@@ -9258,6 +9255,11 @@
 
     row.appendChild(handle);
     row.appendChild(titleBtn);
+    // A click anywhere else on the row (its number, the space beside the
+    // title) selects it too; only the title opens it.
+    row.addEventListener('click', function (e) {
+      if (!writerMQ.matches && !e.target.closest('button')) selectCompactRow(poem.id);
+    });
     if (isSeriesOn(poem)) row.appendChild(makeSeriesTag(poem));
     if (tiersShown()) row.appendChild(makeTierPill(poem));
     row.appendChild(makeDotsBtn(index));
@@ -9387,6 +9389,20 @@
   // The closed row last clicked in Title View (or Tier View): the first
   // click selects a poem and shows it in the preview, a second opens it.
   var selectedCompactId = null;
+  function selectCompactRow(id) {
+    selectedCompactId = id;
+    poemList.querySelectorAll('.poem-compact-row').forEach(function (r) {
+      r.classList.toggle('is-selected', r.dataset.poemId === id);
+    });
+  }
+  // A click anywhere outside the selected poem's row lets it go.
+  document.addEventListener('click', function (e) {
+    if (selectedCompactId == null) return;
+    // (A row's own click handlers have already run, so a click that
+    // just selected a row finds it selected here.)
+    var row = e.target.closest && e.target.closest('.poem-compact-row');
+    if (!row || row.dataset.poemId !== selectedCompactId) selectCompactRow(null);
+  });
   // The Sections | Titles | Entries switch above the list. Titles is
   // poemsViewMode 'compact', Entries is 'full'; Sections is sectionsOnly
   // (below), available once the book has at least one section.
