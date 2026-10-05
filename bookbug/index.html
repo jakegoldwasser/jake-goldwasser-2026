@@ -740,6 +740,11 @@
     background: var(--surface-2); padding: 6px 10px; margin-bottom: 4px;
   }
   .poem-compact-row.dragging { opacity: 0.4; }
+  /* Selected (shown in the preview, one more click opens it). Same 1px
+     border width as a plain row, so selecting doesn't nudge anything;
+     the inset bar (as on a selected picture-book text field) sets it
+     apart from a section bar, which is also outlined. */
+  .poem-compact-row.is-selected { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
   .poem-compact-row .poem-handle { flex: 0 0 26px; flex-direction: row; gap: 6px; padding-top: 0; justify-content: flex-start; }
   .poem-title-compact {
     flex: 1; min-width: 0; border: none; background: transparent; font-family: "Zilla Slab", ui-serif, serif;
@@ -9188,7 +9193,7 @@
 
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
-    row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '');
+    row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '') + (selectedCompactId === poem.id ? ' is-selected' : '');
     row.dataset.poemId = poem.id;
     row.draggable = true;
 
@@ -9206,6 +9211,16 @@
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
     titleBtn.addEventListener('click', function () {
+      // On desktop a first click only selects the row; the delegated
+      // poemList click handler shows it in the preview. The phone has no
+      // preview beside the list, so a tap there opens straight away.
+      if (!writerMQ.matches && selectedCompactId !== poem.id) {
+        var prev = poemList.querySelector('.poem-compact-row.is-selected');
+        if (prev) prev.classList.remove('is-selected');
+        selectedCompactId = poem.id;
+        row.classList.add('is-selected');
+        return;
+      }
       // Remember the row's place before the open card pushes things around.
       if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
       if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
@@ -9351,6 +9366,9 @@
   // Tier View: poems grouped by tier (poetry, with tiers switched on).
   var tiersView = false;
   var expandedCompactIds = {};
+  // The closed row last clicked in Title View (or Tier View): the first
+  // click selects a poem and shows it in the preview, a second opens it.
+  var selectedCompactId = null;
   // The Sections | Titles | Entries switch above the list. Titles is
   // poemsViewMode 'compact', Entries is 'full'; Sections is sectionsOnly
   // (below), available once the book has at least one section.
