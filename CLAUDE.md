@@ -43,3 +43,7 @@ Use these words, and only these, in the UI, in conversation and in commit messag
 ## Train board (`trains/`)
 
 Jake's departure board for 71st & Columbus (the 1/2/3 at 72 St–Broadway and the B/C at 72 St–Central Park West), live from the MTA's GTFS-realtime feeds, read straight from the browser (no server, no key). It lives at jake-goldwasser.com/trains/, is not linked from the site's nav, and is `noindex`. It moved here from a Netlify Drop site so changes deploy with the rest of the site. One file, `trains/index.html`; walk times, stations and how many trains to show are in `CONFIG` and `STATIONS` at the top of its script.
+
+## Tweak (`tweak/`)
+
+Jake's sandbox of whole-site design combinations (Catalogue × Swatch), live at jake-goldwasser.com/tweak/, not linked from the nav and `noindex`. Each `cNN-*.html` is a small config passed to `Combo()` in `combo.js`; structure is in `combo.css`, shared content in `data.js`, page switching / gallery / lightbox in `site.js`. The Tweaks button sets only CSS variables (colorway, line width, corners, spacing, padding) and remembers them per page in the browser. Never use Fraunces. Keep the pages spare: no intro lines, labels or hints.
