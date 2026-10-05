@@ -10048,12 +10048,18 @@
         'px; font-size:' + (plan.globalSize * scale).toFixed(1) + 'px; line-height:1; color:#241A1F;">' + escapeHtml(label) + '</div>';
     }
     pageNum = label;
-    var sizePx = (9.5 * scale).toFixed(1);
-    var bottom = (10 * scale).toFixed(1);
-    var side = (12 * scale).toFixed(1);
-    var style = 'position:absolute; bottom:' + bottom + 'px; font-size:' + sizePx + 'px; color:#6B5A42; font-variant-numeric:tabular-nums;';
-    if (state.pageNumberStyle === 'corners') {
+    // Same baselines and edges as the PDF (footerY / cornerY up from the
+    // bottom, corners flush with the text block). With line-height 1 the
+    // baseline sits about 0.2em above the box's bottom, so the box goes
+    // that much lower. (It used to sit 10pt up, well below where it
+    // prints, which made it look jammed against the page edge.)
+    var corners = state.pageNumberStyle === 'corners';
+    var baseline = corners ? 30 : 36;
+    var style = 'position:absolute; bottom:' + ((baseline - 9.5 * 0.2) * scale).toFixed(1) + 'px; font-size:' + (9.5 * scale).toFixed(1) +
+      'px; line-height:1; color:#6B5A42; font-variant-numeric:tabular-nums;';
+    if (corners) {
       var isRecto = (pageNum % 2) === 1;
+      var side = ((isRecto ? plan.marginRight : plan.marginLeft) * scale).toFixed(1);
       return '<div style="' + style + (isRecto ? 'right' : 'left') + ':' + side + 'px;">' + pageNum + '</div>';
     }
     return '<div style="' + style + 'left:0; right:0; text-align:center;">' + pageNum + '</div>';
