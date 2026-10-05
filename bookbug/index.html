@@ -9144,6 +9144,48 @@
     return card;
   }
 
+  // Opening an entry from Title View swaps its small title for the
+  // editor's large one in a new spot, and closing swaps back -- an
+  // instant jump that's hard to follow. So the new title starts where
+  // and at the size the old one was and glides into place (FLIP), and
+  // an opening card unrolls down from the row it replaced. Desktop only:
+  // the phone goes straight to the full-screen writer.
+  var reduceMotionMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function titleTextBox(el) {
+    var r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    return {
+      left: r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft),
+      top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop),
+      fontSize: parseFloat(cs.fontSize), rect: r
+    };
+  }
+  function animateTitleSwap(from, toEl, card) {
+    if (!from || !toEl || !toEl.animate || reduceMotionMQ.matches || writerMQ.matches) return;
+    var to = titleTextBox(toEl);
+    var s = from.fontSize / to.fontSize;
+    // Scaling about the element's top-left corner, shift so the text's
+    // own start lands exactly where the old text started.
+    var tx = from.left - to.rect.left - s * (to.left - to.rect.left);
+    var ty = from.top - to.rect.top - s * (to.top - to.rect.top);
+    var timing = { duration: 280, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' };
+    toEl.style.transformOrigin = '0 0';
+    toEl.animate([
+      { transform: 'translate(' + tx + 'px, ' + ty + 'px) scale(' + s + ')' },
+      { transform: 'none' }
+    ], timing);
+    if (card) {
+      // Clip the card to the old row's box and let it open downward, so
+      // the page grows out of the row instead of popping in whole.
+      var c = card.getBoundingClientRect(), r = from.rowRect;
+      var top = Math.max(0, r.top - c.top), bottom = Math.max(0, c.bottom - r.bottom);
+      var left = Math.max(0, r.left - c.left), right = Math.max(0, c.right - r.right);
+      card.animate([
+        { clipPath: 'inset(' + top + 'px ' + right + 'px ' + bottom + 'px ' + left + 'px round 6px)' },
+        { clipPath: 'inset(0 0 0 0 round 6px)' }
+      ], timing);
+    }
+  }
+
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
     row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '');
@@ -9168,7 +9210,11 @@
       if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
       if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
       else expandedCompactIds[poem.id] = true;
+      var fromTitle = titleTextBox(titleBtn);
+      fromTitle.rowRect = row.getBoundingClientRect();
       renderPoems();
+      var openCard = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"]');
+      if (openCard) animateTitleSwap(fromTitle, openCard.querySelector('textarea.poem-title'), openCard);
       // On a phone, skip the cramped inline card and go straight into
       // the full-screen writer (focusing it is what opens that).
       if (expandedCompactIds[poem.id] && writerMQ.matches) {
@@ -9220,7 +9266,9 @@
       expandedTitleRow.addEventListener('click', function (e) {
         if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) {
           delete expandedCompactIds[poem.id];
+          var fromTitle = titleTextBox(expandedCard.querySelector('textarea.poem-title'));
           renderPoems();
+          animateTitleSwap(fromTitle, poemList.querySelector('.poem-compact-row[data-poem-id="' + poem.id + '"] .poem-title-compact-toggle'));
         }
       });
       var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
