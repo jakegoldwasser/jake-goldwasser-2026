@@ -401,7 +401,10 @@
   /* An entry's title is the same size closed (Title View's row) as open
      (Poem View's card), and an opened card keeps it on the row's line, so
      opening or closing an entry leaves its title exactly where it was. */
-  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); }
+  /* Closed, a title is 18px (with the zoom); open, it is set a quarter
+     bigger than the entry's text (--entry-title-open, from
+     setEntryTitleSize), and grows to that size as the entry opens. */
+  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); --entry-title-open: var(--entry-title-size); }
   .poem-card {
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
     padding: 10px 14px 12px; margin-bottom: 6px; display: flex; gap: 10px;
@@ -412,7 +415,7 @@
      drag), so the pane still spans the card with even margins. */
   .poem-card { position: relative; --card-top: 6px; }
   .poem-card > .poem-handle {
-    position: absolute; left: -36px; top: calc(var(--card-top) + 1px); height: calc(var(--entry-title-size) * 1.2 + 8px);
+    position: absolute; left: -36px; top: calc(var(--card-top) + 1px); height: calc(var(--entry-title-open) * 1.2 + 8px);
     justify-content: center; width: 32px; padding: 0; cursor: default;
   }
   .poem-card > .poem-handle .poem-num { width: 32px; justify-content: center; }
@@ -457,7 +460,7 @@
        -- without it, this field's own intrinsic minimum width could
        force the whole card (and page) wider than a narrow viewport. */
     flex: 1; min-width: 0; border: none; background: transparent;
-    font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: var(--entry-title-size); padding: 3px 2px 7px; outline: none;
+    font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: var(--entry-title-open); padding: 3px 2px 7px; outline: none;
     color: var(--ink); resize: none; overflow: hidden; line-height: 1.2; display: block;
   }
   textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
@@ -500,10 +503,15 @@
   /* An open entry's close button sits in the grip's slot, level with
      its title. (Phones open entries full screen, with their own Done.) */
   .poem-close-btn {
-    position: absolute; left: 7px; top: calc(var(--card-top) + (var(--entry-title-size) * 1.2 + 8px) / 2); transform: translateY(-50%);
+    position: absolute; left: 7px; top: 8px;
     width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
     color: var(--ink-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
   }
+  /* Its tier and ⋯ sit in the page's top right corner, level with the
+     close button. */
+  .poem-card-corner { position: absolute; top: 8px; right: 10px; display: flex; align-items: center; gap: 8px; }
+  .poem-card-corner .dots-btn { margin-left: 0; }
+  .poem-card.is-writing .poem-card-corner { display: none; }
   .poem-close-btn:hover { border-color: var(--accent); color: var(--accent); }
   @media (max-width: 700px) { .poem-close-btn { display: none; } }
   .poem-card.is-writing .poem-close-btn { display: none; }
@@ -9401,13 +9409,41 @@
   function setEntryOpen(id, open) {
     var el = writerMQ.matches ? null : entryTitleEl(id);
     var before = el && el.getBoundingClientRect().top;
+    var fromSize = el && getComputedStyle(el).fontSize;
     if (open) expandedCompactIds[id] = true; else delete expandedCompactIds[id];
     renderPoems();
     var after = el && entryTitleEl(id);
     if (after) {
       var drift = after.getBoundingClientRect().top - before;
       if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
+      growTitle(after, fromSize);
     }
+  }
+  // The title eases from the size it was to its new one (an opened
+  // title's field is fitted to its text once it gets there).
+  function growTitle(el, fromSize) {
+    if (!fromSize || getComputedStyle(el).fontSize === fromSize) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var isField = el.tagName === 'TEXTAREA';
+    el.style.transition = 'none';
+    el.style.fontSize = fromSize;
+    // One line tall, in ems, so its height grows along with the type.
+    if (isField) { el.style.width = '100%'; el.rows = 1; el.style.height = 'auto'; }
+    void el.offsetWidth;
+    el.style.transition = 'font-size .28s ease';
+    el.style.fontSize = '';
+    // Finished on transitionend, or by a timer if that never comes (a
+    // hidden tab, a re-render).
+    var finished = false;
+    function done(e) {
+      if (finished || (e && e.propertyName !== 'font-size')) return;
+      finished = true;
+      el.removeEventListener('transitionend', done);
+      el.style.transition = '';
+      if (isField) fitTitleInput(el);
+    }
+    el.addEventListener('transitionend', done);
+    setTimeout(done, 400);
   }
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
@@ -9495,6 +9531,12 @@
       closeBtn.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6.5 6 2l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       closeBtn.addEventListener('click', function () { setEntryOpen(poem.id, false); });
       expandedCard.appendChild(closeBtn);
+      if (!writerMQ.matches) {
+        var corner = document.createElement('div');
+        corner.className = 'poem-card-corner';
+        expandedCard.querySelectorAll('.poem-title-row > .series-tag, .poem-title-row > .tier-pill, .poem-title-row > .dots-btn').forEach(function (el) { corner.appendChild(el); });
+        expandedCard.appendChild(corner);
+      }
       var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
       expandedTitleRow.addEventListener('click', function (e) {
         if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) setEntryOpen(poem.id, false);
@@ -9565,7 +9607,8 @@
   // Sizes a title input to its own text (or placeholder), so the space
   // after it belongs to the row instead of the input.
   function fitTitleInput(input) {
-    if (!input.isConnected) return;
+    // (Mid-grow it's left full width; growTitle fits it when done.)
+    if (!input.isConnected || input.style.transition) return;
     var cs = getComputedStyle(input);
     measureCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
     var textW = measureCtx.measureText(input.value || input.placeholder || '').width;
@@ -10060,7 +10103,7 @@
   // a quarter bigger than the editor's text, so titles read as titles.
   function setEntryTitleSize(plan) {
     var bodyPx = plan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE;
-    document.documentElement.style.setProperty('--entry-title-size', Math.round(Math.max(18 * editorZoom, bodyPx * 1.25)) + 'px');
+    document.documentElement.style.setProperty('--entry-title-open', Math.round(Math.max(18 * editorZoom, bodyPx * 1.25)) + 'px');
   }
   function renderPoems() {
     poemList.innerHTML = '';
