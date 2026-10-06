@@ -1136,6 +1136,8 @@
   .stage-edit-body, .stage-edit-title, .pv-typeset { font-kerning: none; font-variant-ligatures: none; }
   .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
+  /* A note's reference numeral: small and raised, as the PDF sets it. */
+  .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
   .stage-edit-body.opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
   .stage-edit-body.opener-drop > .is-opener::first-letter {
     float: left; font-size: var(--dc-size); line-height: var(--dc-lh); margin: 0 var(--dc-gap) var(--dc-mb) 0; padding: 0;
@@ -3089,6 +3091,13 @@
               <option value="none">Plain</option>
               <option value="caps">First line in capitals</option>
               <option value="drop">Drop cap</option>
+            </select>
+          </div>
+          <div class="field" id="notesField">
+            <label for="noteStyleSelect">Notes</label>
+            <select id="noteStyleSelect">
+              <option value="foot">Footnotes, at the foot of the page</option>
+              <option value="end">Endnotes, after each entry</option>
             </select>
           </div>
           <div class="field" id="proseTypeField">
@@ -5649,7 +5658,30 @@
     return pdfFamily === 'sans' ? 'Arial, Helvetica, sans-serif' : "'Times New Roman', Times, serif";
   }
   function styleFor(weight, italic) { return weight >= 600 ? 'bold' : (italic ? 'italic' : 'regular'); }
+  // Notes are written inline, Pandoc's way: ^[the note's text] where the
+  // reference goes. For setting, each becomes a reference numeral held
+  // between two private-use characters (SUP_A n SUP_B) -- measured and
+  // drawn small and raised -- and its text goes to the foot of the page
+  // or the end of the entry.
+  var SUP_A = '\uE000', SUP_B = '\uE001', SUP_RE = /\uE000(\d+)\uE001/g, NOTE_RE = /\^\[([^\]]*)\]/g;
+  var SUP_SCALE = 0.65, SUP_RISE = 0.36, FN_SCALE = 0.8;
+  function extractNotes(lines) {
+    var notes = [];
+    return {
+      lines: (lines || []).map(function (l) {
+        return String(l || '').replace(NOTE_RE, function (m, t) { notes.push(t.trim()); return SUP_A + notes.length + SUP_B; });
+      }),
+      notes: notes
+    };
+  }
   function measure(text, sizePt, fontChoice, weight, italic) {
+    if (text && text.indexOf(SUP_A) !== -1) {
+      var total = 0;
+      text.split(/\uE000(\d+)\uE001/).forEach(function (part, i) {
+        if (part) total += i % 2 ? measure(part, sizePt * SUP_SCALE, fontChoice, weight, italic) : measure(part, sizePt, fontChoice, weight, italic);
+      });
+      return total;
+    }
     var embedded = EMBEDDED_FONTS[fontChoice];
     if (embedded) {
       var table = embedded[styleFor(weight, italic)].widths;
@@ -5953,7 +5985,8 @@
     var renderLines = [];
     var wasWrapped = false;
     var partStarts = isSeriesOn(poem, state) ? seriesParts(poem) : [];
-    poem.lines.forEach(function (line, li) {
+    var noteSet = extractNotes(poem.lines);
+    noteSet.lines.forEach(function (line, li) {
       // A series part starts a new page (blank lines before it are dropped,
       // so they can't spill a page of nothing).
       if (partStarts.indexOf(li) !== -1) {
@@ -6010,6 +6043,53 @@
       fullOut = false;
     });
 
+    // Notes, set a fifth smaller on rows a fifth shorter: endnotes after
+    // the text ("1. ..."), footnotes kept for the foot of their page.
+    var FN = 0.8, notes = noteSet.notes, footLines = {};
+    function noteText(i) { return notes[i] ? notes[i] : ''; }
+    if (notes.length) {
+      var footMode = (state.noteStyle || 'foot') === 'foot';
+      notes.forEach(function (t, i) {
+        var label = footMode ? SUP_A + (i + 1) + SUP_B + ' ' : (i + 1) + '. ';
+        var hang = measure(stripFormatMarkers(label), sizePt * FN, state.bodyFontChoice, 400);
+        var set = wrapFormatted(label + noteText(i), contentWidthPt - hang, sizePt * FN, state.bodyFontChoice, 0).map(function (w, wi) {
+          return { text: w.text, indent: wi ? hang : 0, small: true, rows: FN };
+        });
+        footLines[i + 1] = set;
+      });
+      if (!footMode) {
+        renderLines.push({ blank: true }, { rule: true, rows: FN });
+        notes.forEach(function (t, i) { footLines[i + 1].forEach(function (l) { renderLines.push(l); }); });
+        footLines = {};
+      }
+    }
+    // Which notes a line refers to.
+    renderLines.forEach(function (rl) {
+      if (!rl.text || rl.small || !footLines[1]) return;
+      var refs = [], m;
+      SUP_RE.lastIndex = 0;
+      while ((m = SUP_RE.exec(rl.text))) refs.push(+m[1]);
+      if (refs.length) rl.refs = refs;
+    });
+    // A page's footnotes take its foot: a short rule, then the notes, with
+    // whatever the text leaves blank above them.
+    function footRows(lines) {
+      var n = 0;
+      lines.forEach(function (l) { (l.refs || []).forEach(function (r) { n += (footLines[r] || []).length * FN; }); });
+      return n ? n + FN : 0;
+    }
+    function closePage(pg, capNow) {
+      var fr = footRows(pg);
+      if (!fr) return pg;
+      var usedRows = pg.reduce(function (a, l) { return a + (l.rows || 1); }, 0);
+      if (capNow - usedRows - fr > 0.01) pg.push({ blank: true, spacer: true, rows: capNow - usedRows - fr });
+      pg.push({ rule: true, rows: FN });
+      var refs = [];
+      pg.forEach(function (l) { (l.refs || []).forEach(function (r) { refs.push(r); }); });
+      refs.forEach(function (r) { (footLines[r] || []).forEach(function (fl) { pg.push(fl); }); });
+      return pg;
+    }
+
     // Fill pages by rows rather than a fixed line count -- an image
     // takes several rows, and moves whole to the next page if it
     // doesn't fit in what's left.
@@ -6020,9 +6100,9 @@
     var keepLines = state.keepLines !== false;
     var pages = [], cur = [], used = 0, cap = firstCap;
     renderLines.forEach(function (rl, ri) {
-      if (rl.pagebreak) { if (cur.length) { pages.push(cur); cur = []; used = 0; cap = laterCap; } return; }
+      if (rl.pagebreak) { if (cur.length) { pages.push(closePage(cur, cap)); cur = []; used = 0; cap = laterCap; } return; }
       var rows = rl.rows || 1;
-      if (cur.length && used + rows > cap) {
+      if (cur.length && used + rows + footRows(cur.concat([rl])) > cap) {
         var carry = [];
         var prev = cur[cur.length - 1];
         if (keepLines && rl.para && prev && prev.para === rl.para && cur.length > 1) {
@@ -6031,11 +6111,11 @@
           for (j = ri; j < renderLines.length && renderLines[j].para === rl.para; j++) n++;
           if (k === 1 || (n === 1 && k >= 3)) carry = [cur.pop()];
         }
-        pages.push(cur); cur = carry; used = carry.length; cap = laterCap;
+        pages.push(closePage(cur, cap)); cur = carry; used = carry.length; cap = laterCap;
       }
       cur.push(rl); used += rows;
     });
-    if (cur.length || !pages.length) pages.push(cur);
+    if (cur.length || !pages.length) pages.push(closePage(cur, cap));
 
     // A "middle" or "bottom" image gets blank space before it on its
     // page: middle centers the image on the page (title included), bottom
@@ -6903,6 +6983,17 @@
     // Tracking (Tc) is text state that outlives ET, so it's put back.
     pushAscii(bytes, ' Tj\n' + (trackPt ? '0 Tc\n' : '') + 'ET\n');
   }
+  // drawText, with any note numerals in it set small and raised.
+  function drawTextSup(bytes, fontRef, sizePt, x, y, text, rgb, trackPt, fontChoice, weight, italic) {
+    if (text.indexOf(SUP_A) === -1) { drawText(bytes, fontRef, sizePt, x, y, text, rgb, trackPt); return; }
+    var cx = x;
+    text.split(/\uE000(\d+)\uE001/).forEach(function (part, i) {
+      if (!part) return;
+      var sz = i % 2 ? sizePt * SUP_SCALE : sizePt;
+      drawText(bytes, fontRef, sz, cx, i % 2 ? y + sizePt * SUP_RISE : y, part, rgb, trackPt);
+      cx += measure(part, sz, fontChoice, weight, italic) + (trackPt ? part.length * trackPt : 0);
+    });
+  }
   function drawLine(bytes, x1, y1, x2, y2, gray, w) {
     pushAscii(bytes, gray.toFixed(3) + ' G\n' + (w || 0.75).toFixed(2) + ' w\n' +
       x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n');
@@ -6919,7 +7010,7 @@
       if (!run.text) return;
       var key = run.bold ? keys.bold : (run.italic ? keys.ital : keys.reg);
       var w = measure(run.text, sizePt, fontChoice, run.bold ? 700 : 400, !!run.italic);
-      drawText(bytes, key, sizePt, curX, y, run.text, rgb);
+      drawTextSup(bytes, key, sizePt, curX, y, run.text, rgb, 0, fontChoice, run.bold ? 700 : 400, !!run.italic);
       if (run.underline) {
         var uy = y - sizePt * 0.09;
         drawLine(bytes, curX, uy, curX + w, uy, rgb[0], Math.max(0.6, sizePt * 0.045));
@@ -6950,7 +7041,7 @@
     atoms.forEach(function (at, i) {
       if (at.sp) { curX += at.w + (i > 0 ? at.t.length * extra : 0); return; }
       var key = at.run.bold ? keys.bold : (at.run.italic ? keys.ital : keys.reg);
-      drawText(bytes, key, sz, curX, y, at.t, rgb, track);
+      drawTextSup(bytes, key, sz, curX, y, at.t, rgb, track, fontChoice, at.run.bold ? 700 : 400, !!at.run.italic);
       if (at.run.underline) {
         var uy = y - sizePt * 0.09;
         drawLine(bytes, curX, uy, curX + at.w, uy, rgb[0], Math.max(0.6, sizePt * 0.045));
@@ -7162,6 +7253,16 @@
             var iy = top - blockH / 2 - rl.h / 2;
             pushAscii(bytes, 'q\n' + rl.w.toFixed(2) + ' 0 0 ' + rl.h.toFixed(2) + ' ' + ix.toFixed(2) + ' ' + iy.toFixed(2) + ' cm\n/' + rl.image + ' Do\nQ\n');
             if (imagesUsed.indexOf(rl.image) === -1) imagesUsed.push(rl.image);
+            return;
+          }
+          if (rl.rule) {
+            var ry = top - rows * layout.lineHeight * 0.45;
+            drawLine(bytes, contentLeft, ry, contentLeft + (contentRight - contentLeft) * 0.3, ry, MUTED_RGB[0], 0.5);
+            return;
+          }
+          if (rl.small) {
+            var sy = top - rows * layout.lineHeight + rows * layout.lineHeight * 0.28;
+            drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt * FN_SCALE, contentLeft + (rl.indent || 0), sy, rl.text, INK_RGB);
             return;
           }
           var lineY = top - layout.lineHeight + layout.lineHeight * 0.28;
@@ -9055,6 +9156,18 @@
     });
     addBtn('format-btn-indent', ICON_OUTDENT, 'Outdent line', function () { indentEditorLines(ed, true); });
     addBtn('format-btn-indent', ICON_INDENT, 'Indent line', function () { indentEditorLines(ed, false); });
+    // A note: ^[ ] at the cursor, the cursor between them to type it.
+    addBtn('format-btn-note', '<span style="font-size:11px; font-weight:700;">x<sup style="font-size:8px;">1</sup></span>', 'Add a note: type it between ^[ and ]', function () {
+      ed.focus();
+      document.execCommand('insertText', false, '^[]');
+      var sel = window.getSelection();
+      if (sel.rangeCount && sel.anchorNode && sel.anchorNode.nodeType === 3 && sel.anchorOffset > 0) {
+        var r = document.createRange();
+        r.setStart(sel.anchorNode, sel.anchorOffset - 1);
+        r.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r);
+      }
+    });
     var fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -11833,7 +11946,7 @@
   // markers for the PDF.
   function renderInlineRunsHtml(text) {
     return parseInlineRuns(text).map(function (run) {
-      var t = escapeHtml(run.text);
+      var t = escapeHtml(run.text).replace(SUP_RE, '<span class="note-ref">$1</span>');
       if (run.bold) t = '<b>' + t + '</b>';
       if (run.italic) t = '<i>' + t + '</i>';
       if (run.underline) t = '<u>' + t + '</u>';
@@ -12164,6 +12277,15 @@
         if (rl.image) {
           html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px; display:flex; align-items:center; justify-content:center;">' +
             '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
+          return;
+        }
+        if (rl.rule) {
+          html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px; position:relative;"><div style="position:absolute; left:0; width:30%; top:45%; border-top:0.5px solid #6B5A42;"></div></div>';
+          return;
+        }
+        if (rl.small) {
+          var shp = (rl.rows * layout.lineHeight * scale).toFixed(2);
+          html += '<div style="font-size:' + FN_SCALE + 'em; height:' + shp + 'px; line-height:' + shp + 'px; text-align:left;' + (rl.indent ? ' padding-left:' + (rl.indent * scale).toFixed(2) + 'px;' : '') + '">' + renderInlineRunsHtml(rl.text) + '</div>';
           return;
         }
         var dropHtml = '';
@@ -13705,6 +13827,7 @@
   });
   document.getElementById('hyphenateCheck').addEventListener('change', function (e) { state.hyphenate = e.target.checked; persist(); renderAll(); });
   document.getElementById('openerSelect').addEventListener('change', function (e) { state.opener = e.target.value; persist(); renderAll(); });
+  document.getElementById('noteStyleSelect').addEventListener('change', function (e) { state.noteStyle = e.target.value; persist(); renderAll(); });
   document.getElementById('runningHeadsSelect').addEventListener('change', function (e) { state.runningHeads = e.target.value; persist(); renderAll(); });
   document.getElementById('keepLinesCheck').addEventListener('change', function (e) { state.keepLines = e.target.checked; persist(); renderAll(); });
   document.getElementById('pageNumbersCheck').addEventListener('change', function (e) {
@@ -13829,6 +13952,7 @@
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
     document.getElementById('hyphenateCheck').checked = !!state.hyphenate;
     document.getElementById('openerSelect').value = state.opener || 'none';
+    document.getElementById('noteStyleSelect').value = state.noteStyle || 'foot';
     document.getElementById('epigraphInput').value = state.epigraph || '';
     document.getElementById('epigraphSourceInput').value = state.epigraphSource || '';
     document.getElementById('acksInput').value = state.acknowledgments || '';
@@ -13841,6 +13965,7 @@
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('proseTypeField').hidden = script;
     document.getElementById('openerField').hidden = script;
+    document.getElementById('notesField').hidden = script;
     document.getElementById('runningHeadsField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
     document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
@@ -14269,7 +14394,12 @@
     return parseInlineRuns(text).map(function (run) {
       if (!run.text) return '';
       var rPr = (run.bold ? '<w:b/>' : '') + (run.italic ? '<w:i/>' : '') + (run.underline ? '<w:u w:val="single"/>' : '');
-      return '<w:r>' + (rPr ? '<w:rPr>' + rPr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escapeXml(run.text).split('\t').join('</w:t><w:tab/><w:t xml:space="preserve">') + '</w:t></w:r>';
+      // Note numerals as Word superscripts.
+      return run.text.split(/\uE000(\d+)\uE001/).map(function (part, i) {
+        if (!part) return '';
+        var pr = rPr + (i % 2 ? '<w:vertAlign w:val="superscript"/>' : '');
+        return '<w:r>' + (pr ? '<w:rPr>' + pr + '</w:rPr>' : '') + '<w:t xml:space="preserve">' + escapeXml(part).split('\t').join('</w:t><w:tab/><w:t xml:space="preserve">') + '</w:t></w:r>';
+      }).join('');
     }).join('');
   }
 
@@ -14342,7 +14472,8 @@
       body += '<w:p/>';
       // Verse turns long lines over with a hanging indent, as in the PDF.
       var linePr = isVerseEntry(poem, exportDocState) ? '<w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' : '';
-      poem.lines.forEach(function (line) {
+      var noteSet = extractNotes(poem.lines);
+      noteSet.lines.forEach(function (line) {
         var imgKey = imageKeyForLine(line, { images: images });
         if (imgKey) {
           var rel = imageRels.filter(function (r) { return r.key === imgKey; })[0];
@@ -14352,6 +14483,11 @@
         }
         body += line === '' ? '<w:p/>' : '<w:p>' + linePr + docxRunsXml(line) + '</w:p>';
       });
+      // Notes after the entry, numbered as in the text.
+      if (noteSet.notes.length) {
+        body += '<w:p/>';
+        noteSet.notes.forEach(function (t, k) { body += '<w:p><w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' + docxRunsXml((k + 1) + '. ' + t) + '</w:p>'; });
+      }
     });
     body += '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -14507,7 +14643,8 @@
         firstEntry = true;
         return;
       }
-      var lines = (poem.lines || []).filter(function (l) { return !IMAGE_LINE_RE.test(l || ''); });
+      var noteSet = extractNotes((poem.lines || []).filter(function (l) { return !IMAGE_LINE_RE.test(l || ''); }));
+      var lines = noteSet.lines;
       var head = escapeXml(entryLabel(poem, st));
       // A poem (or a later chapter) starts a new page; the first one
       // follows the title on page one.
@@ -14523,6 +14660,11 @@
         body += p(line.replace(/^\t+/, ''), DOUBLE + '<w:ind w:firstLine="720"/>');
         newPara = false;
       });
+      // A manuscript's notes follow the piece they belong to.
+      if (noteSet.notes.length) {
+        body += p('Notes', (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>');
+        noteSet.notes.forEach(function (t, k) { body += p((k + 1) + '. ' + t, poetry ? SINGLE : DOUBLE); });
+      }
     });
     if (!poetry) body += p('END', DOUBLE + '<w:jc w:val="center"/>');
     body += '<w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/><w:titlePg/>' +
