@@ -5805,6 +5805,10 @@
   // too long" warning -- prose wrapping is just normal typesetting.
   var PROSE_LINE_CHARS = 140;
 
+  // Verse, for setting it: only a poetry collection's entries can be --
+  // a novel's or essay's short paragraphs are still prose (the
+  // typesetter, the editors and the Word export all ask this).
+  function isVerseEntry(poem, st) { return bookFormOf(st || state) === 'collection' && isLineated(poem); }
   function isLineated(poem) {
     var lines = (poem.lines || []).filter(function (l) { return l && l.trim() !== '' && !IMAGE_LINE_RE.test(l); });
     if (!lines.length) return true;
@@ -9772,7 +9776,7 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     });
     function updateVerseClass() {
-      editor.classList.toggle('is-verse', !isScriptForm() && isLineated(poem) && editorAlign(poem) === 'left');
+      editor.classList.toggle('is-verse', isVerseEntry(poem) && editorAlign(poem) === 'left');
     }
     updateVerseClass();
 
@@ -14209,7 +14213,7 @@
         escapeXml(entryLabel(poem)) + '</w:t></w:r></w:p>';
       body += '<w:p/>';
       // Verse turns long lines over with a hanging indent, as in the PDF.
-      var linePr = isLineated(poem) ? '<w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' : '';
+      var linePr = isVerseEntry(poem, exportDocState) ? '<w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr>' : '';
       poem.lines.forEach(function (line) {
         var imgKey = imageKeyForLine(line, { images: images });
         if (imgKey) {
