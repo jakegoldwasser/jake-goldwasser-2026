@@ -1145,8 +1145,8 @@
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
   /* A note's reference numeral: small and raised, as the PDF sets it. */
   .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
-  .stage-edit-body.opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
-  .stage-edit-body.opener-drop > .is-opener::first-letter {
+  .opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
+  .opener-drop > .is-opener::first-letter {
     float: left; font-size: var(--dc-size); line-height: var(--dc-lh); margin: 0 var(--dc-gap) var(--dc-mb) 0; padding: 0;
   }
   /* A scrollbar would take its width out of the column and wrap lines
@@ -6034,7 +6034,10 @@
         if (wrapped.length > 1) wasWrapped = true;
         wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
       } else {
-        var opening = !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
+        // Openers are for novels and essays (a poetry book's prose poems
+        // and a script's lines have none).
+        var proseBook = bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays';
+        var opening = proseBook && !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
         var drop = opening === 'drop' ? dropCapFor(stripFormatMarkers(body), sizePt, lineHeight, state.bodyFontChoice) : null;
         if (drop) {
           var rr = parseInlineRuns(body), plainLen = rr.map(function (r) { return r.text; }).join('').length;
@@ -9791,6 +9794,29 @@
   // `getDefault`: the book's own setting, shown as chosen when the entry
   // has none of its own; choosing it again clears the entry's, so it
   // follows the book.
+  // Shows a first paragraph's opener in an editor as the typesetter sets
+  // it: capitals via ::first-line, a drop cap as a floated
+  // ::first-letter two lines deep (its line-height puts the capital's foot
+  // on the second baseline; its bottom margin makes the float exactly two
+  // lines tall, so it narrows just those). `scale` is pixels per point.
+  function applyOpener(ed, op, scale, lhPx) {
+    ed.classList.toggle('opener-caps', !!op && op.type === 'caps');
+    ed.classList.toggle('opener-drop', !!op && op.type === 'drop');
+    if (op && op.type === 'drop') {
+      var fmx = fontMetrics(state.bodyFontChoice), dsx = op.size * scale;
+      var boxL = 2 * (1.72 * lhPx) + (fmx.desc - fmx.asc) * dsx;
+      ed.style.setProperty('--dc-size', dsx.toFixed(2) + 'px');
+      ed.style.setProperty('--dc-lh', boxL.toFixed(2) + 'px');
+      ed.style.setProperty('--dc-mb', (2 * lhPx - boxL).toFixed(2) + 'px');
+      ed.style.setProperty('--dc-gap', (op.gap * scale).toFixed(2) + 'px');
+    }
+    function markOpener() {
+      var first = Array.prototype.filter.call(ed.children, function (d) { return !d.dataset.token && d.textContent.trim(); })[0];
+      Array.prototype.forEach.call(ed.children, function (d) { d.classList.toggle('is-opener', !!op && d === first); });
+    }
+    markOpener();
+    if (!ed.dataset.openerWired) { ed.dataset.openerWired = '1'; ed.addEventListener('input', markOpener); }
+  }
   function makeAlignControl(label, getVal, setVal, getDefault, withJustify) {
     var wrap = document.createElement('div');
     wrap.className = 'title-align';
@@ -9927,6 +9953,10 @@
     editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
     tagScriptLines(editor);
+    var cardLayout = initialPlan && initialPlan.layouts ? initialPlan.layouts[index] : null;
+    if (cardLayout && cardLayout.opener) setTimeout(function () {
+      applyOpener(editor, cardLayout.opener, editorPxPerPt(), parseFloat(getComputedStyle(editor).lineHeight) || cardLayout.lineHeight * editorPxPerPt());
+    }, 0);
     setTimeout(function () { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }, 0);
     function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * editorPxPerPt()); }
     tagProse();
@@ -12397,23 +12427,7 @@
     // drop cap as a floated ::first-letter two lines deep (its line-height
     // puts the capital's foot on the second baseline; its bottom margin
     // makes the float exactly two lines tall, so it narrows just those).
-    var op = layout.opener;
-    body.classList.toggle('opener-caps', !!op && op.type === 'caps');
-    body.classList.toggle('opener-drop', !!op && op.type === 'drop');
-    if (op && op.type === 'drop') {
-      var fmx = fontMetrics(state.bodyFontChoice), lhx = layout.lineHeight * scale, dsx = op.size * scale;
-      var boxL = 2 * (1.72 * lhx) + (fmx.desc - fmx.asc) * dsx;
-      body.style.setProperty('--dc-size', dsx.toFixed(2) + 'px');
-      body.style.setProperty('--dc-lh', boxL.toFixed(2) + 'px');
-      body.style.setProperty('--dc-mb', (2 * lhx - boxL).toFixed(2) + 'px');
-      body.style.setProperty('--dc-gap', (op.gap * scale).toFixed(2) + 'px');
-    }
-    function markOpener() {
-      var first = Array.prototype.filter.call(body.children, function (d) { return !d.dataset.token && d.textContent.trim(); })[0];
-      Array.prototype.forEach.call(body.children, function (d) { d.classList.toggle('is-opener', d === first); });
-    }
-    markOpener();
-    body.addEventListener('input', markOpener);
+    applyOpener(body, layout.opener, scale, layout.lineHeight * scale);
     function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
@@ -13920,7 +13934,8 @@
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('proseTypeField').hidden = script;
-    document.getElementById('openerField').hidden = script;
+    // A first-paragraph opener is for the prose books.
+    document.getElementById('openerField').hidden = !(bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays');
     document.getElementById('notesField').hidden = script;
     document.getElementById('runningHeadsField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
