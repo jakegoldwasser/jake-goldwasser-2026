@@ -410,9 +410,9 @@
   /* An open entry keeps its number, in the same gutter as Title View's
      rows and level with its title; the grip goes (open entries don't
      drag), so the pane still spans the card with even margins. */
-  .poem-card { position: relative; }
+  .poem-card { position: relative; --card-top: 6px; }
   .poem-card > .poem-handle {
-    position: absolute; left: -36px; top: 7px; height: calc(var(--entry-title-size) * 1.2 + 8px);
+    position: absolute; left: -36px; top: calc(var(--card-top) + 1px); height: calc(var(--entry-title-size) * 1.2 + 8px);
     justify-content: center; width: 32px; padding: 0; cursor: default;
   }
   .poem-card > .poem-handle .poem-num { width: 32px; justify-content: center; }
@@ -479,13 +479,17 @@
     /* An open entry's card is its page: title and text on one white
        sheet, with one outline (the text pane's own border and fill are
        dropped; the outline turns green while you type in it). */
-    .poem-card { padding: 6px 10px 12px; background: var(--surface); }
+    /* A page's margins: half an inch above the title (opening an entry
+       scrolls by that much, so its title stays put and what's above it
+       moves up; see setEntryOpen), a quarter inch between title and
+       text, and half an inch around the text. */
+    .poem-card { --card-top: 0.5in; padding: var(--card-top) 10px 12px; background: var(--surface); }
     .poem-card:focus-within { border-color: var(--accent); }
     /* The title starts on the text's left margin (the pane's 1px border
        plus its half-inch padding, less the title field's own 2px). */
     .poem-card .poem-title-row { padding-left: calc(0.5in - 1px); }
     .poem-card textarea.poem-title { border-bottom: none; padding: 4px 2px; text-align: left !important; }
-    .poem-card .poem-text { padding: 6px 0.5in 0.5in; border-color: transparent; background: transparent; }
+    .poem-card .poem-text { padding: 0.25in 0.5in 0.5in; border-color: transparent; background: transparent; }
     /* A closed row's title sits on that same margin -- the grip's slot
        is widened to fill the gap (1 + 10 + 39 + 8 + 2 = the card's
        1 + 10 + 0.5in - 1 + 2) -- so opening or closing an entry never
@@ -496,7 +500,7 @@
   /* An open entry's close button sits in the grip's slot, level with
      its title. (Phones open entries full screen, with their own Done.) */
   .poem-close-btn {
-    position: absolute; left: 7px; top: calc(6px + (var(--entry-title-size) * 1.2 + 8px) / 2); transform: translateY(-50%);
+    position: absolute; left: 7px; top: calc(var(--card-top) + (var(--entry-title-size) * 1.2 + 8px) / 2); transform: translateY(-50%);
     width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
     color: var(--ink-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
   }
@@ -2707,7 +2711,7 @@
       <div class="panel preview-panel" id="previewPanel">
         <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="previewOpenBtn" type="button" title="Read the book page by page, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
         <div id="previewBlock">
-          <div class="preview-stage"><div class="preview-page" id="previewPage" title="Click to read full screen"></div></div>
+          <div class="preview-stage"><div class="preview-page" id="previewPage" title="Click to open it large, beside Formatting"></div></div>
           <div class="preview-nav">
             <button type="button" id="previewFirstBtn" aria-label="Preview first page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
             <button type="button" id="previewPrevBtn" aria-label="Previous page">‹</button>
@@ -9388,6 +9392,23 @@
     return card;
   }
 
+  // Opens or closes an entry in Title View without moving its title on
+  // screen: the open page's top margin grows above the title, so the
+  // window scrolls by however far the title would have shifted.
+  function entryTitleEl(id) {
+    return poemList.querySelector('.poem-compact-row[data-poem-id="' + id + '"] .poem-title-compact, .poem-card[data-poem-id="' + id + '"] textarea.poem-title');
+  }
+  function setEntryOpen(id, open) {
+    var el = writerMQ.matches ? null : entryTitleEl(id);
+    var before = el && el.getBoundingClientRect().top;
+    if (open) expandedCompactIds[id] = true; else delete expandedCompactIds[id];
+    renderPoems();
+    var after = el && entryTitleEl(id);
+    if (after) {
+      var drift = after.getBoundingClientRect().top - before;
+      if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
+    }
+  }
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
     row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '') + (selectedCompactId === poem.id ? ' is-selected' : '');
@@ -9412,9 +9433,7 @@
     function toggleOpen() {
       // Remember the row's place before the open card pushes things around.
       if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
-      if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
-      else expandedCompactIds[poem.id] = true;
-      renderPoems();
+      setEntryOpen(poem.id, !expandedCompactIds[poem.id]);
       // On a phone, skip the cramped inline card and go straight into
       // the full-screen writer (focusing it is what opens that).
       if (expandedCompactIds[poem.id] && writerMQ.matches) {
@@ -9474,17 +9493,11 @@
       closeBtn.title = 'Close';
       closeBtn.setAttribute('aria-label', 'Close ' + (poem.title || entryLabel(poem)));
       closeBtn.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6.5 6 2l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      closeBtn.addEventListener('click', function () {
-        delete expandedCompactIds[poem.id];
-        renderPoems();
-      });
+      closeBtn.addEventListener('click', function () { setEntryOpen(poem.id, false); });
       expandedCard.appendChild(closeBtn);
       var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
       expandedTitleRow.addEventListener('click', function (e) {
-        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) {
-          delete expandedCompactIds[poem.id];
-          renderPoems();
-        }
+        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) setEntryOpen(poem.id, false);
       });
       var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
       expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
@@ -9967,6 +9980,7 @@
   // changed in Title View, so rows here aren't dragged.
   function renderTierGroups() {
     var plan = planBooklet(state), num = 0, groups = {}, none = [];
+    setEntryTitleSize(plan);
     poemTiers.tiers.forEach(function (t) { groups[t.id] = []; });
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) return;
@@ -10013,6 +10027,7 @@
   }
   function renderSearchResults() {
     var plan = planBooklet(state), nums = {}, n = 0;
+    setEntryTitleSize(plan);
     state.poems.forEach(function (p) { if (!isSection(p)) nums[p.id] = ++n; });
     var hits = viewOrder().filter(entryMatchesSearch);
     if (!hits.length) {
@@ -10041,6 +10056,12 @@
     });
   }
 
+  // An entry's title (closed or open, the same size either way) is set
+  // a quarter bigger than the editor's text, so titles read as titles.
+  function setEntryTitleSize(plan) {
+    var bodyPx = plan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE;
+    document.documentElement.style.setProperty('--entry-title-size', Math.round(Math.max(18 * editorZoom, bodyPx * 1.25)) + 'px');
+  }
   function renderPoems() {
     poemList.innerHTML = '';
     var searchRow = document.getElementById('entrySearchRow');
@@ -10081,6 +10102,7 @@
     }
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
+    setEntryTitleSize(plan);
     var entryNum = 0;
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) {
@@ -10644,7 +10666,11 @@
   // an entry (or section) page to edit it right there, instead.
   document.getElementById('previewOpenBtn').addEventListener('click', openFullPreview);
   document.getElementById('previewPage').addEventListener('click', function (e) {
-    if (!stageMode) { openFullPreview(); return; }
+    if (!stageMode) {
+      if (wideLayout.matches && !document.getElementById('bookWorkspace').classList.contains('tools-hidden')) openFormatStage();
+      else openFullPreview();
+      return;
+    }
     if (stageEdit) return;
     var item = buildPreviewItems(state)[previewIndex];
     if (item && item.type === 'poem' && !isScriptForm()) startStageEdit(item, e);
@@ -11513,6 +11539,7 @@
       var drift = toggle.getBoundingClientRect().top - headerTop;
       if (Math.abs(drift) > 1) window.scrollBy({ top: drift, behavior: 'instant' });
       if (!body.hidden) revealPanel(toggle.closest('.collapsible-panel'));
+      if (toggle.id === 'formattingToggle' && body.hidden) formatStageWanted = false;
       if (toggle.id === 'coversToggle' || toggle.id === 'formattingToggle') {
         if (!body.hidden) lastStagePanel = toggle.id === 'coversToggle' ? 'matter' : 'format';
         updateMatterStage();
@@ -11590,12 +11617,23 @@
   var matterTarget = 'front';
   var stageMode = null;          // 'format' | 'matter' | null
   var lastStagePanel = 'format'; // whichever of the two opened last wins
+  // Formatting opens in the tools column only; the large page comes up
+  // when the preview is opened (a click on its page), which opens
+  // Formatting beside it. Closing Formatting puts the preview back.
+  var formatStageWanted = false;
+  function openFormatStage() {
+    formatStageWanted = true;
+    lastStagePanel = 'format';
+    var t = document.getElementById('formattingToggle');
+    if (t.getAttribute('aria-expanded') !== 'true') t.click();
+    else updateMatterStage();
+  }
   var wideLayout = window.matchMedia('(min-width: 861px)');
   function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
   function computeStageMode() {
     if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') || document.body.classList.contains('view-cb') ||
         document.getElementById('bookWorkspace').classList.contains('tools-hidden')) return null;
-    var f = panelOpen('formattingBody'), m = panelOpen('coversBody');
+    var f = panelOpen('formattingBody') && formatStageWanted, m = panelOpen('coversBody');
     if (f && m) return lastStagePanel;
     return m ? 'matter' : f ? 'format' : null;
   }
