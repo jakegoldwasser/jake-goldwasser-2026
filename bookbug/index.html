@@ -429,6 +429,10 @@
   /* 18px with the zoom; an open entry's title is bold, a closed one's
      regular. */
   :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); }
+  /* An open entry's title is drawn to the same scale as its text (set
+     from the Title size by renderPoems), so an 18 pt title over 12 pt
+     text looks it -- closed rows stay at the list's own size. */
+  .poem-card { --entry-title-size: var(--open-title-size, calc(18px * var(--editor-zoom, 1))); }
   .poem-card {
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
     padding: 10px 14px 12px; margin-bottom: 6px; display: flex; gap: 10px;
@@ -516,8 +520,8 @@
     .poem-card:focus-within { border-color: var(--accent); }
     /* The title starts on the text's left margin (the pane's 1px border
        plus its half-inch padding, less the title field's own 2px). */
-    .poem-card .poem-title-row { padding-left: calc(0.5in - 1px); }
-    .poem-card textarea.poem-title { border-bottom: none; padding: 4px 2px; text-align: left !important; }
+    .poem-card .poem-title-row { padding-left: calc(0.5in - 1px); padding-right: calc(0.5in - 1px); }
+    .poem-card textarea.poem-title { border-bottom: none; padding: 4px 2px; }
     .poem-card .poem-text { padding: 0.25in 0.5in 0.5in; border-color: transparent; background: transparent; }
     /* A closed row's title sits on that same margin -- the grip's slot
        is widened to fill the gap (1 + 10 + 39 + 8 + 2 = the card's
@@ -2925,14 +2929,19 @@
               <button data-val="right">Right</button>
             </div>
           </div>
-          <div class="field">
-            <label>Size</label>
-            <div class="seg seg-3" id="titleSizeModeSeg">
-              <button data-val="small">Small</button>
-              <button data-val="medium" class="active">Medium</button>
-              <button data-val="large">Large</button>
-            </div>
-          </div>
+          <!-- Half width, in the same slot as Body's Size. -->
+          <div class="field-pair"><div class="field">
+            <label for="titleSizeSelect">Size</label>
+            <select id="titleSizeSelect">
+              <option value="12">12 pt</option>
+              <option value="14">14 pt</option>
+              <option value="16">16 pt</option>
+              <option value="18" selected>18 pt</option>
+              <option value="20">20 pt</option>
+              <option value="24">24 pt</option>
+              <option value="28">28 pt</option>
+            </select>
+          </div></div>
           </div>
 
           <div class="text-target-pane" data-pane="body">
@@ -3525,7 +3534,7 @@
       titleAlignment: 'left',
       bodySizePt: 12,
       lineSpacing: 1.15,
-      titleSizeMode: 'medium',
+      titleSizePt: 18,
       includeTitlePage: true,
       includeToc: true,
       showPageNumbers: true,
@@ -5633,8 +5642,13 @@
   }
   var TITLE_SIZE_PRESETS = { small: 14, medium: 18, large: 24 };
 
+  // Like the body, a true point size (12-28); books saved with Small /
+  // Medium / Large (titleSizeMode) map over.
+  var TITLE_SIZES = [12, 14, 16, 18, 20, 24, 28];
   function resolveTitleSizePt(state) {
-    return fontSizePt(TITLE_SIZE_PRESETS[state.titleSizeMode] || TITLE_SIZE_PRESETS.medium, state.titleFontChoice);
+    var pt = Number(state.titleSizePt);
+    if (TITLE_SIZES.indexOf(pt) >= 0) return pt;
+    return TITLE_SIZE_PRESETS[state.titleSizeMode] || 18;
   }
 
   // Left/center/right x-position for a piece of text of width w, shared
@@ -9274,8 +9288,16 @@
   function makeTitleAlignControl(poem, titleInput) {
     return makeAlignControl('Title', function () { return poem.titleAlign; }, function (v) {
       poem.titleAlign = v;
-      titleInput.style.textAlign = titleAlignFor(poem);
+      applyTitleAlign(titleInput, poem);
     });
+  }
+  // A title field may be sized to its own text (an open entry in Title
+  // View), where text-align alone can't move it: its margins do.
+  function applyTitleAlign(titleInput, poem) {
+    var a = titleAlignFor(poem);
+    titleInput.style.textAlign = a;
+    titleInput.style.marginLeft = a === 'left' ? '' : 'auto';
+    titleInput.style.marginRight = a === 'center' ? 'auto' : '';
   }
 
   function makeBodyAlignControl(poem, editor, onChange) {
@@ -9317,7 +9339,7 @@
     titleInput.draggable = false;
     titleInput.placeholder = bookFormOf(state) === 'screenplay' ? 'INT. PLACE - DAY' : entryLabel(poem);
     titleInput.value = poem.title;
-    titleInput.style.textAlign = titleAlignFor(poem);
+    applyTitleAlign(titleInput, poem);
     titleInput.style.fontFamily = displayStackFor(state.titleFontChoice);
     // The title is set in CSS (--entry-title-size), the same as in Title
     // View's rows; true printed proportions show in the preview.
@@ -10687,6 +10709,8 @@
 
   function renderPoems() {
     poemList.innerHTML = '';
+    document.documentElement.style.setProperty('--open-title-size',
+      (resolveTitleSizePt(state) * 1.333 * editorZoom * EDITOR_ZOOM_BASE).toFixed(1) + 'px');
     var searchRow = document.getElementById('entrySearchRow');
     if (searchRow) {
       searchRow.hidden = !state.poems.length;
@@ -12626,7 +12650,9 @@
   document.getElementById('lineSpacingSelect').addEventListener('change', function () {
     state.lineSpacing = parseFloat(this.value); persist(); renderAll();
   });
-  wireSeg('titleSizeModeSeg', function (val) { state.titleSizeMode = val; persist(); renderAll(); });
+  document.getElementById('titleSizeSelect').addEventListener('change', function () {
+    state.titleSizePt = Number(this.value); delete state.titleSizeMode; persist(); renderAll();
+  });
   wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
   function wireSetting(segId, key) {
     wireSeg(segId, function (val) { state[key] = val; state.isExample = false; persist(); renderAll(); });
@@ -12855,7 +12881,7 @@
     document.querySelectorAll('#titleAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleAlignment); });
     document.getElementById('bodySizeSelect').value = String(bodySizePtOf(state));
     document.getElementById('lineSpacingSelect').value = String(state.lineSpacing || 1.15);
-    document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
+    document.getElementById('titleSizeSelect').value = String(resolveTitleSizePt(state));
     document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
     var sec = sectionStyle(state), front = frontCoverStyle(state), back = backCoverStyle(state);
