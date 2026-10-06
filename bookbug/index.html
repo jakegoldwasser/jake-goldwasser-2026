@@ -460,7 +460,7 @@
        -- without it, this field's own intrinsic minimum width could
        force the whole card (and page) wider than a narrow viewport. */
     flex: 1; min-width: 0; border: none; background: transparent;
-    font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: var(--entry-title-open); padding: 3px 2px 7px; outline: none;
+    font-family: "Zilla Slab", ui-serif, serif; font-weight: 400; font-size: var(--entry-title-open); padding: 3px 2px 7px; outline: none;
     color: var(--ink); resize: none; overflow: hidden; line-height: 1.2; display: block;
   }
   textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
@@ -801,7 +801,7 @@
   .poem-compact-row .poem-handle { flex: 0 0 26px; flex-direction: row; gap: 6px; padding-top: 0; justify-content: flex-start; }
   .poem-title-compact {
     flex: 1; min-width: 0; border: none; background: transparent; font-family: "Zilla Slab", ui-serif, serif;
-    font-weight: 600; font-size: var(--entry-title-size); line-height: 1.2; padding: 4px 2px; outline: none; color: var(--ink);
+    font-weight: 400; font-size: var(--entry-title-size); line-height: 1.2; padding: 4px 2px; outline: none; color: var(--ink);
   }
   .poem-title-compact::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   button.poem-title-compact-toggle {
@@ -916,7 +916,7 @@
   .section-row .section-block-count, .section-row .section-move-btn.is-first { margin-left: auto; }
   input.section-title {
     flex: 0 1 auto; min-width: 3em; max-width: 100%; cursor: text; border: none; border-bottom: 1px solid transparent; background: transparent;
-    font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: 16.5px; padding: 3px 2px; outline: none; color: var(--ink);
+    font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: calc(23px * var(--editor-zoom, 1)); padding: 3px 2px; outline: none; color: var(--ink);
   }
   input.section-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
   input.section-title:focus { border-bottom-color: var(--accent); }
@@ -10565,9 +10565,30 @@
   });
 
   var SIDEBAR_PREVIEW_WIDTH_PX = 210;
+  // Which page the preview last showed (not just its place in the
+  // book), so a change that adds or takes away pages before it -- a
+  // larger size or line spacing spilling an entry onto another page --
+  // keeps showing that same page. Paging through the book (anything that
+  // sets previewIndex) moves it on as usual.
+  var shownPreview = null;
+  function previewItemKey(it) {
+    return it ? [it.type, it.index, it.pageIndex, it.tocPageIndex, it.castPageIndex].join('|') : '';
+  }
   function renderPreview() {
     var items = buildPreviewItems(state);
+    if (shownPreview && previewIndex === shownPreview.at && previewItemKey(items[previewIndex]) !== shownPreview.key) {
+      var keys = items.map(previewItemKey), same = keys.indexOf(shownPreview.key);
+      // Gone (an entry that shrank a page)? Its last page that's left.
+      if (same < 0 && shownPreview.type === 'poem') {
+        for (var k = items.length - 1; k >= 0; k--) {
+          if (items[k].type === 'poem' && items[k].index === shownPreview.index) { same = k; break; }
+        }
+      }
+      if (same >= 0) previewIndex = same;
+    }
     previewIndex = Math.max(0, Math.min(previewIndex, items.length - 1));
+    var shownItem = items[previewIndex];
+    shownPreview = { at: previewIndex, key: previewItemKey(shownItem), type: shownItem && shownItem.type, index: shownItem && shownItem.index };
     var atStart = previewIndex === 0, atEnd = previewIndex === items.length - 1;
     if (stageEdit) {
       var cur = items[previewIndex];
