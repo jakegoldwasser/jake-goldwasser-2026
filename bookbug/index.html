@@ -182,12 +182,19 @@
     50% { box-shadow: 0 0 0 4px rgba(156, 107, 18, 0.22); }
   }
 
-  .chapbook-header { display: flex; flex-direction: column; gap: 4px; }
+  /* Title and author on the left; Hide tools at the right, level with
+     the author line, so it isn't stranded on a row of its own above the
+     workspace. */
+  .chapbook-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; row-gap: 4px; align-items: end; }
+  .chapbook-header > :not(.tools-toggle) { grid-column: 1; }
+  .chapbook-header > .tools-toggle { grid-column: 2; grid-row: 1 / span 2; align-self: end; margin-bottom: 2px; }
   .book-title-row { display: flex; align-items: flex-end; gap: 6px; max-width: 680px; }
   /* Sized to its text (fitTitleInput) so the ⋯ sits right after the
      title; a long title caps at the row and wraps. */
   .book-title-row #bookTitleInput { flex: 0 1 auto; min-width: 4em; max-width: 100%; }
-  .book-title-row .dots-btn { margin-bottom: 8px; }
+  /* fitTitleInput leaves a little slack so the title never wraps early;
+     pull the ⋯ back over it so it reads as part of the title. */
+  .book-title-row .dots-btn { margin-bottom: 8px; margin-left: -10px; }
   .book-title-row .dots-btn[hidden] { display: none; }
 
   .signin-gate {
@@ -343,16 +350,15 @@
      of shrinking and letting that row's own flex-wrap kick in. */
   .workspace > * { min-width: 0; }
   @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
-  /* One Show / Hide Tools toggle, in its own row above both columns (the
-     way Pages' Format button and Docs' side-panel toggle work), so the
-     editor and the Preview panel start level. It never moves, shown or
-     hidden, and the column stays however you last left it. */
+  /* One Show / Hide Tools toggle, in the book's header beside the title
+     (the way Pages' Format button and Docs' side-panel toggle sit up
+     top), so the editor and the Preview panel start level. It never
+     moves, shown or hidden, and the column stays however you left it. */
   .tools-bar { display: none; }
   @media (min-width: 861px) {
-    .workspace { grid-template-rows: auto 1fr; row-gap: 12px; }
-    .tools-bar { display: flex; justify-content: flex-end; grid-column: 1 / -1; grid-row: 1; }
-    #entriesColumn { grid-column: 1; grid-row: 2; }
-    .sidebar { grid-column: 2; grid-row: 2; }
+    /* The tools bar only holds the phone's Formatting button now. */
+    #entriesColumn { grid-column: 1; grid-row: 1; }
+    .sidebar { grid-column: 2; grid-row: 1; }
     .tools-toggle { display: inline-flex; justify-content: center; gap: 7px; min-width: 128px; }
     .workspace.tools-hidden { grid-template-columns: 1fr; }
     .workspace.tools-hidden .sidebar { display: none; }
@@ -363,7 +369,7 @@
   .fmt-jump { display: none; }
   @media (max-width: 860px) {
     .tools-bar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-    .tools-bar .tools-toggle { display: none; }
+    .tools-toggle { display: none; }
     .fmt-jump { display: inline-flex; align-items: center; gap: 7px; }
   }
   .fmt-jump svg { flex: 0 0 auto; }
@@ -995,6 +1001,25 @@
   }
   .stage-edit-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; outline: none; }
   .view-seg[hidden] { display: none; }
+  /* View Options: one pill that opens the list of views, in place of a
+     row of four pills that crowded the list's header. */
+  .view-menu-wrap { position: relative; }
+  .view-menu-btn {
+    display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--ink); border-radius: 999px;
+    background: var(--surface); color: var(--ink); padding: 7px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .view-menu-btn:hover, .view-menu-btn[aria-expanded="true"] { background: var(--accent-soft); }
+  .view-menu-btn svg { transition: transform 0.15s; }
+  .view-menu-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+  /* Hangs from the button (not position: fixed like the ⋯ menus), so it
+     scrolls with the header and needs no placement math. */
+  .entry-menu.view-menu { position: absolute; top: calc(100% + 6px); right: 0; min-width: 210px; }
+  .entry-menu.view-menu button { display: flex; align-items: center; gap: 9px; }
+  .entry-menu.view-menu button[hidden] { display: none; }
+  .entry-menu.view-menu button svg { flex: 0 0 auto; width: 14px; }
+  .entry-menu.view-menu button.active { font-weight: 700; background: var(--accent-soft); }
+  .entry-menu.view-menu button:disabled { color: var(--ink-faint); cursor: default; background: none; }
   .matter-stage .preview-stage { padding: 0; }
   .matter-stage .preview-nav { width: 100%; max-width: 440px; align-self: center; margin-top: -8px; }
   .preview-page {
@@ -1056,6 +1081,11 @@
   .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
   .field[hidden], .checkline[hidden] { display: none; }
   .field:last-child { margin-bottom: 0; }
+  /* Two short dropdowns share a row (Size beside Line spacing). */
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 13px; }
+  .field-pair > .field { margin-bottom: 0; }
+  /* A script hides its spacing; Size keeps its half-width slot. */
+  .field-pair > .field[hidden] { display: none; }
   .field label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); }
   .field input[type="text"] { font-size: 13.5px; }
   select {
@@ -1221,7 +1251,7 @@
   @media (min-width: 701px) {
     body:not(.view-home) .back-home {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 68px; height: 56px; margin: 12px 0 16px -12px; padding: 0;
+      width: 56px; height: 44px; margin: 10px 0 -10px -12px; padding: 0;
       appearance: none; border: none; border-radius: 999px; background: none; color: var(--ink-soft); cursor: pointer;
       transition: background-color 0.15s, color 0.15s, transform 0.15s;
     }
@@ -1567,7 +1597,7 @@
   .pb-view[hidden] { display: none; }
   body.view-pb .page > .chapbook-header, body.view-pb #intakePanel,
   body.view-pb #intakeCollapsedBar, body.view-pb .page > .workspace { display: none !important; }
-  @media (min-width: 861px) { .pb-main { grid-column: 1; grid-row: 2; } }
+  @media (min-width: 861px) { .pb-main { grid-column: 1; grid-row: 1; } }
   .pb-main { display: flex; flex-direction: column; gap: 16px; }
   #pbTitleInput { max-width: 640px; }
   .pb-view .book-title-row #pbTitleInput { flex: 0 1 auto; min-width: 4em; max-width: 100%; }
@@ -2001,7 +2031,7 @@
   body.view-cb .page > .chapbook-header, body.view-cb #intakePanel,
   body.view-cb #intakeCollapsedBar, body.view-cb .page > .workspace { display: none !important; }
   @media (min-width: 861px) {
-    .cb-main { grid-column: 1; grid-row: 2; }
+    .cb-main { grid-column: 1; grid-row: 1; }
     #cbSidebar { max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 4px; margin-right: -4px; }
   }
   .cb-main { display: flex; flex-direction: column; gap: 16px; }
@@ -2232,15 +2262,15 @@
         <button class="dots-btn" id="pbBookMenuBtn" type="button" title="Picture book options" aria-label="Picture book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>
       </div>
       <input type="text" id="pbAuthorInput" placeholder="Author name">
+      <button class="btn tools-toggle" id="pbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="pbSidebar" title="Show or hide Preview, Formatting and Export">
+        <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+        <span id="pbToolsToggleLabel">Hide tools</span>
+      </button>
     </div>
 
     <div class="workspace" id="pbWorkspace">
       <div class="tools-bar">
         <button class="btn fmt-jump" type="button" data-panel="pbFormattingPanel" aria-controls="pbFormattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
-        <button class="btn tools-toggle" id="pbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="pbSidebar" title="Show or hide Preview, Formatting and Export">
-          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-          <span id="pbToolsToggleLabel">Hide tools</span>
-        </button>
       </div>
       <div class="pb-main">
         <div class="panel" id="pbSpreadsPanel">
@@ -2507,14 +2537,14 @@
         <button class="dots-btn" id="cbBookMenuBtn" type="button" title="Cartoon book options" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
       <input type="text" id="cbAuthorInput" placeholder="Cartoonist">
+      <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
+        <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+        <span id="cbToolsToggleLabel">Hide tools</span>
+      </button>
     </div>
     <div class="workspace" id="cbWorkspace">
       <div class="tools-bar">
         <button class="btn fmt-jump" type="button" data-panel="cbFormattingPanel" aria-controls="cbFormattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
-        <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
-          <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-          <span id="cbToolsToggleLabel">Hide tools</span>
-        </button>
       </div>
       <div class="cb-main">
         <div class="panel" id="cbListPanel">
@@ -2604,6 +2634,10 @@
       <button class="dots-btn" id="currentBookMenuBtn" type="button" title="Book options" aria-label="Book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>
     </div>
     <input type="text" id="authorInput" placeholder="Author name">
+    <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
+      <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
+      <span id="toolsToggleLabel">Hide tools</span>
+    </button>
   </div>
 
   <div class="panel" id="intakePanel">
@@ -2662,10 +2696,6 @@
          the column is showing or not. -->
     <div class="tools-bar">
       <button class="btn fmt-jump" type="button" data-panel="formattingPanel" aria-controls="formattingPanel"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 3.5h12M1 10.5h12"/><circle cx="4.5" cy="3.5" r="1.6" fill="var(--surface)"/><circle cx="9.5" cy="10.5" r="1.6" fill="var(--surface)"/></svg>Formatting</button>
-        <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
-        <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
-        <span id="toolsToggleLabel">Hide tools</span>
-      </button>
     </div>
     <div id="entriesColumn">
       <!-- While Formatting or Front and Back Matter is open (wide screens),
@@ -2689,11 +2719,16 @@
           </div>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
-            <div class="seg view-seg" id="entriesViewSeg" role="group" aria-label="Show">
-              <button type="button" data-view="sections" title="Just the section titles, to rename or reorder whole sections"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 10h12"/><path d="M4 6h6" stroke-width="1.2"/></svg><span class="vs-label">Section View</span></button>
-              <button type="button" data-view="tiers" title="Poems grouped by tier, to see what needs work" hidden><span class="vs-label">Tier View</span></button>
-              <button type="button" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
-              <button type="button" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
+            <div class="view-menu-wrap">
+              <button type="button" class="view-menu-btn" id="viewMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="entriesViewSeg">View Options<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+              <div class="entry-menu view-menu" id="entriesViewSeg" role="menu" aria-label="View options" hidden>
+              <button type="button" role="menuitemradio" data-view="sections" title="Just the section titles, to rename or reorder whole sections"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 10h12"/><path d="M4 6h6" stroke-width="1.2"/></svg><span class="vs-label">Section View</span></button>
+              <button type="button" role="menuitemradio" data-view="tiers" title="Poems grouped by tier, to see what needs work" hidden><span class="vs-label">Tier View</span></button>
+              <button type="button" role="menuitemradio" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
+              <button type="button" role="menuitemradio" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
+                <div class="menu-sep"></div>
+                <button type="button" role="menuitemradio" data-view="open" title="Just the poems open now, with every other title and section out of the way until you pick another view"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 11l1-3 7-7 2 2-7 7z"/><path d="M8 2l2 2"/></svg><span class="vs-label">Edit open poems</span></button>
+              </div>
             </div>
           </div>
         </div>
@@ -2843,21 +2878,25 @@
               <button data-val="right">Right</button>
             </div>
           </div>
-          <div class="field">
-            <label>Size</label>
-            <div class="seg seg-3" id="bodySizeModeSeg">
-              <button data-val="small">Small</button>
-              <button data-val="medium" class="active">Medium</button>
-              <button data-val="large">Large</button>
+          <div class="field-pair">
+            <div class="field">
+              <label for="bodySizeSelect">Size</label>
+              <select id="bodySizeSelect">
+                <option value="10">10 pt</option>
+                <option value="11">11 pt</option>
+                <option value="12" selected>12 pt</option>
+                <option value="13">13 pt</option>
+                <option value="14">14 pt</option>
+              </select>
             </div>
-          </div>
-          <div class="field">
-            <label>Line spacing</label>
-            <div class="seg seg-4" id="lineSpacingSeg">
-              <button data-val="1">1.0</button>
-              <button data-val="1.15" class="active">1.15</button>
-              <button data-val="1.5">1.5</button>
-              <button data-val="2">2.0</button>
+            <div class="field">
+              <label for="lineSpacingSelect">Line spacing</label>
+              <select id="lineSpacingSelect">
+                <option value="1">1.0</option>
+                <option value="1.15" selected>1.15</option>
+                <option value="1.5">1.5</option>
+                <option value="2">2.0</option>
+              </select>
             </div>
           </div>
           <div class="field" id="paragraphField">
@@ -3149,6 +3188,7 @@
   <button type="button" role="menuitem" data-send="bottom">Send to bottom</button>
   <div class="menu-sep"></div>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
+  <button type="button" role="menuitem" data-action="archive-all" hidden>Archive section and its poems</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>
 </div>
 
@@ -3394,7 +3434,7 @@
       titleFontChoice: 'zillaslab',
       bodyAlignment: 'left',
       titleAlignment: 'left',
-      bodySizeMode: 'medium',
+      bodySizePt: 12,
       lineSpacing: 1.15,
       titleSizeMode: 'medium',
       includeTitlePage: true,
@@ -3435,7 +3475,7 @@
   };
   function SCRIPT_DEFAULTS(extra) {
     return Object.assign({ trimKey: 'letter', bodyFontChoice: 'courierprime', titleFontChoice: 'courierprime',
-      bodyAlignment: 'left', bodySizeMode: 'medium', paragraphs: 'space', includeToc: false, pageNumberStyle: 'topright',
+      bodyAlignment: 'left', bodySizePt: 12, paragraphs: 'space', includeToc: false, pageNumberStyle: 'topright',
       sectionOwnPage: false, sectionFontChoice: 'courierprime', coverFontChoice: 'courierprime', coverAuthorFontChoice: 'courierprime',
       coverSizeMode: 'small', coverTitlePos: 'middle', coverAuthorPos: 'middle', backShowAuthor: false, backShowYear: false }, extra);
   }
@@ -5494,6 +5534,14 @@
   // Poem pagination
   // ---------------------------------------------------------------------
   var BODY_SIZE_PRESETS = { small: 10, medium: 12, large: 14 };
+  // Body size is a true point size, 10-14, as in Word or Docs: unlike
+  // titles it isn't scaled per face, so 12 means 12 pt. Books saved
+  // before this kept Small/Medium/Large (bodySizeMode); those map over.
+  function bodySizePtOf(s) {
+    var pt = Number(s.bodySizePt);
+    if (pt >= 10 && pt <= 14) return pt;
+    return BODY_SIZE_PRESETS[s.bodySizeMode] || 12;
+  }
   var TITLE_SIZE_PRESETS = { small: 14, medium: 18, large: 24 };
 
   function resolveTitleSizePt(state) {
@@ -5867,7 +5915,7 @@
   // stay consistent from poem to poem -- rather than letting each poem
   // pick its own size independently.
   function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, state) {
-    return fontSizePt(BODY_SIZE_PRESETS[state.bodySizeMode] || BODY_SIZE_PRESETS.medium, state.bodyFontChoice);
+    return bodySizePtOf(state);
   }
 
   // The table of contents must land on a recto (right-hand) page. Page 1
@@ -8739,6 +8787,14 @@
       if (b.dataset.send.indexOf('section') === 0) b.textContent = 'Send to ' + b.dataset.send.slice(8) + ' of ' + formNouns().section;
     });
     entryMenu.querySelector('[data-send-sep]').hidden = !anySend;
+    // A section's Archive says which it does: just the heading (its
+    // entries join the section above), or the section with its entries.
+    var n = poem && isSection(poem) ? sectionMembers(index).length : 0;
+    var nouns = formNouns();
+    entryMenu.querySelector('[data-action="archive"]').textContent = n ? 'Archive heading only' : 'Archive';
+    var allBtn = entryMenu.querySelector('[data-action="archive-all"]');
+    allBtn.hidden = !n;
+    allBtn.textContent = 'Archive ' + nouns.section + ' and its ' + (n === 1 ? nouns.one : nouns.many);
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -8885,6 +8941,7 @@
     var idx = entryMenuIndex;
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
+    else if (item.dataset.action === 'archive-all') archiveSectionWithEntries(idx);
     else if (item.dataset.action === 'delete') deletePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
     else if (item.dataset.action === 'series') toggleSeries(idx);
@@ -9684,7 +9741,24 @@
   // poemsViewMode 'compact', Entries is 'full'; Sections is sectionsOnly
   // (below), available once the book has at least one section.
   var entriesViewSeg = document.getElementById('entriesViewSeg');
+  var viewMenuBtn = document.getElementById('viewMenuBtn');
+  function setViewMenu(open) {
+    entriesViewSeg.hidden = !open;
+    viewMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  viewMenuBtn.addEventListener('click', function () { setViewMenu(entriesViewSeg.hidden); });
+  document.addEventListener('click', function (e) { if (!e.target.closest('.view-menu-wrap')) setViewMenu(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !entriesViewSeg.hidden) { setViewMenu(false); viewMenuBtn.focus(); } });
+  // Edit open poems: the ids of the entries that were open when it was
+  // chosen, shown in full with every other title and section hidden. A
+  // snapshot, so nothing drops out mid-edit; any other view ends it.
+  var openOnlyIds = null;
+  function openEntryIds() {
+    var all = poemsViewMode === 'full' && !sectionsOnly && !tiersView;
+    return state.poems.filter(function (p) { return !isSection(p) && (all || expandedCompactIds[p.id]); }).map(function (p) { return p.id; });
+  }
   function currentEntriesView() {
+    if (openOnlyIds) return 'open';
     if (tiersView) return 'tiers';
     return sectionsOnly ? 'sections' : (poemsViewMode === 'compact' ? 'titles' : 'entries');
   }
@@ -9708,11 +9782,32 @@
         b.disabled = !hasSections;
         b.title = hasSections ? 'Just the section titles, to rename or reorder whole sections' : 'Add a section to use this view';
       }
+      if (b.dataset.view === 'open') {
+        b.disabled = view !== 'open' && !openEntryIds().length;
+        b.querySelector('.vs-label').textContent = 'Edit open ' + formNouns().many;
+      }
     });
   }
   entriesViewSeg.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-view]');
     if (!b || b.disabled) return;
+    setViewMenu(false);
+    if (b.dataset.view === 'open') {
+      if (openOnlyIds) return;
+      openOnlyIds = openEntryIds();
+      selectCompactRow(null);
+      renderPoems();
+      var shown = {};
+      openOnlyIds.forEach(function (id) { shown[id] = true; });
+      previewShow(function (it) { return it.type === 'poem' && shown[(state.poems[it.index] || {}).id]; });
+      return;
+    }
+    if (openOnlyIds) {
+      // Leaving Edit open poems: back to the view it was opened from,
+      // or to the one picked.
+      openOnlyIds = null;
+      if (b.dataset.view === currentEntriesView()) { renderPoems(); return; }
+    }
     // Entry View again toggles back to Title View.
     if (b.dataset.view === 'entries' && currentEntriesView() === 'entries') b = entriesViewSeg.querySelector('[data-view="titles"]');
     else if (b.dataset.view === 'sections' && currentEntriesView() === 'sections') {
@@ -10194,6 +10289,23 @@
       if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
       return;
     }
+    if (openOnlyIds) {
+      var keep = {};
+      openOnlyIds.forEach(function (id) { keep[id] = true; });
+      var openPlan = planBooklet(state), num = 0, shownCount = 0;
+      poemList.classList.remove('titles-view');
+      state.poems.forEach(function (poem, i) {
+        if (isSection(poem)) return;
+        num++;
+        if (!keep[poem.id]) return;
+        shownCount++;
+        poemList.appendChild(makeCard(poem, i, openPlan, num));
+      });
+      poemsCount.textContent = 'Editing ' + nounFor(shownCount, state) + ' of ' + countEntries(state.poems);
+      updateArchiveButton();
+      if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
+      return;
+    }
     if (tiersView) {
       renderTierGroups();
       poemsCount.textContent = nounFor(countEntries(state.poems), state);
@@ -10247,7 +10359,7 @@
   var emptyArchiveBtn = document.getElementById('emptyArchiveBtn');
 
   function updateArchiveButton() {
-    var n = (state.archivedPoems || []).length;
+    var n = (state.archivedPoems || []).filter(function (p, _, all) { return !isGroupedAway(p, all); }).length;
     state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS);
     var d = state.deletedPoems.length;
     if (!n && !d) archiveOpen = false;
@@ -10264,6 +10376,45 @@
     }
   });
 
+  // The entries under the section at `index`: everything up to the next
+  // section.
+  function sectionMembers(index) {
+    var out = [];
+    for (var j = index + 1; j < state.poems.length && !isSection(state.poems[j]); j++) out.push(state.poems[j]);
+    return out;
+  }
+  // A section archived with its entries is kept flat in archivedPoems
+  // (so code that walks archived entries, like the image sweep, still
+  // sees each one), its entries tagged with the section's id. The archive
+  // shows the lot as one row, and restores or deletes it together.
+  function archiveGroupOf(sec, archived) {
+    return (archived || state.archivedPoems || []).filter(function (p) { return p.archiveGroup === sec.id && p !== sec; });
+  }
+  function isGroupedAway(p, archived) {
+    return !!p.archiveGroup && !isSection(p) && (archived || []).some(function (q) { return q.id === p.archiveGroup && isSection(q); });
+  }
+  async function archiveSectionWithEntries(index) {
+    var sec = state.poems[index];
+    if (!sec || !isSection(sec)) return;
+    var members = sectionMembers(index), nouns = formNouns();
+    var ok = await confirmDialog('Send the “' + sectionLabel(sec) + '” ' + nouns.section + ' and its ' + members.length + ' ' +
+      (members.length === 1 ? nouns.one : nouns.many) + ' to the archive?');
+    if (!ok) return;
+    var gone = state.poems.splice(index, members.length + 1), now = Date.now();
+    state.archivedPoems = state.archivedPoems || [];
+    gone.forEach(function (p) {
+      delete expandedCompactIds[p.id];
+      // Nothing in it: removed outright, as anywhere else.
+      if (p !== sec && entryIsEmpty(p)) return;
+      p.archivedAt = now;
+      p.archiveGroup = sec.id;
+      state.archivedPoems.push(p);
+    });
+    state.isExample = false;
+    persist();
+    renderAll();
+  }
+
   async function archivePoem(index) {
     var target = state.poems[index];
     if (!target) return;
@@ -10276,9 +10427,10 @@
       return;
     }
     var label = isSection(target)
-      ? 'the “' + sectionLabel(target) + '” ' + formNouns().section
+      ? 'the “' + sectionLabel(target) + '” ' + formNouns().section + ' heading'
       : '“' + entryLabel(target) + '”';
-    var ok = await confirmDialog('Are you sure you want to send ' + label + ' to the archive?');
+    var stay = isSection(target) && sectionMembers(index).length ? ' Its ' + formNouns().many + ' stay in the book.' : '';
+    var ok = await confirmDialog('Send ' + label + ' to the archive?' + stay);
     if (!ok) return;
     var poem = state.poems.splice(index, 1)[0];
     if (!poem) return;
@@ -10315,10 +10467,12 @@
 
   function restoreArchivedPoem(i) {
     var archived = state.archivedPoems || [];
-    var poem = archived.splice(i, 1)[0];
+    var poem = archived[i];
     if (!poem) return;
-    delete poem.archivedAt;
-    state.poems.push(poem);
+    // A section archived with its entries comes back with them, in order.
+    var back = [poem].concat(isSection(poem) ? archiveGroupOf(poem, archived) : []);
+    state.archivedPoems = archived.filter(function (p) { return back.indexOf(p) < 0; });
+    back.forEach(function (p) { delete p.archivedAt; delete p.archiveGroup; state.poems.push(p); });
     state.isExample = false;
     persist();
     renderAll();
@@ -10353,11 +10507,14 @@
       return;
     }
     archived.forEach(function (poem, i) {
+      if (isGroupedAway(poem, archived)) return;
+      var group = isSection(poem) ? archiveGroupOf(poem, archived) : [];
       var row = document.createElement('div');
       row.className = 'poem-compact-row';
       var titleSpan = document.createElement('div');
       titleSpan.className = 'poem-title-compact';
-      titleSpan.textContent = (poem.title || (isSection(poem) ? 'Untitled' : entryLabel(poem))) + (isSection(poem) ? ' (section)' : '');
+      titleSpan.textContent = (poem.title || (isSection(poem) ? 'Untitled' : entryLabel(poem))) + (!isSection(poem) ? '' :
+        group.length ? ' (' + formNouns().section + ' and ' + group.length + ' ' + (group.length === 1 ? formNouns().one : formNouns().many) + ')' : ' (' + formNouns().section + ' heading)');
       var restoreBtn = document.createElement('button');
       restoreBtn.className = 'btn btn-sm';
       restoreBtn.type = 'button';
@@ -10369,10 +10526,12 @@
       deleteBtn.title = 'Delete (kept in Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days)';
       deleteBtn.textContent = '×';
       deleteBtn.addEventListener('click', async function () {
-        var ok = await confirmDialog('Delete “' + (poem.title || entryLabel(poem)) + '”? You can restore it from Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days.', 'Delete');
+        var extra = group.length ? ' and its ' + group.length + ' ' + (group.length === 1 ? formNouns().one : formNouns().many) : '';
+        var ok = await confirmDialog('Delete “' + (poem.title || entryLabel(poem)) + '”' + extra + '? You can restore ' + (extra ? 'them' : 'it') + ' from Recently deleted for ' + ENTRY_RECOVER_DAYS + ' days.', 'Delete');
         if (!ok) return;
-        var gone = state.archivedPoems.splice(i, 1)[0];
-        state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS).concat([{ deletedAt: Date.now(), poem: gone }]);
+        var gone = [poem].concat(group), now = Date.now();
+        state.archivedPoems = state.archivedPoems.filter(function (p) { return gone.indexOf(p) < 0; });
+        state.deletedPoems = freshDeleted(state.deletedPoems, ENTRY_RECOVER_DAYS).concat(gone.map(function (p) { delete p.archiveGroup; return { deletedAt: now, poem: p }; }));
         persist();
         renderArchiveList();
         updateArchiveButton();
@@ -12027,8 +12186,12 @@
   wireSeg('titleFontSeg', function (val) { state.titleFontChoice = val; persist(); renderAll(); });
   wireSeg('bodyAlignSeg', function (val) { state.bodyAlignment = val; persist(); renderAll(); });
   wireSeg('titleAlignSeg', function (val) { state.titleAlignment = val; persist(); renderAll(); });
-  wireSeg('bodySizeModeSeg', function (val) { state.bodySizeMode = val; persist(); renderAll(); });
-  wireSeg('lineSpacingSeg', function (val) { state.lineSpacing = parseFloat(val); persist(); renderAll(); });
+  document.getElementById('bodySizeSelect').addEventListener('change', function () {
+    state.bodySizePt = Number(this.value); delete state.bodySizeMode; persist(); renderAll();
+  });
+  document.getElementById('lineSpacingSelect').addEventListener('change', function () {
+    state.lineSpacing = parseFloat(this.value); persist(); renderAll();
+  });
   wireSeg('titleSizeModeSeg', function (val) { state.titleSizeMode = val; persist(); renderAll(); });
   wireSeg('pageNumberStyleSeg', function (val) { state.pageNumberStyle = val; persist(); renderAll(); });
   function wireSetting(segId, key) {
@@ -12256,8 +12419,8 @@
     markSeg('titleFontSeg', state.titleFontChoice);
     document.querySelectorAll('#bodyAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodyAlignment); });
     document.querySelectorAll('#titleAlignSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleAlignment); });
-    document.querySelectorAll('#bodySizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.bodySizeMode); });
-    document.querySelectorAll('#lineSpacingSeg button').forEach(function (b) { b.classList.toggle('active', parseFloat(b.dataset.val) === state.lineSpacing); });
+    document.getElementById('bodySizeSelect').value = String(bodySizePtOf(state));
+    document.getElementById('lineSpacingSelect').value = String(state.lineSpacing || 1.15);
     document.querySelectorAll('#titleSizeModeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.titleSizeMode); });
     document.querySelectorAll('#pageNumberStyleSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === state.pageNumberStyle); });
     document.getElementById('titlePageCheck').checked = !!state.includeTitlePage;
@@ -12328,7 +12491,7 @@
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
     document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
-    document.getElementById('lineSpacingSeg').closest('.field').hidden = script;
+    document.getElementById('lineSpacingSelect').closest('.field').hidden = script;
     // Scripts print one-sided and are bound with brads, never folded.
     document.getElementById('exportPrintBtn').hidden = script;
     document.getElementById('cutLinesCheck').closest('.checkline').hidden = script;
@@ -17853,7 +18016,7 @@
     ],
     collection: [
       { sel: '#intakePanel', title: 'Bring in your writing', text: 'From Google Drive, a link, or pasted text. You can fix titles and line breaks afterward.' },
-      { sel: '#entriesViewSeg', title: 'Switch views', text: 'See just the section titles, one row per title, or everything open in full.' },
+      { sel: '#viewMenuBtn', title: 'Switch views', text: 'See just the section titles, one row per title, everything open in full, or only the poems you have open.' },
       { sel: '#toolsSidebar', title: 'Preview, Formatting, Export', text: 'The book as it will print, how it looks, and the PDF and Word files.' }
     ]
   };
