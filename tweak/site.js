@@ -126,7 +126,9 @@
     "[data-pic]{cursor:zoom-in}" +
     /* the self-portrait's only file is 320px square: never blow it up past
        400px (it goes soft), just center it on white in whatever frame holds it */
-    ".jg-feature{background:#fff}.jg-feature img{width:auto!important;height:auto!important;max-width:min(100%,400px)!important;margin:0 auto}" +
+    ".jg-feature{background:#fff;display:block;width:auto!important}.jg-feature img{width:auto!important;height:auto!important;max-width:min(100%,400px)!important;margin:0 auto}" +
+    /* and the frame around it shrinks to the portrait, so the box is square, not a wide box with white margins */
+    "#feature{width:fit-content!important;max-width:100%;margin-inline:auto;justify-self:center;align-self:center}" +
     ".jg-lb{position:fixed;inset:0;z-index:1000;display:none;grid-template-columns:clamp(56px,8vw,96px) minmax(0,1fr) clamp(56px,8vw,96px);grid-template-rows:64px minmax(0,1fr) 64px;background:var(--lb-bg,#111);color:var(--lb-ink,#fff);font-family:var(--lb-font,inherit)}" +
     ".jg-lb.open{display:grid}" +
     ".jg-lb figure{grid-column:2;grid-row:2;margin:0;position:relative;min-height:0}" +
