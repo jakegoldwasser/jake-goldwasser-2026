@@ -56,7 +56,7 @@
     var bl = document.querySelectorAll("#bio a");
     bl[0].dataset.k = "poem"; bl[1].dataset.k = "comic"; bl[2].dataset.k = "trans";
     if (cfg.facts) document.getElementById("facts").innerHTML = J.facts.map(function (f) { return "<li><b>" + f[0] + "</b><span>" + f[1] + "</span></li>"; }).join("");
-    document.getElementById("feature").innerHTML = J.pic(J.FEATURE, "", 1500) + "<figcaption><span>" + J.pictures[J.FEATURE].t + "</span></figcaption>";
+    document.getElementById("feature").innerHTML = J.pic(J.FEATURE, "", 1500);
     function card(w) {
       var tag = w.url ? "a" : "div", attrs = w.url ? ' href="' + w.url + '" target="_blank" rel="noopener"' : "";
       return "<" + tag + ' class="card" data-k="' + w.k + '"' + attrs + '><span class="k">' + J.kinds[w.k].one + '</span><p class="t">' + J.title(w) + '</p><span class="v">' + J.sub(w) + "</span></" + tag + ">";

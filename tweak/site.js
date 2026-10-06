@@ -16,6 +16,8 @@
   J.alt = function (i) { var t = J.pictures[i].t; return t ? "Drawing by Jake Goldwasser: " + t : "Drawing by Jake Goldwasser"; };
   /* a button that opens picture i in the lightbox */
   J.pic = function (i, cls, size, inner) {
+    // the Me page's featured drawing gets jg-feature (see the CSS below)
+    if (i === J.FEATURE && (size || 0) >= 1500) cls = (cls ? cls + " " : "") + "jg-feature";
     return '<button type="button" class="' + (cls || "") + '" data-pic="' + i + '"><img src="' + J.thumb(i, size) + '" alt="' + J.esc(J.alt(i)) + '" loading="' + ((size || 0) >= 1500 ? "eager" : "lazy") + '">' + (inner || "") + "</button>";
   };
   /* title link (or plain text when the piece isn't online) */
@@ -122,6 +124,9 @@
     ".jg-tile{display:block;padding:0;border:0;background:none;cursor:zoom-in;flex:none;overflow:hidden}" +
     ".jg-tile img{width:100%;height:100%;object-fit:cover;display:block}" +
     "[data-pic]{cursor:zoom-in}" +
+    /* the self-portrait's only file is 320px square: never blow it up past
+       400px (it goes soft), just center it on white in whatever frame holds it */
+    ".jg-feature{background:#fff}.jg-feature img{width:auto!important;height:auto!important;max-width:min(100%,400px)!important;margin:0 auto}" +
     ".jg-lb{position:fixed;inset:0;z-index:1000;display:none;grid-template-columns:clamp(56px,8vw,96px) minmax(0,1fr) clamp(56px,8vw,96px);grid-template-rows:64px minmax(0,1fr) 64px;background:var(--lb-bg,#111);color:var(--lb-ink,#fff);font-family:var(--lb-font,inherit)}" +
     ".jg-lb.open{display:grid}" +
     ".jg-lb figure{grid-column:2;grid-row:2;margin:0;position:relative;min-height:0}" +

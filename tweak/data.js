@@ -100,8 +100,9 @@ window.JG = {
     { p: "1703461479625-R9NEKRH6WDJ5R565S4WD/5.jpg" },
     { p: "1e283c09-71dd-414b-a8bc-27add53988fe/Screenshot+2025-03-08+at+10.13.23%E2%80%AFAM.png" }
   ],
-  /* index into pictures for the drawing an option features on Me */
-  FEATURE: 27,
+  /* the drawing every option features on Me: Jake's self-portrait
+     (Jake_Goldwasser_Cartoonist.jpg), shown without a caption */
+  FEATURE: 7,
   links: {
     bookbug: "../bookbug/",
     instagram: "https://www.instagram.com/jakegoldwasser/",
