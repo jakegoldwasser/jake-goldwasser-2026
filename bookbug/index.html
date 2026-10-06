@@ -7651,7 +7651,12 @@
   function enterWriting(card, poemId) {
     if (writingCard === card) return;
     if (writingCard) exitWriting();
-    if (!writingReturn) writingReturn = { top: card.getBoundingClientRect().top };
+    if (!writingReturn) writingReturn = { top: card.getBoundingClientRect().top, y: window.scrollY };
+    // Done steps back through history, and the browser's own scroll
+    // restoration then put the list back where the *writer* left it (the
+    // top of the page) -- after exitWriting had placed it. Bookbug places
+    // it itself while writing.
+    try { history.scrollRestoration = 'manual'; } catch (e) {}
     writingCard = card;
     writingPoemId = poemId;
     closeEntryMenu();
@@ -7693,13 +7698,30 @@
     }
     var back = writingReturn;
     writingReturn = null;
-    var row = poemList.querySelector('[data-poem-id="' + poemId + '"]');
-    if (!row) return;
     var top = back ? Math.max(8, Math.min(back.top, window.innerHeight - 80)) : window.innerHeight / 3;
-    function place() { window.scrollTo(0, window.scrollY + row.getBoundingClientRect().top - top); }
+    var touched = false;
+    function onTouch() { touched = true; }
+    window.addEventListener('touchstart', onTouch, { passive: true, once: true });
+    window.addEventListener('wheel', onTouch, { passive: true, once: true });
+    function place() {
+      // The list may have been re-rendered since, so look the row up each time.
+      var row = poemList.querySelector('[data-poem-id="' + poemId + '"]');
+      if (row && row.offsetParent) window.scrollTo(0, window.scrollY + row.getBoundingClientRect().top - top);
+      else if (back) window.scrollTo(0, back.y);
+    }
+    // Once the person touches or scrolls the page, their scroll wins.
+    function settle() { if (!touched && !writingCard) place(); }
     place();
-    // iOS can nudge the page once the keyboard finishes closing.
-    requestAnimationFrame(place);
+    // History's popstate and iOS closing the keyboard can both move the
+    // page after this runs; put it back once each has had its turn.
+    requestAnimationFrame(settle);
+    setTimeout(settle, 120);
+    setTimeout(function () {
+      settle();
+      window.removeEventListener('touchstart', onTouch);
+      window.removeEventListener('wheel', onTouch);
+      if (!writingCard) { try { history.scrollRestoration = 'auto'; } catch (e) {} }
+    }, 450);
   }
   // The entry before / after the one being written, in book order
   // (section titles skipped).
