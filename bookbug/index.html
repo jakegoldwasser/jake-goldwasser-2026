@@ -1911,7 +1911,24 @@
   textarea.pb-notes:focus { border-color: var(--accent); background: var(--surface); }
   textarea.pb-notes::placeholder { color: var(--ink-faint); }
   /* Room between the last spread and Add spread. */
-  .pb-sheet-foot { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+  .pb-sheet-foot { display: flex; gap: 8px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+  /* Import cartoons: sources on the left (the current one large, as it
+     will be cleaned up), the cleanup settings on the right. */
+  .modal-box.scan-box { max-width: 880px; width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .scan-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .scan-main { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
+  .scan-main[hidden] { display: none; }
+  @media (max-width: 700px) { .scan-main { grid-template-columns: 1fr; } }
+  .scan-view { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 10px; }
+  .scan-view canvas { max-width: 100%; max-height: 52vh; display: block; background: #fff; }
+  .scan-strip { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; }
+  .scan-thumb { position: relative; flex: 0 0 auto; width: 58px; height: 58px; border: 2px solid var(--line); border-radius: 6px; background: #fff center / contain no-repeat; cursor: pointer; padding: 0; }
+  .scan-thumb.is-current { border-color: var(--accent); }
+  .scan-thumb span { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 12px; line-height: 18px; text-align: center; }
+  .scan-controls .field { margin-bottom: 12px; }
+  .scan-controls input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .scan-controls output { float: right; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .scan-status { font-size: 13px; color: var(--ink-soft); margin: 8px 0 0; min-height: 1.2em; }
   #pbSheet .poem-gap { margin: 3px 0; }
   #pbSheet .poem-gap-line { left: 34px; }
   body.pref-no-spread-numbers #pbSheet .poem-gap-line { left: 0; }
@@ -2713,6 +2730,7 @@
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
             <button class="btn add-poem-btn" id="cbAddBtn" type="button">+ Add cartoon</button>
+            <button class="btn" id="cbImportBtn" type="button" title="A PDF of drawings, or photos of them: each page or photo becomes a cartoon">Import a PDF or photos…</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
@@ -19014,6 +19032,238 @@
     cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files), null);
   });
   cbFmt('cbAddBtn').addEventListener('click', function () { cbPick(null); });
+  cbFmt('cbImportBtn').addEventListener('click', openCartoonImport);
+
+  // ---------------------------------------------------------------------
+  // Importing cartoons from a PDF (each page a cartoon; read with PDF.js,
+  // loaded only when needed) or from photos (each photo a cartoon, from
+  // files or the camera), cleaned up like a scanner would: color,
+  // grayscale or black and white, shadows lifted, contrast, brightness,
+  // and the blank paper trimmed away. One set of settings covers the
+  // batch; the large view shows the selected page as it will come in.
+  // ---------------------------------------------------------------------
+  var PDFJS_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  var pdfjsReady = null;
+  function loadPdfJs() {
+    if (!pdfjsReady) pdfjsReady = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = PDFJS_BASE + 'pdf.min.js';
+      sc.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + 'pdf.worker.min.js'; resolve(window.pdfjsLib); };
+      sc.onerror = function () { pdfjsReady = null; reject(new Error('Couldn’t load the PDF reader. Check the connection and try again.')); };
+      document.head.appendChild(sc);
+    });
+    return pdfjsReady;
+  }
+  // Each page drawn at up to 2400px on its long side, on white.
+  async function pdfPagesToCanvases(file, onPage) {
+    var lib = await loadPdfJs();
+    var doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    for (var p = 1; p <= doc.numPages; p++) {
+      var page = await doc.getPage(p), vp1 = page.getViewport({ scale: 1 });
+      var vp = page.getViewport({ scale: Math.min(4, 2400 / Math.max(vp1.width, vp1.height)) });
+      var c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      onPage(c, p, doc.numPages);
+    }
+  }
+  // The cleanup. Shadows: the paper's own light is estimated from a much
+  // smaller copy with the ink taken out (each pixel the brightest near
+  // it), smoothed back up, and divided out -- so a shadow or a dim corner
+  // turns as white as the rest of the sheet. `shadow` blends that in.
+  function scanClean(src, o, maxDim) {
+    var c = pbCanvasFrom(src, maxDim);
+    var ctx = c.getContext('2d'), W = c.width, H = c.height;
+    var im = ctx.getImageData(0, 0, W, H), d = im.data, bg = null, k = (o.shadow || 0) / 100;
+    if (k > 0) {
+      var sw = Math.max(8, Math.round(W / 24)), sh = Math.max(8, Math.round(H / 24));
+      var sc = document.createElement('canvas'); sc.width = sw; sc.height = sh;
+      var sctx = sc.getContext('2d');
+      sctx.drawImage(c, 0, 0, sw, sh);
+      var sd = sctx.getImageData(0, 0, sw, sh), a = sd.data, out = new Uint8ClampedArray(a.length), R = 2;
+      for (var y = 0; y < sh; y++) for (var x = 0; x < sw; x++) {
+        var mr = 0, mg = 0, mb = 0;
+        for (var yy = Math.max(0, y - R); yy <= Math.min(sh - 1, y + R); yy++) for (var xx = Math.max(0, x - R); xx <= Math.min(sw - 1, x + R); xx++) {
+          var q = (yy * sw + xx) * 4;
+          if (a[q] > mr) mr = a[q]; if (a[q + 1] > mg) mg = a[q + 1]; if (a[q + 2] > mb) mb = a[q + 2];
+        }
+        var o4 = (y * sw + x) * 4; out[o4] = mr; out[o4 + 1] = mg; out[o4 + 2] = mb; out[o4 + 3] = 255;
+      }
+      sd.data.set(out); sctx.putImageData(sd, 0, 0);
+      var big = document.createElement('canvas'); big.width = W; big.height = H;
+      var bctx = big.getContext('2d');
+      bctx.imageSmoothingQuality = 'high';
+      bctx.filter = 'blur(' + Math.max(2, Math.round(Math.max(W, H) / 60)) + 'px)';
+      bctx.drawImage(sc, 0, 0, W, H);
+      bg = bctx.getImageData(0, 0, W, H).data;
+    }
+    var C = (o.contrast || 0) * 2.55, f = (259 * (C + 255)) / (255 * (259 - C)), B = (o.brightness || 0) * 1.28;
+    var thr = o.threshold == null ? 160 : o.threshold, mode = o.mode;
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i], g = d[i + 1], b = d[i + 2];
+      if (bg) {
+        r += (Math.min(255, r * 255 / Math.max(1, bg[i])) - r) * k;
+        g += (Math.min(255, g * 255 / Math.max(1, bg[i + 1])) - g) * k;
+        b += (Math.min(255, b * 255 / Math.max(1, bg[i + 2])) - b) * k;
+      }
+      r = f * (r - 128) + 128 + B; g = f * (g - 128) + 128 + B; b = f * (b - 128) + 128 + B;
+      if (mode !== 'color') {
+        var l = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (mode === 'bw') l = l >= thr ? 255 : 0;
+        r = g = b = l;
+      }
+      d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
+    }
+    ctx.putImageData(im, 0, 0);
+    if (!o.trim) return c;
+    // Trim: crop to the ink, with a little white kept around it.
+    var x0 = W, y0 = H, x1 = -1, y1 = -1, step = Math.max(1, Math.round(Math.max(W, H) / 1200));
+    for (var ty = 0; ty < H; ty += step) for (var tx = 0; tx < W; tx += step) {
+      var t = (ty * W + tx) * 4;
+      if (0.299 * d[t] + 0.587 * d[t + 1] + 0.114 * d[t + 2] < 170) {
+        if (tx < x0) x0 = tx; if (tx > x1) x1 = tx; if (ty < y0) y0 = ty; if (ty > y1) y1 = ty;
+      }
+    }
+    if (x1 < 0) return c;
+    var pad = Math.round(Math.max(W, H) * 0.025);
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+    var cr = document.createElement('canvas'); cr.width = x1 - x0 + 1; cr.height = y1 - y0 + 1;
+    cr.getContext('2d').drawImage(c, x0, y0, cr.width, cr.height, 0, 0, cr.width, cr.height);
+    return cr;
+  }
+  function openCartoonImport() {
+    var d = makeDialog('scan-box', 'Import cartoons',
+      '<p style="margin-top:0;">Import cartoons</p>' +
+      '<div class="scan-pick"><button class="btn" type="button" data-pick="pdf">Choose a PDF</button><button class="btn" type="button" data-pick="photos">Choose photos</button>' +
+      '<button class="btn" type="button" data-pick="camera">Take photos</button>' +
+      '<input type="file" accept="application/pdf" hidden data-in="pdf"><input type="file" accept="image/*" multiple hidden data-in="photos">' +
+      '<input type="file" accept="image/*" capture="environment" hidden data-in="camera"></div>' +
+      '<p class="snap-empty scan-empty">Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption.</p>' +
+      '<div class="scan-main" hidden><div><div class="scan-view"></div><div class="scan-strip"></div></div>' +
+      '<div class="scan-controls">' +
+        '<div class="field"><label>Scan as</label><div class="seg seg-3" data-mode><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
+        '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
+        '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
+        '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
+        '<div class="field" data-thr><label>Ink threshold <output data-out="threshold"></output></label><input type="range" min="60" max="230" step="5" data-k="threshold"></div>' +
+        '<label class="checkline" style="text-transform:none;letter-spacing:0;font-weight:400;"><input type="checkbox" data-k="trim"> Trim the blank paper</label>' +
+      '</div></div>' +
+      '<p class="scan-status" aria-live="polite"></p>' +
+      '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add cartoons</button></div>');
+    var box = d.box, sources = [], cur = 0, busy = false;
+    var o = { mode: 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true };
+    var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status');
+    var addBtn = box.querySelector('[data-act="add"]');
+    // Take photos: shown where there's a camera to take them with.
+    box.querySelector('[data-pick="camera"]').hidden = !window.matchMedia('(pointer: coarse)').matches;
+    box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
+    function syncControls() {
+      box.querySelectorAll('[data-mode] button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === o.mode); });
+      box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) { r.value = o[r.dataset.k]; box.querySelector('[data-out="' + r.dataset.k + '"]').textContent = o[r.dataset.k]; });
+      box.querySelector('input[type="checkbox"][data-k="trim"]').checked = o.trim;
+      box.querySelector('[data-thr]').hidden = o.mode !== 'bw';
+    }
+    var renderTimer = null;
+    function renderView() {
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(function () {
+        if (!sources[cur]) return;
+        view.innerHTML = '';
+        view.appendChild(scanClean(sources[cur].canvas, o, 900));
+      }, 30);
+    }
+    function renderStrip() {
+      strip.innerHTML = '';
+      sources.forEach(function (src, i) {
+        var t = document.createElement('button');
+        t.type = 'button';
+        t.className = 'scan-thumb' + (i === cur ? ' is-current' : '');
+        t.style.backgroundImage = 'url(' + src.thumb + ')';
+        t.title = 'Page ' + (i + 1);
+        t.innerHTML = '<span role="button" aria-label="Leave this one out" title="Leave this one out">×</span>';
+        t.addEventListener('click', function (e) {
+          if (e.target.tagName === 'SPAN') { sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
+          cur = i; refresh();
+        });
+        strip.appendChild(t);
+      });
+    }
+    function refresh() {
+      var has = sources.length > 0;
+      box.querySelector('.scan-main').hidden = !has;
+      box.querySelector('.scan-empty').hidden = has;
+      addBtn.disabled = !has || busy;
+      addBtn.textContent = has ? 'Add ' + sources.length + (sources.length === 1 ? ' cartoon' : ' cartoons') : 'Add cartoons';
+      syncControls();
+      renderStrip();
+      if (has) renderView(); else view.innerHTML = '';
+    }
+    function addSource(canvas, fromPdf) {
+      var th = pbCanvasFrom(canvas, 120);
+      sources.push({ canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7) });
+      // A PDF is already clean; a photo has shadows to lift.
+      if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
+      refresh();
+    }
+    box.querySelectorAll('[data-pick]').forEach(function (b) {
+      b.addEventListener('click', function () { var inp = box.querySelector('[data-in="' + b.dataset.pick + '"]'); inp.value = ''; inp.click(); });
+    });
+    box.querySelector('[data-in="pdf"]').addEventListener('change', async function (e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        status.textContent = 'Reading the PDF…';
+        await pdfPagesToCanvases(file, function (c, p, n) { status.textContent = 'Reading page ' + p + ' of ' + n + '…'; addSource(c, true); });
+        status.textContent = '';
+      } catch (err) { status.textContent = 'Couldn’t read that PDF: ' + (err && err.message ? err.message : 'unknown error'); }
+    });
+    async function takeImages(files) {
+      files = Array.prototype.filter.call(files || [], function (f) { return /^image\//.test(f.type); });
+      for (var i = 0; i < files.length; i++) {
+        status.textContent = 'Reading photo ' + (i + 1) + ' of ' + files.length + '…';
+        var img = await pbBlobToImage(files[i]);
+        addSource(pbCanvasFrom(img, 2400), false);
+        URL.revokeObjectURL(img.src);
+      }
+      status.textContent = '';
+    }
+    box.querySelector('[data-in="photos"]').addEventListener('change', function (e) { takeImages(e.target.files); });
+    // The camera takes one photo at a time; Take photos again adds the next.
+    box.querySelector('[data-in="camera"]').addEventListener('change', function (e) {
+      takeImages(e.target.files).then(function () { if (sources.length) status.textContent = sources.length + ' so far. Take photos again for the next one.'; });
+    });
+    box.querySelectorAll('[data-mode] button').forEach(function (b) {
+      b.addEventListener('click', function () { o.mode = b.dataset.val; syncControls(); renderView(); });
+    });
+    box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
+      r.addEventListener('input', function () { o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
+    });
+    box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { o.trim = e.target.checked; renderView(); });
+    addBtn.addEventListener('click', async function () {
+      if (busy || !sources.length) return;
+      busy = true; addBtn.disabled = true;
+      try {
+        for (var i = 0; i < sources.length; i++) {
+          status.textContent = 'Adding ' + (i + 1) + ' of ' + sources.length + '…';
+          var full = scanClean(sources[i].canvas, o, 2400);
+          var enc = await pbEncode(full, o.mode === 'bw');
+          var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
+          cbState.cartoons.push(cbNormalizeCartoon({ img: id }));
+        }
+        cbPersist();
+        cbRenderList();
+        var n = sources.length;
+        d.close();
+        showToast('Added ' + n + (n === 1 ? ' cartoon.' : ' cartoons.') + ' Write their captions beside them.');
+      } catch (err) {
+        busy = false; addBtn.disabled = false;
+        status.textContent = 'Couldn’t add them: ' + (err && err.message ? err.message : 'unknown error');
+      }
+    });
+    refresh();
+  }
 
   // ⋯ on a cartoon: tidy the drawing, move it, archive it.
   var cbItemMenu = document.createElement('div');
