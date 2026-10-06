@@ -3122,6 +3122,7 @@
             <button type="button" role="tab" data-target="front">Front cover</button>
             <button type="button" role="tab" data-target="cast" hidden>Characters</button>
             <button type="button" role="tab" data-target="toc">Contents</button>
+            <button type="button" role="tab" data-target="extras">Extra pages</button>
             <button type="button" role="tab" data-target="back">Back cover</button>
           </div>
           <div class="cover-pane" data-pane="front">
@@ -3265,6 +3266,28 @@
           <div class="checkline" data-toc-sections>
             <input type="checkbox" id="tocSectionSpaceCheck">
             <label for="tocSectionSpaceCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Space before each section</label>
+          </div>
+          </div>
+          <!-- Pages around the entries, each in the book only while it has
+               words: an epigraph after the cover, and acknowledgments and
+               a note about the author after the last entry. -->
+          <div class="cover-pane" data-pane="extras" hidden>
+          <div class="subhead">Epigraph</div>
+          <div class="field">
+            <label for="epigraphInput">Quotation</label>
+            <textarea id="epigraphInput" class="back-text-input" rows="3" placeholder="On a page of its own, after the cover"></textarea>
+          </div>
+          <div class="field">
+            <label for="epigraphSourceInput">From</label>
+            <input type="text" id="epigraphSourceInput" placeholder="Author, Title">
+          </div>
+          <div class="subhead">Acknowledgments</div>
+          <div class="field">
+            <textarea id="acksInput" class="back-text-input" rows="4" placeholder="Thanks, and where these first appeared. After the last entry." aria-label="Acknowledgments"></textarea>
+          </div>
+          <div class="subhead">About the author</div>
+          <div class="field">
+            <textarea id="aboutInput" class="back-text-input" rows="3" placeholder="A short bio, before the back cover" aria-label="About the author"></textarea>
           </div>
           </div>
           <div class="cover-pane" data-pane="back" hidden>
@@ -6339,6 +6362,31 @@
     return pages;
   }
   // One page of the list as layout items (see layoutFrontCover).
+  var BACK_MATTER = [{ key: 'acknowledgments', title: 'Acknowledgments' }, { key: 'aboutAuthor', title: 'About the Author' }];
+  // An epigraph: its lines in italic, centered, a third of the way down
+  // the page, and its source under it after a dash.
+  function layoutEpigraphPage(s, plan) {
+    var size = plan.globalSize, font = s.bodyFontChoice, lead = size * 1.45, items = [];
+    var width = plan.contentWidth * 0.72, mid = plan.marginLeft + plan.contentWidth / 2;
+    var y = plan.PAGE_H * 0.66;
+    (s.epigraph || '').trim().split('\n').forEach(function (para) {
+      wrapLine(stripFormatMarkers(para).trim(), width, size, font, 400).forEach(function (t) {
+        var w = measure(t, size, font, 400, true);
+        if (t) items.push({ text: t, font: font, weight: 400, italic: true, size: size, x: mid - w / 2, y: y, rgb: INK_RGB, key: 'bodyItal' });
+        y -= lead;
+      });
+    });
+    var src = (s.epigraphSource || '').trim();
+    if (src) {
+      y -= lead * 0.5;
+      wrapLine('— ' + src, width, size, font, 400).forEach(function (t) {
+        var w = measure(t, size, font, 400);
+        items.push({ text: t, font: font, weight: 400, size: size, x: mid - w / 2, y: y, rgb: INK_RGB, key: 'bodyReg' });
+        y -= lead;
+      });
+    }
+    return items;
+  }
   function layoutCastPage(s, plan, lines, first) {
     var size = plan.globalSize, font = s.bodyFontChoice, items = [];
     var left = plan.marginLeft, right = plan.PAGE_W - plan.marginRight, top = plan.PAGE_H - plan.marginTop, row = 0;
@@ -6665,9 +6713,10 @@
       while (remaining > 0) { tocPageCount++; remaining -= linesPerTocPageN; }
     }
     var castPages = castPagePlan(state, contentWidth, contentHeight, globalSize);
-    var tocSpacer = needsTocSpacer(state, tocPageCount, castPages.length) ? 1 : 0;
+    var epigraphPages = !script && (state.epigraph || '').trim() ? 1 : 0;
+    var tocSpacer = needsTocSpacer(state, tocPageCount, castPages.length + epigraphPages) ? 1 : 0;
 
-    var frontPages = (state.includeTitlePage ? 1 : 0) + castPages.length + tocSpacer + tocPageCount;
+    var frontPages = (state.includeTitlePage ? 1 : 0) + epigraphPages + castPages.length + tocSpacer + tocPageCount;
     var running = frontPages + 1;
     layouts.forEach(function (l) {
       l.startPage = running;
@@ -6676,14 +6725,30 @@
     // A screenplay scene without pages of its own starts partway into
     // the flow its run's first scene holds.
     layouts.forEach(function (l) { if (l.host != null) l.startPage = layouts[l.host].startPage + l.hostPage; });
+    // Acknowledgments and About the Author: set like entries (prose,
+    // titled), after the last one.
+    var backMatter = [];
+    if (!script) {
+      var matterState = Object.assign({}, state, { form: 'essays', opener: 'none', paragraphs: 'space' });
+      BACK_MATTER.forEach(function (bm) {
+        var text = (state[bm.key] || '').trim();
+        if (!text) return;
+        var pseudo = { id: 'matter-' + bm.key, title: bm.title, lines: text.split('\n') };
+        var ml = layoutPoem(pseudo, globalSize, contentWidth, contentHeight, matterState);
+        ml.startPage = running;
+        running += ml.pages.length;
+        backMatter.push({ key: bm.key, label: bm.title, poem: pseudo, layout: ml });
+      });
+    }
     // +1 for the back cover, which is always present.
-    var totalPages = frontPages + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0) + 1;
+    var totalPages = frontPages + layouts.reduce(function (a, l) { return a + l.pages.length; }, 0) +
+      backMatter.reduce(function (a, m) { return a + m.layout.pages.length; }, 0) + 1;
 
     return {
       trim: trim, PAGE_W: PAGE_W, PAGE_H: PAGE_H, marginSide: marginSide, marginTop: marginTop, marginBottom: marginBottom,
       marginLeft: marginLeft, marginRight: marginRight, script: script, frontPages: frontPages,
       contentWidth: contentWidth, contentHeight: contentHeight, globalSize: globalSize, layouts: layouts,
-      castPages: castPages, tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
+      castPages: castPages, epigraphPages: epigraphPages, backMatter: backMatter, tocPageCount: tocPageCount, tocSpacer: tocSpacer, toc: toc, tocFontSize: tocFontSize, tocLineHeight: tocLineHeight, tocTitleH: tocTitleH,
       linesPerTocPage1: linesPerTocPage1, linesPerTocPageN: linesPerTocPageN,
       totalPages: totalPages
     };
@@ -6976,6 +7041,13 @@
       contents.push(coverBytes);
     }
 
+    // ---- Epigraph ----
+    if (plan.epigraphPages) {
+      var epiBytes = [];
+      drawLayoutItems(epiBytes, layoutEpigraphPage(state, plan), itemKeys, imagesUsed);
+      contents.push(epiBytes);
+    }
+
     // ---- Character list (a play's) ----
     plan.castPages.forEach(function (lines, k) {
       var castBytes = [];
@@ -7041,17 +7113,8 @@
       }
     }
 
-    // ---- Poem pages ----
-    state.poems.forEach(function (poem, pi) {
-      var layout = plan.layouts[pi];
-      if (layout.isSection) {
-        if (layout.pages.length) {
-          var secBytes = [];
-          drawLayoutItems(secBytes, layoutSectionPage(state, plan, layout), itemKeys, imagesUsed);
-          contents.push(secBytes);
-        }
-        return;
-      }
+    // An entry's pages: its title on the first, then its lines.
+    function drawEntryPages(poem, layout) {
       var effAlign = titleAlignFor(poem, state);
       // A script places each element itself (indents, centering).
       var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
@@ -7106,7 +7169,24 @@
         pageNumberOp(bytes, layout.startPage + pageIdx);
         contents.push(bytes);
       });
+    }
+
+    // ---- Poem pages ----
+    state.poems.forEach(function (poem, pi) {
+      var layout = plan.layouts[pi];
+      if (layout.isSection) {
+        if (layout.pages.length) {
+          var secBytes = [];
+          drawLayoutItems(secBytes, layoutSectionPage(state, plan, layout), itemKeys, imagesUsed);
+          contents.push(secBytes);
+        }
+        return;
+      }
+      drawEntryPages(poem, layout);
     });
+
+    // ---- Acknowledgments, About the Author ----
+    plan.backMatter.forEach(function (m) { drawEntryPages(m.poem, m.layout); });
 
     // ---- Back cover -- always present ----
     var backBytes = [];
@@ -11754,6 +11834,7 @@
     var ghostOf = stageMode === 'matter' ? matterTarget : null;
     if (state.includeTitlePage) items.push({ type: 'cover' });
     else if (ghostOf === 'front') items.push({ type: 'cover', ghost: true });
+    if (plan.epigraphPages) items.push({ type: 'epigraph' });
     plan.castPages.forEach(function (lines, k) { items.push({ type: 'cast', castPageIndex: k }); });
     if (!plan.castPages.length && ghostOf === 'cast' && bookFormOf(state) === 'play') items.push({ type: 'cast', castPageIndex: 0, ghost: true });
     var tocCount = plan.tocPageCount;
@@ -11766,6 +11847,9 @@
       // fallback below only matters for a missing layout.
       var pageCount = plan.layouts[i] ? plan.layouts[i].pages.length : 1;
       for (var p = 0; p < pageCount; p++) items.push({ type: 'poem', index: i, pageIndex: p });
+    });
+    plan.backMatter.forEach(function (m, k) {
+      for (var p = 0; p < m.layout.pages.length; p++) items.push({ type: 'poem', matter: k, pageIndex: p });
     });
     items.push({ type: 'back' });
     return items;
@@ -11873,7 +11957,7 @@
       }
       var rgb = it.rgb.map(function (c) { return Math.round(c * 255); }).join(',');
       html += '<div style="position:absolute; white-space:pre; line-height:1; left:' + (it.x * scale).toFixed(2) +
-        'px; top:' + ((plan.PAGE_H - it.y - it.size * 0.8) * scale).toFixed(2) + 'px; font-family:' + displayStackFor(it.font) +
+        'px; top:' + ((plan.PAGE_H - it.y - it.size * 0.8) * scale).toFixed(2) + 'px; font-family:' + printStackFor(it.font) +
         '; font-size:' + (it.size * scale).toFixed(2) + 'px; font-weight:' + (it.weight || 400) + ';' +
         (it.italic ? ' font-style:italic;' : '') + ' color:rgb(' + rgb + ');">' + escapeHtml(it.text) + '</div>';
     });
@@ -11906,6 +11990,10 @@
     });
   }
   function previewShowMatter(target) {
+    if (target === 'extras') {
+      previewShow(function (it) { return it.type === 'epigraph' || it.matter != null; });
+      return;
+    }
     var type = target === 'toc' || target === 'back' || target === 'cast' ? target : 'cover';
     previewShow(function (it) { return it.type === type; });
   }
@@ -12012,16 +12100,20 @@
       renderTocPreview(box, plan, scale, item.tocPageIndex);
       var tocTotal = plan.tocPageCount || 1;
       caption.textContent = 'Table of contents' + (tocTotal > 1 ? ' (' + (item.tocPageIndex + 1) + ' of ' + tocTotal + ')' : '');
+    } else if (item.type === 'epigraph') {
+      renderItemsPreview(box, layoutEpigraphPage(state, plan), plan, scale);
+      caption.textContent = 'Epigraph';
     } else if (item.type === 'back') {
       renderItemsPreview(box, layoutBackCover(state, plan), plan, scale);
       box.innerHTML += pageNumberOverlayHtml(plan.totalPages, scale);
       caption.textContent = 'Back cover';
-    } else if (plan.layouts[item.index] && plan.layouts[item.index].isSection) {
+    } else if (item.matter == null && plan.layouts[item.index] && plan.layouts[item.index].isSection) {
       renderItemsPreview(box, layoutSectionPage(state, plan, plan.layouts[item.index]), plan, scale);
       caption.textContent = Cap(formNouns().section) + ': ' + sectionLabel(state.poems[item.index]);
     } else {
-      var poem = state.poems[item.index];
-      var layout = plan.layouts[item.index];
+      var bm = item.matter != null ? plan.backMatter[item.matter] : null;
+      var poem = bm ? bm.poem : state.poems[item.index];
+      var layout = bm ? bm.layout : plan.layouts[item.index];
       var pageIndex = item.pageIndex || 0;
       var isFirstPoemPage = pageIndex === 0;
       // The page's own border comes out of the margins, not the text
@@ -12078,6 +12170,7 @@
         return;
       }
       var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
+      if (bm) { caption.textContent = bm.label + pageNote; return; }
       var entryNo = countEntries(state.poems.slice(0, item.index + 1));
       caption.textContent = Cap(formNouns().one) + ' ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
     }
@@ -12139,7 +12232,8 @@
     }
     if (stageEdit) return;
     var item = buildPreviewItems(state)[previewIndex];
-    if (item && item.type === 'poem' && !isScriptForm()) startStageEdit(item, e);
+    // Extra pages are written in Front and Back Matter, not on the page.
+    if (item && item.type === 'poem' && item.matter == null && !isScriptForm()) startStageEdit(item, e);
   });
 
   // ---- Editing on the page (large Formatting view) ----
@@ -13160,7 +13254,7 @@
       }
       return;
     }
-    title.textContent = 'Front and Back Matter · ' + ({ front: isScriptForm() ? 'Title page' : 'Front cover', cast: 'Character list', toc: 'Contents', back: 'Back cover' })[matterTarget];
+    title.textContent = 'Front and Back Matter · ' + ({ front: isScriptForm() ? 'Title page' : 'Front cover', cast: 'Character list', toc: 'Contents', back: 'Back cover', extras: 'Extra pages' })[matterTarget];
     var note = '';
     if (item && item.ghost) {
       if (item.type === 'cast' && castIncluded(state)) note = 'no characters yet';
@@ -13459,6 +13553,12 @@
   document.getElementById('backTextInput').addEventListener('input', function (e) {
     state.backText = e.target.value; persist(); updateStats();
   });
+  [['epigraphInput', 'epigraph'], ['epigraphSourceInput', 'epigraphSource'], ['acksInput', 'acknowledgments'], ['aboutInput', 'aboutAuthor']].forEach(function (f) {
+    document.getElementById(f[0]).addEventListener('input', function (e) {
+      state[f[1]] = e.target.value; state.isExample = false; persist(); updateStats();
+      if (matterIsOpen()) previewShowMatter('extras');
+    });
+  });
 
   // Cover images: a thumbnail with Replace / Remove, or an Add button.
   // Stored like entry images (state.images), referenced by key.
@@ -13709,6 +13809,10 @@
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
     document.getElementById('hyphenateCheck').checked = !!state.hyphenate;
     document.getElementById('openerSelect').value = state.opener || 'none';
+    document.getElementById('epigraphInput').value = state.epigraph || '';
+    document.getElementById('epigraphSourceInput').value = state.epigraphSource || '';
+    document.getElementById('acksInput').value = state.acknowledgments || '';
+    document.getElementById('aboutInput').value = state.aboutAuthor || '';
     document.getElementById('runningHeadsSelect').value = state.runningHeads || 'none';
     document.querySelector('#runningHeadsSelect [value="book-entry"]').textContent = 'Book title · ' + Cap(formNouns().one) + ' title';
     document.getElementById('keepLinesCheck').checked = state.keepLines !== false;
@@ -13988,7 +14092,10 @@
     document.querySelector('#coverTargetToggle [data-target="front"]').textContent = Cap(cover);
     // Only a play has a character list.
     document.querySelector('#coverTargetToggle [data-target="cast"]').hidden = form !== 'play';
-    document.getElementById('coverTargetToggle').classList.toggle('is-four', form === 'play');
+    // Scripts have no extra pages (their format is fixed).
+    document.querySelector('#coverTargetToggle [data-target="extras"]').hidden = isScriptForm();
+    if (isScriptForm() && matterTarget === 'extras') showCoverTarget('front');
+    document.getElementById('coverTargetToggle').classList.toggle('is-four', true);
     if (form !== 'play' && matterTarget === 'cast') showCoverTarget('front');
     document.querySelector('label[for="titlePageCheck"]').textContent = 'Include ' + cover;
     TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
