@@ -509,6 +509,10 @@
   }
   /* Its tier and ⋯ sit in the page's top right corner, level with the
      close button. */
+  /* The page's top margin, above the title, closes it too (the click
+     lands on the card itself; see makeCompactRow). */
+  .poem-compact-expanded::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: var(--card-top); cursor: pointer; }
+  .poem-compact-expanded.is-writing::before { display: none; }
   .poem-card-corner { position: absolute; top: 8px; right: 10px; display: flex; align-items: center; gap: 8px; }
   .poem-card-corner .dots-btn { margin-left: 0; }
   .poem-card.is-writing .poem-card-corner { display: none; }
@@ -9408,23 +9412,38 @@
   }
   function setEntryOpen(id, open) {
     var el = writerMQ.matches ? null : entryTitleEl(id);
-    var before = el && el.getBoundingClientRect().top;
+    var before = el && titleBaseline(el);
     var fromSize = el && getComputedStyle(el).fontSize;
     if (open) expandedCompactIds[id] = true; else delete expandedCompactIds[id];
     renderPoems();
     var after = el && entryTitleEl(id);
     if (after) {
-      var drift = after.getBoundingClientRect().top - before;
+      // An opened title's field, one line at its full width, as it ends up.
+      if (after.tagName === 'TEXTAREA') { after.style.width = '100%'; after.rows = 1; after.style.height = 'auto'; }
+      var drift = titleBaseline(after) - before;
       if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
       growTitle(after, fromSize);
     }
   }
-  // The title eases from the size it was to its new one (an opened
-  // title's field is fitted to its text once it gets there).
+  // Where a one-line title's letters sit (their baseline), on screen:
+  // the line's top, plus the half-leading, plus the type's ascent.
+  function titleBaseline(el) {
+    var cs = getComputedStyle(el), fs = parseFloat(cs.fontSize);
+    var lh = parseFloat(cs.lineHeight) || fs * 1.2;
+    return el.getBoundingClientRect().top + parseFloat(cs.paddingTop) + (lh - fs) / 2 + fs * 0.8;
+  }
+  // The title eases from the size it was to its new one, growing (or
+  // shrinking) upward from the line its letters sit on: its row is held
+  // at its final height with the title pinned to the row's bottom. (An
+  // opened title's field is fitted to its text once it gets there.)
   function growTitle(el, fromSize) {
     if (!fromSize || getComputedStyle(el).fontSize === fromSize) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     var isField = el.tagName === 'TEXTAREA';
+    var holder = el.parentNode;
+    holder.style.boxSizing = 'border-box';
+    holder.style.height = holder.getBoundingClientRect().height + 'px';
+    el.style.alignSelf = 'flex-end';
     el.style.transition = 'none';
     el.style.fontSize = fromSize;
     // One line tall, in ems, so its height grows along with the type.
@@ -9440,6 +9459,9 @@
       finished = true;
       el.removeEventListener('transitionend', done);
       el.style.transition = '';
+      el.style.alignSelf = '';
+      holder.style.height = '';
+      holder.style.boxSizing = '';
       if (isField) fitTitleInput(el);
     }
     el.addEventListener('transitionend', done);
@@ -9540,6 +9562,10 @@
       var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
       expandedTitleRow.addEventListener('click', function (e) {
         if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) setEntryOpen(poem.id, false);
+      });
+      expandedCard.addEventListener('click', function (e) {
+        if (e.target === expandedCard && !expandedCard.classList.contains('is-writing') &&
+            e.clientY < expandedTitleRow.getBoundingClientRect().top) setEntryOpen(poem.id, false);
       });
       var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
       expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
