@@ -423,6 +423,12 @@
   }
 
   .poems-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  /* The find box sits in the header row, between zoom and the count /
+     View Options, taking the room between them; on a phone it drops to
+     a full-width row of its own under them. */
+  #poemsPanel > .poems-head { align-items: center; }
+  .poems-head > .entry-search { flex: 1 1 180px; margin: 0; min-width: 0; }
+  @media (max-width: 700px) { .poems-head > .entry-search { order: 3; flex-basis: 100%; } }
   .entry-search { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-faint); }
   .entry-search:focus-within { border-color: var(--accent); color: var(--accent); }
   .entry-search input[type="search"] { flex: 1; min-width: 0; border: none !important; background: transparent !important; outline: none; padding: 8px 0; font-size: 14px; color: var(--ink); box-shadow: none !important; }
@@ -517,10 +523,6 @@
   /* 18px with the zoom; an open entry's title is bold, a closed one's
      regular. */
   :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); }
-  /* An open entry's title is drawn to the same scale as its text (set
-     from the Title size by renderPoems), so an 18 pt title over 12 pt
-     text looks it -- closed rows stay at the list's own size. */
-  .poem-card { --entry-title-size: var(--open-title-size, calc(18px * var(--editor-zoom, 1))); }
   .poem-card {
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
     padding: 10px 14px 12px; margin-bottom: 6px; display: flex; gap: 10px;
@@ -1083,13 +1085,18 @@
      export never requires scrolling past the (possibly very long) entries
      editor on the left; it's always just a local scroll within the
      sidebar itself. */
-  /* No inner scroll box (it clipped the next panel into an empty sliver
-     at the bottom edge): the column scrolls with the page, and a JS-set
-     negative `top` (see fitStickySidebar) makes a column taller than the
-     window stick by its bottom edge instead of its top. */
+  /* Its own scroll box, the window's height, that stays beside the page:
+     scrolling over it scrolls it alone (overscroll-behavior keeps a
+     scroll at its end from passing to the page), the way the picture
+     book's and cartoon book's tool columns work. */
   .sidebar {
     position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px;
+    max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-gutter: stable; padding-right: 4px; margin-right: -4px;
   }
+  /* Panels keep their height and the column scrolls, rather than
+     squeezing them to fit. */
+  .sidebar > * { flex-shrink: 0; }
   .sidebar-scroll {
     display: flex; flex-direction: column; gap: 16px;
   }
@@ -1157,8 +1164,8 @@
   .reader-message { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--ink-soft); background: var(--paper, var(--surface)); z-index: 5; }
   /* A note's reference numeral: small and raised, as the PDF sets it. */
   .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
-  .stage-edit-body.opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
-  .stage-edit-body.opener-drop > .is-opener::first-letter {
+  .opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
+  .opener-drop > .is-opener::first-letter {
     float: left; font-size: var(--dc-size); line-height: var(--dc-lh); margin: 0 var(--dc-gap) var(--dc-mb) 0; padding: 0;
   }
   /* A scrollbar would take its width out of the column and wrap lines
@@ -2912,6 +2919,12 @@
               <button id="zoomInBtn" type="button" aria-label="Zoom editor text in">+</button>
             </div>
           </div>
+          <!-- Find an entry by its title or words (filters the list below). -->
+          <div class="entry-search" id="entrySearchRow">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
+            <input type="search" id="entrySearch" placeholder="Find a poem" autocomplete="off" spellcheck="false" aria-label="Find a poem">
+            <button type="button" class="entry-search-replace" id="findReplaceBtn" title="Find and replace in every title and line (⌘⇧H)">Replace…</button>
+          </div>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div class="poems-count" id="poemsCount"></div>
             <div class="view-menu-wrap">
@@ -2929,12 +2942,6 @@
               </div>
             </div>
           </div>
-        </div>
-        <!-- Find an entry by its title or words (filters the list below). -->
-        <div class="entry-search" id="entrySearchRow">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
-          <input type="search" id="entrySearch" placeholder="Find a poem" autocomplete="off" spellcheck="false" aria-label="Find a poem">
-          <button type="button" class="entry-search-replace" id="findReplaceBtn" title="Find and replace in every title and line (⌘⇧H)">Replace…</button>
         </div>
         <div id="poemGapTop"></div>
         <!-- Poetry only: a second Add poem above the list, styled the
@@ -3691,7 +3698,12 @@
   // small at "100%" -- this constant shifts the whole scale up so what
   // used to look like 120% is now what "100%" looks like, without
   // changing the control's displayed percentages or range.
-  var EDITOR_ZOOM_BASE = 1.2;
+  // The editor's scale, in pixels per printed point: an entry's title is
+  // the list's own title size (18px at 100%) whether it's open or closed,
+  // so it never grows on a click, and the text under it is set to the
+  // same scale -- 12 pt text under an 18 pt title shows two-thirds its
+  // size, as it prints.
+  function editorPxPerPt() { return 18 / resolveTitleSizePt(state) * editorZoom; }
   var editorZoom = IS_PHONE ? 0.9 : 1;
   try {
     var savedZoom = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
@@ -6044,7 +6056,10 @@
         if (wrapped.length > 1) wasWrapped = true;
         wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
       } else {
-        var opening = !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
+        // Openers are for novels and essays (a poetry book's prose poems
+        // and a script's lines have none).
+        var proseBook = bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays';
+        var opening = proseBook && !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
         var drop = opening === 'drop' ? dropCapFor(stripFormatMarkers(body), sizePt, lineHeight, state.bodyFontChoice) : null;
         if (drop) {
           var rr = parseInlineRuns(body), plainLen = rr.map(function (r) { return r.text; }).join('').length;
@@ -9798,20 +9813,45 @@
   // applies it immediately to the live input/textarea (a plain
   // persist()+updateStats() alone doesn't touch the DOM, which is why
   // these used to require a reload/tab-switch to actually show).
-  function makeAlignControl(label, getVal, setVal) {
+  // `getDefault`: the book's own setting, shown as chosen when the entry
+  // has none of its own; choosing it again clears the entry's, so it
+  // follows the book.
+  // Shows a first paragraph's opener in an editor as the typesetter sets
+  // it: capitals via ::first-line, a drop cap as a floated
+  // ::first-letter two lines deep (its line-height puts the capital's foot
+  // on the second baseline; its bottom margin makes the float exactly two
+  // lines tall, so it narrows just those). `scale` is pixels per point.
+  function applyOpener(ed, op, scale, lhPx) {
+    ed.classList.toggle('opener-caps', !!op && op.type === 'caps');
+    ed.classList.toggle('opener-drop', !!op && op.type === 'drop');
+    if (op && op.type === 'drop') {
+      var fmx = fontMetrics(state.bodyFontChoice), dsx = op.size * scale;
+      var boxL = 2 * (1.72 * lhPx) + (fmx.desc - fmx.asc) * dsx;
+      ed.style.setProperty('--dc-size', dsx.toFixed(2) + 'px');
+      ed.style.setProperty('--dc-lh', boxL.toFixed(2) + 'px');
+      ed.style.setProperty('--dc-mb', (2 * lhPx - boxL).toFixed(2) + 'px');
+      ed.style.setProperty('--dc-gap', (op.gap * scale).toFixed(2) + 'px');
+    }
+    function markOpener() {
+      var first = Array.prototype.filter.call(ed.children, function (d) { return !d.dataset.token && d.textContent.trim(); })[0];
+      Array.prototype.forEach.call(ed.children, function (d) { d.classList.toggle('is-opener', !!op && d === first); });
+    }
+    markOpener();
+    if (!ed.dataset.openerWired) { ed.dataset.openerWired = '1'; ed.addEventListener('input', markOpener); }
+  }
+  function makeAlignControl(label, getVal, setVal, getDefault, withJustify) {
     var wrap = document.createElement('div');
     wrap.className = 'title-align';
     var labelEl = document.createElement('span');
     labelEl.textContent = label;
     var seg = document.createElement('div');
     seg.className = 'title-align-seg';
-    // Left / Center / Right as the standard alignment icons (the row is
-    // tight); Auto, meaning "use the book's setting", stays a word.
+    // Left / Center / Right (and Justified, for text) as the standard
+    // alignment icons -- the row is tight.
     var ICON = function (d) { return '<svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="' + d + '"/></svg>'; };
-    [['', 'Auto', 'Auto'],
-     ['left', ICON('M1 1.5h12M1 6h7M1 10.5h10'), 'Align left'],
+    [['left', ICON('M1 1.5h12M1 6h7M1 10.5h10'), 'Align left'],
      ['center', ICON('M1 1.5h12M3.5 6h7M2 10.5h10'), 'Center'],
-     ['right', ICON('M1 1.5h12M6 6h7M3 10.5h10'), 'Align right']].forEach(function (pair) {
+     ['right', ICON('M1 1.5h12M6 6h7M3 10.5h10'), 'Align right']].concat(withJustify ? [['justify', ICON('M1 1.5h12M1 6h12M1 10.5h12'), 'Justify']] : []).forEach(function (pair) {
       var val = pair[0];
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -9819,9 +9859,9 @@
       btn.title = pair[2];
       btn.setAttribute('aria-label', label + ': ' + pair[2]);
       btn.dataset.val = val;
-      if ((getVal() || '') === val) btn.classList.add('active');
+      if ((getVal() || getDefault()) === val) btn.classList.add('active');
       btn.addEventListener('click', function () {
-        setVal(val || null);
+        setVal(val === getDefault() ? null : val);
         state.isExample = false;
         seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
@@ -9848,7 +9888,7 @@
     return makeAlignControl('Title', function () { return poem.titleAlign; }, function (v) {
       poem.titleAlign = v;
       applyTitleAlign(titleInput, poem);
-    });
+    }, function () { return state.titleAlignment || 'left'; });
   }
   // A title field may be sized to its own text (an open entry in Title
   // View), where text-align alone can't move it: its margins do.
@@ -9870,7 +9910,7 @@
       poem.bodyAlign = v;
       editor.style.textAlign = editorAlign(poem);
       if (onChange) onChange();
-    });
+    }, function () { return state.bodyAlignment || 'left'; }, true);
   }
 
   function makeCard(poem, index, initialPlan, entryNum) {
@@ -9935,14 +9975,18 @@
     editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
     tagScriptLines(editor);
+    var cardLayout = initialPlan && initialPlan.layouts ? initialPlan.layouts[index] : null;
+    if (cardLayout && cardLayout.opener) setTimeout(function () {
+      applyOpener(editor, cardLayout.opener, editorPxPerPt(), parseFloat(getComputedStyle(editor).lineHeight) || cardLayout.lineHeight * editorPxPerPt());
+    }, 0);
     setTimeout(function () { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }, 0);
-    function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE); }
+    function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * editorPxPerPt()); }
     tagProse();
     editor.style.textAlign = isScriptForm() ? 'left' : editorAlign(poem);
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight();
-    if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
-    editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
+    if (initialPlan) editor.style.fontSize = (initialPlan.globalSize * editorPxPerPt()).toFixed(2) + 'px';
+    editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * editorPxPerPt());
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
       if (poem.comments && poem.comments.length) { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }
@@ -10340,79 +10384,22 @@
     return row;
   }
 
-  // The tools column scrolls along with the page and pins at whichever
-  // edge it reaches -- its top when scrolling up, its bottom when
-  // scrolling down -- so a column taller than the window never hides
-  // part of itself. Its sticky `top` only changes with scrolling (and is
-  // clamped when the column resizes), so opening a panel leaves that
-  // panel's header where it was and the contents open downward.
+  // The tools column is its own scroll box beside the page (see
+  // .sidebar): the wheel over it scrolls it, over the editor scrolls the
+  // page, and neither moves the other. Opening a panel scrolls only the
+  // column, to show the panel.
   var sidebarEl = document.getElementById('toolsSidebar');
-  var sidebarTop = 24;
-  var lastScrollY = window.scrollY;
-  function fitStickySidebar() {
-    var lowest = Math.min(24, window.innerHeight - sidebarEl.offsetHeight - 24);
-    // An open Formatting panel may be lifted right up to the window's top.
-    if (formattingPinned()) {
-      var fp = document.getElementById('formattingPanel');
-      lowest = Math.min(lowest, 24 - (fp.getBoundingClientRect().top - sidebarEl.getBoundingClientRect().top));
-    }
-    sidebarTop = Math.max(lowest, Math.min(24, sidebarTop));
-    sidebarEl.style.top = sidebarTop + 'px';
+  function fitStickySidebar() {}
+  function scrollColumnTo(panel, atTop) {
+    var c = sidebarEl.getBoundingClientRect(), r = panel.getBoundingClientRect();
+    if (atTop) { sidebarEl.scrollTop += r.top - c.top; return; }
+    if (r.bottom > c.bottom) sidebarEl.scrollTop += Math.min(r.bottom - c.bottom, r.top - c.top);
   }
-  // Only the person's own scrolling (wheel or trackpad, touch, keys,
-  // the scrollbar) moves the column. When the page scrolls itself --
-  // keeping an opened entry's title in place, say -- the column stays
-  // where it is on screen, so an open Formatting panel doesn't slide away.
-  var userScrollUntil = 0;
-  function userScrolling(ms) { userScrollUntil = Date.now() + ms; }
-  window.addEventListener('wheel', function () { userScrolling(300); }, { passive: true });
-  window.addEventListener('touchmove', function () { userScrolling(1500); }, { passive: true });
-  window.addEventListener('keydown', function (e) {
-    if (/^(Arrow(Up|Down)|Page(Up|Down)|Home|End| )$/.test(e.key) && !(e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'))) userScrolling(800);
-  });
-  document.addEventListener('mousedown', function (e) { if (e.target === document.documentElement) userScrolling(60000); });
-  document.addEventListener('mouseup', function () { if (userScrollUntil - Date.now() > 1000) userScrolling(100); });
-  // While Formatting is open the column holds still whatever the page
-  // does; scrolling with the pointer over the column moves the column
-  // itself (and not the page), so it stays put until you go there.
-  // (Side-by-side layout only; narrower screens stack the tools below.)
-  var sideBySideMQ = window.matchMedia('(min-width: 861px)');
-  function formattingPinned() { return sideBySideMQ.matches && !document.getElementById('formattingBody').hidden; }
-  sidebarEl.addEventListener('wheel', function (e) {
-    if (!formattingPinned() || e.ctrlKey) return;
-    // A list inside the column that scrolls (a typeface picker) scrolls itself.
-    for (var el = e.target; el && el !== sidebarEl; el = el.parentElement) {
-      var oy = getComputedStyle(el).overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return;
-    }
-    e.preventDefault();
-    sidebarTop -= e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
-    fitStickySidebar();
-  }, { passive: false });
-  window.addEventListener('scroll', function () {
-    if (Date.now() < userScrollUntil && !formattingPinned()) sidebarTop -= window.scrollY - lastScrollY;
-    lastScrollY = window.scrollY;
-    fitStickySidebar();
-  }, { passive: true });
-  // After a panel opens, lift the column just enough to show all of it
-  // -- but never so far that its own header goes off the top.
-  function revealPanel(panel) {
-    var r = panel.getBoundingClientRect();
-    var overflow = r.bottom - (window.innerHeight - 16);
-    if (overflow > 0) { sidebarTop -= Math.min(overflow, r.top - 16); fitStickySidebar(); }
-  }
-  // Opening Formatting brings it to the top right of the window: the
-  // column lifts, and if the column is still in the page's flow (scrolled
-  // near the top), the page scrolls the rest of the way.
-  function pinPanelToTop(panel) {
-    sidebarTop -= panel.getBoundingClientRect().top - 24;
-    fitStickySidebar();
-    var rest = panel.getBoundingClientRect().top - 24;
-    if (rest > 1) window.scrollBy({ top: rest, behavior: 'instant' });
-  }
-  window.addEventListener('resize', fitStickySidebar);
-  if (window.ResizeObserver) new ResizeObserver(fitStickySidebar).observe(sidebarEl);
-  fitStickySidebar();
+  // After a panel opens, scroll the column just enough to show all of
+  // it -- but never so far that its own header goes off the top.
+  function revealPanel(panel) { scrollColumnTo(panel, false); }
+  // Opening Formatting brings it to the top of the column.
+  function pinPanelToTop(panel) { scrollColumnTo(panel, true); }
 
   // Tools column (desktop): shown or hidden only by the Tools toggle,
   // and remembered -- no automatic folding, so nothing jumps around
@@ -11647,8 +11634,6 @@
 
   function renderPoems() {
     poemList.innerHTML = '';
-    document.documentElement.style.setProperty('--open-title-size',
-      (resolveTitleSizePt(state) * 1.333 * editorZoom * EDITOR_ZOOM_BASE).toFixed(1) + 'px');
     var searchRow = document.getElementById('entrySearchRow');
     if (searchRow) {
       searchRow.hidden = !state.poems.length;
@@ -12464,23 +12449,7 @@
     // drop cap as a floated ::first-letter two lines deep (its line-height
     // puts the capital's foot on the second baseline; its bottom margin
     // makes the float exactly two lines tall, so it narrows just those).
-    var op = layout.opener;
-    body.classList.toggle('opener-caps', !!op && op.type === 'caps');
-    body.classList.toggle('opener-drop', !!op && op.type === 'drop');
-    if (op && op.type === 'drop') {
-      var fmx = fontMetrics(state.bodyFontChoice), lhx = layout.lineHeight * scale, dsx = op.size * scale;
-      var boxL = 2 * (1.72 * lhx) + (fmx.desc - fmx.asc) * dsx;
-      body.style.setProperty('--dc-size', dsx.toFixed(2) + 'px');
-      body.style.setProperty('--dc-lh', boxL.toFixed(2) + 'px');
-      body.style.setProperty('--dc-mb', (2 * lhx - boxL).toFixed(2) + 'px');
-      body.style.setProperty('--dc-gap', (op.gap * scale).toFixed(2) + 'px');
-    }
-    function markOpener() {
-      var first = Array.prototype.filter.call(body.children, function (d) { return !d.dataset.token && d.textContent.trim(); })[0];
-      Array.prototype.forEach.call(body.children, function (d) { d.classList.toggle('is-opener', d === first); });
-    }
-    markOpener();
-    body.addEventListener('input', markOpener);
+    applyOpener(body, layout.opener, scale, layout.lineHeight * scale);
     function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
@@ -13347,8 +13316,9 @@
       // taking this header off screen. Scrolling by exactly that drift,
       // before anything paints, keeps the header where it was clicked --
       // the panel visibly opens downward.
+      // (Not for Formatting: it opens without the page moving at all.)
       var drift = toggle.getBoundingClientRect().top - headerTop;
-      if (Math.abs(drift) > 1) window.scrollBy({ top: drift, behavior: 'instant' });
+      if (Math.abs(drift) > 1 && toggle.id !== 'formattingToggle') window.scrollBy({ top: drift, behavior: 'instant' });
       if (!body.hidden) {
         if (toggle.id === 'formattingToggle' && wideLayout.matches) pinPanelToTop(toggle.closest('.collapsible-panel'));
         else revealPanel(toggle.closest('.collapsible-panel'));
@@ -14044,7 +14014,8 @@
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('proseTypeField').hidden = script;
-    document.getElementById('openerField').hidden = script;
+    // A first-paragraph opener is for the prose books.
+    document.getElementById('openerField').hidden = !(bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays');
     document.getElementById('notesField').hidden = script;
     document.getElementById('runningHeadsField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
@@ -20116,7 +20087,7 @@
   function regrowAll() {
     // Tab stops were measured against whatever font was ready then.
     document.querySelectorAll('.poem-card .poem-text').forEach(function (ed) {
-      ed.style.tabSize = tabSizeFor(ed.style.fontFamily || displayStackFor(state.bodyFontChoice), parseFloat(getComputedStyle(ed).fontSize), TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
+      ed.style.tabSize = tabSizeFor(ed.style.fontFamily || displayStackFor(state.bodyFontChoice), parseFloat(getComputedStyle(ed).fontSize), TAB_STOP_PT * editorPxPerPt());
     });
     pbRegrow();
     if (isCartoonShown()) fitTitleInput(cbTitleInput);
