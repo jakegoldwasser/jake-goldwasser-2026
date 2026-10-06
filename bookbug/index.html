@@ -3275,6 +3275,33 @@
     }
     return poemTiers.at > (cloud ? cloud.at : 0);
   }
+  // Whether the poet last chose Tier View, kept like the tiers themselves
+  // (`tierView`, stamped, synced; the newer side wins), so a refresh or
+  // another device opens a poetry collection in the same view.
+  var TIER_VIEW_KEY = 'bookbug.tierView.v1';
+  var tierViewPref = { on: false, at: 0 };
+  try {
+    var storedTierView = JSON.parse(localStorage.getItem(TIER_VIEW_KEY) || 'null');
+    if (storedTierView) tierViewPref = { on: !!storedTierView.on, at: Number(storedTierView.at) || 0 };
+  } catch (e) {}
+  function setTierViewPref(on) {
+    if (tierViewPref.on === on) return;
+    tierViewPref = { on: on, at: Date.now() };
+    try { localStorage.setItem(TIER_VIEW_KEY, JSON.stringify(tierViewPref)); } catch (e) {}
+    scheduleCloudAutosave();
+  }
+  function tierViewForCloud() { return tierViewPref.at ? tierViewPref : undefined; }
+  // Folds the account's choice in; says whether the account needs ours.
+  function mergeTierView(cloud) {
+    if (cloud && typeof cloud === 'object' && Number(cloud.at) > tierViewPref.at) {
+      var was = tierViewPref.on;
+      tierViewPref = { on: !!cloud.on, at: Number(cloud.at) };
+      try { localStorage.setItem(TIER_VIEW_KEY, JSON.stringify(tierViewPref)); } catch (e) {}
+      if (was !== tierViewPref.on && typeof renderPoems === 'function' && state && state.poems) renderPoems();
+      return false;
+    }
+    return tierViewPref.at > (cloud ? Number(cloud.at) || 0 : 0);
+  }
   function tiersShown() { return poemTiers.on && bookFormOf(state) === 'collection'; }
   function tierById(id) { return id ? poemTiers.tiers.filter(function (t) { return t.id === id; })[0] || null : null; }
   function tierColor(t) {
@@ -4092,7 +4119,43 @@
     if (!id || (cur && cur.id === id)) return;
     try { localStorage.setItem(LAST_OPENED_KEY, JSON.stringify({ id: id, at: Date.now() })); } catch (e) {}
     scheduleCloudAutosave();
+    syncBookUrl();
   }
+
+  // The open book's id rides in the address (?book=<id>), so a refresh
+  // or a shared link comes back to that book instead of Home. Home (and
+  // a book that hasn't been saved yet) has none.
+  function bookIdShown() {
+    if (isHomeShown()) return null;
+    if (isPictureBookShown()) return pbId;
+    if (isCartoonShown()) return cbId;
+    return state && state.chapbookId || null;
+  }
+  function urlBookId() {
+    try { return new URLSearchParams(location.search).get('book'); } catch (e) { return null; }
+  }
+  function syncBookUrl() {
+    var id = bookIdShown();
+    if (id === urlBookId()) return;
+    try {
+      var url = new URL(location.href);
+      if (id) url.searchParams.set('book', id); else url.searchParams.delete('book');
+      history.replaceState(history.state, '', url.href);
+    } catch (e) {}
+  }
+  // Opens any kind of book by its id; says whether there was one to open.
+  function openBookById(id) {
+    var entry = id && library.filter(function (c) { return c.id === id; })[0];
+    if (entry && entry.data) { loadChapbook(id); return true; }
+    var pb = pbEntry(id);
+    if (pb && pb.data) { openPictureBook(id); return true; }
+    var cb = cbEntry(id);
+    if (cb && cb.data) { openCartoonBook(id); return true; }
+    return false;
+  }
+  // A ?book= this device doesn't have yet: opened once the account's
+  // books arrive, if it's among them.
+  var pendingUrlBook = null;
 
   function ensureCurrentInLibrary() {
     if (state.chapbookId || !hasContent(state)) return;
@@ -4479,6 +4542,7 @@
       mergeRecentlyDeleted(ours.recentlyDeleted);
       if (JSON.stringify(recentlyDeleted) !== deletedBefore || JSON.stringify(recentlyDeleted) !== JSON.stringify(freshDeleted(ours.recentlyDeleted))) pbChanged = true;
       if (mergePoemTiers(ours.poemTiers)) pbChanged = true;
+      if (mergeTierView(ours.tierView)) pbChanged = true;
       var cloudOpened = ours.lastOpened || null;
       var localOpened = getLastOpened();
       if (cloudOpened && (!localOpened || cloudOpened.at > localOpened.at)) {
@@ -4548,6 +4612,11 @@
   // library is empty, keeps a new book that just hasn't got content yet
   // (so settings picked on it survive a reload).
   function openLastOpenedBook() {
+    if (pendingUrlBook) {
+      var wanted = pendingUrlBook;
+      pendingUrlBook = null;
+      if (openBookById(wanted)) return;
+    }
     var last = getLastOpened();
     // A picture book opened last: the book editor still gets the most
     // recent book behind it, without that becoming "last opened".
@@ -4569,6 +4638,7 @@
     // Phones have no Home, so they reopen straight into it.
     if (lastPictureBook && !lastPictureBook.archived && !homeMQ.matches &&
         !(isPictureBookShown() && pbId === lastPictureBook.id)) openPictureBook(lastPictureBook.id);
+    syncBookUrl();
   }
 
   async function syncLibraryToCloud() {
@@ -4584,7 +4654,7 @@
           chapbooks: library, trash: trash, lastOpened: getLastOpened(),
           pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
           cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, recentlyDeleted: freshDeleted(recentlyDeleted),
-          poemTiers: poemTiersForCloud()
+          poemTiers: poemTiersForCloud(), tierView: tierViewForCloud()
         } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
@@ -9395,7 +9465,10 @@
   function updateEntriesViewSeg(hasSections) {
     var tierBtn = entriesViewSeg.querySelector('[data-view="tiers"]');
     tierBtn.hidden = !tiersShown();
-    if (tiersView && !tiersShown()) tiersView = false;
+    // Tier View is the poet's remembered choice (tierViewPref), shown
+    // wherever it applies: a poetry collection, with tiers switched on.
+    tiersView = tierViewPref.on && tiersShown();
+    if (tiersView) { sectionsOnly = false; poemsViewMode = 'compact'; }
     var view = currentEntriesView();
     // A Section View that no longer applies (no sections left) falls
     // back to what the list is showing.
@@ -9435,6 +9508,7 @@
     }
     sectionsOnly = b.dataset.view === 'sections';
     tiersView = b.dataset.view === 'tiers';
+    if (tiersShown()) setTierViewPref(tiersView);
     formatKey = tiersView ? 'titles' : b.dataset.view;
     if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' || tiersView ? 'compact' : 'full';
     if (tiersView) expandedCompactIds = {};
@@ -10598,16 +10672,18 @@
     updateMatterStage();
     renderHome();
     window.scrollTo(0, 0);
+    syncBookUrl();
   }
   function showEditor() {
     var fromPictureBook = hidePictureBookView();
     var fromCartoon = hideCartoonView();
-    if (!isHomeShown() && !fromPictureBook && !fromCartoon) return;
+    if (!isHomeShown() && !fromPictureBook && !fromCartoon) { syncBookUrl(); return; }
     maybeStartTour('collection');
     document.body.classList.remove('view-home');
     homeView.hidden = true;
     updateMatterStage();
     window.scrollTo(0, 0);
+    syncBookUrl();
   }
   function makeHomeCard(entry) {
     var data = entry.data || {};
@@ -12634,6 +12710,7 @@
     homeView.hidden = true;
     document.body.classList.add('view-pb');
     pbView.hidden = false;
+    syncBookUrl();
     updateMatterStage();
     window.scrollTo(0, 0);
     maybeStartTour('picture');
@@ -16769,6 +16846,7 @@
     homeView.hidden = true;
     document.body.classList.add('view-cb');
     cbView.hidden = false;
+    syncBookUrl();
     updateMatterStage();
     window.scrollTo(0, 0);
   }
@@ -17516,12 +17594,16 @@
   if (storedCloudAuthToken) handleGoogleCredential({ credential: storedCloudAuthToken });
   bookAtLoad = JSON.stringify(state);
   updateSignInGate();
-  if (homeMQ.matches) showHome();
+  var bookAtUrl = urlBookId();
+  if (bookAtUrl && openBookById(bookAtUrl)) bookAtLoad = JSON.stringify(state);
+  else if (homeMQ.matches) { pendingUrlBook = bookAtUrl; showHome(); }
   else {
+    pendingUrlBook = bookAtUrl;
     var openedAtLoad = getLastOpened();
     var pbAtLoad = openedAtLoad && pbEntry(openedAtLoad.id);
     if (pbAtLoad && !pbAtLoad.archived) openPictureBook(pbAtLoad.id);
   }
+  syncBookUrl();
   // The ▾ only belongs where Home is still a dropdown of books (phones).
   function syncMyBooksLabel() { chapbooksMenuBtn.textContent = homeMQ.matches ? 'Home' : 'Home ▾'; }
   syncMyBooksLabel();
