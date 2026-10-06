@@ -541,15 +541,17 @@
     font: 500 10.5px/1.4 system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--ink-faint); background: var(--surface); pointer-events: none; user-select: none;
   }
+  /* Tier View, like Section View: a bar per tier, folded to just its
+     name; click it to show (or hide) its titles beneath. */
   .tier-group-head {
-    display: flex; align-items: center; gap: 8px; margin: 22px 0 8px; padding-bottom: 6px;
-    border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14px; color: var(--ink);
+    display: flex; align-items: center; gap: 10px; border: 2px solid var(--ink); border-radius: 8px;
+    background: var(--accent-soft); padding: 6px 10px 6px 14px; margin-bottom: 4px; cursor: pointer; color: var(--ink);
   }
-  .tier-group-head:first-child { margin-top: 4px; }
+  .tier-group-name { font-family: "Zilla Slab", ui-serif, serif; font-weight: 700; font-size: calc(20px * var(--editor-zoom, 1)); padding: 3px 0; }
   .tiers-view .poem-grip { visibility: hidden; }
   .tier-group-count { margin-left: auto; font-weight: 500; font-size: 12px; color: var(--ink-faint); }
   .open-all-btn { flex: 0 0 auto; }
-  .tier-group-empty { padding: 6px 2px 4px; font-size: 13px; color: var(--ink-faint); }
+  .tier-group-empty { padding: 4px 8px; font-size: 12.5px; color: var(--ink-faint); }
   .series-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
   .poem-compact-row .series-tag { margin-left: auto; }
   .poem-compact-row .series-tag + .tier-pill { margin-left: 8px; }
@@ -9655,6 +9657,9 @@
   var sectionsOnly = false;
   // Tier View: poems grouped by tier (poetry, with tiers switched on).
   var tiersView = false;
+  // Tier View's open tiers (by tier id; '' is "No tier"): folded to just
+  // the tier names until one is clicked, like Section View.
+  var expandedTierIds = {};
   var expandedCompactIds = {};
   // The closed row last clicked in Title View (or Tier View): the first
   // click selects a poem and shows it in the preview, a second opens it.
@@ -9716,6 +9721,14 @@
       renderPoems();
       return;
     }
+    else if (b.dataset.view === 'tiers' && currentEntriesView() === 'tiers') {
+      // Tier View again folds everything back to just the tiers.
+      if (writingCard) exitWriting();
+      expandedTierIds = {};
+      expandedCompactIds = {};
+      renderPoems();
+      return;
+    }
     else if (b.dataset.view === currentEntriesView()) {
       // Title View again folds every opened entry back to its title.
       if (b.dataset.view === 'titles' && Object.keys(expandedCompactIds).length) {
@@ -9730,7 +9743,8 @@
     if (tiersShown()) setTierViewPref(tiersView);
     formatKey = tiersView ? 'titles' : b.dataset.view;
     if (!sectionsOnly) poemsViewMode = b.dataset.view === 'titles' || tiersView ? 'compact' : 'full';
-    if (tiersView) expandedCompactIds = {};
+    // Tier View always starts as just the tiers.
+    if (tiersView) { expandedCompactIds = {}; expandedTierIds = {}; }
     // "Titles only" means titles only -- don't reopen whatever entry was
     // open before "Reveal All".
     if (b.dataset.view === 'titles') expandedCompactIds = {};
@@ -10064,29 +10078,45 @@
       var g = tierById(poem.tier) ? groups[poem.tier] : none;
       g.push({ poem: poem, index: i, num: num });
     });
-    function group(name, color, items) {
+    function group(key, name, color, items) {
+      var open = !!expandedTierIds[key];
       var head = document.createElement('div');
       head.className = 'tier-group-head';
+      head.tabIndex = 0;
+      head.setAttribute('role', 'button');
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (color) head.style.setProperty('--tier', color);
       head.innerHTML = (color ? '<span class="tier-dot" aria-hidden="true"></span>' : '') + '<span class="tier-group-name"></span><span class="tier-group-count"></span>';
       head.querySelector('.tier-group-name').textContent = name;
-      head.querySelector('.tier-group-count').textContent = items.length;
-      if (items.length) head.appendChild(makeOpenAllBtn(items.map(function (it) { return it.poem; })));
+      head.querySelector('.tier-group-count').textContent = nounFor(items.length, state);
+      if (items.length) head.appendChild(makeOpenAllBtn(items.map(function (it) { return it.poem; }), function () { expandedTierIds[key] = true; }));
+      function toggle() {
+        if (open) delete expandedTierIds[key]; else expandedTierIds[key] = true;
+        renderPoems();
+      }
+      head.addEventListener('click', function (e) { if (!e.target.closest('button')) toggle(); });
+      head.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === head) { e.preventDefault(); toggle(); }
+      });
       poemList.appendChild(head);
+      if (!open) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'section-block-entries';
       if (!items.length) {
         var empty = document.createElement('div');
         empty.className = 'tier-group-empty';
         empty.textContent = 'No ' + formNouns().many + ' yet';
-        poemList.appendChild(empty);
+        wrap.appendChild(empty);
       }
       items.forEach(function (it) {
         var row = makeCompactRow(it.poem, it.index, plan, it.num);
         row.draggable = false;
-        poemList.appendChild(row);
+        wrap.appendChild(row);
       });
+      poemList.appendChild(wrap);
     }
-    poemTiers.tiers.forEach(function (t) { group(tierName(t), tierColor(t), groups[t.id]); });
-    if (none.length) group('No tier', null, none);
+    poemTiers.tiers.forEach(function (t) { group(t.id, tierName(t), tierColor(t), groups[t.id]); });
+    if (none.length) group('', 'No tier', null, none);
   }
 
   // The search box above the list: while it has words in it, the list
