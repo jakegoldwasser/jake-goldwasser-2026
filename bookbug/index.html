@@ -9563,17 +9563,30 @@
     sidebarTop = Math.max(lowest, Math.min(24, sidebarTop));
     sidebarEl.style.top = sidebarTop + 'px';
   }
+  // Only the person's own scrolling (wheel or trackpad, touch, keys,
+  // the scrollbar) moves the column. When the page scrolls itself --
+  // keeping an opened entry's title in place, say -- the column stays
+  // where it is on screen, so an open Formatting panel doesn't slide away.
+  var userScrollUntil = 0;
+  function userScrolling(ms) { userScrollUntil = Date.now() + ms; }
+  window.addEventListener('wheel', function () { userScrolling(300); }, { passive: true });
+  window.addEventListener('touchmove', function () { userScrolling(1500); }, { passive: true });
+  window.addEventListener('keydown', function (e) {
+    if (/^(Arrow(Up|Down)|Page(Up|Down)|Home|End| )$/.test(e.key) && !(e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]'))) userScrolling(800);
+  });
+  document.addEventListener('mousedown', function (e) { if (e.target === document.documentElement) userScrolling(60000); });
+  document.addEventListener('mouseup', function () { if (userScrollUntil - Date.now() > 1000) userScrolling(100); });
   window.addEventListener('scroll', function () {
-    sidebarTop -= window.scrollY - lastScrollY;
+    if (Date.now() < userScrollUntil) sidebarTop -= window.scrollY - lastScrollY;
     lastScrollY = window.scrollY;
     fitStickySidebar();
   }, { passive: true });
-  // After a panel opens, scroll just enough to show all of it -- but
-  // never so far that its own header goes off the top.
+  // After a panel opens, lift the column just enough to show all of it
+  // -- but never so far that its own header goes off the top.
   function revealPanel(panel) {
     var r = panel.getBoundingClientRect();
     var overflow = r.bottom - (window.innerHeight - 16);
-    if (overflow > 0) window.scrollBy({ top: Math.min(overflow, r.top - 16), behavior: 'smooth' });
+    if (overflow > 0) { sidebarTop -= Math.min(overflow, r.top - 16); fitStickySidebar(); }
   }
   window.addEventListener('resize', fitStickySidebar);
   if (window.ResizeObserver) new ResizeObserver(fitStickySidebar).observe(sidebarEl);
