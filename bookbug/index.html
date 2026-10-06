@@ -1132,6 +1132,7 @@
   .stage-edit-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; outline: none; padding-right: 3%; }
   .stage-edit-body, .stage-edit-title, .pv-typeset { font-kerning: none; font-variant-ligatures: none; }
   .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
+  .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
   /* A scrollbar would take its width out of the column and wrap lines
      early; the box still scrolls, without one. */
   .stage-edit-body { scrollbar-width: none; }
@@ -3029,10 +3030,11 @@
           </div>
           <div class="field">
             <label>Alignment</label>
-            <div class="seg seg-3" id="bodyAlignSeg">
+            <div class="seg seg-4" id="bodyAlignSeg">
               <button data-val="left" class="active">Left</button>
               <button data-val="center">Center</button>
               <button data-val="right">Right</button>
+              <button data-val="justify" title="Prose set flush to both margins; verse stays left">Justified</button>
             </div>
           </div>
           <div class="field-pair">
@@ -3055,6 +3057,10 @@
                 <option value="2">2.0</option>
               </select>
             </div>
+          </div>
+          <div class="field" id="proseTypeField">
+            <div class="checkline"><input type="checkbox" id="hyphenateCheck"><label for="hyphenateCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Hyphenate prose</label></div>
+            <div class="checkline"><input type="checkbox" id="keepLinesCheck" checked><label for="keepLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">No widows or orphans</label></div>
           </div>
           <div class="field" id="paragraphField">
             <label>Paragraphs</label>
@@ -3398,6 +3404,8 @@
   </div>
 </div>
 
+<!-- Hyphenation patterns for the typesetter (see wrapParagraph). -->
+<script src="vendor/hyphen-en.js"></script>
 <script>
 (function () {
 
@@ -5660,20 +5668,60 @@
   // A prose paragraph: the first line narrowed by its indent (a Tab, or
   // the book-style paragraph indent), the rest the full measure -- the
   // way books set it, and the way the editor shows it.
-  function wrapParagraph(line, firstWidthPt, restWidthPt, sizePt, fontFamily) {
+  // Greedy, word by word; with `hyphenate`, a word that won't fit breaks
+  // at the latest syllable (TeX's English patterns, via Hypher) that
+  // leaves room for its hyphen, or after a hyphen it already has. Returns
+  // each line's marker text, a hyphen added where a word was broken.
+  function wrapParagraph(line, firstWidthPt, restWidthPt, sizePt, fontFamily, opts) {
     var runs = parseInlineRuns(line);
     var plain = runs.map(function (r) { return r.text; }).join('');
-    var first = wrapLine(plain, firstWidthPt, sizePt, fontFamily, 400)[0];
-    var pieces = [first];
-    var rest = plain.slice(first.length).replace(/^ +/, '');
-    if (rest) pieces = pieces.concat(wrapLine(rest, restWidthPt, sizePt, fontFamily, 400));
-    if (pieces.length === 1) return [line];
-    var cursor = 0;
-    return pieces.map(function (t) {
-      var start = plain.indexOf(t, cursor);
-      if (start < 0) start = cursor;
-      cursor = start + t.length;
-      return runsToMarkup(sliceRuns(runs, start, cursor));
+    var hy = opts && opts.hyphenate && window.bookbugHyphenator;
+    function wide(a, b, dash) { return measure(plain.slice(a, b) + (dash ? '-' : ''), sizePt, fontFamily, 400); }
+    var toks = [], m, re = /\S+/g;
+    while ((m = re.exec(plain))) toks.push([m.index, m.index + m[0].length]);
+    if (!toks.length) return [line];
+    var out = [], a = 0, b = -1;
+    function room() { return (out.length ? restWidthPt : firstWidthPt) * 0.97; }
+    // Where in [s, e) the word could break so that [a, break) fits: the
+    // latest such place, or -1. { at, dash } (dash: add a hyphen).
+    function split(s, e) {
+      var word = plain.slice(s, e), best = null;
+      for (var k = word.length - 2; k > 0; k--) {
+        if (word[k - 1] === '-' && /[A-Za-z]/.test(word[k]) && wide(a, s + k) <= room()) { best = { at: s + k, dash: false }; break; }
+      }
+      var mm = /^([^A-Za-z]*)([A-Za-z]{5,})/.exec(word);
+      if (hy && mm) {
+        var syl = hy.hyphenate(mm[2]), off = s + mm[1].length;
+        for (var j = syl.length - 1; j > 0; j--) {
+          var at = off + syl.slice(0, j).join('').length;
+          if (best && best.at >= at) break;
+          if (wide(a, at, true) <= room()) { best = { at: at, dash: true }; break; }
+        }
+      }
+      return best;
+    }
+    for (var i = 0; i < toks.length; i++) {
+      var s0 = toks[i][0], e0 = toks[i][1];
+      if (b < 0 && out.length) a = s0;
+      if (wide(a, e0) <= room()) { b = e0; continue; }
+      var sp = split(s0, e0);
+      if (sp) { out.push({ a: a, b: sp.at, dash: sp.dash }); toks[i] = [sp.at, e0]; a = sp.at; b = -1; i--; continue; }
+      if (b >= 0) { out.push({ a: a, b: b }); b = -1; i--; continue; }
+      // One word longer than the line: break it wherever it must.
+      var p = s0 + 1;
+      while (p < e0 - 1 && wide(a, p + 1) <= room()) p++;
+      out.push({ a: a, b: p });
+      toks[i] = [p, e0]; a = p; i--;
+    }
+    if (b >= 0) out.push({ a: a, b: b });
+    if (out.length === 1 && !out[0].dash) return [line];
+    return out.map(function (ln) {
+      var piece = sliceRuns(runs, ln.a, ln.b);
+      if (ln.dash) {
+        var last = piece[piece.length - 1] || {};
+        piece.push({ text: '-', bold: last.bold, italic: last.italic, underline: last.underline });
+      }
+      return runsToMarkup(piece);
     });
   }
 
@@ -5776,7 +5824,11 @@
     var paraIndent = TAB_STOP_PT, fullOut = true;
     var bodyAlign = poem.bodyAlign || state.bodyAlignment;
     // Hanging turnovers only make sense against a left margin.
-    var hangPt = verse && bodyAlign === 'left' ? sizePt * 1.5 : 0;
+    // Justified is for prose; verse lines stay ranged left.
+    var hangPt = verse && (bodyAlign === 'left' || bodyAlign === 'justify') ? sizePt * 1.5 : 0;
+    var justify = !verse && bodyAlign === 'justify';
+    var hyphenate = !verse && !!state.hyphenate;
+    var paraNo = 0;
     var renderLines = [];
     var wasWrapped = false;
     var partStarts = isSeriesOn(poem, state) ? seriesParts(poem) : [];
@@ -5816,8 +5868,10 @@
         if (wrapped.length > 1) wasWrapped = true;
         wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
       } else {
-        wrapParagraph(body, contentWidthPt - tabPt - firstIndent, contentWidthPt, sizePt, state.bodyFontChoice).forEach(function (t, wi) {
-          renderLines.push({ blank: false, text: t, indent: wi === 0 ? tabPt + firstIndent : 0 });
+        var pieces = wrapParagraph(body, contentWidthPt - tabPt - firstIndent, contentWidthPt, sizePt, state.bodyFontChoice, { hyphenate: hyphenate });
+        paraNo++;
+        pieces.forEach(function (t, wi) {
+          renderLines.push({ blank: false, text: t, indent: wi === 0 ? tabPt + firstIndent : 0, para: paraNo, justify: justify && wi < pieces.length - 1 });
         });
       }
       fullOut = false;
@@ -5826,11 +5880,26 @@
     // Fill pages by rows rather than a fixed line count -- an image
     // takes several rows, and moves whole to the next page if it
     // doesn't fit in what's left.
+    // A paragraph never leaves one line alone at the foot of a page (an
+    // orphan) or carries one alone to the next (a widow): the page breaks
+    // a line early instead -- unless the paragraph has only two lines on
+    // the page to give, where moving one would just orphan the other.
+    var keepLines = state.keepLines !== false;
     var pages = [], cur = [], used = 0, cap = firstCap;
-    renderLines.forEach(function (rl) {
+    renderLines.forEach(function (rl, ri) {
       if (rl.pagebreak) { if (cur.length) { pages.push(cur); cur = []; used = 0; cap = laterCap; } return; }
       var rows = rl.rows || 1;
-      if (cur.length && used + rows > cap) { pages.push(cur); cur = []; used = 0; cap = laterCap; }
+      if (cur.length && used + rows > cap) {
+        var carry = [];
+        var prev = cur[cur.length - 1];
+        if (keepLines && rl.para && prev && prev.para === rl.para && cur.length > 1) {
+          var k = 0, n = 0, j;
+          for (j = cur.length - 1; j >= 0 && cur[j].para === rl.para; j--) k++;
+          for (j = ri; j < renderLines.length && renderLines[j].para === rl.para; j++) n++;
+          if (k === 1 || (n === 1 && k >= 3)) carry = [cur.pop()];
+        }
+        pages.push(cur); cur = carry; used = carry.length; cap = laterCap;
+      }
       cur.push(rl); used += rows;
     });
     if (cur.length || !pages.length) pages.push(cur);
@@ -6682,6 +6751,34 @@
     });
   }
 
+  // A justified line: drawn word by word, the leftover width shared out
+  // among its spaces. (PDF word spacing, Tw, only stretches one-byte
+  // spaces, and the embedded fonts here use two-byte codes.)
+  function drawJustifiedRuns(bytes, keys, fontChoice, sizePt, x, y, text, rgb, widthPt) {
+    var atoms = [];
+    parseInlineRuns(text).forEach(function (run) {
+      run.text.split(/( +)/).forEach(function (part) {
+        if (!part) return;
+        atoms.push({ t: part, run: run, sp: /^ +$/.test(part), w: measure(part, sizePt, fontChoice, run.bold ? 700 : 400, !!run.italic) });
+      });
+    });
+    while (atoms.length && atoms[atoms.length - 1].sp) atoms.pop();
+    var natural = 0, spaces = 0;
+    atoms.forEach(function (at, i) { natural += at.w; if (at.sp && i > 0) spaces += at.t.length; });
+    var extra = spaces ? Math.max(0, (widthPt - natural) / spaces) : 0;
+    var curX = x;
+    atoms.forEach(function (at, i) {
+      if (at.sp) { curX += at.w + (i > 0 ? at.t.length * extra : 0); return; }
+      var key = at.run.bold ? keys.bold : (at.run.italic ? keys.ital : keys.reg);
+      drawText(bytes, key, sizePt, curX, y, at.t, rgb);
+      if (at.run.underline) {
+        var uy = y - sizePt * 0.09;
+        drawLine(bytes, curX, uy, curX + at.w, uy, rgb[0], Math.max(0.6, sizePt * 0.045));
+      }
+      curX += at.w;
+    });
+  }
+
   function drawLayoutItems(bytes, items, keyMap, imagesUsed) {
     items.forEach(function (it) {
       if (it.image) {
@@ -6877,8 +6974,12 @@
             return;
           }
           var lineY = top - layout.lineHeight + layout.lineHeight * 0.28;
+          if (rl.justify) {
+            drawJustifiedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, contentLeft + (rl.indent || 0), lineY, rl.text, INK_RGB, contentRight - contentLeft - (rl.indent || 0));
+            return;
+          }
           var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice, 400);
-          var x = resolveX(rl.center ? 'center' : effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
+          var x = resolveX(rl.center ? 'center' : effBodyAlign === 'justify' ? 'left' : effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
           drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
         pageNumberOp(bytes, layout.startPage + pageIdx);
@@ -8539,7 +8640,7 @@
     var lines = [], cur = null;
     function flush() { lines.push(cur ? runsToMarkup(cur) : ''); cur = null; }
     function addText(text, fmt) {
-      text = text.replace(/\u00a0/g, ' ').replace(/\u200b/g, '');
+      text = text.replace(/\u00a0/g, ' ').replace(/[\u200b\u00ad]/g, '');
       if (!text) return;
       text.split('\n').forEach(function (part, i) {
         if (i > 0) { flush(); cur = []; }
@@ -9402,10 +9503,16 @@
     titleInput.style.marginRight = a === 'center' ? 'auto' : '';
   }
 
+  // How an editor sets an entry's text: as printed, except that a
+  // justified book's verse stays ranged left (as it prints).
+  function editorAlign(poem) {
+    var a = poem.bodyAlign || state.bodyAlignment;
+    return a === 'justify' && bookFormOf(state) === 'collection' && isLineated(poem) ? 'left' : a;
+  }
   function makeBodyAlignControl(poem, editor, onChange) {
     return makeAlignControl('Body', function () { return poem.bodyAlign; }, function (v) {
       poem.bodyAlign = v;
-      editor.style.textAlign = v || state.bodyAlignment;
+      editor.style.textAlign = editorAlign(poem);
       if (onChange) onChange();
     });
   }
@@ -9475,7 +9582,7 @@
     setTimeout(function () { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }, 0);
     function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE); }
     tagProse();
-    editor.style.textAlign = isScriptForm() ? 'left' : poem.bodyAlign || state.bodyAlignment;
+    editor.style.textAlign = isScriptForm() ? 'left' : editorAlign(poem);
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight();
     if (initialPlan) editor.style.fontSize = Math.round(initialPlan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE) + 'px';
@@ -9548,7 +9655,7 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     });
     function updateVerseClass() {
-      editor.classList.toggle('is-verse', !isScriptForm() && isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left');
+      editor.classList.toggle('is-verse', !isScriptForm() && isLineated(poem) && editorAlign(poem) === 'left');
     }
     updateVerseClass();
 
@@ -11812,7 +11919,9 @@
             '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
           return;
         }
-        var indentStyle = rl.center ? ' style="text-align:center"' : rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
+        var indentStyle = rl.center ? ' style="text-align:center"' :
+          rl.justify ? ' style="text-align:justify; text-align-last:justify;' + (rl.indent ? ' padding-left:' + (rl.indent * scale).toFixed(2) + 'px' : '') + '"' :
+          rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
         html += '<div' + indentStyle + (layout.script ? ' class="pv-line"' : '') + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
@@ -11939,10 +12048,17 @@
     body.setAttribute('aria-multiline', 'true');
     body.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
-      'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
+      'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + editorAlign(poem) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
     tagProseLines(body, poem, TAB_STOP_PT * scale);
-    function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left'); }
+    // Hyphenated prose breaks where the typesetter would: soft hyphens
+    // at its syllables (the browser's own dictionary differs). Typing
+    // drops them from what's saved (serializeEditor).
+    if (state.hyphenate && window.bookbugHyphenator && !(bookFormOf(state) === 'collection' && isLineated(poem))) {
+      var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT), tn;
+      while ((tn = walker.nextNode())) tn.data = tn.data.replace(/[A-Za-z]{5,}/g, function (w) { return window.bookbugHyphenator.hyphenate(w).join('\u00ad'); });
+    }
+    function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
     body.addEventListener('keydown', function (ev) {
@@ -13302,6 +13418,8 @@
   document.getElementById('tocCheck').addEventListener('change', function (e) {
     state.includeToc = e.target.checked; persist(); updateStats();
   });
+  document.getElementById('hyphenateCheck').addEventListener('change', function (e) { state.hyphenate = e.target.checked; persist(); renderAll(); });
+  document.getElementById('keepLinesCheck').addEventListener('change', function (e) { state.keepLines = e.target.checked; persist(); renderAll(); });
   document.getElementById('pageNumbersCheck').addEventListener('change', function (e) {
     state.showPageNumbers = e.target.checked;
     document.getElementById('pageNumberStyleField').hidden = !e.target.checked;
@@ -13422,9 +13540,12 @@
     document.getElementById('pageNumbersCheck').checked = !!state.showPageNumbers;
     document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
+    document.getElementById('hyphenateCheck').checked = !!state.hyphenate;
+    document.getElementById('keepLinesCheck').checked = state.keepLines !== false;
     // A script's spacing and paragraphs are fixed by its format.
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
+    document.getElementById('proseTypeField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
     document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
     document.getElementById('lineSpacingSelect').closest('.field').hidden = script;
