@@ -99,21 +99,31 @@
 
     /* ---------- Words ---------- */
     var filters = document.getElementById("filters"), work = document.getElementById("work");
-    filters.innerHTML = '<button type="button" data-f="all" aria-pressed="true"><i></i>All</button>' +
+    var noFilter = cfg.filter === "none";
+    if (noFilter) filters.remove();
+    else filters.innerHTML = '<button type="button" data-f="all" aria-pressed="true"><i></i>All</button>' +
       J.order.map(function (k) { return '<button type="button" data-f="' + k + '" data-k="' + k + '" aria-pressed="false"><i></i>' + J.kinds[k].label + "</button>"; }).join("") +
       (hasBernie ? '<div class="bernie" id="bernie" aria-hidden="true"><img src="' + (cfg.dog || "../dog.svg") + '" alt=""></div>' : "");
     if (cfg.words === "shelves") {
       work.className = "shelves";
       work.innerHTML = J.order.map(function (k) {
         var list = J.byKind(k);
-        return '<div class="shelf" data-k="' + k + '"><h2>' + J.kinds[k].label + "<span>" + list.length + "</span></h2><ul>" + list.map(function (w) {
-          return "<li>" + J.a(w, J.title(w), "t") + '<span class="v">' + J.sub(w) + "</span></li>";
-        }).join("") + "</ul></div>";
+        // shelfMax: one cutoff for every list, or { poem: 6, … } per genre
+        var lim = cfg.shelfMax, max = (typeof lim === "object" ? lim[k] : lim) || list.length;
+        return '<div class="shelf" data-k="' + k + '"><h2>' + J.kinds[k].label + "</h2><ul>" + list.map(function (w, i) {
+          return "<li" + (i >= max ? " hidden" : "") + ">" + J.a(w, J.title(w), "t") + '<span class="v">' + J.sub(w) + "</span></li>";
+        }).join("") + "</ul>" + (list.length > max ? '<button type="button" class="shelf-more" aria-expanded="false">More</button>' : "") + "</div>";
       }).join("");
     } else {
       work.className = "cards";
       work.innerHTML = J.works.map(card).join("");
     }
+    work.addEventListener("click", function (e) {
+      var mb = e.target.closest(".shelf-more"); if (!mb) return;
+      var lim = cfg.shelfMax, k = mb.closest(".shelf").dataset.k, open = mb.getAttribute("aria-expanded") !== "true", max = typeof lim === "object" ? lim[k] : lim;
+      mb.closest(".shelf").querySelectorAll("li").forEach(function (li, i) { if (i >= max) li.hidden = !open; });
+      mb.setAttribute("aria-expanded", open); mb.textContent = open ? "Less" : "More";
+    });
     var bernie = document.getElementById("bernie"), chosen = "all";
     function placeBernie(trot) {
       if (!bernie) return;
@@ -122,6 +132,12 @@
       if (trot) { bernie.classList.remove("trot"); void bernie.offsetWidth; bernie.classList.add("trot"); }
     }
     function choose(f) {
+      // without a filter bar, #words/poem just scrolls to that genre's list
+      if (noFilter) {
+        var sh = f && work.querySelector('.shelf[data-k="' + f + '"]');
+        if (sh) setTimeout(function () { window.scrollTo({ top: sh.getBoundingClientRect().top + scrollY - 110, behavior: "smooth" }); }, 30);
+        return;
+      }
       chosen = f || "all";
       var btn = filters.querySelector('[data-f="' + chosen + '"]') || filters.querySelector("button");
       chosen = btn.dataset.f;
@@ -131,7 +147,7 @@
       placeBernie(true);
       filters.scrollTo({ left: btn.offsetLeft - 16, behavior: "smooth" });
     }
-    filters.addEventListener("click", function (e) {
+    if (!noFilter) filters.addEventListener("click", function (e) {
       var btn = e.target.closest("button"); if (!btn) return;
       history.replaceState(null, "", "#words" + (btn.dataset.f === "all" ? "" : "/" + btn.dataset.f));
       choose(btn.dataset.f);

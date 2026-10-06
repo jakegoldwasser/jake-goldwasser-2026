@@ -25,7 +25,7 @@ window.JG = {
   recent: [
     { k: "comic", t: "“Furniture Arrangements for Your Therapist’s Office”", v: "The New Yorker", url: "https://www.newyorker.com/humor/daily-shouts/furniture-arrangements-for-your-therapists-office" },
     { k: "poem", t: "“The News”", v: "Gotham Literature", url: "https://www.gothamliterature.nyc/content/the-news" },
-    { k: "trans", label: "Weekly", t: "A cartoon every Sunday", v: "The Sunday Long Read", url: "https://sundaylongread.com" }
+    { k: "trans", t: "“Jaguar Man” by Raoul de Jong", v: "From the Dutch · Words Without Borders", url: "https://wordswithoutborders.org/read/article/2024-05/jaguar-man-raoul-de-jong-jake-goldwasser/" }
   ],
   poemLine: "I smoked what was left of my pipe and tidied my house. I thought about how alone I would look if a camera was hidden. I folded a few months of laundry and spackled the drawers. I gathered the cobwebs and laid them onto a plate one strand at a time. I imagined a hammock’s day in the mild sun. I twisted the clock to display a time I preferred.",
   /* a few facts from the live About page, for options that want a
