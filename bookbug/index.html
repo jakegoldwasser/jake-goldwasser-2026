@@ -2802,7 +2802,7 @@
         <div class="panel-title">Bring in your <span data-noun="many">entries</span></div>
         <div class="panel-sub">Import from Google Drive or a link, or paste text by hand. Either way you can fix up titles and line breaks afterward.</div>
       </div>
-      <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Minimize</button>
+      <button class="btn btn-sm" id="intakeCollapseBtn" type="button">Close</button>
     </div>
     <div class="tabs">
       <button class="tab active" data-tab="drive">Import from Google Drive</button>
@@ -7503,7 +7503,7 @@
     state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
-    state.intakeCollapsed = true;
+    intakeOpen = false;
     state.intakeSourceLabel = title;
     state.sourceAdded = true;
     if (!state.bookTitle) state.bookTitle = title;
@@ -8176,7 +8176,7 @@
     state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
-    state.intakeCollapsed = true;
+    intakeOpen = false;
     state.intakeSourceLabel = 'pasted text';
     state.sourceAdded = true;
     var msg = (wasExample ? 'Parsed ' : 'Added ') + nounFor(entryCount, state);
@@ -13732,45 +13732,33 @@
     renderPreview();
   }
 
+  // Bring in your entries: a bar at the foot of the entries list, for
+  // every kind of book (a new one too), that opens into the import tools
+  // only when clicked. Open or closed isn't saved -- a book always opens
+  // with it closed, and it closes again once something is brought in.
+  var intakeOpen = false, intakeBookId = null;
   function applyIntakeCollapsedView() {
-    // Getting entries in is the first thing a new book needs, so the
-    // intake panel leads the page -- until a source has been added or an
-    // entry exists, after which it moves into the entries column, just
-    // under the entries. There it fills the space beside the (often
-    // taller) tools column instead of leaving an empty gap above a
-    // full-width panel.
-    var workspace = document.getElementById('bookWorkspace');
+    if (intakeBookId !== state.chapbookId) { intakeBookId = state.chapbookId; intakeOpen = false; }
     var entriesColumn = document.getElementById('entriesColumn');
     var intakePanel = document.getElementById('intakePanel');
     var intakeBar = document.getElementById('intakeCollapsedBar');
-    var belowEditor = !!state.sourceAdded || countEntries(state.poems) > 0;
-    if (belowEditor !== (intakePanel.parentElement === entriesColumn)) {
-      if (belowEditor) entriesColumn.append(intakePanel, intakeBar);
-      else workspace.before(intakePanel, intakeBar);
-    }
-    var collapsed = !!state.intakeCollapsed;
-    document.getElementById('intakePanel').hidden = collapsed;
-    document.getElementById('intakeCollapsedBar').hidden = !collapsed;
-    if (collapsed) {
-      var n = countEntries(state.poems);
-      document.getElementById('intakeCollapsedText').innerHTML = '';
-      var strong = document.createElement('strong');
-      strong.textContent = nounFor(n, state);
-      document.getElementById('intakeCollapsedText').appendChild(strong);
-      document.getElementById('intakeCollapsedText').appendChild(document.createTextNode(
-        state.intakeSourceLabel ? ' loaded from “' + state.intakeSourceLabel + '”' : ' loaded'
-      ));
-    }
+    if (intakePanel.parentElement !== entriesColumn || entriesColumn.lastElementChild !== intakeBar) entriesColumn.append(intakePanel, intakeBar);
+    intakePanel.hidden = !intakeOpen;
+    intakeBar.hidden = intakeOpen;
+    // The sample a new book starts with isn't the writer's own.
+    var n = countEntries(state.poems.filter(function (p) { return !isUntouchedSample(p); })), f = formNouns();
+    var text = document.getElementById('intakeCollapsedText');
+    text.textContent = 'Bring in ' + f.many + ' from Google Drive, a link, or pasted text.';
+    document.getElementById('intakeExpandBtn').textContent = n ? 'Bring in more' : 'Bring in ' + f.many;
   }
   document.getElementById('intakeCollapseBtn').addEventListener('click', function () {
-    state.intakeCollapsed = true;
-    persist();
+    intakeOpen = false;
     applyIntakeCollapsedView();
   });
   document.getElementById('intakeExpandBtn').addEventListener('click', function () {
-    state.intakeCollapsed = false;
-    persist();
+    intakeOpen = true;
     applyIntakeCollapsedView();
+    document.getElementById('intakePanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
   (function () {
@@ -19241,7 +19229,7 @@
       { sel: '#poemList .is-sample .dots-btn', title: 'Archive it when you’re done', text: 'Open its ⋯ menu and choose Archive. It moves to the archive at the bottom of the list, where you can bring it back any time.' }
     ],
     collection: [
-      { sel: '#intakePanel', title: 'Bring in your writing', text: 'From Google Drive, a link, or pasted text. You can fix titles and line breaks afterward.' },
+      { sel: '#intakeCollapsedBar', title: 'Bring in your writing', text: 'From Google Drive, a link, or pasted text, at the foot of the list. You can fix titles and line breaks afterward.' },
       { sel: '#viewMenuBtn', title: 'Switch views', text: 'See just the section titles, one row per title, everything open in full, or only the poems you have open.' },
       { sel: '#toolsSidebar', title: 'Preview, Formatting, Export', text: 'The book as it will print, how it looks, and the PDF and Word files.' }
     ]
