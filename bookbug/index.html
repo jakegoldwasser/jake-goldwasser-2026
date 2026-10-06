@@ -476,13 +476,33 @@
      Title View row (same padding, same inset past the grip's place, left
      aligned), and the page-like pane below holds the text. */
   @media (min-width: 701px) {
-    .poem-card { padding: 6px 10px 12px; }
+    /* An open entry's card is its page: title and text on one white
+       sheet, with one outline (the text pane's own border and fill are
+       dropped; the outline turns green while you type in it). */
+    .poem-card { padding: 6px 10px 12px; background: var(--surface); }
+    .poem-card:focus-within { border-color: var(--accent); }
     /* The title starts on the text's left margin (the pane's 1px border
        plus its half-inch padding, less the title field's own 2px). */
     .poem-card .poem-title-row { padding-left: calc(0.5in - 1px); }
     .poem-card textarea.poem-title { border-bottom: none; padding: 4px 2px; text-align: left !important; }
-    .poem-card .poem-text { padding: 0.5in; }
+    .poem-card .poem-text { padding: 6px 0.5in 0.5in; border-color: transparent; background: transparent; }
+    /* A closed row's title sits on that same margin -- the grip's slot
+       is widened to fill the gap (1 + 10 + 39 + 8 + 2 = the card's
+       1 + 10 + 0.5in - 1 + 2) -- so opening or closing an entry never
+       moves its title. */
+    .poem-compact-row { padding-left: 10px; }
+    #poemList .poem-compact-row .poem-handle { flex: 0 0 calc(0.5in - 9px); }
   }
+  /* An open entry's close button sits in the grip's slot, level with
+     its title. (Phones open entries full screen, with their own Done.) */
+  .poem-close-btn {
+    position: absolute; left: 7px; top: calc(6px + (var(--entry-title-size) * 1.2 + 8px) / 2); transform: translateY(-50%);
+    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--ink-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  }
+  .poem-close-btn:hover { border-color: var(--accent); color: var(--accent); }
+  @media (max-width: 700px) { .poem-close-btn { display: none; } }
+  .poem-card.is-writing .poem-close-btn { display: none; }
   /* Lineated verse: a line too long for the box wraps with its
      continuation indented (a hanging indent), the same way the printed
      page turns it over -- so a wrapped line never reads as a new line
@@ -9448,6 +9468,17 @@
     if (expandedCompactIds[poem.id]) {
       var expandedCard = makeCard(poem, index, plan, entryNum);
       expandedCard.classList.add('poem-compact-expanded');
+      var closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'poem-close-btn';
+      closeBtn.title = 'Close';
+      closeBtn.setAttribute('aria-label', 'Close ' + (poem.title || entryLabel(poem)));
+      closeBtn.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6.5 6 2l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      closeBtn.addEventListener('click', function () {
+        delete expandedCompactIds[poem.id];
+        renderPoems();
+      });
+      expandedCard.appendChild(closeBtn);
       var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
       expandedTitleRow.addEventListener('click', function (e) {
         if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) {
