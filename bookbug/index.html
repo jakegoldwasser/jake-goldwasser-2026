@@ -401,7 +401,7 @@
   /* An entry's title is the same size closed (Title View's row) as open
      (Poem View's card), and an opened card keeps it on the row's line, so
      opening or closing an entry leaves its title exactly where it was. */
-  /* Closed, a title is 18px (with the zoom); open, it is set a quarter
+  /* Closed, a title is 18px (with the zoom); open, it is set a little
      bigger than the entry's text (--entry-title-open, from
      setEntryTitleSize), and grows to that size as the entry opens. */
   :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); --entry-title-open: var(--entry-title-size); }
@@ -9422,8 +9422,8 @@
     renderPoems();
     var after = el && entryTitleEl(id);
     if (after) {
-      // An opened title's field, one line at its full width, as it ends up.
-      if (after.tagName === 'TEXTAREA') { after.style.width = '100%'; after.rows = 1; after.style.height = 'auto'; }
+      // An opened title's field, fitted to its text as it ends up.
+      if (after.tagName === 'TEXTAREA') fitTitleInput(after);
       var drift = titleBaseline(after) - before;
       if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
       growTitle(after, fromSize);
@@ -9436,40 +9436,17 @@
     var lh = parseFloat(cs.lineHeight) || fs * 1.2;
     return el.getBoundingClientRect().top + parseFloat(cs.paddingTop) + (lh - fs) / 2 + fs * 0.8;
   }
-  // The title eases from the size it was to its new one, growing (or
-  // shrinking) upward from the line its letters sit on: its row is held
-  // at its final height with the title pinned to the row's bottom. (An
-  // opened title's field is fitted to its text once it gets there.)
+  // The title eases from the size it was to its new one. It's laid out
+  // at its new size straight away and only its drawing is scaled, from
+  // the left end of the line its letters sit on, so nothing reflows and
+  // the letters never leave that line.
   function growTitle(el, fromSize) {
-    if (!fromSize || getComputedStyle(el).fontSize === fromSize) return;
+    var cs = getComputedStyle(el), to = parseFloat(cs.fontSize), from = parseFloat(fromSize);
+    if (!from || Math.abs(to - from) < 0.1 || !el.animate) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    var isField = el.tagName === 'TEXTAREA';
-    var holder = el.parentNode;
-    holder.style.boxSizing = 'border-box';
-    holder.style.height = holder.getBoundingClientRect().height + 'px';
-    el.style.alignSelf = 'flex-end';
-    el.style.transition = 'none';
-    el.style.fontSize = fromSize;
-    // One line tall, in ems, so its height grows along with the type.
-    if (isField) { el.style.width = '100%'; el.rows = 1; el.style.height = 'auto'; }
-    void el.offsetWidth;
-    el.style.transition = 'font-size .28s ease';
-    el.style.fontSize = '';
-    // Finished on transitionend, or by a timer if that never comes (a
-    // hidden tab, a re-render).
-    var finished = false;
-    function done(e) {
-      if (finished || (e && e.propertyName !== 'font-size')) return;
-      finished = true;
-      el.removeEventListener('transitionend', done);
-      el.style.transition = '';
-      el.style.alignSelf = '';
-      holder.style.height = '';
-      holder.style.boxSizing = '';
-      if (isField) fitTitleInput(el);
-    }
-    el.addEventListener('transitionend', done);
-    setTimeout(done, 400);
+    var lh = parseFloat(cs.lineHeight) || to * 1.2;
+    el.style.transformOrigin = cs.paddingLeft + ' ' + (parseFloat(cs.paddingTop) + (lh - to) / 2 + to * 0.8) + 'px';
+    el.animate([{ transform: 'scale(' + from / to + ')' }, { transform: 'none' }], { duration: 280, easing: 'ease' });
   }
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
@@ -9646,8 +9623,7 @@
   // Sizes a title input to its own text (or placeholder), so the space
   // after it belongs to the row instead of the input.
   function fitTitleInput(input) {
-    // (Mid-grow it's left full width; growTitle fits it when done.)
-    if (!input.isConnected || input.style.transition) return;
+    if (!input.isConnected) return;
     var cs = getComputedStyle(input);
     measureCtx.font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
     var textW = measureCtx.measureText(input.value || input.placeholder || '').width;
@@ -10139,10 +10115,10 @@
   }
 
   // An entry's title (closed or open, the same size either way) is set
-  // a quarter bigger than the editor's text, so titles read as titles.
+  // a little bigger than the editor's text, so titles read as titles.
   function setEntryTitleSize(plan) {
     var bodyPx = plan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE;
-    document.documentElement.style.setProperty('--entry-title-open', Math.round(Math.max(18 * editorZoom, bodyPx * 1.25)) + 'px');
+    document.documentElement.style.setProperty('--entry-title-open', Math.round(Math.max(18 * editorZoom, bodyPx * 1.15)) + 'px');
   }
   function renderPoems() {
     poemList.innerHTML = '';
