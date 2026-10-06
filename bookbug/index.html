@@ -397,13 +397,66 @@
   .entry-search { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-faint); }
   .entry-search:focus-within { border-color: var(--accent); color: var(--accent); }
   .entry-search input[type="search"] { flex: 1; min-width: 0; border: none !important; background: transparent !important; outline: none; padding: 8px 0; font-size: 14px; color: var(--ink); box-shadow: none !important; }
+  /* Margin comments: a commented line gets a tinted edge and a mark in
+     the right margin; the notes themselves sit under the text. */
+  .poem-text > .has-comment { box-shadow: inset 3px 0 0 var(--warning); background: var(--warning-soft); position: relative; }
+  .poem-text > .has-comment::after {
+    content: "\201C"; position: absolute; right: -0.38in; top: 0; font: 700 18px/1 "Zilla Slab", ui-serif, serif; color: var(--warning);
+  }
+  .poem-text > .has-comment.is-flash { animation: commentFlash 1s ease; }
+  @keyframes commentFlash { 0%, 40% { background: var(--warning); } 100% { background: var(--warning-soft); } }
+  /* Clear of the line / page count in the card's bottom corner. */
+  .poem-comments { display: flex; flex-direction: column; gap: 6px; margin: 0 0.5in 30px; }
+  .poem-comments:empty { display: none; }
+  .poem-comment { border: 1px solid var(--line); border-left: 3px solid var(--warning); border-radius: 0 6px 6px 0; padding: 7px 10px; background: var(--surface-2); font-size: 13.5px; }
+  .poem-comment-head { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; color: var(--ink-faint); }
+  .poem-comment-head button { margin-left: auto; border: none; background: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .poem-comment-head button:hover { color: var(--accent); }
+  .poem-comment-line { cursor: pointer; font-weight: 600; }
+  .poem-comment-line:hover { color: var(--accent); }
+  .poem-comment-quote { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .poem-comment-text { margin-top: 3px; color: var(--ink); white-space: pre-wrap; }
+  @media (max-width: 700px) {
+    .poem-comments { margin: 0 0 6px; }
+    .poem-text > .has-comment::after { right: 0; }
+    .poem-card.is-writing .poem-comments { display: none; }
+  }
+  /* Snapshots and submissions dialogs. */
+  /* .modal-box caps at 380px and comes later; these need the room. */
+  .modal-box.snap-box, .modal-box.subs-box { max-width: 600px; width: 100%; }
+  .snap-take, .subs-add { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 10px; }
+  .subs-add { grid-template-columns: 1fr 150px auto; }
+  .snap-take input, .subs-add input { font-size: 16px; padding: 8px 10px; min-width: 0; }
+  .snap-note { font-size: 12px; color: var(--ink-faint); margin: -4px 0 10px; }
+  .snap-list, .subs-list { max-height: 44vh; overflow-y: auto; border-top: 1px solid var(--line); }
+  .snap-row, .subs-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); }
+  .subs-row { grid-template-columns: 1fr auto auto; }
+  .snap-row-name, .subs-row-venue { font-size: 14px; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+  .snap-row-meta, .subs-row-meta { font-size: 12px; color: var(--ink-faint); font-weight: 400; }
+  .snap-row-actions { display: flex; gap: 6px; }
+  .subs-row select { width: auto; padding: 5px 8px; font-size: 13px; }
+  .subs-row.is-accepted .subs-row-venue { color: var(--accent); }
+  .subs-row.is-closed { opacity: 0.6; }
+  .subs-flag { font-size: 11.5px; font-weight: 600; color: var(--warning); }
+  .snap-diff { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; max-height: 36vh; overflow-y: auto; font-size: 13.5px; line-height: 1.55; background: var(--surface-2); }
+  .snap-diff-head { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .snap-diff .is-del { color: var(--danger); text-decoration: line-through; background: var(--danger-soft); }
+  .snap-diff .is-add { background: var(--accent-soft); }
+  .snap-diff div { white-space: pre-wrap; min-height: 1.2em; padding: 0 4px; }
+  .snap-empty { padding: 14px 2px; color: var(--ink-soft); font-size: 13.5px; }
+  .tracker-group { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); margin: 12px 0 2px; }
+  .tracker-add-poems { max-height: 22vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; margin-bottom: 10px; }
+  .tracker-add-poems label { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; cursor: pointer; }
+  /* On a closed row: out at journals, or taken. */
+  .subs-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; white-space: nowrap; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-soft); }
+  .subs-tag.is-accepted { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
   .entry-search-replace {
     flex: 0 0 auto; border: none; background: none; padding: 4px 2px; font-size: 12.5px; font-weight: 600;
     color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
   }
   .entry-search-replace:hover { color: var(--accent); }
   /* Find and replace: the fields, a count, and every match in context. */
-  .fr-box { max-width: 560px; width: 100%; }
+  .modal-box.fr-box { max-width: 560px; width: 100%; }
   .fr-fields { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; margin-bottom: 10px; }
   .fr-fields label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); }
   .fr-fields input { font-size: 16px; padding: 8px 10px; }
@@ -2803,6 +2856,8 @@
                 <button type="button" role="menuitemradio" data-view="split" title="The list on the left; click titles to open them beside it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="10.5" rx="1.5"/><path d="M5 1v10"/><path d="M2.5 4h1M2.5 6.5h1" stroke-linecap="round"/></svg><span class="vs-label">Poem and List View</span></button>
                 <div class="menu-sep"></div>
                 <button type="button" role="menuitemradio" data-view="open" title="Just the poems open now, with every other title and section out of the way until you pick another view"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 11l1-3 7-7 2 2-7 7z"/><path d="M8 2l2 2"/></svg><span class="vs-label">Edit open poems</span></button>
+                <div class="menu-sep"></div>
+                <button type="button" role="menuitem" data-action="tracker"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 3.5l6 4 6-4"/><rect x="1" y="1.5" width="12" height="9" rx="1.5"/></svg><span>Submissions…</span></button>
               </div>
             </div>
           </div>
@@ -3269,6 +3324,8 @@
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="focus">Focus mode</button>
+  <button type="button" role="menuitem" data-action="snapshots">Snapshots…</button>
+  <button type="button" role="menuitem" data-action="subs">Submissions…</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <button type="button" role="menuitem" data-action="move">Move to another book…</button>
@@ -8603,6 +8660,7 @@
   });
 
   var ICON_INDENT = '<svg width="15" height="12" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M1 4l3 3-3 3"/></svg>';
+  var ICON_COMMENT = '<svg width="14" height="13" viewBox="0 0 14 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M2 1.5h10a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H6L3 12V9.5H2a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg>';
   var ICON_OUTDENT = '<svg width="15" height="12" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h10M7 7h10M7 13h10M4 4L1 7l3 3"/></svg>';
   var ICON_IMAGE = '<svg width="15" height="12" viewBox="0 0 17 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="1" width="15" height="12" rx="2"/><circle cx="5.5" cy="5" r="1.4"/><path d="M1.5 11.5l4.5-4 3.5 3 2.5-2 3.5 3"/></svg>';
 
@@ -8874,6 +8932,8 @@
     moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
     moveBtn.textContent = 'Move ' + (poem ? formNouns().one : formNouns().section) + ' to another book…';
     entryMenu.querySelector('[data-action="focus"]').hidden = !poem || isSection(poem) || writerMQ.matches;
+    entryMenu.querySelector('[data-action="snapshots"]').hidden = !poem || isSection(poem);
+    entryMenu.querySelector('[data-action="subs"]').hidden = !poem || isSection(poem);
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
     seriesBtn.hidden = !poem || isSection(poem) || bookFormOf(state) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
@@ -9047,6 +9107,8 @@
     if (item.dataset.action === 'archive') archivePoem(idx);
     else if (item.dataset.action === 'archive-all') archiveSectionWithEntries(idx);
     else if (item.dataset.action === 'focus') focusEntry(state.poems[idx] && state.poems[idx].id);
+    else if (item.dataset.action === 'snapshots') openSnapshots(state.poems[idx]);
+    else if (item.dataset.action === 'subs') openSubmissions(state.poems[idx]);
     else if (item.dataset.action === 'split') enterSplitView(sectionMembers(idx).map(function (p) { return p.id; }));
     else if (item.dataset.action === 'delete') deletePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
@@ -9364,6 +9426,7 @@
     editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
     renderEditor(editor, poem.lines);
     tagScriptLines(editor);
+    setTimeout(function () { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }, 0);
     function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE); }
     tagProse();
     editor.style.textAlign = isScriptForm() ? 'left' : poem.bodyAlign || state.bodyAlignment;
@@ -9373,6 +9436,7 @@
     editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * 1.333 * editorZoom * EDITOR_ZOOM_BASE);
     editor.addEventListener('input', function () {
       poem.lines = serializeEditor(editor);
+      if (poem.comments && poem.comments.length) { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }
       state.isExample = false;
       tagScriptLines(editor);
       tagProse();
@@ -9521,11 +9585,24 @@
     writerBar.appendChild(writerTools);
     writerBar.appendChild(doneBtn);
 
+    // Margin comments on this entry's lines (see renderComments).
+    var commentsEl = document.createElement('div');
+    commentsEl.className = 'poem-comments';
     body.appendChild(writerBar);
     body.appendChild(titleRow);
     body.appendChild(editor);
+    body.appendChild(commentsEl);
     body.appendChild(metaRow);
     var formatRow = makeFormatToolbar(editor);
+    var commentBtn = document.createElement('button');
+    commentBtn.type = 'button';
+    commentBtn.className = 'format-btn format-btn-comment';
+    commentBtn.title = 'Comment on this line';
+    commentBtn.setAttribute('aria-label', 'Comment on this line');
+    commentBtn.innerHTML = ICON_COMMENT;
+    commentBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    commentBtn.addEventListener('click', function () { addComment(poem, editor, commentsEl); });
+    formatRow.appendChild(commentBtn);
     var aligns = document.createElement('div');
     aligns.className = 'format-aligns';
     // A script's alignment is set by its format, not chosen.
@@ -9713,6 +9790,8 @@
       if (!e.target.closest('button')) toggleOpen();
     });
     if (isSeriesOn(poem)) row.appendChild(makeSeriesTag(poem));
+    var subTag = makeSubsTag(poem);
+    if (subTag) row.appendChild(subTag);
     if (tiersShown()) row.appendChild(makeTierPill(poem));
     row.appendChild(makeDotsBtn(index));
 
@@ -9969,6 +10048,7 @@
     });
   }
   entriesViewSeg.addEventListener('click', function (e) {
+    if (e.target.closest('[data-action="tracker"]')) { setViewMenu(false); openTracker(); return; }
     var b = e.target.closest('button[data-view]');
     if (!b || b.disabled) return;
     setViewMenu(false);
@@ -10565,6 +10645,361 @@
       openFindReplace();
     }
   });
+
+  // ---------------------------------------------------------------------
+  // Margin comments: a note pinned to one line of an entry. Each keeps the
+  // words of its line (`quote`) as well as its place, so it follows the
+  // line when lines are added above; if that line is edited, it stays at
+  // the same place and takes the new words.
+  // ---------------------------------------------------------------------
+  function anchorComments(poem) {
+    var lines = (poem.lines || []).map(stripFormatMarkers);
+    (poem.comments || []).forEach(function (c) {
+      if (lines[c.line] === c.quote) return;
+      var best = -1, dist = Infinity;
+      lines.forEach(function (l, i) { if (l === c.quote && Math.abs(i - c.line) < dist) { best = i; dist = Math.abs(i - c.line); } });
+      if (best >= 0) c.line = best;
+      else { c.line = Math.max(0, Math.min(c.line, lines.length - 1)); c.quote = lines[c.line] || ''; }
+    });
+  }
+  function markCommentLines(poem, editor) {
+    anchorComments(poem);
+    var on = {};
+    (poem.comments || []).forEach(function (c) { on[c.line] = true; });
+    Array.prototype.forEach.call(editor.children, function (el, i) { el.classList.toggle('has-comment', !!on[i]); });
+  }
+  // The editor line the cursor is in (its index among the editor's lines).
+  function caretLineIndex(editor) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return -1;
+    var n = sel.anchorNode;
+    if (n === editor) return Math.min(sel.anchorOffset, editor.children.length - 1);
+    while (n && n.parentNode !== editor) n = n.parentNode;
+    return n ? Array.prototype.indexOf.call(editor.children, n) : -1;
+  }
+  function shortQuote(t) { t = (t || '').trim(); return t.length > 48 ? t.slice(0, 46) + '…' : t; }
+  async function addComment(poem, editor, listEl) {
+    var i = caretLineIndex(editor);
+    if (i < 0) { showToast('Click into a line first, then Comment.'); return; }
+    poem.lines = serializeEditor(editor);
+    var quote = stripFormatMarkers(poem.lines[i] || '');
+    var text = await promptDialog('Comment on line ' + (i + 1) + (quote.trim() ? ': “' + shortQuote(quote) + '”' : ''), '');
+    if (!text || !text.trim()) return;
+    poem.comments = (poem.comments || []).concat([{ id: 'c' + Date.now().toString(36), line: i, quote: quote, text: text.trim(), at: Date.now() }]);
+    state.isExample = false;
+    persist();
+    markCommentLines(poem, editor);
+    renderComments(poem, editor, listEl);
+  }
+  function renderComments(poem, editor, listEl) {
+    listEl.innerHTML = '';
+    (poem.comments || []).slice().sort(function (a, b) { return a.line - b.line || a.at - b.at; }).forEach(function (c) {
+      var el = document.createElement('div');
+      el.className = 'poem-comment';
+      el.innerHTML = '<div class="poem-comment-head"><span class="poem-comment-line"></span><span class="poem-comment-quote"></span><button type="button">Resolve</button></div><div class="poem-comment-text"></div>';
+      el.querySelector('.poem-comment-line').textContent = 'Line ' + (c.line + 1);
+      el.querySelector('.poem-comment-quote').textContent = c.quote.trim() ? '“' + shortQuote(c.quote) + '”' : '';
+      el.querySelector('.poem-comment-text').textContent = c.text;
+      el.querySelector('.poem-comment-line').addEventListener('click', function () {
+        var line = editor.children[c.line];
+        if (!line) return;
+        line.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        line.classList.remove('is-flash');
+        void line.offsetWidth;
+        line.classList.add('is-flash');
+      });
+      el.querySelector('button').addEventListener('click', function () {
+        poem.comments = (poem.comments || []).filter(function (x) { return x !== c; });
+        persist();
+        markCommentLines(poem, editor);
+        renderComments(poem, editor, listEl);
+        showToast('Comment resolved.', 'Undo', function () {
+          poem.comments = (poem.comments || []).concat([c]);
+          persist();
+          renderPoems();
+        });
+      });
+      listEl.appendChild(el);
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Snapshots: saved copies of an entry to compare with or go back to.
+  // Kept on this device (IndexedDB), not synced: a book's synced copy has
+  // a size limit, and a few drafts of every chapter would pass it.
+  // ---------------------------------------------------------------------
+  var snapDbPromise = null;
+  function snapDb() {
+    if (!snapDbPromise) snapDbPromise = new Promise(function (resolve, reject) {
+      var req = indexedDB.open('bookbug-snapshots', 1);
+      req.onupgradeneeded = function () {
+        var store = req.result.createObjectStore('snaps', { keyPath: 'id' });
+        store.createIndex('poemId', 'poemId');
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { snapDbPromise = null; reject(req.error); };
+    });
+    return snapDbPromise;
+  }
+  function snapTx(mode, fn) {
+    return snapDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction('snaps', mode), out;
+        out = fn(tx.objectStore('snaps'));
+        tx.oncomplete = function () { resolve(out && 'result' in out ? out.result : undefined); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function snapList(poemId) {
+    return snapTx('readonly', function (st) { return st.index('poemId').getAll(poemId); })
+      .then(function (rows) { return (rows || []).sort(function (a, b) { return b.at - a.at; }); });
+  }
+  function snapTake(poem, name) {
+    var rec = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), poemId: poem.id, bookId: state.chapbookId || null,
+      at: Date.now(), name: name || '', title: poem.title || '', lines: (poem.lines || []).slice() };
+    return snapTx('readwrite', function (st) { return st.put(rec); }).then(function () { return rec; });
+  }
+  function snapDelete(id) { return snapTx('readwrite', function (st) { return st.delete(id); }); }
+  // A line-by-line comparison (longest common run of lines), oldest first.
+  function lineDiff(a, b) {
+    var n = a.length, m = b.length, dp = [];
+    for (var i = 0; i <= n; i++) { dp.push(new Array(m + 1).fill(0)); }
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    var out = []; i = 0; j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { out.push({ t: a[i] }); i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) out.push({ t: a[i++], del: true });
+      else out.push({ t: b[j++], add: true });
+    }
+    while (i < n) out.push({ t: a[i++], del: true });
+    while (j < m) out.push({ t: b[j++], add: true });
+    return out;
+  }
+  function fmtWhen(t) {
+    var d = new Date(t);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) +
+      ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+  function makeDialog(cls, label, html) {
+    var ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    var box = document.createElement('div');
+    box.className = 'modal-box ' + cls;
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', label);
+    box.innerHTML = html;
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape' && !document.querySelector('#modalOverlay.open, #promptOverlay.open')) { e.stopPropagation(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    return { ov: ov, box: box, close: close };
+  }
+  function openSnapshots(poem) {
+    if (!poem || isSection(poem)) return;
+    var d = makeDialog('snap-box', 'Snapshots',
+      '<p style="margin-top:0;"></p>' +
+      '<div class="snap-take"><input type="text" placeholder="Name this snapshot (optional)" autocomplete="off"><button class="btn btn-primary" type="button">Take snapshot</button></div>' +
+      '<p class="snap-note">Kept on this device.</p>' +
+      '<div class="snap-list"></div><div class="snap-diff-wrap"></div>' +
+      '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
+    d.box.querySelector('p').textContent = 'Snapshots of “' + entryLabel(poem) + '”';
+    var nameIn = d.box.querySelector('.snap-take input'), listEl = d.box.querySelector('.snap-list'), diffWrap = d.box.querySelector('.snap-diff-wrap');
+    d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    function take() {
+      flushPendingSave();
+      snapTake(poem, nameIn.value.trim()).then(function () { nameIn.value = ''; refresh(); showToast('Snapshot taken.'); });
+    }
+    d.box.querySelector('.snap-take .btn').addEventListener('click', take);
+    nameIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); take(); } });
+    function showDiff(rec) {
+      var rows = lineDiff([rec.title].concat(rec.lines.map(stripFormatMarkers)), [poem.title || ''].concat((poem.lines || []).map(stripFormatMarkers)));
+      diffWrap.innerHTML = '<div class="snap-diff"><div class="snap-diff-head"></div></div>';
+      var box = diffWrap.firstChild;
+      box.firstChild.textContent = (rec.name || fmtWhen(rec.at)) + ' → now (struck = only in the snapshot, tinted = only now)';
+      rows.forEach(function (r) {
+        var el = document.createElement('div');
+        if (r.del) el.className = 'is-del';
+        if (r.add) el.className = 'is-add';
+        el.textContent = r.t || '\u00a0';
+        box.appendChild(el);
+      });
+      if (!rows.some(function (r) { return r.del || r.add; })) box.appendChild(document.createTextNode('No differences.'));
+    }
+    function refresh() {
+      snapList(poem.id).then(function (rows) {
+        listEl.innerHTML = '';
+        if (!rows.length) { listEl.innerHTML = '<div class="snap-empty">No snapshots yet.</div>'; return; }
+        rows.forEach(function (rec) {
+          var row = document.createElement('div');
+          row.className = 'snap-row';
+          row.innerHTML = '<div><div class="snap-row-name"></div><div class="snap-row-meta"></div></div>' +
+            '<div class="snap-row-actions"><button class="btn btn-sm" type="button">Compare</button><button class="btn btn-sm" type="button">Restore</button>' +
+            '<button class="btn btn-ghost btn-danger btn-sm" type="button" title="Delete snapshot" aria-label="Delete snapshot">×</button></div>';
+          row.querySelector('.snap-row-name').textContent = rec.name || fmtWhen(rec.at);
+          row.querySelector('.snap-row-meta').textContent = (rec.name ? fmtWhen(rec.at) + ' · ' : '') + rec.lines.length + (rec.lines.length === 1 ? ' line' : ' lines');
+          var bs = row.querySelectorAll('button');
+          bs[0].addEventListener('click', function () { showDiff(rec); });
+          bs[1].addEventListener('click', async function () {
+            var ok = await confirmDialog('Go back to this snapshot? What’s there now is saved as a snapshot first.');
+            if (!ok) return;
+            flushPendingSave();
+            await snapTake(poem, 'Before restoring');
+            poem.title = rec.title;
+            poem.lines = rec.lines.slice();
+            state.isExample = false;
+            persist();
+            renderAll();
+            d.close();
+            showToast('Restored. The version before is in Snapshots.');
+          });
+          bs[2].addEventListener('click', async function () {
+            var ok = await confirmDialog('Delete this snapshot? This can’t be undone.', 'Delete');
+            if (!ok) return;
+            await snapDelete(rec.id);
+            diffWrap.innerHTML = '';
+            refresh();
+          });
+          listEl.appendChild(row);
+        });
+      }).catch(function () { listEl.innerHTML = '<div class="snap-empty">Snapshots aren’t available in this browser (private windows can block them).</div>'; });
+    }
+    refresh();
+    setTimeout(function () { nameIn.focus(); }, 0);
+  }
+
+  // ---------------------------------------------------------------------
+  // Submissions: where each entry has been sent and what came of it, on
+  // the entry (synced with the book). A closed row shows "Out · 2" or
+  // "Accepted"; View Options > Submissions… is the whole book's tracker.
+  // ---------------------------------------------------------------------
+  var SUB_STATUSES = [['out', 'Out'], ['accepted', 'Accepted'], ['declined', 'Declined'], ['withdrawn', 'Withdrawn']];
+  function todayISO() { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+  function daysSince(iso) { return Math.max(0, Math.round((Date.parse(todayISO()) - Date.parse(iso)) / 86400000)); }
+  function fmtDay(iso) { var d = new Date(iso + 'T12:00:00'); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
+  function makeSubsTag(poem) {
+    var subs = poem.subs || [];
+    var accepted = subs.filter(function (x) { return x.status === 'accepted'; })[0];
+    var out = subs.filter(function (x) { return x.status === 'out'; }).length;
+    if (!accepted && !out) return null;
+    var tag = document.createElement('span');
+    tag.className = 'subs-tag' + (accepted ? ' is-accepted' : '');
+    tag.textContent = accepted ? 'Accepted' : 'Out' + (out > 1 ? ' · ' + out : '');
+    tag.title = accepted ? 'Accepted at ' + accepted.venue : 'Out at ' + subs.filter(function (x) { return x.status === 'out'; }).map(function (x) { return x.venue; }).join(', ');
+    return tag;
+  }
+  // One submission's row: venue, when, status, and remove.
+  function makeSubRow(poem, sub, showPoem, onChange) {
+    var row = document.createElement('div');
+    var taken = (poem.subs || []).some(function (x) { return x.status === 'accepted' && x !== sub; });
+    row.className = 'subs-row' + (sub.status === 'accepted' ? ' is-accepted' : '') + (sub.status === 'declined' || sub.status === 'withdrawn' ? ' is-closed' : '');
+    row.innerHTML = '<div><div class="subs-row-venue"></div><div class="subs-row-meta"></div></div><select aria-label="Status"></select>' +
+      '<button class="btn btn-ghost btn-danger btn-sm" type="button" title="Remove" aria-label="Remove">×</button>';
+    row.querySelector('.subs-row-venue').textContent = (showPoem ? entryLabel(poem) + ' · ' : '') + sub.venue;
+    var meta = 'Sent ' + fmtDay(sub.sent) + (sub.status === 'out' ? ' · ' + daysSince(sub.sent) + ' days' : '');
+    row.querySelector('.subs-row-meta').textContent = meta;
+    if (sub.status === 'out' && taken) {
+      var flag = document.createElement('div');
+      flag.className = 'subs-flag';
+      flag.textContent = 'Accepted elsewhere: withdraw it here';
+      row.firstChild.appendChild(flag);
+    }
+    var sel = row.querySelector('select');
+    SUB_STATUSES.forEach(function (st) { var o = document.createElement('option'); o.value = st[0]; o.textContent = st[1]; sel.appendChild(o); });
+    sel.value = sub.status;
+    sel.addEventListener('change', function () { sub.status = sel.value; persist(); renderPoems(); onChange(); });
+    row.querySelector('button').addEventListener('click', function () {
+      poem.subs = (poem.subs || []).filter(function (x) { return x !== sub; });
+      persist(); renderPoems(); onChange();
+    });
+    return row;
+  }
+  function addSub(poem, venue, sent) {
+    poem.subs = (poem.subs || []).concat([{ id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), venue: venue, sent: sent || todayISO(), status: 'out' }]);
+  }
+  function openSubmissions(poem) {
+    if (!poem || isSection(poem)) return;
+    var d = makeDialog('subs-box', 'Submissions',
+      '<p style="margin-top:0;"></p>' +
+      '<div class="subs-add"><input type="text" placeholder="Journal or press" autocomplete="off"><input type="date" aria-label="Date sent"><button class="btn btn-primary" type="button">Add</button></div>' +
+      '<div class="subs-list"></div><div class="modal-actions"><button class="btn" type="button">Done</button></div>');
+    d.box.querySelector('p').textContent = 'Where “' + entryLabel(poem) + '” has been sent';
+    var inputs = d.box.querySelectorAll('.subs-add input'), listEl = d.box.querySelector('.subs-list');
+    inputs[1].value = todayISO();
+    d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    function add() {
+      var v = inputs[0].value.trim();
+      if (!v) { inputs[0].focus(); return; }
+      addSub(poem, v, inputs[1].value);
+      state.isExample = false;
+      persist(); renderPoems();
+      inputs[0].value = '';
+      refresh();
+    }
+    d.box.querySelector('.subs-add .btn').addEventListener('click', add);
+    inputs[0].addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    function refresh() {
+      listEl.innerHTML = '';
+      var subs = (poem.subs || []).slice().sort(function (a, b) { return b.sent < a.sent ? -1 : 1; });
+      if (!subs.length) { listEl.innerHTML = '<div class="snap-empty">Not sent anywhere yet.</div>'; return; }
+      subs.forEach(function (sub) { listEl.appendChild(makeSubRow(poem, sub, false, refresh)); });
+    }
+    refresh();
+    setTimeout(function () { inputs[0].focus(); }, 0);
+  }
+  // The whole book's submissions: out (longest out first), accepted, and
+  // closed; and sending several entries to one place at once.
+  function openTracker() {
+    var nouns = formNouns();
+    var d = makeDialog('subs-box', 'Submissions',
+      '<p style="margin-top:0;">Submissions</p>' +
+      '<div class="subs-add"><input type="text" placeholder="Send to: journal or press" autocomplete="off"><input type="date" aria-label="Date sent"><button class="btn btn-primary" type="button">Add</button></div>' +
+      '<div class="tracker-add-poems"></div><div class="subs-list"></div>' +
+      '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
+    var inputs = d.box.querySelectorAll('.subs-add input'), listEl = d.box.querySelector('.subs-list'), pick = d.box.querySelector('.tracker-add-poems');
+    inputs[1].value = todayISO();
+    d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    state.poems.forEach(function (p) {
+      if (isSection(p)) return;
+      var l = document.createElement('label');
+      l.innerHTML = '<input type="checkbox"><span></span>';
+      l.querySelector('input').value = p.id;
+      l.querySelector('span').textContent = entryLabel(p);
+      pick.appendChild(l);
+    });
+    if (!pick.children.length) pick.hidden = true;
+    d.box.querySelector('.subs-add .btn').addEventListener('click', function () {
+      var v = inputs[0].value.trim();
+      var ids = Array.prototype.filter.call(pick.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+      if (!v) { inputs[0].focus(); return; }
+      if (!ids.length) { showToast('Tick the ' + nouns.many + ' you sent.'); return; }
+      state.poems.forEach(function (p) { if (ids.indexOf(p.id) >= 0) addSub(p, v, inputs[1].value); });
+      pick.querySelectorAll('input').forEach(function (c) { c.checked = false; });
+      inputs[0].value = '';
+      state.isExample = false;
+      persist(); renderPoems(); refresh();
+    });
+    function refresh() {
+      listEl.innerHTML = '';
+      var all = [];
+      state.poems.forEach(function (p) { (p.subs || []).forEach(function (sub) { all.push({ poem: p, sub: sub }); }); });
+      if (!all.length) { listEl.innerHTML = '<div class="snap-empty">Nothing sent yet. Name a journal, tick what you sent, and Add.</div>'; return; }
+      [['out', 'Out'], ['accepted', 'Accepted'], ['closed', 'Declined or withdrawn']].forEach(function (g) {
+        var items = all.filter(function (x) { return g[0] === 'closed' ? (x.sub.status === 'declined' || x.sub.status === 'withdrawn') : x.sub.status === g[0]; })
+          .sort(function (a, b) { return a.sub.sent < b.sub.sent ? -1 : 1; });
+        if (!items.length) return;
+        var h = document.createElement('div');
+        h.className = 'tracker-group';
+        h.textContent = g[1] + ' (' + items.length + ')';
+        listEl.appendChild(h);
+        items.forEach(function (x) { listEl.appendChild(makeSubRow(x.poem, x.sub, true, refresh)); });
+      });
+    }
+    refresh();
+  }
 
   // Open all / Close all on a tier's heading or a section's bar: opens
   // every poem in it in full (Close all folds them back to titles).
