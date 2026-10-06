@@ -3386,6 +3386,8 @@
               <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
             </div>
             <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
+            <button class="btn" id="exportManuscriptBtn" style="width:100%; justify-content:center;" title="Standard manuscript format for submitting to journals, agents and presses: Times 12, double-spaced prose, your contact details and a word count on page one">Export submission manuscript</button>
+            <button class="btn" id="exportMarkdownBtn" style="width:100%; justify-content:center;" title="Plain text, with Markdown's marks for headings and bold or italic">Export as Markdown</button>
             <button class="btn" id="exportSelectBtn" style="width:100%; justify-content:center;">Export select entries…</button>
             <div class="export-status" id="exportStatus"></div>
           </div>
@@ -13845,6 +13847,7 @@
     document.getElementById('lineSpacingSelect').closest('.field').hidden = script;
     // Scripts print one-sided and are bound with brads, never folded.
     document.getElementById('exportPrintBtn').hidden = script;
+    document.getElementById('exportManuscriptBtn').hidden = script;
     document.getElementById('cutLinesCheck').closest('.checkline').hidden = script;
     document.getElementById('selectEntriesPrintBtn').hidden = script;
   }
@@ -14401,6 +14404,175 @@
   }
 
   var DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+  // Saves bytes through the page's downloads capability when it has one,
+  // otherwise as an ordinary download.
+  async function saveExport(filename, bytes, mime) {
+    try {
+      var dl = null;
+      try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+      if (dl) { await dl.save({ filename: filename, data: bytes }); setExportStatus('Saved ' + filename + '.'); }
+      else { downloadBlob(filename, bytes, mime); setExportStatus('Downloaded ' + filename + '.'); }
+    } catch (err) {
+      if (err && err.code === 'declined') setExportStatus('');
+      else setExportStatus('Couldn’t save the file' + (err && err.code ? ' (' + err.code + ')' : '') + '.');
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Markdown: the book as plain text that reads cleanly as it is -- # for
+  // the book, ## for sections, ### (or ##) for entries, the editor's own
+  // **bold** and *italic*. A verse line ends in two spaces (Markdown's
+  // line break); prose paragraphs are separated by a blank line.
+  // ---------------------------------------------------------------------
+  function bookAsMarkdown(st) {
+    var out = [], hasSections = st.poems.some(isSection);
+    function md(line) { return line.replace(/\+\+([^+]+)\+\+/g, '<u>$1</u>'); }
+    out.push('# ' + (st.bookTitle || 'Untitled'));
+    if (st.author) out.push('', '*' + st.author + '*');
+    if ((st.epigraph || '').trim()) {
+      out.push('');
+      st.epigraph.trim().split('\n').forEach(function (l) { out.push('> ' + l + '  '); });
+      if ((st.epigraphSource || '').trim()) out.push('>', '> — ' + st.epigraphSource.trim());
+    }
+    st.poems.forEach(function (poem) {
+      if (isSection(poem)) { out.push('', '## ' + sectionLabel(poem, st)); return; }
+      out.push('', (hasSections ? '### ' : '## ') + entryLabel(poem, st), '');
+      var verse = isVerseEntry(poem, st), prev = null;
+      (poem.lines || []).forEach(function (line) {
+        if (IMAGE_LINE_RE.test(line || '')) return;
+        if (!line || !line.trim()) { if (prev !== '') out.push(''); prev = ''; return; }
+        if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) { out.push('', '* * *', ''); prev = ''; return; }
+        var t = md(line.replace(/^\t+/, function (tabs) { return verse ? tabs.replace(/\t/g, '&emsp;') : ''; }));
+        if (verse) out.push(t + '  ');
+        else { if (prev !== null && prev !== '') out.push(''); out.push(t); }
+        prev = t;
+      });
+    });
+    BACK_MATTER.forEach(function (bm) {
+      var text = (st[bm.key] || '').trim();
+      if (text) out.push('', '## ' + bm.title, '', text.split('\n').join('\n\n'));
+    });
+    return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
+  }
+  document.getElementById('exportMarkdownBtn').addEventListener('click', function () {
+    if (countEntries(state.poems) === 0) return;
+    saveExport(slugify(state.bookTitle) + '.md', new TextEncoder().encode(bookAsMarkdown(state)), 'text/markdown');
+  });
+
+  // ---------------------------------------------------------------------
+  // Submission manuscript (William Shunn's standard format, as journals,
+  // agents and presses ask for it): Times New Roman 12, one-inch margins;
+  // page one has the writer's name and contact details at the top left,
+  // the word count at the right, and the title centered a third of the
+  // way down with "by" the writer under it; every later page is headed
+  // "Surname / Title / page". Prose is double-spaced with half-inch
+  // first-line indents, # for a scene break, each chapter on a new page,
+  // and END after the last. Poems go one to a page, single-spaced.
+  // ---------------------------------------------------------------------
+  function bookWordCount(st) {
+    var n = 0;
+    st.poems.forEach(function (p) {
+      if (isSection(p)) return;
+      (p.lines || []).forEach(function (l) { if (!IMAGE_LINE_RE.test(l || '')) n += (stripFormatMarkers(l).match(/[\w’'-]+/g) || []).length; });
+    });
+    return n;
+  }
+  function buildManuscriptDocx(st, contactLines) {
+    var enc = new TextEncoder(), poetry = bookFormOf(st) === 'collection';
+    // The writer's name: the book's author, or else the contact block's first line.
+    var author = (st.author || '').trim() || (contactLines[0] || '').trim(), surname = author.split(/\s+/).pop() || 'Author';
+    var title = (st.bookTitle || 'Untitled').trim();
+    var words = bookWordCount(st);
+    var rounded = words < 1000 ? Math.round(words / 10) * 10 : Math.round(words / 100) * 100;
+    var DOUBLE = '<w:spacing w:line="480" w:lineRule="auto" w:before="0" w:after="0"/>';
+    var SINGLE = '<w:spacing w:line="240" w:lineRule="auto" w:before="0" w:after="0"/>';
+    function p(text, ppr, raw) { return '<w:p><w:pPr>' + (ppr || SINGLE) + '</w:pPr>' + (raw ? text : text ? docxRunsXml(text) : '') + '</w:p>'; }
+    var body = '';
+    // Page one: contact block left, word count right (a tab to the right margin).
+    var count = poetry ? '' : 'About ' + rounded.toLocaleString('en-US') + ' words';
+    contactLines.forEach(function (l, i) {
+      var run = '<w:r><w:t xml:space="preserve">' + escapeXml(l) + '</w:t></w:r>';
+      if (i === 0 && count) run += '<w:r><w:tab/><w:t xml:space="preserve">' + escapeXml(count) + '</w:t></w:r>';
+      body += p(run, SINGLE + '<w:tabs><w:tab w:val="right" w:pos="9360"/></w:tabs>', true);
+    });
+    // Title a third of the way down the page (about 3 inches), then "by".
+    body += p('<w:r><w:t xml:space="preserve">' + escapeXml(title) + '</w:t></w:r>', '<w:spacing w:before="' + Math.max(0, 4320 - contactLines.length * 280) + '" w:after="0" w:line="480" w:lineRule="auto"/><w:jc w:val="center"/>', true);
+    if (author) body += p('<w:r><w:t xml:space="preserve">by ' + escapeXml(author) + '</w:t></w:r>', DOUBLE + '<w:jc w:val="center"/>', true);
+    body += p('', DOUBLE);
+    var firstEntry = true;
+    st.poems.forEach(function (poem) {
+      if (isSection(poem)) {
+        body += p('<w:r><w:t xml:space="preserve">' + escapeXml(sectionLabel(poem, st)) + '</w:t></w:r>', '<w:pageBreakBefore/>' + DOUBLE + '<w:jc w:val="center"/>', true);
+        firstEntry = true;
+        return;
+      }
+      var lines = (poem.lines || []).filter(function (l) { return !IMAGE_LINE_RE.test(l || ''); });
+      var head = escapeXml(entryLabel(poem, st));
+      // A poem (or a later chapter) starts a new page; the first one
+      // follows the title on page one.
+      var brk = poetry || !firstEntry ? '<w:pageBreakBefore/>' : '';
+      body += p('<w:r>' + (poetry ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + head + '</w:t></w:r>', brk + (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="' + (poetry ? 'left' : 'center') + '"/>', true);
+      if (poetry) body += p('', SINGLE);
+      firstEntry = false;
+      var newPara = true;
+      lines.forEach(function (line) {
+        if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) { body += p('#', (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>'); newPara = true; return; }
+        if (poetry) { body += p(line.replace(/^\t+/, ''), SINGLE + (/^\t/.test(line) ? '<w:ind w:left="720"/>' : '')); return; }
+        if (!line.trim()) return;
+        body += p(line.replace(/^\t+/, ''), DOUBLE + '<w:ind w:firstLine="720"/>');
+        newPara = false;
+      });
+    });
+    if (!poetry) body += p('END', DOUBLE + '<w:jc w:val="center"/>');
+    body += '<w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/><w:titlePg/>' +
+      '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720"/></w:sectPr>';
+    var NS = ' xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    var documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document' + NS + '><w:body>' + body + '</w:body></w:document>';
+    var headerXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr' + NS + '><w:p><w:pPr><w:jc w:val="right"/></w:pPr>' +
+      '<w:r><w:t xml:space="preserve">' + escapeXml(surname + ' / ' + title + ' / ') + '</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>2</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '</w:p></w:hdr>';
+    var styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style></w:styles>';
+    return makeZip([
+      { name: '[Content_Types].xml', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>') },
+      { name: '_rels/.rels', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>') },
+      { name: 'word/document.xml', data: enc.encode(documentXml) },
+      { name: 'word/_rels/document.xml.rels', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+        '<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>') },
+      { name: 'word/styles.xml', data: enc.encode(styles) },
+      { name: 'word/header1.xml', data: enc.encode(headerXml) }
+    ]);
+  }
+  // The contact block: asked for once (and remembered with the book), with
+  // the author's name to start it.
+  document.getElementById('exportManuscriptBtn').addEventListener('click', function () {
+    if (countEntries(state.poems) === 0) return;
+    var d = makeDialog('subs-box', 'Submission manuscript',
+      '<p style="margin-top:0;">Your name and contact details for the top of page one, a line each</p>' +
+      '<div class="field"><textarea class="back-text-input" rows="5" aria-label="Contact details" placeholder="Name&#10;Street address&#10;City, State ZIP&#10;Email&#10;Phone"></textarea></div>' +
+      '<div class="modal-actions"><button class="btn" type="button">Cancel</button><button class="btn btn-primary" type="button">Export</button></div>');
+    var ta = d.box.querySelector('textarea'), bs = d.box.querySelectorAll('.modal-actions .btn');
+    ta.value = state.manuscriptContact || state.author || '';
+    bs[0].addEventListener('click', d.close);
+    bs[1].addEventListener('click', function () {
+      var lines = ta.value.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+      state.manuscriptContact = lines.join('\n');
+      persist();
+      d.close();
+      setExportStatus('Building the manuscript…');
+      saveExport(slugify(state.bookTitle) + '-manuscript.docx', buildManuscriptDocx(state, lines.length ? lines : [state.author || '']), DOCX_MIME);
+    });
+    setTimeout(function () { ta.focus(); }, 0);
+  });
 
   async function runDocxExportForState(exportState, filenameSuffix) {
     setExportStatus('Building .docx…');
