@@ -391,6 +391,25 @@
   .entry-search { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-faint); }
   .entry-search:focus-within { border-color: var(--accent); color: var(--accent); }
   .entry-search input[type="search"] { flex: 1; min-width: 0; border: none !important; background: transparent !important; outline: none; padding: 8px 0; font-size: 14px; color: var(--ink); box-shadow: none !important; }
+  .entry-search-replace {
+    flex: 0 0 auto; border: none; background: none; padding: 4px 2px; font-size: 12.5px; font-weight: 600;
+    color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+  }
+  .entry-search-replace:hover { color: var(--accent); }
+  /* Find and replace: the fields, a count, and every match in context. */
+  .fr-box { max-width: 560px; width: 100%; }
+  .fr-fields { display: grid; grid-template-columns: auto 1fr; gap: 8px 10px; align-items: center; margin-bottom: 10px; }
+  .fr-fields label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); }
+  .fr-fields input { font-size: 16px; padding: 8px 10px; }
+  .fr-opts { display: flex; gap: 16px; font-size: 13px; color: var(--ink-soft); margin-bottom: 10px; }
+  .fr-opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .fr-count { font-size: 13px; color: var(--ink-soft); margin: 0 0 6px; }
+  .fr-list { max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--line); margin-bottom: 4px; }
+  .fr-hit { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); }
+  .fr-hit-where { font-size: 11.5px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
+  .fr-hit-text { font-size: 14px; color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
+  .fr-hit-text:hover { color: var(--accent); }
+  .fr-hit mark { background: var(--accent-soft); color: inherit; border-bottom: 2px solid var(--accent); padding: 0 1px; }
   .entry-search-empty { padding: 14px 6px; color: var(--ink-soft); font-size: 14px; }
   .zoom-control {
     display: flex; align-items: center; gap: 2px; border: 1px solid var(--line-strong); border-radius: 7px;
@@ -522,6 +541,14 @@
   .poem-compact-expanded.is-writing::before { display: none; }
   .poem-card-corner { position: absolute; top: 8px; right: 10px; display: flex; align-items: center; gap: 8px; }
   .poem-card-corner .dots-btn { margin-left: 0; }
+  .focus-btn {
+    appearance: none; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 999px; background: none;
+    color: var(--ink-faint); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .focus-btn:hover { color: var(--accent); border-color: var(--accent); }
+  /* A phone is always in the writer while editing, so it has no use for it. */
+  @media (max-width: 700px) { .focus-btn { display: none; } }
   .poem-card.is-writing .poem-card-corner { display: none; }
   .poem-close-btn:hover { border-color: var(--accent); color: var(--accent); }
   @media (max-width: 700px) { .poem-close-btn { display: none; } }
@@ -735,10 +762,6 @@
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       flex: 0 0 auto; padding: 6px 0 2px;
     }
-    .poem-writer-done {
-      appearance: none; background: none; border: none; color: var(--accent); font-weight: 700; font-size: 16px;
-      padding: 8px 0 8px 16px; cursor: pointer; flex: 0 0 auto;
-    }
     .poem-card.is-writing .poem-title-row { flex: 0 0 auto; cursor: auto; }
     .poem-card.is-writing textarea.poem-title {
       flex: 1 1 auto; width: auto !important;
@@ -755,12 +778,6 @@
       background: var(--surface-2); border-top: 1px solid var(--line);
     }
     .poem-card.is-writing .format-toolbar .format-btn { flex: 1 1 0; width: auto; max-width: 64px; height: 36px; font-size: 16px; border-radius: 8px; }
-    .poem-writer-title {
-      flex: 1; min-width: 0; appearance: none; background: none; border: none; padding: 6px 0; text-align: left;
-      font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; color: var(--ink);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
-    }
-    .poem-writer-title.is-placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
     .poem-card.is-writing:not(.is-body-focus) .poem-writer-title { visibility: hidden; }
     .poem-card.is-writing .poem-text {
       flex: 1 1 auto; min-height: 0; height: auto !important; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -772,17 +789,52 @@
     /* Previous / next entry and the formatting switch sit in fixed slots
        left of Done, so the arrows stay put under the thumb however long
        the title beside them is. */
-    .poem-writer-tools { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-    .poem-writer-tools button {
-      appearance: none; width: 38px; height: 36px; padding: 0; border: none; border-radius: 999px; background: none;
-      color: var(--ink-soft); font-size: 28px; line-height: 1; cursor: pointer;
-      display: inline-flex; align-items: center; justify-content: center;
-    }
-    .poem-writer-tools button:disabled { color: var(--line-strong); cursor: default; }
-    .poem-writer-tools .poem-writer-fmt { font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; }
-    .poem-writer-tools .poem-writer-fmt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
     /* Formatting hidden: the text runs down to the keyboard. */
     html.writer-fmt-hidden .poem-card.is-writing .format-toolbar { display: none; }
+  }
+
+  /* The writer bar's pieces: shared by phone writing mode and desktop
+     focus mode (the bar itself only shows in those). */
+  .poem-writer-done {
+    appearance: none; background: none; border: none; color: var(--accent); font-weight: 700; font-size: 16px;
+    padding: 8px 0 8px 16px; cursor: pointer; flex: 0 0 auto;
+  }
+  .poem-writer-title {
+    flex: 1; min-width: 0; appearance: none; background: none; border: none; padding: 6px 0; text-align: left;
+    font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
+  }
+  .poem-writer-title.is-placeholder { color: var(--ink-faint); font-style: italic; font-weight: 500; }
+  .poem-writer-tools { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+  .poem-writer-tools button {
+    appearance: none; width: 38px; height: 36px; padding: 0; border: none; border-radius: 999px; background: none;
+    color: var(--ink-soft); font-size: 28px; line-height: 1; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .poem-writer-tools button:disabled { color: var(--line-strong); cursor: default; }
+  .poem-writer-tools .poem-writer-fmt { font-family: "Zilla Slab", ui-serif, serif; font-size: 16px; font-weight: 600; }
+  .poem-writer-tools .poem-writer-fmt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+  /* Focus mode (desktop): the same writer, as a quiet full-window page
+     -- the poem in a centered column, its title and text larger, the
+     bar's previous / next and Done above it, everything else covered. */
+  @media (min-width: 701px) {
+    html.is-writing, html.is-writing body { overflow: hidden; }
+    .poem-card.is-writing {
+      position: fixed; inset: 0; z-index: 65; margin: 0 !important; border: none; border-radius: 0; background: var(--surface);
+      padding: 18px max(24px, calc(50vw - 380px)) 0; overflow-y: auto; height: auto !important;
+    }
+    .poem-card.is-writing::before { display: none; }
+    .poem-card.is-writing .poem-handle { display: none; }
+    .poem-card.is-writing .poem-body { min-height: 100%; }
+    .poem-card.is-writing .poem-writer-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      position: sticky; top: -18px; z-index: 1; background: var(--surface); padding: 6px 0 10px; margin-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .poem-card.is-writing .poem-writer-title { visibility: hidden; }
+    .poem-card.is-writing .poem-writer-fmt { display: none; }
+    .poem-card.is-writing textarea.poem-title { font-size: calc(30px * var(--editor-zoom, 1)) !important; }
+    .poem-card.is-writing .poem-text { font-size: calc(21px * var(--editor-zoom, 1)) !important; border: none; background: transparent; min-height: 60vh; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -2765,6 +2817,7 @@
         <div class="entry-search" id="entrySearchRow">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
           <input type="search" id="entrySearch" placeholder="Find a poem" autocomplete="off" spellcheck="false" aria-label="Find a poem">
+          <button type="button" class="entry-search-replace" id="findReplaceBtn" title="Find and replace in every title and line (⌘⇧H)">Replace…</button>
         </div>
         <div id="poemGapTop"></div>
         <!-- Poetry only: a second Add poem above the list, styled the
@@ -3212,6 +3265,7 @@
 </div>
 
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-action="focus">Focus mode</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <button type="button" role="menuitem" data-action="move">Move to another book…</button>
@@ -7908,7 +7962,7 @@
     if (card.contains(document.activeElement)) document.activeElement.blur();
     // Opened from the titles-only list: fold back to just its title row
     // (which also picks up any rename made while writing).
-    if (card.classList.contains('poem-compact-expanded') && poemList.contains(card)) {
+    if (card.classList.contains('poem-compact-expanded') && poemList.contains(card) && writerMQ.matches) {
       delete expandedCompactIds[poemId];
       renderPoems();
     }
@@ -8811,6 +8865,7 @@
     var poem = state.poems[index], moveBtn = entryMenu.querySelector('[data-action="move"]');
     moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
     moveBtn.textContent = 'Move ' + (poem ? formNouns().one : formNouns().section) + ' to another book…';
+    entryMenu.querySelector('[data-action="focus"]').hidden = !poem || isSection(poem) || writerMQ.matches;
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
     seriesBtn.hidden = !poem || isSection(poem) || bookFormOf(state) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
@@ -8983,6 +9038,7 @@
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
     else if (item.dataset.action === 'archive-all') archiveSectionWithEntries(idx);
+    else if (item.dataset.action === 'focus') focusEntry(state.poems[idx] && state.poems[idx].id);
     else if (item.dataset.action === 'split') enterSplitView(sectionMembers(idx).map(function (p) { return p.id; }));
     else if (item.dataset.action === 'delete') deletePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
@@ -9543,6 +9599,28 @@
   // tier and ⋯ in the page's top corner, and a click in its top margin
   // closes it. Title View opens these in the list; Poem and List View
   // in the pane beside it.
+  // Focus mode: the writer, full window (desktop; a phone is always in it
+  // while editing). Esc or Done leaves.
+  function makeFocusBtn(card, id) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'focus-btn';
+    b.title = 'Focus mode (Esc to leave)';
+    b.setAttribute('aria-label', 'Focus mode');
+    b.innerHTML = '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4.5V1h3.5M8.5 1H12v3.5M12 8.5V12H8.5M4.5 12H1V8.5"/></svg>';
+    b.addEventListener('click', function (e) { e.stopPropagation(); focusEntry(id); });
+    return b;
+  }
+  function focusEntry(id) {
+    var sel = '.poem-card[data-poem-id="' + id + '"]';
+    var card = poemList.querySelector(sel);
+    if (!card) { revealEntry(id); card = poemList.querySelector(sel); }
+    if (!card) return;
+    enterWriting(card, id);
+    var ed = card.querySelector('.poem-text');
+    if (ed) ed.focus();
+  }
+
   function makeOpenCard(poem, index, plan, entryNum, close) {
     var expandedCard = makeCard(poem, index, plan, entryNum);
     expandedCard.classList.add('poem-compact-expanded');
@@ -9557,6 +9635,7 @@
     if (!writerMQ.matches) {
       var corner = document.createElement('div');
       corner.className = 'poem-card-corner';
+      corner.appendChild(makeFocusBtn(expandedCard, poem.id));
       expandedCard.querySelectorAll('.poem-title-row > .series-tag, .poem-title-row > .tier-pill, .poem-title-row > .dots-btn').forEach(function (el) { corner.appendChild(el); });
       expandedCard.appendChild(corner);
     }
@@ -10298,6 +10377,178 @@
     poemList.appendChild(pane);
     poemsCount.textContent = shown ? shown + ' of ' + nounFor(countEntries(state.poems), state) + ' open' : nounFor(countEntries(state.poems), state);
   }
+
+  // ---------------------------------------------------------------------
+  // Find and replace, across every entry's title and text. Matching is on
+  // the words as they read (formatting markers are invisible to it), and
+  // a replacement takes the formatting of the first letter it replaces,
+  // so "**storm**" -> "**squall**" stays bold. Picture lines are skipped.
+  // ---------------------------------------------------------------------
+  function frRegex(find, opts) {
+    var src = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (opts.word) src = '(?<![\\p{L}\\p{N}])' + src + '(?![\\p{L}\\p{N}])';
+    return new RegExp(src, 'gu' + (opts.caseSensitive ? '' : 'i'));
+  }
+  // Each place a match is: { poem, field: 'title' | line index, start, end, plain }.
+  function frMatches(find, opts) {
+    var out = [];
+    if (!find) return out;
+    var re = frRegex(find, opts);
+    state.poems.forEach(function (poem) {
+      function scan(plain, field) {
+        re.lastIndex = 0;
+        var m;
+        while ((m = re.exec(plain))) {
+          if (!m[0].length) { re.lastIndex++; continue; }
+          out.push({ poem: poem, field: field, start: m.index, end: m.index + m[0].length, plain: plain });
+        }
+      }
+      scan(poem.title || '', 'title');
+      if (isSection(poem)) return;
+      (poem.lines || []).forEach(function (line, i) {
+        if (IMAGE_LINE_RE.test(line || '')) return;
+        scan(stripFormatMarkers(line), i);
+      });
+    });
+    return out;
+  }
+  // Replaces the matches [start, end) given (all in one line), keeping
+  // each letter's formatting.
+  function frReplaceInLine(line, spans, replacement) {
+    var chars = [];
+    parseInlineRuns(line).forEach(function (r) {
+      for (var k = 0; k < r.text.length; k++) chars.push({ c: r.text[k], bold: r.bold, italic: r.italic, underline: r.underline });
+    });
+    spans.slice().sort(function (a, b) { return b.start - a.start; }).forEach(function (sp) {
+      var st = chars[sp.start] || { bold: false, italic: false, underline: false };
+      var add = replacement.split('').map(function (c) { return { c: c, bold: st.bold, italic: st.italic, underline: st.underline }; });
+      Array.prototype.splice.apply(chars, [sp.start, sp.end - sp.start].concat(add));
+    });
+    return runsToMarkup(chars.map(function (ch) { return { text: ch.c, bold: ch.bold, italic: ch.italic, underline: ch.underline }; }));
+  }
+  function frApply(matches, replacement) {
+    var groups = [];
+    matches.forEach(function (m) {
+      var g = groups.filter(function (x) { return x.poem === m.poem && x.field === m.field; })[0];
+      if (!g) groups.push(g = { poem: m.poem, field: m.field, spans: [] });
+      g.spans.push(m);
+    });
+    groups.forEach(function (g) {
+      if (g.field === 'title') {
+        var t = g.poem.title || '';
+        g.spans.slice().sort(function (a, b) { return b.start - a.start; }).forEach(function (sp) { t = t.slice(0, sp.start) + replacement + t.slice(sp.end); });
+        g.poem.title = t;
+      } else g.poem.lines[g.field] = frReplaceInLine(g.poem.lines[g.field], g.spans, replacement);
+    });
+  }
+  function openFindReplace() {
+    if (document.querySelector('.fr-box')) return;
+    var ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    var box = document.createElement('div');
+    box.className = 'modal-box fr-box';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', 'Find and replace');
+    box.innerHTML =
+      '<div class="fr-fields">' +
+        '<label for="frFind">Find</label><input type="text" id="frFind" autocomplete="off" spellcheck="false">' +
+        '<label for="frReplace">Replace with</label><input type="text" id="frReplace" autocomplete="off" spellcheck="false">' +
+      '</div>' +
+      '<div class="fr-opts"><label><input type="checkbox" id="frCase"> Match case</label><label><input type="checkbox" id="frWord"> Whole words</label></div>' +
+      '<p class="fr-count" aria-live="polite"></p><div class="fr-list"></div>' +
+      '<div class="modal-actions"><button class="btn" type="button" id="frDone">Done</button><button class="btn btn-primary" type="button" id="frAll">Replace all</button></div>';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    var findIn = box.querySelector('#frFind'), replIn = box.querySelector('#frReplace');
+    var caseIn = box.querySelector('#frCase'), wordIn = box.querySelector('#frWord');
+    var countEl = box.querySelector('.fr-count'), listEl = box.querySelector('.fr-list'), allBtn = box.querySelector('#frAll');
+    findIn.value = entrySearchQuery();
+    var matches = [];
+    function opts() { return { caseSensitive: caseIn.checked, word: wordIn.checked }; }
+    function where(m) {
+      var label = m.poem.title || (isSection(m.poem) ? 'Untitled ' + formNouns().section : entryLabel(m.poem));
+      return label + (m.field === 'title' ? ' · title' : ' · line ' + (m.field + 1));
+    }
+    function refresh() {
+      matches = frMatches(findIn.value, opts());
+      var entries = {};
+      matches.forEach(function (m) { entries[m.poem.id] = true; });
+      var n = Object.keys(entries).length;
+      countEl.textContent = !findIn.value ? '' : !matches.length ? 'No matches.' :
+        matches.length + (matches.length === 1 ? ' match' : ' matches') + ' in ' + n + ' ' + (n === 1 ? 'place' : 'places') + '.';
+      allBtn.disabled = !matches.length;
+      listEl.innerHTML = '';
+      matches.slice(0, 300).forEach(function (m) {
+        var hit = document.createElement('div');
+        hit.className = 'fr-hit';
+        var a = Math.max(0, m.start - 40), b = Math.min(m.plain.length, m.end + 40);
+        hit.innerHTML = '<div><div class="fr-hit-where"></div><div class="fr-hit-text" title="Open it"></div></div><button type="button" class="btn btn-sm">Replace</button>';
+        hit.querySelector('.fr-hit-where').textContent = where(m);
+        var txt = hit.querySelector('.fr-hit-text');
+        txt.innerHTML = (a > 0 ? '…' : '') + escapeHtml(m.plain.slice(a, m.start)) + '<mark>' + escapeHtml(m.plain.slice(m.start, m.end)) + '</mark>' +
+          escapeHtml(m.plain.slice(m.end, b)) + (b < m.plain.length ? '…' : '');
+        txt.addEventListener('click', function () { close(); revealEntry(m.poem.id); });
+        hit.querySelector('button').addEventListener('click', function () {
+          frApply([m], replIn.value);
+          state.isExample = false;
+          persist();
+          renderAll();
+          refresh();
+        });
+        listEl.appendChild(hit);
+      });
+    }
+    findIn.addEventListener('input', refresh);
+    caseIn.addEventListener('change', refresh);
+    wordIn.addEventListener('change', refresh);
+    allBtn.addEventListener('click', function () {
+      if (!matches.length) return;
+      var before = JSON.stringify(state.poems), n = matches.length;
+      frApply(matches, replIn.value);
+      state.isExample = false;
+      persist();
+      renderAll();
+      close();
+      showToast('Replaced ' + n + (n === 1 ? ' match.' : ' matches.'), 'Undo', function () {
+        state.poems = JSON.parse(before);
+        persist();
+        renderAll();
+      });
+    });
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+      if (e.key === 'Enter' && (e.target === findIn || e.target === replIn)) { e.preventDefault(); if (e.target === findIn) replIn.focus(); }
+    }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    box.querySelector('#frDone').addEventListener('click', close);
+    refresh();
+    setTimeout(function () { (findIn.value ? replIn : findIn).focus(); }, 0);
+  }
+  // Brings an entry into view, open: in Poem and List View in the pane,
+  // otherwise open in place in Title View (or whatever view is showing it).
+  function revealEntry(id) {
+    if (entrySearchInput && entrySearchInput.value) { entrySearchInput.value = ''; }
+    if (splitView) splitOpenIds[id] = true;
+    else {
+      openOnlyIds = null;
+      if (sectionsOnly || tiersView) { sectionsOnly = false; tiersView = false; }
+      if (poemsViewMode === 'compact') expandedCompactIds[id] = true;
+    }
+    renderPoems();
+    var el = poemList.querySelector('.poem-card[data-poem-id="' + id + '"], .section-row[data-poem-id="' + id + '"]');
+    if (el) el.scrollIntoView({ block: 'center' });
+  }
+  document.getElementById('findReplaceBtn').addEventListener('click', openFindReplace);
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'h' && !document.getElementById('poemsPanel').closest('[hidden]') &&
+        !document.body.classList.contains('view-home') && !document.body.classList.contains('view-pb') && !isCartoonShown()) {
+      e.preventDefault();
+      openFindReplace();
+    }
+  });
 
   // Open all / Close all on a tier's heading or a section's bar: opens
   // every poem in it in full (Close all folds them back to titles).
