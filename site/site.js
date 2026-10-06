@@ -259,7 +259,7 @@
 
   J.init = function () {
     document.querySelectorAll("[data-view]").forEach(function (s) { views[s.dataset.view] = s; });
-    document.querySelectorAll("[data-bookbug]").forEach(function (a) { a.href = J.links.bookbug; });
+    document.querySelectorAll("[data-bookbug]").forEach(function (a) { a.href = J.links.bookbug; a.target = "_blank"; a.rel = "noopener"; });
     document.querySelectorAll("[data-ig]").forEach(function (a) { a.href = J.links.instagram; a.target = "_blank"; a.rel = "noopener"; });
     buildLightbox();
     document.addEventListener("click", function (e) {
