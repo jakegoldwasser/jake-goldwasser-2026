@@ -245,6 +245,12 @@
     max-width: 320px; transition: border-color .15s ease;
   }
   #authorInput:hover, #pbAuthorInput:hover, #cbAuthorInput:hover { border-bottom-color: var(--line); }
+  /* The text book's author is set in Front and Back Matter (the header
+     keeps just the title), so it looks like that panel's other fields. */
+  #coversBody #authorInput {
+    border: 1px solid var(--line-strong); border-radius: 7px; padding: 8px 10px; background: var(--surface-2);
+    max-width: none; font-size: 16px; color: var(--ink);
+  }
   #authorInput:focus, #pbAuthorInput:focus, #cbAuthorInput:focus { border-bottom-color: var(--accent); }
   #authorInput::placeholder, #pbAuthorInput::placeholder, #cbAuthorInput::placeholder { color: var(--ink-faint); }
 
@@ -1328,20 +1334,6 @@
   body.view-home .chapbook-header, body.view-home #intakePanel,
   body.view-home #intakeCollapsedBar, body.view-home .workspace { display: none !important; }
   @media (min-width: 701px) { .masthead h1.appname { cursor: pointer; } }
-  /* Back to Home, under the wordmark in every book editor. Home is a
-     page of its own only on wider screens (phones use the Home menu), so
-     the arrow is too. It also sets the book's title a little lower. */
-  .back-home { display: none; }
-  @media (min-width: 701px) {
-    body:not(.view-home) .back-home {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 56px; height: 44px; margin: 10px 0 -10px -12px; padding: 0;
-      appearance: none; border: none; border-radius: 999px; background: none; color: var(--ink-soft); cursor: pointer;
-      transition: background-color 0.15s, color 0.15s, transform 0.15s;
-    }
-    body:not(.view-home) .back-home:hover { background: var(--accent-soft); color: var(--accent); transform: translateX(-2px); }
-    .back-home:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  }
   .home-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .home-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 22px; margin: 0; }
   .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 20px; }
@@ -2236,7 +2228,6 @@
   <div class="masthead">
     <div>
       <h1 class="appname"><span class="c1">b</span><span class="c2">o</span><span class="c4">o</span><span class="c3">k</span><span class="c1">b</span><span class="c3">u</span><span class="c4">g</span></h1>
-      <button class="back-home" id="backHomeBtn" type="button" title="Back to Home" aria-label="Back to Home"><svg width="44" height="34" viewBox="0 0 44 34" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M41 17H5M17 4L4 17l13 13"/></svg></button>
     </div>
     <div class="top-actions">
       <div class="top-actions-main">
@@ -2717,7 +2708,6 @@
       <textarea id="bookTitleInput" rows="1" placeholder="Book title"></textarea>
       <button class="dots-btn" id="currentBookMenuBtn" type="button" title="Book options" aria-label="Book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>
     </div>
-    <input type="text" id="authorInput" placeholder="Author name">
     <button class="btn tools-toggle" id="toolsToggleBtn" type="button" aria-pressed="true" aria-controls="toolsSidebar" title="Show or hide Preview, Formatting, Front and Back Matter and Export">
       <svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1" y="1" width="14" height="12" rx="2"/><path d="M10 1v12"/></svg>
       <span id="toolsToggleLabel">Hide tools</span>
@@ -3052,6 +3042,10 @@
             <div class="seg seg-3" id="coverAlignSeg"><button data-val="left">Left</button><button data-val="center" class="active">Center</button><button data-val="right">Right</button></div>
           </div>
           <div class="subhead" id="coverAuthorHead">Author name</div>
+          <div class="field">
+            <label for="authorInput">Name</label>
+            <input type="text" id="authorInput" placeholder="Author name">
+          </div>
           <div class="checkline">
             <input type="checkbox" id="coverAuthorCheck" checked>
             <label for="coverAuthorCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show author name</label>
@@ -11595,7 +11589,6 @@
     if (chapbooksDropdown.hidden) { chapbooksViewMode = 'library'; renderChapbooksList(); }
     chapbooksDropdown.hidden = !chapbooksDropdown.hidden;
   }
-  document.getElementById('backHomeBtn').addEventListener('click', showHome);
   // Desktop has the home grid for this; phones keep the compact dropdown.
   chapbooksMenuBtn.addEventListener('click', function (e) {
     e.stopPropagation();
@@ -12834,7 +12827,7 @@
   document.getElementById('cutLinesCheck').addEventListener('change', function (e) {
     state.showCutLines = e.target.checked; persist(); updateStats();
   });
-  wireSingleLine(document.getElementById('bookTitleInput'), function () { document.getElementById('authorInput').focus(); });
+  wireSingleLine(document.getElementById('bookTitleInput'), function () { document.getElementById('bookTitleInput').blur(); });
   // Re-fit the book title whenever its width changes or it's revealed.
   if (window.ResizeObserver) {
     var lastTitleW = 0;
