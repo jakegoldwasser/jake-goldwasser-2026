@@ -1,5 +1,5 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
@@ -394,9 +394,68 @@ export async function fetchPage(raw) {
   return { url: url.href, contentType: type.split(';')[0].trim(), googleDoc: !!exportUrl, text };
 }
 
+// ---- Read-only share links ----
+// A shared book is reached by a random token. Each link is its own item in
+// the same table, keyed "share#<token>" (a Google account id is all
+// digits, so the two can't collide), holding { owner, bookId, createdAt }.
+// Anyone with the token can read that one book -- always its latest saved
+// version -- and nothing else: no account, no other books, and none of
+// the writer's private notes on it.
+const SHARE_TOKEN = /^[A-Za-z0-9_-]{20,40}$/;
+function shareKey(token) { return { userId: { S: 'share#' + token } }; }
+// What a reader gets: the book as it prints, without the writer's working
+// notes (comments, submissions, contact details, the archive).
+function sharedCopy(data) {
+  const book = JSON.parse(JSON.stringify(data || {}));
+  ['archivedPoems', 'deletedPoems', 'manuscriptContact', 'shareToken', 'intakeSourceLabel', 'sourceAdded'].forEach(k => { delete book[k]; });
+  (book.poems || []).forEach(p => { delete p.comments; delete p.subs; delete p.tier; });
+  return book;
+}
+async function getSharedBook(token) {
+  if (!SHARE_TOKEN.test(token)) return respond(404, { error: 'No such link' });
+  const link = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: shareKey(token) }));
+  if (!link.Item) return respond(404, { error: 'No such link' });
+  const { owner, bookId, revoked } = JSON.parse(link.Item.state.S);
+  if (revoked) return respond(404, { error: 'No such link' });
+  const { state } = await getStoredState(owner);
+  const entry = ((state.chapbookbuilder && state.chapbookbuilder.chapbooks) || []).find(c => c && c.id === bookId);
+  if (!entry || !entry.data) return respond(404, { error: 'No such link' });
+  return respond(200, { title: entry.title || '', book: sharedCopy(entry.data) });
+}
+// PUT ?share with { bookId } makes a link to one of the writer's own books
+// and returns { token }; { token, revoke: true } ends one of theirs.
+async function putShare(userId, payload) {
+  if (payload && payload.revoke) {
+    if (!SHARE_TOKEN.test(payload.token || '')) return respond(400, { error: 'Bad token' });
+    const link = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: shareKey(payload.token) }));
+    if (!link.Item) return respond(200, { ok: true });
+    const info = JSON.parse(link.Item.state.S);
+    if (info.owner !== userId) return respond(403, { error: 'Not yours' });
+    // Marked revoked (a PutItem, which the function's role already has on
+    // this table) rather than deleted.
+    await ddb.send(new PutItemCommand({ TableName: TABLE_NAME, Item: { ...shareKey(payload.token), state: { S: JSON.stringify({ ...info, revoked: Date.now() }) } } }));
+    return respond(200, { ok: true });
+  }
+  const bookId = payload && payload.bookId;
+  if (typeof bookId !== 'string' || !bookId) return respond(400, { error: 'Expected { bookId }' });
+  const { state } = await getStoredState(userId);
+  const books = (state.chapbookbuilder && state.chapbookbuilder.chapbooks) || [];
+  if (!books.some(c => c && c.id === bookId)) return respond(404, { error: 'Save the book first' });
+  const token = randomBytes(18).toString('base64url');
+  await ddb.send(new PutItemCommand({
+    TableName: TABLE_NAME,
+    Item: { ...shareKey(token), state: { S: JSON.stringify({ owner: userId, bookId, createdAt: Date.now() }) } },
+    ConditionExpression: 'attribute_not_exists(userId)'
+  }));
+  return respond(200, { token });
+}
+
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
   const path = event.rawPath || '/';
+
+  // A shared book is public: no sign-in.
+  if (method === 'GET' && event.queryStringParameters?.share) return getSharedBook(event.queryStringParameters.share);
 
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
@@ -428,6 +487,17 @@ export const handler = async (event) => {
       const known = /^(bad_url|blocked_host|google_private|unsupported_type|too_large|too_many_redirects|http_\d+)$/.test(code);
       return respond(422, { error: known ? code : 'fetch_failed' });
     }
+  }
+
+  if (method === 'PUT' && event.queryStringParameters?.share !== undefined) {
+    let payload;
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+      payload = JSON.parse(raw);
+    } catch (e) {
+      return respond(400, { error: 'Invalid JSON body' });
+    }
+    return putShare(userId, payload);
   }
 
   // ---- Picture-book images ----

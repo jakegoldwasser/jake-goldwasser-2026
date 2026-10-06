@@ -4,6 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
+  // A read-only share link (?read=<token>) opens one book to read and
+  // nothing else: this page then keeps its storage in memory, so the
+  // visitor's own saved books (if any) are never read or written, and it
+  // never signs in (see bootReader).
+  (function () {
+    var t = new URLSearchParams(location.search).get('read');
+    if (!t) return;
+    window.BOOKBUG_READ_TOKEN = t;
+    var mem = {};
+    Storage.prototype.getItem = function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; };
+    Storage.prototype.setItem = function (k, v) { mem[k] = String(v); };
+    Storage.prototype.removeItem = function (k) { delete mem[k]; };
+    document.documentElement.classList.add('reader-mode');
+  })();
+</script>
+<script>
   // iOS Safari zooms the whole page in whenever a text field under 16px
   // is focused (e.g. the editor at 70-80%), shoving text off screen.
   // maximum-scale=1 stops that auto-zoom; iOS still honors pinch-zoom
@@ -1136,6 +1152,9 @@
   .stage-edit-body, .stage-edit-title, .pv-typeset { font-kerning: none; font-variant-ligatures: none; }
   .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
+  /* A share link's reader: only the book, full screen. */
+  html.reader-mode .page, html.reader-mode .signin-gate, html.reader-mode #previewFullClose { display: none !important; }
+  .reader-message { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--ink-soft); background: var(--paper, var(--surface)); z-index: 5; }
   /* A note's reference numeral: small and raised, as the PDF sets it. */
   .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
   .stage-edit-body.opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
@@ -3411,6 +3430,7 @@
 </div>
 
 <div class="entry-menu" id="bookMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-action="share" hidden>Share a read-only link…</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete…</button>
@@ -4761,6 +4781,7 @@
     return !!getLastGoogleUser() && (library.length > 0 || pbLibrary.length > 0 || cbLibrary.length > 0);
   }
   function updateSignInGate() {
+    if (window.BOOKBUG_READ_TOKEN) { document.getElementById('signInGate').hidden = true; document.getElementById('loadingScreen').hidden = true; return; }
     var localFirst = hasCachedBooksForReturningUser();
     document.getElementById('signInGate').hidden = !!cloudAuthToken || signedInThisLoad || localFirst;
     document.getElementById('loadingScreen').hidden = !(cloudAuthToken && !initialLoadDone && !localFirst);
@@ -5022,6 +5043,7 @@
   }
 
   function waitForGoogleIdentity(retriesLeft) {
+    if (window.BOOKBUG_READ_TOKEN) return;
     if (window.google && google.accounts && google.accounts.id) {
       // auto_select + prompt() lets a returning visitor with a live Google
       // session sign back in silently, instead of needing to click the
@@ -12334,7 +12356,7 @@
     document.getElementById('previewFullClose').focus();
   }
   function closeFullPreview() {
-    if (previewFull.hidden) return;
+    if (previewFull.hidden || window.BOOKBUG_READ_TOKEN) return;
     previewFull.hidden = true;
     document.documentElement.classList.remove('preview-full-open');
   }
@@ -12935,6 +12957,8 @@
     btn.setAttribute('aria-expanded', 'true');
     bookMenu.querySelector('[data-action="archive"]').textContent = entry.archived ? 'Unarchive' : 'Archive';
     bookMenu.querySelector('[data-action="delete"]').hidden = !entry.archived;
+    // Text books, from inside the book, once signed in (links live in the account).
+    bookMenu.querySelector('[data-action="share"]').hidden = !(bookMenuFromEditor && btn.id === 'currentBookMenuBtn' && cloudAuthToken);
     bookMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = bookMenu.offsetWidth, mh = bookMenu.offsetHeight;
@@ -12962,6 +12986,7 @@
       else deletePictureBookForever(entry.id);
       return;
     }
+    if (item.dataset.action === 'share') { openShareDialog(); return; }
     if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id, fromEditor);
     else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
     else deleteChapbookForever(entry.id);
@@ -12970,6 +12995,61 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBookMenu(); });
   window.addEventListener('scroll', closeBookMenu, true);
   window.addEventListener('resize', closeBookMenu);
+
+  // Share a read-only link: anyone with it can read this book, page by
+  // page as it prints (always the latest saved version), and nothing else.
+  function shareUrlFor(token) { return location.origin + location.pathname + '?read=' + encodeURIComponent(token); }
+  async function shareApi(body) {
+    var res = await fetch(CLOUD_API_URL + '?share', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cloudAuthToken }, body: JSON.stringify(body) });
+    var out = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(out.error || 'http_' + res.status);
+    return out;
+  }
+  function openShareDialog() {
+    var d = makeDialog('subs-box', 'Share a read-only link',
+      '<p style="margin-top:0;">Anyone with this link can read the book, page by page as it prints, and always the latest saved version. They can’t change it, and they don’t see your comments, submissions or archive.</p>' +
+      '<div class="share-body"></div><p class="scan-status" aria-live="polite"></p>' +
+      '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
+    var bodyEl = d.box.querySelector('.share-body'), status = d.box.querySelector('.scan-status');
+    d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    function render() {
+      bodyEl.innerHTML = '';
+      if (!state.shareToken) {
+        var make = document.createElement('button');
+        make.type = 'button'; make.className = 'btn btn-primary'; make.textContent = 'Create link';
+        make.addEventListener('click', async function () {
+          make.disabled = true; status.textContent = 'Saving the book and making the link…';
+          try {
+            flushPendingSave();
+            await syncLibraryToCloud();
+            var out = await shareApi({ bookId: state.chapbookId });
+            state.shareToken = out.token; persist();
+            status.textContent = '';
+            render();
+          } catch (e) { make.disabled = false; status.textContent = 'Couldn’t make the link (' + e.message + ').'; }
+        });
+        bodyEl.appendChild(make);
+        return;
+      }
+      var row = document.createElement('div');
+      row.className = 'snap-take';
+      row.innerHTML = '<input type="text" readonly aria-label="Link"><button class="btn btn-primary" type="button">Copy link</button>';
+      var inp = row.querySelector('input'); inp.value = shareUrlFor(state.shareToken);
+      inp.addEventListener('focus', function () { inp.select(); });
+      row.querySelector('button').addEventListener('click', function () {
+        (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(function () { status.textContent = 'Copied.'; }, function () { inp.select(); status.textContent = 'Press ⌘C to copy.'; });
+      });
+      var stop = document.createElement('button');
+      stop.type = 'button'; stop.className = 'btn btn-ghost btn-danger btn-sm'; stop.textContent = 'Stop sharing';
+      stop.addEventListener('click', async function () {
+        stop.disabled = true;
+        try { await shareApi({ token: state.shareToken, revoke: true }); delete state.shareToken; persist(); status.textContent = 'The link no longer works.'; render(); }
+        catch (e) { stop.disabled = false; status.textContent = 'Couldn’t stop sharing (' + e.message + ').'; }
+      });
+      bodyEl.append(row, stop);
+    }
+    render();
+  }
 
   // The open book's own ⋯ (beside its title). Only once it's in My
   // Books -- an untouched new book has nothing to duplicate or archive.
@@ -20048,6 +20128,31 @@
   var regrowTimer = null;
   window.addEventListener('resize', function () { clearTimeout(regrowTimer); regrowTimer = setTimeout(regrowAll, 120); });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(regrowAll);
+
+  // A share link: fetch the book (no sign-in) and open it full screen,
+  // page by page, as it prints. Nothing here is saved anywhere.
+  async function bootReader(token) {
+    var msg = document.createElement('div');
+    msg.className = 'reader-message';
+    document.body.appendChild(msg);
+    msg.textContent = 'Opening the book…';
+    try {
+      var res = await fetch(CLOUD_API_URL + '?share=' + encodeURIComponent(token));
+      if (!res.ok) throw new Error(res.status === 404 ? 'gone' : 'http');
+      var data = await res.json();
+      state = migrateFontKeys(data.book || {});
+      state.chapbookId = null;
+      state.isExample = false;
+      renderAll();
+      previewIndex = 0;
+      openFullPreview();
+      document.title = (state.bookTitle || data.title || 'A book') + (state.author ? ' by ' + state.author : '') + ' · Bookbug';
+      msg.remove();
+    } catch (e) {
+      msg.textContent = e.message === 'gone' ? 'This book isn’t shared any more.' : 'Couldn’t open the book. Check the connection and try again.';
+    }
+  }
+  if (window.BOOKBUG_READ_TOKEN) bootReader(window.BOOKBUG_READ_TOKEN);
 })();
 </script>
 <script src="/selection-highlight.js?v=1" defer></script>
