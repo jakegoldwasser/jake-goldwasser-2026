@@ -965,8 +965,14 @@
   .stage-preview-slot #previewBlock { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .stage-preview-slot .preview-stage { align-self: stretch; }
   .matter-stage { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 10px; }
-  .matter-back { font-size: 15px; font-weight: 700; padding: 11px 18px; width: 100%; justify-content: center; text-align: center; }
-  body:not(.matter-open) #matterBackBtn { display: none; }
+  /* The large view's way out: a big × in its top right corner. */
+  .matter-stage { position: relative; }
+  .stage-close {
+    position: absolute; top: 10px; right: 12px; width: 40px; height: 40px; border-radius: 999px;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  }
+  .stage-close:hover { border-color: var(--accent); color: var(--accent); }
   /* While the large view is up, only the panel driving it shows. */
   body.stage-format #coversPanel, body.stage-format #exportPanel,
   body.stage-matter #formattingPanel, body.stage-matter #exportPanel { display: none; }
@@ -2663,6 +2669,7 @@
         <div class="matter-head">
           <span class="matter-title" id="matterTitle"></span>
         </div>
+        <button type="button" class="stage-close" id="stageCloseBtn" title="Close the preview" aria-label="Close the preview"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 3l12 12M15 3 3 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
         <div class="stage-preview-slot" id="stagePreviewSlot"></div>
       </div>
       <div class="panel" id="poemsPanel">
@@ -3082,9 +3089,6 @@
           </div>
         </div>
 
-        <!-- Shown only while the large view is up, right under the panel
-             that opened it (the other panels step aside then). -->
-        <button type="button" class="btn matter-back" id="matterBackBtn">← Back to <span data-noun="many">entries</span></button>
         <div class="panel collapsible-panel" id="exportPanel">
           <button type="button" class="panel-toggle" id="exportToggle" aria-expanded="false" aria-controls="exportBody">
             <span class="panel-title">Export</span><span class="panel-chevron" aria-hidden="true">▾</span>
@@ -9632,11 +9636,7 @@
   }
   applyToolsHidden();
   toolsToggleBtn.addEventListener('click', function () {
-    // Hiding the tools folds Formatting and Front and Back Matter too, so
-    // showing them again brings back the plain column (Preview on top)
-    // rather than jumping straight into the large page view an open
-    // panel calls up.
-    if (!toolsHidden) closeStagePanels();
+    // Just the column: a large page view that's up stays up.
     toolsHidden = !toolsHidden;
     try { localStorage.setItem(TOOLS_HIDDEN_KEY, toolsHidden ? '1' : '0'); } catch (e) {}
     applyToolsHidden();
@@ -11703,18 +11703,21 @@
   // when the preview is opened (a click on its page), which opens
   // Formatting beside it. Closing Formatting puts the preview back.
   var formatStageWanted = false;
+  // Whether opening the preview is what opened Formatting (so closing
+  // the preview folds it again, leaving things as they were).
+  var formatOpenedByPreview = false;
   function openFormatStage() {
     formatStageWanted = true;
     lastStagePanel = 'format';
     var t = document.getElementById('formattingToggle');
-    if (t.getAttribute('aria-expanded') !== 'true') t.click();
+    formatOpenedByPreview = t.getAttribute('aria-expanded') !== 'true';
+    if (formatOpenedByPreview) t.click();
     else updateMatterStage();
   }
   var wideLayout = window.matchMedia('(min-width: 861px)');
   function panelOpen(bodyId) { return !document.getElementById(bodyId).hidden; }
   function computeStageMode() {
-    if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') || document.body.classList.contains('view-cb') ||
-        document.getElementById('bookWorkspace').classList.contains('tools-hidden')) return null;
+    if (!wideLayout.matches || document.body.classList.contains('view-home') || document.body.classList.contains('view-pb') || document.body.classList.contains('view-cb')) return null;
     var f = panelOpen('formattingBody') && formatStageWanted, m = panelOpen('coversBody');
     if (f && m) return lastStagePanel;
     return m ? 'matter' : f ? 'format' : null;
@@ -11815,14 +11818,20 @@
   if (wideLayout.addEventListener) wideLayout.addEventListener('change', updateMatterStage);
   // The way back: the stage's own button, or Esc (unless the full-screen
   // preview is up -- Esc closes that first).
-  function closeStage() { closeStagePanels(); }
-  function closeStagePanels() {
-    ['formattingToggle', 'coversToggle'].forEach(function (id) {
-      var t = document.getElementById(id);
-      if (t.getAttribute('aria-expanded') === 'true') t.click();
-    });
+  // The stage's ×, or Esc: back to what was showing before it opened --
+  // Front and Back Matter folds, and Formatting folds only if opening
+  // the preview is what opened it.
+  function closeStage() {
+    var covers = document.getElementById('coversToggle');
+    if (covers.getAttribute('aria-expanded') === 'true') covers.click();
+    if (formatStageWanted) {
+      formatStageWanted = false;
+      var t = document.getElementById('formattingToggle');
+      if (formatOpenedByPreview && t.getAttribute('aria-expanded') === 'true') t.click();
+      else updateMatterStage();
+    }
   }
-  document.getElementById('matterBackBtn').addEventListener('click', closeStage);
+  document.getElementById('stageCloseBtn').addEventListener('click', closeStage);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && stageMode && document.getElementById('previewFull').hidden) closeStage();
   });
