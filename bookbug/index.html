@@ -7723,14 +7723,25 @@
       if (!writingCard) { try { history.scrollRestoration = 'auto'; } catch (e) {} }
     }, 450);
   }
-  // The entry before / after the one being written, in book order
-  // (section titles skipped).
+  // The entries in the order the current view lists them: Tier View goes
+  // tier by tier (as renderTierGroups lays them out, "No tier" last);
+  // every other view is book order. Section titles are skipped.
+  function viewOrder() {
+    var entries = state.poems.filter(function (p) { return !isSection(p); });
+    if (!tiersView) return entries;
+    var out = [];
+    poemTiers.tiers.forEach(function (t) {
+      entries.forEach(function (p) { if (p.tier === t.id) out.push(p); });
+    });
+    entries.forEach(function (p) { if (!tierById(p.tier)) out.push(p); });
+    return out;
+  }
+  // The entry before / after the one being written, in the current view's order.
   function writingNeighbor(delta) {
-    var list = state.poems, i = -1;
+    var list = viewOrder(), i = -1;
     for (var k = 0; k < list.length; k++) if (list[k].id === writingPoemId) { i = k; break; }
     if (i < 0) return null;
-    for (var j = i + delta; j >= 0 && j < list.length; j += delta) if (!isSection(list[j])) return list[j];
-    return null;
+    return list[i + delta] || null;
   }
   function updateWriterNav(card) {
     var prev = card.querySelector('.poem-writer-prev'), next = card.querySelector('.poem-writer-next');
