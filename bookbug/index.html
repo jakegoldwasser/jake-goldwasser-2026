@@ -1114,7 +1114,18 @@
     display: block; width: 100%; flex: 0 0 auto; border: none; background: transparent; color: inherit; padding: 0;
     font-weight: 700; resize: none; overflow: hidden; outline: none;
   }
-  .stage-edit-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; outline: none; }
+  /* What you see while editing a page is what prints: the typesetter
+     (wrapLine) breaks lines at 97% of the column, measuring glyph by
+     glyph with no kerning or ligatures (the PDF draws none), so the
+     editable page wraps at that same width with those same metrics,
+     and a verse line's turnover hangs 1.5em, as it prints. */
+  .stage-edit-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; outline: none; padding-right: 3%; }
+  .stage-edit-body, .stage-edit-title, .pv-typeset { font-kerning: none; font-variant-ligatures: none; }
+  .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
+  /* A scrollbar would take its width out of the column and wrap lines
+     early; the box still scrolls, without one. */
+  .stage-edit-body { scrollbar-width: none; }
+  .stage-edit-body::-webkit-scrollbar { display: none; }
   .view-seg[hidden] { display: none; }
   /* View Options: one pill that opens the list of views, in place of a
      row of four pills that crowded the list's header. */
@@ -5636,6 +5647,26 @@
     });
   }
 
+  // A prose paragraph: the first line narrowed by its indent (a Tab, or
+  // the book-style paragraph indent), the rest the full measure -- the
+  // way books set it, and the way the editor shows it.
+  function wrapParagraph(line, firstWidthPt, restWidthPt, sizePt, fontFamily) {
+    var runs = parseInlineRuns(line);
+    var plain = runs.map(function (r) { return r.text; }).join('');
+    var first = wrapLine(plain, firstWidthPt, sizePt, fontFamily, 400)[0];
+    var pieces = [first];
+    var rest = plain.slice(first.length).replace(/^ +/, '');
+    if (rest) pieces = pieces.concat(wrapLine(rest, restWidthPt, sizePt, fontFamily, 400));
+    if (pieces.length === 1) return [line];
+    var cursor = 0;
+    return pieces.map(function (t) {
+      var start = plain.indexOf(t, cursor);
+      if (start < 0) start = cursor;
+      cursor = start + t.length;
+      return runsToMarkup(sliceRuns(runs, start, cursor));
+    });
+  }
+
   // Verse or prose? A lineated poem is mostly short lines broken by
   // hand; prose is mostly paragraph-length lines that are *meant* to
   // reflow. Only verse gets hanging-indented turnovers and the "line
@@ -5769,11 +5800,16 @@
       var tabs = (line.match(/^\t+/) || [''])[0].length;
       var tabPt = Math.min(tabs * TAB_STOP_PT, contentWidthPt * 0.6);
       var firstIndent = indented && !fullOut ? paraIndent : 0;
-      var wrapped = wrapFormatted(line.slice(tabs).replace(/\t/g, ' '), contentWidthPt - tabPt - (indented ? paraIndent : 0), sizePt, state.bodyFontChoice, hangPt);
-      if (wrapped.length > 1 && verse) wasWrapped = true;
-      wrapped.forEach(function (w, wi) {
-        renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt + (wi === 0 ? firstIndent : 0) });
-      });
+      var body = line.slice(tabs).replace(/\t/g, ' ');
+      if (verse) {
+        var wrapped = wrapFormatted(body, contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt);
+        if (wrapped.length > 1) wasWrapped = true;
+        wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
+      } else {
+        wrapParagraph(body, contentWidthPt - tabPt - firstIndent, contentWidthPt, sizePt, state.bodyFontChoice).forEach(function (t, wi) {
+          renderLines.push({ blank: false, text: t, indent: wi === 0 ? tabPt + firstIndent : 0 });
+        });
+      }
       fullOut = false;
     });
 
@@ -11750,12 +11786,12 @@
       var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       var html = '';
       if (isFirstPoemPage && layout.titleLines.length) {
-        html += '<div data-page-title style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
+        html += '<div data-page-title class="pv-typeset" style="font-weight:700; font-family:' + titleStack + '; text-align:' + effAlign +
           '; font-size:' + (layout.titleSizePt * scale).toFixed(2) + 'px; line-height:1.28; height:' + (layout.titleH * scale).toFixed(2) + 'px; box-sizing:border-box;">' +
           layout.titleLines.map(function (l) { return l ? escapeHtml(l) : '&nbsp;'; }).join('<br>') + '</div>';
       }
       // One row per line at the layout's own leading (6 to the inch in a script).
-      html += '<div style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + effBodyAlign + ';">';
+      html += '<div class="pv-typeset" style="font-family:' + bodyStack + '; font-size:' + (layout.sizePt * scale).toFixed(2) + 'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + effBodyAlign + ';">';
       (layout.pages[pageIndex] || []).forEach(function (rl) {
         if (rl.spacer) {
           html += '<div style="height:' + (rl.rows * layout.lineHeight * scale).toFixed(2) + 'px;"></div>';
@@ -11896,7 +11932,9 @@
       'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + (poem.bodyAlign || state.bodyAlignment) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
     tagProseLines(body, poem, TAB_STOP_PT * scale);
-    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); persist(); });
+    function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && (poem.bodyAlign || state.bodyAlignment) === 'left'); }
+    syncVerse();
+    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
     body.addEventListener('keydown', function (ev) {
       if (ev.key === 'Tab') { ev.preventDefault(); indentEditorLines(body, ev.shiftKey); }
     });
