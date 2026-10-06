@@ -166,7 +166,12 @@
     }
     // the sizes in force on the page being shown
     function sizes() { var v = state.views[cur]; return v && v.own ? v : state; }
-    J.gallery(document.getElementById("gallery"), { row: 230, gap: function () { return state ? sizes().gap : 22; } });
+    // On a phone the pictures get tight gaps and taller rows (one or two
+    // across instead of three), so each one is big enough to see.
+    J.gallery(document.getElementById("gallery"), { row: 230, small: 210, gap: function () {
+      var g = state ? sizes().gap : 22;
+      return window.innerWidth < 560 ? Math.min(g, 14) : g;
+    } });
 
     var tw = null, sync = function () {}, sliders = [["bw", "Line width", 0, 6, 1], ["r", "Corners", 0, 28, 1], ["gap", "Spacing", 0, 64, 2], ["pad", "Padding", 10, 40, 2]];
     function apply() {
