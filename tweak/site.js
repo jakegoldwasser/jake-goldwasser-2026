@@ -129,6 +129,13 @@
     ".jg-feature{background:#fff;display:block;width:auto!important}.jg-feature img{width:auto!important;height:auto!important;max-width:min(100%,400px)!important;margin:0 auto}" +
     /* and the frame around it shrinks to the portrait, so the box is square, not a wide box with white margins */
     "#feature{width:fit-content!important;max-width:100%;margin-inline:auto;justify-self:center;align-self:center}" +
+    /* the portrait is a circle: each design's square frame steps aside (no
+       border, mat or corner ornaments) and the circle carries the design's
+       ink line instead, at the Tweaks line width where a page has one */
+    "#feature{background:none!important;border:0!important;padding:0!important;outline:0!important;box-shadow:none!important;margin-block:clamp(16px,2.5vw,28px)!important}" +
+    "#feature::after{display:none!important}#feature.tile::before{display:none!important}" +
+    "#feature::before{border-radius:50%}" + /* Riso's pink off-register disc */
+    ".jg-feature{position:relative;border-radius:50%;overflow:hidden;border:var(--bw,3px) solid var(--ink,#222)!important}" +
     ".jg-lb{position:fixed;inset:0;z-index:1000;display:none;grid-template-columns:clamp(56px,8vw,96px) minmax(0,1fr) clamp(56px,8vw,96px);grid-template-rows:64px minmax(0,1fr) 64px;background:var(--lb-bg,#111);color:var(--lb-ink,#fff);font-family:var(--lb-font,inherit)}" +
     ".jg-lb.open{display:grid}" +
     ".jg-lb figure{grid-column:2;grid-row:2;margin:0;position:relative;min-height:0}" +
