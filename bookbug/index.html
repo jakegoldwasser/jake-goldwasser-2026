@@ -12020,7 +12020,13 @@
       var layout = plan.layouts[item.index];
       var pageIndex = item.pageIndex || 0;
       var isFirstPoemPage = pageIndex === 0;
-      box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginRight * scale) + 'px ' + (plan.marginBottom * scale) + 'px ' + (plan.marginLeft * scale) + 'px';
+      // The page's own border comes out of the margins, not the text
+      // column, so the column is exactly the typesetter's width (the
+      // border used to narrow it a couple of pixels, wrapping on screen
+      // lines that fit in print).
+      var bcs = getComputedStyle(box), bl = parseFloat(bcs.borderLeftWidth) || 0, br = parseFloat(bcs.borderRightWidth) || 0,
+        bt = parseFloat(bcs.borderTopWidth) || 0, bb = parseFloat(bcs.borderBottomWidth) || 0;
+      box.style.padding = (plan.marginTop * scale - bt) + 'px ' + (plan.marginRight * scale - br) + 'px ' + (plan.marginBottom * scale - bb) + 'px ' + (plan.marginLeft * scale - bl) + 'px';
 
       var titleStack = printStackFor(state.titleFontChoice);
       var bodyStack = printStackFor(state.bodyFontChoice);
