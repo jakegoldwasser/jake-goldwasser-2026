@@ -401,10 +401,9 @@
   /* An entry's title is the same size closed (Title View's row) as open
      (Poem View's card), and an opened card keeps it on the row's line, so
      opening or closing an entry leaves its title exactly where it was. */
-  /* Closed, a title is 18px (with the zoom); open, it is set a little
-     bigger than the entry's text (--entry-title-open, from
-     setEntryTitleSize), and grows to that size as the entry opens. */
-  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); --entry-title-open: var(--entry-title-size); }
+  /* 18px with the zoom; an open entry's title is bold, a closed one's
+     regular. */
+  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); }
   .poem-card {
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
     padding: 10px 14px 12px; margin-bottom: 6px; display: flex; gap: 10px;
@@ -415,7 +414,7 @@
      drag), so the pane still spans the card with even margins. */
   .poem-card { position: relative; --card-top: 6px; }
   .poem-card > .poem-handle {
-    position: absolute; left: -36px; top: calc(var(--card-top) + 1px); height: calc(var(--entry-title-open) * 1.2 + 8px);
+    position: absolute; left: -36px; top: calc(var(--card-top) + 1px); height: calc(var(--entry-title-size) * 1.2 + 8px);
     justify-content: center; width: 32px; padding: 0; cursor: default;
   }
   .poem-card > .poem-handle .poem-num { width: 32px; justify-content: center; }
@@ -460,7 +459,7 @@
        -- without it, this field's own intrinsic minimum width could
        force the whole card (and page) wider than a narrow viewport. */
     flex: 1; min-width: 0; border: none; background: transparent;
-    font-family: "Zilla Slab", ui-serif, serif; font-weight: 400; font-size: var(--entry-title-open); padding: 3px 2px 7px; outline: none;
+    font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: var(--entry-title-size); padding: 3px 2px 7px; outline: none;
     color: var(--ink); resize: none; overflow: hidden; line-height: 1.2; display: block;
   }
   textarea.poem-title::placeholder { color: var(--ink-faint); font-weight: 500; font-style: italic; }
@@ -9417,7 +9416,6 @@
   function setEntryOpen(id, open) {
     var el = writerMQ.matches ? null : entryTitleEl(id);
     var before = el && titleBaseline(el);
-    var fromSize = el && getComputedStyle(el).fontSize;
     if (open) expandedCompactIds[id] = true; else delete expandedCompactIds[id];
     renderPoems();
     var after = el && entryTitleEl(id);
@@ -9426,7 +9424,6 @@
       if (after.tagName === 'TEXTAREA') fitTitleInput(after);
       var drift = titleBaseline(after) - before;
       if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
-      growTitle(after, fromSize);
     }
   }
   // Where a one-line title's letters sit (their baseline), on screen:
@@ -9435,18 +9432,6 @@
     var cs = getComputedStyle(el), fs = parseFloat(cs.fontSize);
     var lh = parseFloat(cs.lineHeight) || fs * 1.2;
     return el.getBoundingClientRect().top + parseFloat(cs.paddingTop) + (lh - fs) / 2 + fs * 0.8;
-  }
-  // The title eases from the size it was to its new one. It's laid out
-  // at its new size straight away and only its drawing is scaled, from
-  // the left end of the line its letters sit on, so nothing reflows and
-  // the letters never leave that line.
-  function growTitle(el, fromSize) {
-    var cs = getComputedStyle(el), to = parseFloat(cs.fontSize), from = parseFloat(fromSize);
-    if (!from || Math.abs(to - from) < 0.1 || !el.animate) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    var lh = parseFloat(cs.lineHeight) || to * 1.2;
-    el.style.transformOrigin = cs.paddingLeft + ' ' + (parseFloat(cs.paddingTop) + (lh - to) / 2 + to * 0.8) + 'px';
-    el.animate([{ transform: 'scale(' + from / to + ')' }, { transform: 'none' }], { duration: 280, easing: 'ease' });
   }
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
@@ -10038,7 +10023,6 @@
   // changed in Title View, so rows here aren't dragged.
   function renderTierGroups() {
     var plan = planBooklet(state), num = 0, groups = {}, none = [];
-    setEntryTitleSize(plan);
     poemTiers.tiers.forEach(function (t) { groups[t.id] = []; });
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) return;
@@ -10085,7 +10069,6 @@
   }
   function renderSearchResults() {
     var plan = planBooklet(state), nums = {}, n = 0;
-    setEntryTitleSize(plan);
     state.poems.forEach(function (p) { if (!isSection(p)) nums[p.id] = ++n; });
     var hits = viewOrder().filter(entryMatchesSearch);
     if (!hits.length) {
@@ -10114,12 +10097,6 @@
     });
   }
 
-  // An entry's title (closed or open, the same size either way) is set
-  // a little bigger than the editor's text, so titles read as titles.
-  function setEntryTitleSize(plan) {
-    var bodyPx = plan.globalSize * 1.333 * editorZoom * EDITOR_ZOOM_BASE;
-    document.documentElement.style.setProperty('--entry-title-open', Math.round(Math.max(18 * editorZoom, bodyPx * 1.15)) + 'px');
-  }
   function renderPoems() {
     poemList.innerHTML = '';
     var searchRow = document.getElementById('entrySearchRow');
@@ -10160,7 +10137,6 @@
     }
     poemList.appendChild(makeGap(0));
     var plan = planBooklet(state);
-    setEntryTitleSize(plan);
     var entryNum = 0;
     state.poems.forEach(function (poem, i) {
       if (isSection(poem)) {
