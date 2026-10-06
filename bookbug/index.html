@@ -382,6 +382,10 @@
   }
 
   .poems-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .entry-search { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-faint); }
+  .entry-search:focus-within { border-color: var(--accent); color: var(--accent); }
+  .entry-search input[type="search"] { flex: 1; min-width: 0; border: none !important; background: transparent !important; outline: none; padding: 8px 0; font-size: 14px; color: var(--ink); box-shadow: none !important; }
+  .entry-search-empty { padding: 14px 6px; color: var(--ink-soft); font-size: 14px; }
   .zoom-control {
     display: flex; align-items: center; gap: 2px; border: 1px solid var(--line-strong); border-radius: 7px;
     padding: 2px; background: var(--surface-2);
@@ -473,7 +477,9 @@
      aligned), and the page-like pane below holds the text. */
   @media (min-width: 701px) {
     .poem-card { padding: 6px 10px 12px; }
-    .poem-card .poem-title-row { padding-left: 19px; }
+    /* The title starts on the text's left margin (the pane's 1px border
+       plus its half-inch padding, less the title field's own 2px). */
+    .poem-card .poem-title-row { padding-left: calc(0.5in - 1px); }
     .poem-card textarea.poem-title { border-bottom: none; padding: 4px 2px; text-align: left !important; }
     .poem-card .poem-text { padding: 0.5in; }
   }
@@ -1338,6 +1344,8 @@
     #poemList > .poem-card { margin-left: 0; }
     .poem-card .poem-handle { display: none; }
     .poem-card .poem-text { border: none; background: transparent; padding: 4px 0; border-radius: 0; }
+    /* Title flush with the text's left edge. */
+    .poem-card textarea.poem-title { padding-left: 0; padding-right: 0; }
     .poem-compact-row { padding: 6px 6px 6px 4px; }
     .poem-gap-line { left: 0; }
     .sidebar { position: static; max-height: none; overflow: visible; }
@@ -1379,6 +1387,10 @@
   /* An empty line waits where what's typed on it will go (see playEnter). */
   .poem-text.script-play > [data-as="direction"] { padding-left: 20ch; }
   .poem-text.script-play > [data-as="character"] { text-align: center; }
+  /* A suggested character name (updateNameSuggest); Right arrow fills it. */
+  .poem-text.is-script > [data-suggest]::after { content: attr(data-suggest); color: var(--ink-faint); pointer-events: none; }
+  .poem-text.is-script > [data-suggest-full]::after { content: none; }
+  .poem-text.is-script > [data-suggest-full]::before { content: attr(data-suggest); color: var(--ink-faint); pointer-events: none; }
   body.form-screenplay .poem-title { text-transform: uppercase; }
   /* Scripts: goldenrod revision pages for screenplays; a verdigris
      playbill for plays. */
@@ -2635,6 +2647,11 @@
               <button type="button" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
             </div>
           </div>
+        </div>
+        <!-- Find an entry by its title or words (filters the list below). -->
+        <div class="entry-search" id="entrySearchRow">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
+          <input type="search" id="entrySearch" placeholder="Find a poem" autocomplete="off" spellcheck="false" aria-label="Find a poem">
         </div>
         <div id="poemGapTop"></div>
         <!-- Poetry only: a second Add poem above the list, styled the
@@ -7798,13 +7815,13 @@
   // every other view is book order. Section titles are skipped.
   function viewOrder() {
     var entries = state.poems.filter(function (p) { return !isSection(p); });
-    if (!tiersView) return entries;
+    if (!tiersView) return entries.filter(function (p) { return !entrySearchQuery() || entryMatchesSearch(p); });
     var out = [];
     poemTiers.tiers.forEach(function (t) {
       entries.forEach(function (p) { if (p.tier === t.id) out.push(p); });
     });
     entries.forEach(function (p) { if (!tierById(p.tier)) out.push(p); });
-    return out;
+    return entrySearchQuery() ? out.filter(entryMatchesSearch) : out;
   }
   // The entry before / after the one being written, in the current view's order.
   function writingNeighbor(delta) {
@@ -8079,6 +8096,86 @@
     var best = '', most = 0;
     Object.keys(counts).forEach(function (nm) { if (nm !== last && counts[nm] > most) { best = nm; most = counts[nm]; } });
     return best || last || '';
+  }
+  // A suggested character name, shown faintly on the line where a name
+  // goes (data-suggest, drawn by CSS): on an empty play line waiting for
+  // a name, whoever most likely speaks next; on a line where a name is
+  // being typed in capitals, the most used name it starts. The Right
+  // arrow (with the caret at the end of the line) fills it in.
+  function scriptNameCounts(ed, form) {
+    var counts = {}, card = ed.closest('[data-poem-id]'), id = card && card.dataset.poemId;
+    function add(lines) {
+      scriptElements(lines, form).forEach(function (el) {
+        if (el.type !== 'character') return;
+        var nm = scriptCueName(el.text);
+        if (nm) counts[nm] = (counts[nm] || 0) + 1;
+      });
+    }
+    state.poems.forEach(function (p) { if (!isSection(p) && p.id !== id) add(p.lines || []); });
+    add(Array.prototype.filter.call(ed.children, function (c) { return c.nodeType === 1; }).map(function (r) { return r.dataset.token ? '[image 1]' : r.textContent; }));
+    return counts;
+  }
+  function caretRowAtEnd(ed) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed || !ed.contains(sel.anchorNode)) return null;
+    var row = sel.anchorNode;
+    while (row && row.parentNode !== ed) row = row.parentNode;
+    if (!row || row.nodeType !== 1 || row.dataset.token) return null;
+    var rest = document.createRange();
+    rest.setStart(sel.anchorNode, sel.anchorOffset);
+    rest.setEnd(row, row.childNodes.length);
+    return rest.toString() ? null : row;
+  }
+  function clearNameSuggest(ed) {
+    ed.querySelectorAll('[data-suggest]').forEach(function (r) { delete r.dataset.suggest; delete r.dataset.suggestFull; });
+  }
+  function updateNameSuggest(ed) {
+    var form = bookFormOf(state);
+    clearNameSuggest(ed);
+    if (form !== 'play' && form !== 'screenplay') return;
+    var row = caretRowAtEnd(ed);
+    if (!row) return;
+    var typed = row.textContent.replace(/[​ ]/g, ' ').replace(/^\s+/, '');
+    var guess = '';
+    if (!typed) {
+      if (form === 'play' && (row.dataset.as === 'character' || row.dataset.want === 'character')) guess = likelyNextSpeaker(ed, row);
+      if (guess) { row.dataset.suggest = guess; row.dataset.suggestFull = '1'; }
+      return;
+    }
+    // Only a line typed in capitals (or one already marked for a name).
+    var nameLine = row.dataset.want === 'character' || row.dataset.sel === 'character';
+    if (!nameLine && (typed !== typed.toUpperCase() || !/[A-Z]/.test(typed))) return;
+    var up = typed.toUpperCase(), counts = scriptNameCounts(ed, form), most = 0;
+    Object.keys(counts).forEach(function (nm) {
+      if (nm.length > up.length && nm.indexOf(up) === 0 && counts[nm] > most) { guess = nm; most = counts[nm]; }
+    });
+    if (guess) row.dataset.suggest = guess.slice(up.length);
+  }
+  // Right arrow: fill in the suggested name. Returns true if it took the key.
+  function acceptNameSuggest(ed, e) {
+    if (e.shiftKey || e.altKey || e.metaKey || e.ctrlKey || e.isComposing) return false;
+    var row = caretRowAtEnd(ed);
+    if (!row || !row.dataset.suggest) return false;
+    e.preventDefault();
+    var add = row.dataset.suggest, full = row.dataset.suggestFull;
+    clearNameSuggest(ed);
+    if (full) row.textContent = add;
+    else {
+      // Capitalize what was typed too, so the whole name matches.
+      var walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      for (var n = walker.nextNode(); n; n = walker.nextNode()) n.data = n.data.toUpperCase();
+      row.appendChild(document.createTextNode(add));
+      Array.prototype.slice.call(row.querySelectorAll('br')).forEach(function (br) { br.remove(); });
+    }
+    row.normalize();
+    var r = document.createRange();
+    r.selectNodeContents(row);
+    r.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
   }
   // Indented prose shows in the editor the way it prints: each
   // paragraph's first line in by the half-inch indent, except the first
@@ -9075,7 +9172,12 @@
         indentEditorLines(editor, e.shiftKey);
       }
       if (e.key === 'Enter') playEnter(editor, e);
+      if (e.key === 'ArrowRight') acceptNameSuggest(editor, e);
     });
+    // A faint suggested character name in scripts (Right arrow fills it).
+    editor.addEventListener('keyup', function () { updateNameSuggest(editor); });
+    editor.addEventListener('click', function () { updateNameSuggest(editor); });
+    editor.addEventListener('blur', function () { clearNameSuggest(editor); });
     // Pasted text comes in plain (no stray fonts or colors from other
     // apps); a pasted image becomes an image line.
     editor.addEventListener('paste', function (e) {
@@ -9285,14 +9387,9 @@
     titleBtn.textContent = poem.title || entryLabel(poem);
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
-    titleBtn.addEventListener('click', function () {
-      // On desktop a first click only selects the row; the delegated
-      // poemList click handler shows it in the preview. The phone has no
-      // preview beside the list, so a tap there opens straight away.
-      if (!writerMQ.matches && selectedCompactId !== poem.id) {
-        selectCompactRow(poem.id);
-        return;
-      }
+    // A click opens this entry (click again to close it); hovering a row
+    // shows it in the preview (see the poemList mouseover handler).
+    function toggleOpen() {
       // Remember the row's place before the open card pushes things around.
       if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
       if (expandedCompactIds[poem.id]) delete expandedCompactIds[poem.id];
@@ -9304,14 +9401,15 @@
         var ed = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] .poem-text');
         if (ed) ed.focus();
       }
-    });
+    }
+    titleBtn.addEventListener('click', toggleOpen);
 
     row.appendChild(handle);
     row.appendChild(titleBtn);
     // A click anywhere else on the row (its number, the space beside the
-    // title) selects it too; only the title opens it.
+    // title) opens it too -- but not its tier pill or ⋯.
     row.addEventListener('click', function (e) {
-      if (!writerMQ.matches && !e.target.closest('button')) selectCompactRow(poem.id);
+      if (!e.target.closest('button')) toggleOpen();
     });
     if (isSeriesOn(poem)) row.appendChild(makeSeriesTag(poem));
     if (tiersShown()) row.appendChild(makeTierPill(poem));
@@ -9870,8 +9968,56 @@
     if (none.length) group('No tier', null, none);
   }
 
+  // The search box above the list: while it has words in it, the list
+  // shows only the entries whose title or text contains them (every
+  // word, any order, ignoring case and accents), in the current view's
+  // order, numbered as in the book.
+  var entrySearchInput = document.getElementById('entrySearch');
+  function foldText(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+  function entrySearchQuery() { return entrySearchInput ? entrySearchInput.value.trim() : ''; }
+  function entryMatchesSearch(poem) {
+    var words = foldText(entrySearchQuery()).split(/\s+/).filter(Boolean);
+    var hay = foldText((poem.title || '') + '\n' + (poem.lines || []).join('\n'));
+    return words.every(function (w) { return hay.indexOf(w) >= 0; });
+  }
+  function renderSearchResults() {
+    var plan = planBooklet(state), nums = {}, n = 0;
+    state.poems.forEach(function (p) { if (!isSection(p)) nums[p.id] = ++n; });
+    var hits = viewOrder().filter(entryMatchesSearch);
+    if (!hits.length) {
+      var none = document.createElement('div');
+      none.className = 'entry-search-empty';
+      none.textContent = 'No ' + formNouns().many + ' match \u201c' + entrySearchQuery() + '\u201d';
+      poemList.appendChild(none);
+      return;
+    }
+    hits.forEach(function (poem) {
+      var i = state.poems.indexOf(poem);
+      var row = poemsViewMode === 'compact' || sectionsOnly ? makeCompactRow(poem, i, plan, nums[poem.id]) : makeCard(poem, i, plan, nums[poem.id]);
+      row.draggable = false;
+      poemList.appendChild(row);
+    });
+  }
+  if (entrySearchInput) {
+    entrySearchInput.addEventListener('input', function () { renderPoems(); });
+    entrySearchInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && entrySearchInput.value) { e.preventDefault(); entrySearchInput.value = ''; renderPoems(); }
+      // Enter opens the first match.
+      if (e.key === 'Enter') {
+        var first = poemList.querySelector('.poem-compact-row .poem-title-compact-toggle');
+        if (first) { e.preventDefault(); first.click(); }
+      }
+    });
+  }
+
   function renderPoems() {
     poemList.innerHTML = '';
+    var searchRow = document.getElementById('entrySearchRow');
+    if (searchRow) {
+      searchRow.hidden = !state.poems.length;
+      entrySearchInput.placeholder = 'Find a ' + formNouns().one;
+      entrySearchInput.setAttribute('aria-label', entrySearchInput.placeholder);
+    }
     // Poetry gets Add poem above the list too, once there's a list to be
     // above (an empty book has just the one below).
     document.getElementById('addPoemTopRow').hidden = bookFormOf(state) !== 'collection' || !state.poems.length;
@@ -9880,6 +10026,13 @@
     updateEntriesViewSeg(hasSections);
     poemList.classList.toggle('titles-view', poemsViewMode === 'compact' && !sectionsOnly);
     poemList.classList.toggle('tiers-view', tiersView);
+    if (entrySearchQuery()) {
+      renderSearchResults();
+      poemsCount.textContent = nounFor(countEntries(state.poems), state);
+      updateArchiveButton();
+      if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
+      return;
+    }
     if (sectionsOnly) {
       renderSectionsOnly();
       var total = countEntries(state.poems);
@@ -10275,6 +10428,21 @@
     var type = target === 'toc' || target === 'back' || target === 'cast' ? target : 'cover';
     previewShow(function (it) { return it.type === type; });
   }
+  // Hovering a closed row in Title View or Tier View shows that entry in
+  // the preview (mouse and trackpad only; a touch screen opens on tap).
+  var hoverPreviewId = null, hoverPreviewTimer = null;
+  poemList.addEventListener('mouseover', function (e) {
+    if (!window.matchMedia('(hover: hover)').matches) return;
+    var row = e.target.closest('.poem-compact-row');
+    if (!row || row.dataset.poemId === hoverPreviewId) return;
+    hoverPreviewId = row.dataset.poemId;
+    clearTimeout(hoverPreviewTimer);
+    hoverPreviewTimer = setTimeout(function () {
+      var index = state.poems.findIndex(function (p) { return p.id === hoverPreviewId; });
+      if (index >= 0) previewShowPoem(index);
+    }, 60);
+  });
+  poemList.addEventListener('mouseleave', function () { hoverPreviewId = null; clearTimeout(hoverPreviewTimer); });
   ['focusin', 'click'].forEach(function (type) {
     poemList.addEventListener(type, function (e) {
       var row = e.target.closest('[data-poem-id]');
