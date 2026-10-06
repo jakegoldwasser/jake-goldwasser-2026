@@ -9788,20 +9788,22 @@
   // applies it immediately to the live input/textarea (a plain
   // persist()+updateStats() alone doesn't touch the DOM, which is why
   // these used to require a reload/tab-switch to actually show).
-  function makeAlignControl(label, getVal, setVal) {
+  // `getDefault`: the book's own setting, shown as chosen when the entry
+  // has none of its own; choosing it again clears the entry's, so it
+  // follows the book.
+  function makeAlignControl(label, getVal, setVal, getDefault, withJustify) {
     var wrap = document.createElement('div');
     wrap.className = 'title-align';
     var labelEl = document.createElement('span');
     labelEl.textContent = label;
     var seg = document.createElement('div');
     seg.className = 'title-align-seg';
-    // Left / Center / Right as the standard alignment icons (the row is
-    // tight); Auto, meaning "use the book's setting", stays a word.
+    // Left / Center / Right (and Justified, for text) as the standard
+    // alignment icons -- the row is tight.
     var ICON = function (d) { return '<svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="' + d + '"/></svg>'; };
-    [['', 'Auto', 'Auto'],
-     ['left', ICON('M1 1.5h12M1 6h7M1 10.5h10'), 'Align left'],
+    [['left', ICON('M1 1.5h12M1 6h7M1 10.5h10'), 'Align left'],
      ['center', ICON('M1 1.5h12M3.5 6h7M2 10.5h10'), 'Center'],
-     ['right', ICON('M1 1.5h12M6 6h7M3 10.5h10'), 'Align right']].forEach(function (pair) {
+     ['right', ICON('M1 1.5h12M6 6h7M3 10.5h10'), 'Align right']].concat(withJustify ? [['justify', ICON('M1 1.5h12M1 6h12M1 10.5h12'), 'Justify']] : []).forEach(function (pair) {
       var val = pair[0];
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -9809,9 +9811,9 @@
       btn.title = pair[2];
       btn.setAttribute('aria-label', label + ': ' + pair[2]);
       btn.dataset.val = val;
-      if ((getVal() || '') === val) btn.classList.add('active');
+      if ((getVal() || getDefault()) === val) btn.classList.add('active');
       btn.addEventListener('click', function () {
-        setVal(val || null);
+        setVal(val === getDefault() ? null : val);
         state.isExample = false;
         seg.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
         btn.classList.add('active');
@@ -9838,7 +9840,7 @@
     return makeAlignControl('Title', function () { return poem.titleAlign; }, function (v) {
       poem.titleAlign = v;
       applyTitleAlign(titleInput, poem);
-    });
+    }, function () { return state.titleAlignment || 'left'; });
   }
   // A title field may be sized to its own text (an open entry in Title
   // View), where text-align alone can't move it: its margins do.
@@ -9860,7 +9862,7 @@
       poem.bodyAlign = v;
       editor.style.textAlign = editorAlign(poem);
       if (onChange) onChange();
-    });
+    }, function () { return state.bodyAlignment || 'left'; }, true);
   }
 
   function makeCard(poem, index, initialPlan, entryNum) {
