@@ -101,7 +101,10 @@
   h1.appname span:last-child { position: relative; }
   h1.appname span:last-child::before {
     content: "g"; content: "g" / ""; position: absolute; left: 0; top: 0; pointer-events: none;
-    transform: scaleX(-1); transform-origin: 48.6% 50%; clip-path: inset(0 0 59% 70%);
+    /* The crop takes the ear and some of the bowl's top (the bowl is
+       symmetric, so that part lands on itself): a tighter crop cut the
+       ear off where it joins the bowl at the wordmark's own sizes. */
+    transform: scaleX(-1); transform-origin: 48.6% 50%; clip-path: inset(0 0 50% 50%);
   }
   @media (prefers-reduced-motion: no-preference) {
     h1.appname span { display: inline-block; animation: letterJitter 1.1s steps(1, jump-none) infinite; }
@@ -1133,6 +1136,10 @@
   .stage-edit-body, .stage-edit-title, .pv-typeset { font-kerning: none; font-variant-ligatures: none; }
   .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
+  .stage-edit-body.opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
+  .stage-edit-body.opener-drop > .is-opener::first-letter {
+    float: left; font-size: var(--dc-size); line-height: var(--dc-lh); margin: 0 var(--dc-gap) var(--dc-mb) 0; padding: 0;
+  }
   /* A scrollbar would take its width out of the column and wrap lines
      early; the box still scrolls, without one. */
   .stage-edit-body { scrollbar-width: none; }
@@ -3058,6 +3065,14 @@
               </select>
             </div>
           </div>
+          <div class="field" id="openerField">
+            <label for="openerSelect">First paragraph</label>
+            <select id="openerSelect">
+              <option value="none">Plain</option>
+              <option value="caps">First line in capitals</option>
+              <option value="drop">Drop cap</option>
+            </select>
+          </div>
           <div class="field" id="proseTypeField">
             <div class="checkline"><input type="checkbox" id="hyphenateCheck"><label for="hyphenateCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Hyphenate prose</label></div>
             <div class="checkline"><input type="checkbox" id="keepLinesCheck" checked><label for="keepLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">No widows or orphans</label></div>
@@ -3085,6 +3100,14 @@
           <div class="field">
             <label for="trimSelect">Trim size</label>
             <select id="trimSelect"></select>
+          </div>
+          <div class="field" id="runningHeadsField">
+            <label for="runningHeadsSelect">Running heads</label>
+            <select id="runningHeadsSelect">
+              <option value="none">None</option>
+              <option value="author-book">Author · Book title</option>
+              <option value="book-entry">Book title · Entry title</option>
+            </select>
           </div>
 
           </div>
@@ -5551,6 +5574,25 @@
     return FONT_CHOICES[0];
   }
   function displayStackFor(key) { return getFontChoice(key).displayStack; }
+  // The page as printed -- the preview and the page editor -- is drawn
+  // with the very font files the PDF embeds (fonts/*.ttf), not the
+  // Google Fonts builds the rest of the app uses: those are other
+  // versions with slightly different letter widths, enough to wrap a
+  // line on screen that fits in print. Faces are declared once, as
+  // "BB-<key>" (regular 400, bold 700, italic), and load when first used.
+  (function () {
+    var css = '';
+    Object.keys(EMBEDDED_FONTS).forEach(function (key) {
+      var e = EMBEDDED_FONTS[key];
+      [['regular', 'normal', 400], ['bold', 'normal', 700], ['italic', 'italic', 400]].forEach(function (v) {
+        if (e[v[0]] && e[v[0]].file) css += "@font-face { font-family: 'BB-" + key + "'; src: url('fonts/" + e[v[0]].file + "') format('truetype'); font-style: " + v[1] + "; font-weight: " + v[2] + "; font-display: block; }\n";
+      });
+    });
+    var st = document.createElement('style');
+    st.textContent = css;
+    document.head.appendChild(st);
+  })();
+  function printStackFor(key) { return EMBEDDED_FONTS[key] ? "'BB-" + key + "', " + displayStackFor(key) : displayStackFor(key); }
 
   // ---------------------------------------------------------------------
   // PDF text measurement -- exact, from the embedded font's own widths for
@@ -5668,6 +5710,29 @@
   // A prose paragraph: the first line narrowed by its indent (a Tab, or
   // the book-style paragraph indent), the rest the full measure -- the
   // way books set it, and the way the editor shows it.
+  // A first line set in capitals: four-fifths the size, tracked a
+  // twentieth of an em (the CSS the preview and editor use, too).
+  var CAPS_SCALE = 0.8, CAPS_TRACK = 0.05;
+  function capsWidth(text, sizePt, font) {
+    var sz = sizePt * CAPS_SCALE;
+    return measure(text.toUpperCase(), sz, font, 400) + text.length * sz * CAPS_TRACK;
+  }
+  // A drop cap two lines deep: its capital's top level with the first
+  // line's capitals, its foot on the second line's baseline.
+  function fontMetrics(font) {
+    var e = EMBEDDED_FONTS[font], m = e && e.regular, u = (m && m.unitsPerEm) || 1000;
+    if (!m || u !== 1000) return { asc: 0.9, desc: 0.25, cap: 0.68 };
+    return { asc: m.ascent / 1000, desc: -m.descent / 1000, cap: m.capHeight / 1000 };
+  }
+  function dropCapFor(text, sizePt, lineHeight, font) {
+    var mm = /^([“‘"'(\[]*)(\S)/.exec(text);
+    if (!mm) return null;
+    var fm = fontMetrics(font);
+    var size = (lineHeight + fm.cap * sizePt) / fm.cap;
+    var letter = mm[1] + mm[2];
+    return { letter: letter, len: letter.length, size: size, gap: sizePt * 0.3, w: measure(letter, size, font, 400) + sizePt * 0.3 };
+  }
+
   // Greedy, word by word; with `hyphenate`, a word that won't fit breaks
   // at the latest syllable (TeX's English patterns, via Hypher) that
   // leaves room for its hyphen, or after a hyphen it already has. Returns
@@ -5676,12 +5741,21 @@
     var runs = parseInlineRuns(line);
     var plain = runs.map(function (r) { return r.text; }).join('');
     var hy = opts && opts.hyphenate && window.bookbugHyphenator;
-    function wide(a, b, dash) { return measure(plain.slice(a, b) + (dash ? '-' : ''), sizePt, fontFamily, 400); }
+    function wide(a, b, dash) {
+      var t = plain.slice(a, b) + (dash ? '-' : '');
+      return opts && opts.capsFirst && !out.length ? capsWidth(t, sizePt, fontFamily) : measure(t, sizePt, fontFamily, 400);
+    }
     var toks = [], m, re = /\S+/g;
     while ((m = re.exec(plain))) toks.push([m.index, m.index + m[0].length]);
     if (!toks.length) return [line];
     var out = [], a = 0, b = -1;
-    function room() { return (out.length ? restWidthPt : firstWidthPt) * 0.97; }
+    // A drop cap narrows the lines beside it; a capitals first line
+    // measures in its own (smaller, tracked) capitals.
+    var dropLines = opts && opts.dropW ? 2 : 0;
+    // The 3% safety comes off the full measure, and an indent or drop
+    // cap after it -- the way the page editor (padding-right: 3%) lays
+    // the same lines out, so the two break alike.
+    function room() { return restWidthPt * 0.97 - (out.length ? 0 : restWidthPt - firstWidthPt) - (out.length < dropLines ? opts.dropW : 0); }
     // Where in [s, e) the word could break so that [a, break) fits: the
     // latest such place, or -1. { at, dash } (dash: add a hyphen).
     function split(s, e) {
@@ -5828,7 +5902,7 @@
     var hangPt = verse && (bodyAlign === 'left' || bodyAlign === 'justify') ? sizePt * 1.5 : 0;
     var justify = !verse && bodyAlign === 'justify';
     var hyphenate = !verse && !!state.hyphenate;
-    var paraNo = 0;
+    var paraNo = 0, openerInfo = null;
     var renderLines = [];
     var wasWrapped = false;
     var partStarts = isSeriesOn(poem, state) ? seriesParts(poem) : [];
@@ -5868,10 +5942,22 @@
         if (wrapped.length > 1) wasWrapped = true;
         wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
       } else {
-        var pieces = wrapParagraph(body, contentWidthPt - tabPt - firstIndent, contentWidthPt, sizePt, state.bodyFontChoice, { hyphenate: hyphenate });
+        var opening = !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
+        var drop = opening === 'drop' ? dropCapFor(stripFormatMarkers(body), sizePt, lineHeight, state.bodyFontChoice) : null;
+        if (drop) {
+          var rr = parseInlineRuns(body), plainLen = rr.map(function (r) { return r.text; }).join('').length;
+          body = runsToMarkup(sliceRuns(rr, drop.len, plainLen));
+          openerInfo = { type: 'drop', size: drop.size, gap: drop.gap, w: drop.w };
+        }
+        if (opening === 'caps') openerInfo = { type: 'caps' };
+        var pieces = wrapParagraph(body, contentWidthPt - tabPt - firstIndent, contentWidthPt, sizePt, state.bodyFontChoice,
+          { hyphenate: hyphenate, capsFirst: opening === 'caps', dropW: drop ? drop.w : 0 });
         paraNo++;
         pieces.forEach(function (t, wi) {
-          renderLines.push({ blank: false, text: t, indent: wi === 0 ? tabPt + firstIndent : 0, para: paraNo, justify: justify && wi < pieces.length - 1 });
+          var rl = { blank: false, text: t, indent: (wi === 0 ? tabPt + firstIndent : 0) + (drop && wi < 2 ? drop.w : 0), para: paraNo, justify: justify && wi < pieces.length - 1 };
+          if (opening === 'caps' && wi === 0) rl.caps = true;
+          if (drop && wi === 0) rl.drop = { letter: drop.letter, size: drop.size, w: drop.w };
+          renderLines.push(rl);
         });
       }
       fullOut = false;
@@ -5931,7 +6017,7 @@
     return {
       sizePt: sizePt, lineHeight: lineHeight, titleSizePt: titleSizePt,
       titleLines: titleLines, titleH: titleH, pages: pages,
-      wasWrapped: wasWrapped, isVerse: verse
+      wasWrapped: wasWrapped, isVerse: verse, opener: openerInfo
     };
   }
 
@@ -6700,7 +6786,7 @@
 
   function hex4(n) { var s = (n & 0xFFFF).toString(16); while (s.length < 4) s = '0' + s; return s; }
 
-  function drawText(bytes, fontRef, sizePt, x, y, text, rgb) {
+  function drawText(bytes, fontRef, sizePt, x, y, text, rgb, trackPt) {
     // A family with only a regular weight (the typewriter face) gets its
     // bold by also stroking the outlines a little, and its italic by
     // slanting them ~12 degrees -- the same way browsers fake them.
@@ -6709,7 +6795,8 @@
     pushAscii(bytes, 'BT\n/' + fontRef.name + ' ' + sizePt.toFixed(2) + ' Tf\n' + color + ' rg\n' +
       // The render mode outlives BT/ET, so every other run resets it.
       (faux === 'bold' ? color + ' RG\n' + (sizePt * 0.04).toFixed(3) + ' w\n2 Tr\n' : '0 Tr\n') +
-      (faux === 'italic' ? '1 0 0.21 1 ' : '1 0 0 1 ') + x.toFixed(2) + ' ' + y.toFixed(2) + ' Tm\n');
+      (faux === 'italic' ? '1 0 0.21 1 ' : '1 0 0 1 ') + x.toFixed(2) + ' ' + y.toFixed(2) + ' Tm\n' +
+      (trackPt ? trackPt.toFixed(3) + ' Tc\n' : ''));
     if (fontRef.embedded) {
       // Identity-H: each shown code IS the CID directly (no name/cmap
       // lookup) -- we've defined CID = the same WinAnsi byte value the
@@ -6724,7 +6811,8 @@
     } else {
       pdfLiteralStringBytes(text).forEach(function (b) { bytes.push(b); });
     }
-    pushAscii(bytes, ' Tj\nET\n');
+    // Tracking (Tc) is text state that outlives ET, so it's put back.
+    pushAscii(bytes, ' Tj\n' + (trackPt ? '0 Tc\n' : '') + 'ET\n');
   }
   function drawLine(bytes, x1, y1, x2, y2, gray, w) {
     pushAscii(bytes, gray.toFixed(3) + ' G\n' + (w || 0.75).toFixed(2) + ' w\n' +
@@ -6754,29 +6842,45 @@
   // A justified line: drawn word by word, the leftover width shared out
   // among its spaces. (PDF word spacing, Tw, only stretches one-byte
   // spaces, and the embedded fonts here use two-byte codes.)
-  function drawJustifiedRuns(bytes, keys, fontChoice, sizePt, x, y, text, rgb, widthPt) {
-    var atoms = [];
+  // `caps`: the line in tracked capitals (a first line's opener).
+  // Without `widthPt` the line is drawn at its natural spacing.
+  function drawJustifiedRuns(bytes, keys, fontChoice, sizePt, x, y, text, rgb, widthPt, caps) {
+    var atoms = [], sz = caps ? sizePt * CAPS_SCALE : sizePt, track = caps ? sz * CAPS_TRACK : 0;
     parseInlineRuns(text).forEach(function (run) {
       run.text.split(/( +)/).forEach(function (part) {
         if (!part) return;
-        atoms.push({ t: part, run: run, sp: /^ +$/.test(part), w: measure(part, sizePt, fontChoice, run.bold ? 700 : 400, !!run.italic) });
+        var t = caps ? part.toUpperCase() : part;
+        atoms.push({ t: t, run: run, sp: /^ +$/.test(part), w: measure(t, sz, fontChoice, run.bold ? 700 : 400, !!run.italic) + t.length * track });
       });
     });
     while (atoms.length && atoms[atoms.length - 1].sp) atoms.pop();
     var natural = 0, spaces = 0;
     atoms.forEach(function (at, i) { natural += at.w; if (at.sp && i > 0) spaces += at.t.length; });
-    var extra = spaces ? Math.max(0, (widthPt - natural) / spaces) : 0;
+    var extra = spaces && widthPt ? Math.max(0, (widthPt - natural) / spaces) : 0;
     var curX = x;
     atoms.forEach(function (at, i) {
       if (at.sp) { curX += at.w + (i > 0 ? at.t.length * extra : 0); return; }
       var key = at.run.bold ? keys.bold : (at.run.italic ? keys.ital : keys.reg);
-      drawText(bytes, key, sizePt, curX, y, at.t, rgb);
+      drawText(bytes, key, sz, curX, y, at.t, rgb, track);
       if (at.run.underline) {
         var uy = y - sizePt * 0.09;
         drawLine(bytes, curX, uy, curX + at.w, uy, rgb[0], Math.max(0.6, sizePt * 0.045));
       }
       curX += at.w;
     });
+  }
+
+  // Running heads: small tracked capitals in the top margin of an entry's
+  // later pages (never its opening page): the left-hand (even) page one
+  // name, the right-hand (odd) page the other.
+  var RUNNING_HEAD_PT = 8;
+  function runningHeadText(st, poem, pageNum) {
+    var mode = st.runningHeads;
+    if (!mode || mode === 'none' || isScriptForm(st)) return '';
+    var verso = pageNum % 2 === 0, book = (st.bookTitle || '').trim(), t;
+    if (mode === 'author-book') t = verso ? (st.author || '').trim() : book;
+    else t = verso ? book : entryTitle(poem, st) || '';
+    return String(t || '').toUpperCase();
   }
 
   function drawLayoutItems(bytes, items, keyMap, imagesUsed) {
@@ -6974,14 +7078,27 @@
             return;
           }
           var lineY = top - layout.lineHeight + layout.lineHeight * 0.28;
-          if (rl.justify) {
-            drawJustifiedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, contentLeft + (rl.indent || 0), lineY, rl.text, INK_RGB, contentRight - contentLeft - (rl.indent || 0));
+          if (rl.drop) drawText(bytes, bodyKeys.reg, rl.drop.size, contentLeft, lineY - layout.lineHeight, rl.drop.letter, INK_RGB);
+          if (rl.justify || rl.caps) {
+            var lx = contentLeft + (rl.indent || 0);
+            if (rl.caps && !rl.justify && effBodyAlign !== 'left' && effBodyAlign !== 'justify') {
+              var cw = capsWidth(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice);
+              lx = resolveX(effBodyAlign, cw, lx, contentRight);
+            }
+            drawJustifiedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, lx, lineY, rl.text, INK_RGB, rl.justify ? contentRight - lx : 0, rl.caps);
             return;
           }
           var w = measure(stripFormatMarkers(rl.text), layout.sizePt, state.bodyFontChoice, 400);
           var x = resolveX(rl.center ? 'center' : effBodyAlign === 'justify' ? 'left' : effBodyAlign, w, contentLeft + (rl.indent || 0), contentRight);
           drawFormattedRuns(bytes, bodyKeys, state.bodyFontChoice, layout.sizePt, x, lineY, rl.text, INK_RGB);
         });
+        var head = pageIdx > 0 ? runningHeadText(state, poem, layout.startPage + pageIdx) : '';
+        if (head) {
+          var hs = RUNNING_HEAD_PT, ht = hs * 0.1;
+          head = ellipsize(head, plan.contentWidth - head.length * ht, hs, state.bodyFontChoice, 400);
+          var hw = measure(head, hs, state.bodyFontChoice, 400) + (head.length - 1) * ht;
+          drawText(bytes, bodyKeys.reg, hs, (contentLeft + contentRight) / 2 - hw / 2, contentTop + plan.marginTop * 0.45, head, MUTED_RGB, ht);
+        }
         pageNumberOp(bytes, layout.startPage + pageIdx);
         contents.push(bytes);
       });
@@ -11652,6 +11769,14 @@
 
   // Mirrors pageNumberOp() in the real PDF export -- recto/verso corners
   // or a centered footer -- so toggling the setting is visible here too.
+  function runningHeadHtml(poem, layout, pageIndex, scale, plan) {
+    var t = pageIndex > 0 ? runningHeadText(state, poem, layout.startPage + pageIndex) : '';
+    if (!t) return '';
+    var hs = RUNNING_HEAD_PT * scale, baseline = plan.marginTop * 0.55;
+    return '<div class="pv-typeset" style="position:absolute; left:' + (plan.marginLeft * scale).toFixed(1) + 'px; right:' + (plan.marginRight * scale).toFixed(1) +
+      'px; top:' + ((baseline - RUNNING_HEAD_PT * 0.8) * scale).toFixed(1) + 'px; font-size:' + hs.toFixed(2) + 'px; line-height:1; letter-spacing:0.1em; text-align:center;' +
+      ' white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#6B5A42;">' + escapeHtml(t) + '</div>';
+  }
   function pageNumberOverlayHtml(pageNum, scale, plan) {
     if (!pageNum || !state.showPageNumbers) return '';
     plan = plan || planBooklet(state);
@@ -11869,7 +11994,7 @@
     box.style.height = Math.round(plan.PAGE_H * scale) + 'px';
     box.parentNode.style.setProperty('--preview-h', (Math.round(plan.PAGE_H * scale) + 6) + 'px');
     box.style.boxSizing = 'border-box';
-    box.style.fontFamily = displayStackFor(state.bodyFontChoice);
+    box.style.fontFamily = printStackFor(state.bodyFontChoice);
 
     if (item.type === 'cover') {
       renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
@@ -11897,8 +12022,8 @@
       var isFirstPoemPage = pageIndex === 0;
       box.style.padding = (plan.marginTop * scale) + 'px ' + (plan.marginRight * scale) + 'px ' + (plan.marginBottom * scale) + 'px ' + (plan.marginLeft * scale) + 'px';
 
-      var titleStack = displayStackFor(state.titleFontChoice);
-      var bodyStack = displayStackFor(state.bodyFontChoice);
+      var titleStack = printStackFor(state.titleFontChoice);
+      var bodyStack = printStackFor(state.bodyFontChoice);
       var effAlign = titleAlignFor(poem, state);
       var effBodyAlign = layout.script ? 'left' : poem.bodyAlign || state.bodyAlignment;
       var html = '';
@@ -11919,13 +12044,22 @@
             '<img alt="" src="' + state.images[rl.image].data + '" style="display:block; width:' + (rl.w * scale).toFixed(2) + 'px; height:' + (rl.h * scale).toFixed(2) + 'px;"></div>';
           return;
         }
-        var indentStyle = rl.center ? ' style="text-align:center"' :
+        var dropHtml = '';
+        if (rl.drop) {
+          var fm = fontMetrics(state.bodyFontChoice), ds = rl.drop.size * scale, lhPx = layout.lineHeight * scale;
+          var topPx = 1.72 * lhPx - ds * (1 + fm.asc - fm.desc) / 2;
+          dropHtml = '<span style="position:absolute; left:0; top:' + topPx.toFixed(2) + 'px; font-size:' + ds.toFixed(2) + 'px; line-height:1;">' + escapeHtml(rl.drop.letter) + '</span>';
+        }
+        var capsStyle = rl.caps ? ' text-transform:uppercase; font-size:' + CAPS_SCALE + 'em; letter-spacing:' + CAPS_TRACK + 'em;' : '';
+        var indentStyle = (dropHtml || capsStyle) ? ' style="position:relative;' + capsStyle +
+          (rl.justify ? ' text-align:justify; text-align-last:justify;' : '') + (rl.indent ? ' padding-left:' + (rl.indent * scale).toFixed(2) + 'px' : '') + '"' :
+          rl.center ? ' style="text-align:center"' :
           rl.justify ? ' style="text-align:justify; text-align-last:justify;' + (rl.indent ? ' padding-left:' + (rl.indent * scale).toFixed(2) + 'px' : '') + '"' :
           rl.indent ? ' style="padding-left:' + (rl.indent * scale).toFixed(2) + 'px"' : '';
-        html += '<div' + indentStyle + (layout.script ? ' class="pv-line"' : '') + '>' + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
+        html += '<div' + indentStyle + (layout.script ? ' class="pv-line"' : '') + '>' + dropHtml + (rl.blank ? '&nbsp;' : renderInlineRunsHtml(rl.text)) + '</div>';
       });
       html += '</div>';
-      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale, plan);
+      box.innerHTML = html + pageNumberOverlayHtml(layout.startPage + pageIndex, scale, plan) + runningHeadHtml(poem, layout, pageIndex, scale, plan);
 
       if (layout.script === 'screenplay') {
         // Scenes run on, so the page is what counts: script page n of N.
@@ -12034,7 +12168,7 @@
     title.value = poem.title || '';
     title.placeholder = entryLabel(poem);
     title.setAttribute('aria-label', Cap(formNouns().one) + ' title');
-    title.style.cssText = 'font-family:' + displayStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
+    title.style.cssText = 'font-family:' + printStackFor(state.titleFontChoice) + '; font-size:' + (layout.titleSizePt * scale).toFixed(2) +
       'px; line-height:1.28; text-align:' + titleAlignFor(poem) + '; margin-bottom:' + (26 * scale).toFixed(2) + 'px;';
     title.addEventListener('input', function () { poem.title = title.value.replace(/\n/g, ' '); state.isExample = false; persist(); autoGrow(title); });
     title.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); body.focus(); } });
@@ -12047,8 +12181,8 @@
     body.setAttribute('autocapitalize', state.form === 'collection' ? 'off' : 'sentences');
     body.setAttribute('aria-multiline', 'true');
     body.setAttribute('aria-label', Cap(formNouns().one) + ' text');
-    body.style.cssText = 'font-family:' + displayStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
-      'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + editorAlign(poem) + '; tab-size:' + tabSizeFor(displayStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
+    body.style.cssText = 'font-family:' + printStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
+      'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + editorAlign(poem) + '; tab-size:' + tabSizeFor(printStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
     tagProseLines(body, poem, TAB_STOP_PT * scale);
     // Hyphenated prose breaks where the typesetter would: soft hyphens
@@ -12058,6 +12192,27 @@
       var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT), tn;
       while ((tn = walker.nextNode())) tn.data = tn.data.replace(/[A-Za-z]{5,}/g, function (w) { return window.bookbugHyphenator.hyphenate(w).join('\u00ad'); });
     }
+    // The opener, as the typesetter set it: capitals via ::first-line, a
+    // drop cap as a floated ::first-letter two lines deep (its line-height
+    // puts the capital's foot on the second baseline; its bottom margin
+    // makes the float exactly two lines tall, so it narrows just those).
+    var op = layout.opener;
+    body.classList.toggle('opener-caps', !!op && op.type === 'caps');
+    body.classList.toggle('opener-drop', !!op && op.type === 'drop');
+    if (op && op.type === 'drop') {
+      var fmx = fontMetrics(state.bodyFontChoice), lhx = layout.lineHeight * scale, dsx = op.size * scale;
+      var boxL = 2 * (1.72 * lhx) + (fmx.desc - fmx.asc) * dsx;
+      body.style.setProperty('--dc-size', dsx.toFixed(2) + 'px');
+      body.style.setProperty('--dc-lh', boxL.toFixed(2) + 'px');
+      body.style.setProperty('--dc-mb', (2 * lhx - boxL).toFixed(2) + 'px');
+      body.style.setProperty('--dc-gap', (op.gap * scale).toFixed(2) + 'px');
+    }
+    function markOpener() {
+      var first = Array.prototype.filter.call(body.children, function (d) { return !d.dataset.token && d.textContent.trim(); })[0];
+      Array.prototype.forEach.call(body.children, function (d) { d.classList.toggle('is-opener', d === first); });
+    }
+    markOpener();
+    body.addEventListener('input', markOpener);
     function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
     body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
@@ -13419,6 +13574,8 @@
     state.includeToc = e.target.checked; persist(); updateStats();
   });
   document.getElementById('hyphenateCheck').addEventListener('change', function (e) { state.hyphenate = e.target.checked; persist(); renderAll(); });
+  document.getElementById('openerSelect').addEventListener('change', function (e) { state.opener = e.target.value; persist(); renderAll(); });
+  document.getElementById('runningHeadsSelect').addEventListener('change', function (e) { state.runningHeads = e.target.value; persist(); renderAll(); });
   document.getElementById('keepLinesCheck').addEventListener('change', function (e) { state.keepLines = e.target.checked; persist(); renderAll(); });
   document.getElementById('pageNumbersCheck').addEventListener('change', function (e) {
     state.showPageNumbers = e.target.checked;
@@ -13541,11 +13698,16 @@
     document.getElementById('pageNumberStyleField').hidden = !state.showPageNumbers;
     document.getElementById('cutLinesCheck').checked = !!state.showCutLines;
     document.getElementById('hyphenateCheck').checked = !!state.hyphenate;
+    document.getElementById('openerSelect').value = state.opener || 'none';
+    document.getElementById('runningHeadsSelect').value = state.runningHeads || 'none';
+    document.querySelector('#runningHeadsSelect [value="book-entry"]').textContent = 'Book title · ' + Cap(formNouns().one) + ' title';
     document.getElementById('keepLinesCheck').checked = state.keepLines !== false;
     // A script's spacing and paragraphs are fixed by its format.
     var script = isScriptForm();
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('proseTypeField').hidden = script;
+    document.getElementById('openerField').hidden = script;
+    document.getElementById('runningHeadsField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
     document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
     document.getElementById('lineSpacingSelect').closest('.field').hidden = script;
