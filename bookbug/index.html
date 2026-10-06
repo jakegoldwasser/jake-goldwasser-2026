@@ -1004,6 +1004,34 @@
   /* View Options: one pill that opens the list of views, in place of a
      row of four pills that crowded the list's header. */
   .view-menu-wrap { position: relative; }
+  /* Poem and List View: no tools column, and the entries column split
+     into the list (a third) and the open entries (two thirds). Wide
+     screens only; on a phone the menu leaves it out. */
+  .workspace.split-mode { grid-template-columns: 1fr; }
+  .workspace.split-mode .sidebar { display: none; }
+  #poemList.split-view { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 20px; align-items: start; }
+  .split-list { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; scrollbar-gutter: stable; padding-right: 2px; }
+  .split-pane { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  /* An entry open in the pane: its title row stays marked in the list. */
+  .poem-compact-row.is-split-open { background: var(--accent-soft); border-color: var(--accent); }
+  .poem-compact-row.is-split-open .poem-title-compact { font-weight: 700; }
+  .split-empty {
+    border: 2px dashed var(--line-strong); border-radius: 10px; padding: 48px 24px; text-align: center;
+    color: var(--ink-faint); font-size: 15px;
+  }
+  @media (max-width: 860px) {
+    #poemList.split-view { grid-template-columns: 1fr; }
+    .split-list { position: static; max-height: none; overflow: visible; }
+    .entry-menu.view-menu [data-view="split"] { display: none; }
+  }
+  /* The list is narrow here: section bars drop their move arrows and
+     label (order is changed in Title View) so the title has the room. */
+  .split-list .section-move-btn, .split-list .section-row-label, .split-list .poem-grip { display: none; }
+  .split-list .section-title { font-size: 18px; min-width: 0; }
+  /* An open card's number hangs out to its left, which here is the gap
+     between the columns. */
+  .split-pane .poem-num { display: none; }
+  .tier-group-head .dots-btn { margin-left: 2px; }
   .view-menu-btn {
     display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--ink); border-radius: 999px;
     background: var(--surface); color: var(--ink); padding: 7px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
@@ -2726,6 +2754,7 @@
               <button type="button" role="menuitemradio" data-view="tiers" title="Poems grouped by tier, to see what needs work" hidden><svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor" aria-hidden="true"><circle cx="7" cy="6" r="3"/></svg><span class="vs-label">Tier View</span></button>
               <button type="button" role="menuitemradio" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
               <button type="button" role="menuitemradio" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
+                <button type="button" role="menuitemradio" data-view="split" title="The list on the left; click titles to open them beside it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="10.5" rx="1.5"/><path d="M5 1v10"/><path d="M2.5 4h1M2.5 6.5h1" stroke-linecap="round"/></svg><span class="vs-label">Poem and List View</span></button>
                 <div class="menu-sep"></div>
                 <button type="button" role="menuitemradio" data-view="open" title="Just the poems open now, with every other title and section out of the way until you pick another view"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 11l1-3 7-7 2 2-7 7z"/><path d="M8 2l2 2"/></svg><span class="vs-label">Edit open poems</span></button>
               </div>
@@ -3177,6 +3206,11 @@
 <!-- A poem's tier: filled in by openTierMenu. -->
 <div class="entry-menu" id="tierMenu" role="menu" hidden></div>
 
+<!-- A tier heading's ⋯ in Tier View: filled in by openTierGroupMenu. -->
+<div class="entry-menu" id="tierGroupMenu" role="menu" hidden>
+  <button type="button" role="menuitem" data-action="split">Open tier in Poem and List View</button>
+</div>
+
 <div class="entry-menu" id="entryMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
@@ -3188,6 +3222,7 @@
   <button type="button" role="menuitem" data-send="bottom">Send to bottom</button>
   <div class="menu-sep"></div>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
+  <button type="button" role="menuitem" data-action="split" hidden>Open section in Poem and List View</button>
   <button type="button" role="menuitem" data-action="archive-all" hidden>Archive section and its poems</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>
 </div>
@@ -7936,7 +7971,10 @@
     if (!writingCard || !next) return;
     var ed = writingCard.querySelector('.poem-text');
     var typing = !!ed && document.activeElement === ed;
-    if (writingCard.classList.contains('poem-compact-expanded')) {
+    if (splitView) {
+      delete splitOpenIds[writingPoemId];
+      splitOpenIds[next.id] = true;
+    } else if (writingCard.classList.contains('poem-compact-expanded')) {
       delete expandedCompactIds[writingPoemId];
       expandedCompactIds[next.id] = true;
     }
@@ -8795,6 +8833,9 @@
     var allBtn = entryMenu.querySelector('[data-action="archive-all"]');
     allBtn.hidden = !n;
     allBtn.textContent = 'Archive ' + nouns.section + ' and its ' + (n === 1 ? nouns.one : nouns.many);
+    var splitBtn = entryMenu.querySelector('[data-action="split"]');
+    splitBtn.hidden = !n;
+    splitBtn.textContent = 'Open ' + nouns.section + ' in ' + Cap(nouns.one) + ' and List View';
     entryMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = entryMenu.offsetWidth, mh = entryMenu.offsetHeight;
@@ -8942,6 +8983,7 @@
     closeEntryMenu();
     if (item.dataset.action === 'archive') archivePoem(idx);
     else if (item.dataset.action === 'archive-all') archiveSectionWithEntries(idx);
+    else if (item.dataset.action === 'split') enterSplitView(sectionMembers(idx).map(function (p) { return p.id; }));
     else if (item.dataset.action === 'delete') deletePoem(idx);
     else if (item.dataset.action === 'move') openMoveDialog(idx);
     else if (item.dataset.action === 'series') toggleSeries(idx);
@@ -9497,9 +9539,45 @@
     var lh = parseFloat(cs.lineHeight) || fs * 1.2;
     return el.getBoundingClientRect().top + parseFloat(cs.paddingTop) + (lh - fs) / 2 + fs * 0.8;
   }
+  // An open entry as its own page: a close button in the grip's place,
+  // tier and ⋯ in the page's top corner, and a click in its top margin
+  // closes it. Title View opens these in the list; Poem and List View
+  // in the pane beside it.
+  function makeOpenCard(poem, index, plan, entryNum, close) {
+    var expandedCard = makeCard(poem, index, plan, entryNum);
+    expandedCard.classList.add('poem-compact-expanded');
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'poem-close-btn';
+    closeBtn.title = 'Close';
+    closeBtn.setAttribute('aria-label', 'Close ' + (poem.title || entryLabel(poem)));
+    closeBtn.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6.5 6 2l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    closeBtn.addEventListener('click', close);
+    expandedCard.appendChild(closeBtn);
+    if (!writerMQ.matches) {
+      var corner = document.createElement('div');
+      corner.className = 'poem-card-corner';
+      expandedCard.querySelectorAll('.poem-title-row > .series-tag, .poem-title-row > .tier-pill, .poem-title-row > .dots-btn').forEach(function (el) { corner.appendChild(el); });
+      expandedCard.appendChild(corner);
+    }
+    var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
+    expandedTitleRow.addEventListener('click', function (e) {
+      if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) close();
+    });
+    expandedCard.addEventListener('click', function (e) {
+      if (e.target === expandedCard && !expandedCard.classList.contains('is-writing') &&
+          e.clientY < expandedTitleRow.getBoundingClientRect().top) close();
+    });
+    var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
+    expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
+    requestAnimationFrame(function () { fitTitleInput(expandedTitleInput); });
+    return expandedCard;
+  }
+
   function makeCompactRow(poem, index, plan, entryNum) {
     var row = document.createElement('div');
-    row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '') + (selectedCompactId === poem.id ? ' is-selected' : '');
+    row.className = 'poem-compact-row' + (poem.sample ? ' is-sample' : '') + (selectedCompactId === poem.id ? ' is-selected' : '') +
+      (splitView && splitOpenIds[poem.id] ? ' is-split-open' : '');
     row.dataset.poemId = poem.id;
     row.draggable = true;
 
@@ -9519,6 +9597,7 @@
     // A click opens this entry (click again to close it); hovering a row
     // shows it in the preview (see the poemList mouseover handler).
     function toggleOpen() {
+      if (splitView) { toggleSplitEntry(poem.id); return; }
       // Remember the row's place before the open card pushes things around.
       if (!expandedCompactIds[poem.id] && writerMQ.matches) writingReturn = { top: row.getBoundingClientRect().top };
       setEntryOpen(poem.id, !expandedCompactIds[poem.id]);
@@ -9572,35 +9651,8 @@
     // beneath it -- otherwise the number and title show twice, once in
     // the row and again in the card. Clicking the empty part of its title
     // row closes it again (so does Title View).
-    if (expandedCompactIds[poem.id]) {
-      var expandedCard = makeCard(poem, index, plan, entryNum);
-      expandedCard.classList.add('poem-compact-expanded');
-      var closeBtn = document.createElement('button');
-      closeBtn.type = 'button';
-      closeBtn.className = 'poem-close-btn';
-      closeBtn.title = 'Close';
-      closeBtn.setAttribute('aria-label', 'Close ' + (poem.title || entryLabel(poem)));
-      closeBtn.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 6.5 6 2l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      closeBtn.addEventListener('click', function () { setEntryOpen(poem.id, false); });
-      expandedCard.appendChild(closeBtn);
-      if (!writerMQ.matches) {
-        var corner = document.createElement('div');
-        corner.className = 'poem-card-corner';
-        expandedCard.querySelectorAll('.poem-title-row > .series-tag, .poem-title-row > .tier-pill, .poem-title-row > .dots-btn').forEach(function (el) { corner.appendChild(el); });
-        expandedCard.appendChild(corner);
-      }
-      var expandedTitleRow = expandedCard.querySelector('.poem-title-row');
-      expandedTitleRow.addEventListener('click', function (e) {
-        if (e.target === expandedTitleRow && !expandedCard.classList.contains('is-writing')) setEntryOpen(poem.id, false);
-      });
-      expandedCard.addEventListener('click', function (e) {
-        if (e.target === expandedCard && !expandedCard.classList.contains('is-writing') &&
-            e.clientY < expandedTitleRow.getBoundingClientRect().top) setEntryOpen(poem.id, false);
-      });
-      var expandedTitleInput = expandedCard.querySelector('textarea.poem-title');
-      expandedTitleInput.addEventListener('input', function () { fitTitleInput(expandedTitleInput); });
-      requestAnimationFrame(function () { fitTitleInput(expandedTitleInput); });
-      return expandedCard;
+    if (expandedCompactIds[poem.id] && !splitView) {
+      return makeOpenCard(poem, index, plan, entryNum, function () { setEntryOpen(poem.id, false); });
     }
     return row;
   }
@@ -9753,12 +9805,45 @@
   // chosen, shown in full with every other title and section hidden. A
   // snapshot, so nothing drops out mid-edit; any other view ends it.
   var openOnlyIds = null;
+  // Poem and List View: the list stays on the left and the entries
+  // clicked in it open in a pane to its right (in the book's order), with
+  // the tools column out of the way. splitOpenIds is which are open.
+  var splitView = false;
+  var splitOpenIds = {};
+  function applySplitLayout() {
+    document.getElementById('bookWorkspace').classList.toggle('split-mode', splitView);
+    toolsToggleBtn.hidden = splitView;
+  }
+  function enterSplitView(ids) {
+    openOnlyIds = null;
+    sectionsOnly = false;
+    tiersView = false;
+    poemsViewMode = 'compact';
+    splitView = true;
+    splitOpenIds = {};
+    (ids || []).forEach(function (id) { splitOpenIds[id] = true; });
+    selectCompactRow(null);
+    if (stageMode) closeStage();
+    applySplitLayout();
+    renderPoems();
+    var top = document.getElementById('poemsPanel').getBoundingClientRect().top;
+    if (top < 0) window.scrollBy({ top: top - 8, behavior: 'instant' });
+  }
+  function toggleSplitEntry(id) {
+    if (splitOpenIds[id]) {
+      if (writingCard && writingPoemId === id) exitWriting();
+      delete splitOpenIds[id];
+    } else splitOpenIds[id] = true;
+    renderPoems();
+  }
   function openEntryIds() {
-    var all = poemsViewMode === 'full' && !sectionsOnly && !tiersView;
-    return state.poems.filter(function (p) { return !isSection(p) && (all || expandedCompactIds[p.id]); }).map(function (p) { return p.id; });
+    var all = poemsViewMode === 'full' && !sectionsOnly && !tiersView && !splitView;
+    var open = splitView ? splitOpenIds : expandedCompactIds;
+    return state.poems.filter(function (p) { return !isSection(p) && (all || open[p.id]); }).map(function (p) { return p.id; });
   }
   function currentEntriesView() {
     if (openOnlyIds) return 'open';
+    if (splitView) return 'split';
     if (tiersView) return 'tiers';
     return sectionsOnly ? 'sections' : (poemsViewMode === 'compact' ? 'titles' : 'entries');
   }
@@ -9792,9 +9877,14 @@
     var b = e.target.closest('button[data-view]');
     if (!b || b.disabled) return;
     setViewMenu(false);
+    if (b.dataset.view === 'split') {
+      if (!splitView) enterSplitView([]);
+      return;
+    }
     if (b.dataset.view === 'open') {
       if (openOnlyIds) return;
       openOnlyIds = openEntryIds();
+      if (splitView) { splitView = false; applySplitLayout(); }
       selectCompactRow(null);
       renderPoems();
       var shown = {};
@@ -9802,10 +9892,11 @@
       previewShow(function (it) { return it.type === 'poem' && shown[(state.poems[it.index] || {}).id]; });
       return;
     }
-    if (openOnlyIds) {
-      // Leaving Edit open poems: back to the view it was opened from,
-      // or to the one picked.
+    if (openOnlyIds || splitView) {
+      // Leaving Edit open poems or Poem and List View: back to the view
+      // it was opened from, or to the one picked.
       openOnlyIds = null;
+      if (splitView) { splitView = false; applySplitLayout(); }
       if (b.dataset.view === currentEntriesView()) { renderPoems(); return; }
     }
     // Entry View again toggles back to Title View.
@@ -10137,6 +10228,77 @@
     });
   }
 
+  var tierGroupMenu = document.getElementById('tierGroupMenu');
+  var tierGroupIds = null, tierGroupBtn = null;
+  function closeTierGroupMenu() {
+    if (tierGroupBtn) tierGroupBtn.setAttribute('aria-expanded', 'false');
+    tierGroupMenu.hidden = true;
+    tierGroupBtn = null;
+  }
+  function openTierGroupMenu(btn, ids) {
+    var reopening = tierGroupBtn === btn;
+    closeTierGroupMenu();
+    if (reopening) return;
+    tierGroupIds = ids;
+    tierGroupBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    tierGroupMenu.querySelector('[data-action="split"]').textContent = 'Open tier in ' + Cap(formNouns().one) + ' and List View';
+    tierGroupMenu.hidden = false;
+    var r = btn.getBoundingClientRect();
+    var mw = tierGroupMenu.offsetWidth, mh = tierGroupMenu.offsetHeight;
+    tierGroupMenu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.right - mw)) + 'px';
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    tierGroupMenu.style.top = top + 'px';
+  }
+  tierGroupMenu.addEventListener('click', function (e) {
+    if (!e.target.closest('[data-action="split"]')) return;
+    var ids = tierGroupIds;
+    closeTierGroupMenu();
+    enterSplitView(ids);
+  });
+  document.addEventListener('click', function (e) { if (tierGroupBtn && !tierGroupMenu.contains(e.target) && e.target !== tierGroupBtn) closeTierGroupMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTierGroupMenu(); });
+  window.addEventListener('scroll', closeTierGroupMenu, true);
+
+  // Poem and List View: the titles (and section bars) on the left, as in
+  // Title View but never opening in place; the open entries on the right.
+  // The search box narrows the list, not the open entries.
+  function renderSplitView() {
+    poemList.classList.remove('titles-view');
+    var list = document.createElement('div');
+    list.className = 'split-list titles-list';
+    var pane = document.createElement('div');
+    pane.className = 'split-pane';
+    var plan = planBooklet(state), num = 0, shown = 0, query = entrySearchQuery();
+    state.poems.forEach(function (poem, i) {
+      if (isSection(poem)) {
+        if (!query) list.appendChild(makeSectionRow(poem, i)).draggable = false;
+        return;
+      }
+      num++;
+      if (!query || entryMatchesSearch(poem)) {
+        var row = makeCompactRow(poem, i, plan, num);
+        row.draggable = false;
+        list.appendChild(row);
+      }
+      if (!splitOpenIds[poem.id]) return;
+      shown++;
+      var card = makeOpenCard(poem, i, plan, num, function () { toggleSplitEntry(poem.id); });
+      card.draggable = false;
+      pane.appendChild(card);
+    });
+    if (!shown) {
+      var hint = document.createElement('div');
+      hint.className = 'split-empty';
+      hint.textContent = 'Select ' + formNouns().many + ' from the list to see them here.';
+      pane.appendChild(hint);
+    }
+    poemList.appendChild(list);
+    poemList.appendChild(pane);
+    poemsCount.textContent = shown ? shown + ' of ' + nounFor(countEntries(state.poems), state) + ' open' : nounFor(countEntries(state.poems), state);
+  }
+
   // Open all / Close all on a tier's heading or a section's bar: opens
   // every poem in it in full (Close all folds them back to titles).
   function makeOpenAllBtn(poems, beforeOpen) {
@@ -10186,7 +10348,21 @@
       head.innerHTML = (color ? '<span class="tier-dot" aria-hidden="true"></span>' : '') + '<span class="tier-group-name"></span><span class="tier-group-count"></span>';
       head.querySelector('.tier-group-name').textContent = name;
       head.querySelector('.tier-group-count').textContent = nounFor(items.length, state);
-      if (items.length) head.appendChild(makeOpenAllBtn(items.map(function (it) { return it.poem; }), function () { expandedTierIds[key] = true; }));
+      if (items.length) {
+        head.appendChild(makeOpenAllBtn(items.map(function (it) { return it.poem; }), function () { expandedTierIds[key] = true; }));
+        var dots = document.createElement('button');
+        dots.type = 'button';
+        dots.className = 'dots-btn';
+        dots.textContent = '⋯';
+        dots.title = 'More';
+        dots.setAttribute('aria-label', name + ' options');
+        dots.setAttribute('aria-haspopup', 'menu');
+        dots.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openTierGroupMenu(dots, items.map(function (it) { return it.poem.id; }));
+        });
+        head.appendChild(dots);
+      }
       function toggle() {
         if (open) delete expandedTierIds[key]; else expandedTierIds[key] = true;
         renderPoems();
@@ -10274,6 +10450,13 @@
     updateEntriesViewSeg(hasSections);
     poemList.classList.toggle('titles-view', poemsViewMode === 'compact' && !sectionsOnly);
     poemList.classList.toggle('tiers-view', tiersView);
+    poemList.classList.toggle('split-view', splitView);
+    if (splitView) {
+      renderSplitView();
+      updateArchiveButton();
+      if (writingPoemId && !(writingCard && poemList.contains(writingCard))) exitWriting();
+      return;
+    }
     if (entrySearchQuery()) {
       renderSearchResults();
       poemsCount.textContent = nounFor(countEntries(state.poems), state);
@@ -12745,6 +12928,7 @@
     seg.querySelector('[data-view="titles"]').title = 'One row per ' + f.one + '; click a title to open it';
     seg.querySelector('[data-view="entries"] .vs-label').textContent = Cap(f.one) + ' View';
     seg.querySelector('[data-view="entries"]').title = 'Every ' + f.one + ' open in full';
+    seg.querySelector('[data-view="split"] .vs-label').textContent = Cap(f.one) + ' and List View';
     document.querySelector('#intakePanel .panel-title').textContent = 'Bring in your ' + f.many;
     document.getElementById('exportSelectBtn').textContent = 'Export select ' + f.many + '…';
     document.getElementById('statPoemsLabel').textContent = Cap(f.many);
