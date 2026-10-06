@@ -9,7 +9,7 @@ window.JG = {
   bio: "I write poems, draw cartoons for the New Yorker, and translate from Dutch and Ladino. I live and teach in New York.",
   bioHTML: function (cls) {
     cls = cls || {};
-    return 'I write <a href="#words/poem" class="' + (cls.poem || "") + '">poems</a>, draw <a href="#pictures" class="' + (cls.comic || "") + '">cartoons for the New&nbsp;Yorker</a>, and <a href="#words/trans" class="' + (cls.trans || "") + '">translate</a> from Dutch and Ladino. I live and teach in New&nbsp;York.';
+    return 'I write <a href="#words/poem" class="' + (cls.poem || "") + '">poems</a>, draw <a href="#pictures" class="' + (cls.comic || "") + '">cartoons</a> for the New&nbsp;Yorker, and <a href="#words/trans" class="' + (cls.trans || "") + '">translate</a> from Dutch and Ladino. I live and teach in New&nbsp;York.';
   },
   /* the full bio behind the homepage's More button: the live About
      page's paragraphs, minus the first line the bio already says */
@@ -19,12 +19,13 @@ window.JG = {
       "I am also a translator. My translation of Judith Herzberg&rsquo;s chapbook <em>Landscape</em> (Dutch) was published by Circumference Books (2022). I was a finalist for the Peirene Stevns Translation Prize 2024. I hold an MFA in literary translation from the University of Iowa, and am an official translator recognized by the Dutch Foundation for Literature.",
       "I have been a fellow at Fulbright, New Jewish Culture Fellowship, UNESCO, and PJ Libraries and have worked as a linguist at Khan Academy, Google, and elsewhere."
   ],
-  /* Recent on the homepage: a few plain lines of news, newest first.
-     Edit freely; k picks the color (poem, trans, prose, comic). */
+  /* Recent on the homepage: cards for things that can be clicked through
+     to, newest first. Only add items with a url. k picks the color
+     (poem, trans, prose, comic); label overrides the kind's name. */
   recent: [
-    { k: "trans", t: "“Tree of Life” by Avner Perets", v: "From the Ladino · forthcoming in <i>Verklempt!</i>" },
+    { k: "comic", t: "“Furniture Arrangements for Your Therapist’s Office”", v: "The New Yorker", url: "https://www.newyorker.com/humor/daily-shouts/furniture-arrangements-for-your-therapists-office" },
     { k: "poem", t: "“The News”", v: "Gotham Literature", url: "https://www.gothamliterature.nyc/content/the-news" },
-    { k: "comic", t: "Cartoons every week", v: "The Sunday Long Read", url: "https://sundaylongread.com" }
+    { k: "trans", label: "Weekly", t: "A cartoon every Sunday", v: "The Sunday Long Read", url: "https://sundaylongread.com" }
   ],
   poemLine: "I smoked what was left of my pipe and tidied my house. I thought about how alone I would look if a camera was hidden. I folded a few months of laundry and spackled the drawers. I gathered the cobwebs and laid them onto a plate one strand at a time. I imagined a hammock’s day in the mild sun. I twisted the clock to display a time I preferred.",
   /* a few facts from the live About page, for options that want a
@@ -41,7 +42,7 @@ window.JG = {
     poem:  { label: "Poetry",            one: "Poem" },
     trans: { label: "Translation",       one: "Translation" },
     prose: { label: "Nonfiction",        one: "Nonfiction" },
-    comic: { label: "Graphic Narrative", one: "Comic" }
+    comic: { label: "Comics",            one: "Comic" }
   },
   works: [
     { k: "poem", t: "The News", v: "Gotham Literature", url: "https://www.gothamliterature.nyc/content/the-news" },

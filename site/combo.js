@@ -50,6 +50,7 @@
     b.dataset.lede = cfg.lede; b.dataset.me = cfg.me; b.dataset.feature = cfg.feature;
     b.dataset.cards = cfg.cards || "tab"; b.dataset.pics = cfg.pics;
     b.dataset.dots = cfg.dots ? "on" : "off"; b.dataset.pressed = cfg.pressed || "ink";
+    b.classList.toggle("pic-border", !!cfg.picBorder);
 
     var tri = "<span></span>".repeat(9);
     b.insertAdjacentHTML("afterbegin",
@@ -58,7 +59,7 @@
       '<nav class="nav"><a href="#me" data-nav="me">Me</a><a href="#words" data-nav="words">Words</a><a href="#pictures" data-nav="pictures">Pictures</a><a data-bookbug href="#">Bookbug</a></nav></div></header>' +
       '<main class="wrap">' +
         '<section data-view="me"><div class="me"><div><p class="lede" id="bio"></p>' +
-          (cfg.more ? '<div class="bio-more" id="bioMore" hidden></div><button type="button" class="more-btn" id="moreBtn" aria-expanded="false" aria-controls="bioMore">More</button>' : "") +
+          (cfg.more ? '<div class="bio-more" id="bioMore" hidden></div>' : "") +
           (cfg.facts ? '<ul class="facts" id="facts"></ul>' : "") + '</div><figure class="feature" id="feature"></figure></div><div id="extra"></div></section>' +
         '<section data-view="words"><div class="filters" id="filters" role="group" aria-label="Show"></div><div id="work"></div></section>' +
         '<section data-view="pictures"><div class="gallery" id="gallery"></div></section>' +
@@ -73,9 +74,11 @@
     var bl = document.querySelectorAll("#bio a");
     bl[0].dataset.k = "poem"; bl[1].dataset.k = "comic"; bl[2].dataset.k = "trans";
     if (cfg.more) {
+      // an ellipsis at the end of the bio opens the full bio (and closes it again)
+      document.getElementById("bio").insertAdjacentHTML("beforeend", ' <button type="button" class="more-dots" id="moreBtn" aria-expanded="false" aria-controls="bioMore" aria-label="Show full bio">…</button>');
       var more = document.getElementById("bioMore"), mb = document.getElementById("moreBtn");
       more.innerHTML = J.bioMore.map(function (p) { return "<p>" + p + "</p>"; }).join("");
-      mb.onclick = function () { more.hidden = !more.hidden; mb.textContent = more.hidden ? "More" : "Less"; mb.setAttribute("aria-expanded", !more.hidden); };
+      mb.onclick = function () { more.hidden = !more.hidden; mb.setAttribute("aria-expanded", !more.hidden); mb.setAttribute("aria-label", more.hidden ? "Show full bio" : "Hide full bio"); };
     }
     if (cfg.facts) document.getElementById("facts").innerHTML = J.facts.map(function (f) { return "<li><b>" + f[0] + "</b><span>" + f[1] + "</span></li>"; }).join("");
     document.getElementById("feature").innerHTML = J.pic(J.FEATURE, "", 1500);
@@ -89,10 +92,10 @@
     }).join("") + "</div>";
     if (cfg.extra === "lately") extra.innerHTML = '<h2 class="sec">Lately</h2><div class="cards">' + J.order.map(function (k) { return card(J.byKind(k)[0]); }).join("") + "</div>";
     // Recent: a few plain lines of news (J.recent in data.js), not buttons
-    if (cfg.extra === "recent") extra.innerHTML = '<h2 class="sec">Recent</h2><ul class="recent">' + J.recent.map(function (w) {
-      var t = w.url ? '<a href="' + w.url + '" target="_blank" rel="noopener">' + w.t + "</a>" : w.t;
-      return '<li data-k="' + w.k + '"><span class="t">' + t + '</span><span class="v">' + w.v + "</span></li>";
-    }).join("") + "</ul>";
+    // Recent: cards, each one a link out (items without a url are skipped)
+    if (cfg.extra === "recent") extra.innerHTML = '<h2 class="sec">Recent</h2><div class="cards recent-cards">' + J.recent.filter(function (w) { return w.url; }).map(function (w) {
+      return '<a class="card" data-k="' + w.k + '" href="' + w.url + '" target="_blank" rel="noopener"><span class="k">' + (w.label || J.kinds[w.k].one) + '</span><p class="t">' + w.t + '</p><span class="v">' + w.v + "</span></a>";
+    }).join("") + "</div>";
 
     /* ---------- Words ---------- */
     var filters = document.getElementById("filters"), work = document.getElementById("work");
