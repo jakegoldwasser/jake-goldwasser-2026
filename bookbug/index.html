@@ -9555,6 +9555,11 @@
   var lastScrollY = window.scrollY;
   function fitStickySidebar() {
     var lowest = Math.min(24, window.innerHeight - sidebarEl.offsetHeight - 24);
+    // An open Formatting panel may be lifted right up to the window's top.
+    if (formattingPinned()) {
+      var fp = document.getElementById('formattingPanel');
+      lowest = Math.min(lowest, 24 - (fp.getBoundingClientRect().top - sidebarEl.getBoundingClientRect().top));
+    }
     sidebarTop = Math.max(lowest, Math.min(24, sidebarTop));
     sidebarEl.style.top = sidebarTop + 'px';
   }
@@ -9571,8 +9576,25 @@
   });
   document.addEventListener('mousedown', function (e) { if (e.target === document.documentElement) userScrolling(60000); });
   document.addEventListener('mouseup', function () { if (userScrollUntil - Date.now() > 1000) userScrolling(100); });
+  // While Formatting is open the column holds still whatever the page
+  // does; scrolling with the pointer over the column moves the column
+  // itself (and not the page), so it stays put until you go there.
+  // (Side-by-side layout only; narrower screens stack the tools below.)
+  var sideBySideMQ = window.matchMedia('(min-width: 861px)');
+  function formattingPinned() { return sideBySideMQ.matches && !document.getElementById('formattingBody').hidden; }
+  sidebarEl.addEventListener('wheel', function (e) {
+    if (!formattingPinned() || e.ctrlKey) return;
+    // A list inside the column that scrolls (a typeface picker) scrolls itself.
+    for (var el = e.target; el && el !== sidebarEl; el = el.parentElement) {
+      var oy = getComputedStyle(el).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) return;
+    }
+    e.preventDefault();
+    sidebarTop -= e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1);
+    fitStickySidebar();
+  }, { passive: false });
   window.addEventListener('scroll', function () {
-    if (Date.now() < userScrollUntil) sidebarTop -= window.scrollY - lastScrollY;
+    if (Date.now() < userScrollUntil && !formattingPinned()) sidebarTop -= window.scrollY - lastScrollY;
     lastScrollY = window.scrollY;
     fitStickySidebar();
   }, { passive: true });
@@ -9582,6 +9604,15 @@
     var r = panel.getBoundingClientRect();
     var overflow = r.bottom - (window.innerHeight - 16);
     if (overflow > 0) { sidebarTop -= Math.min(overflow, r.top - 16); fitStickySidebar(); }
+  }
+  // Opening Formatting brings it to the top right of the window: the
+  // column lifts, and if the column is still in the page's flow (scrolled
+  // near the top), the page scrolls the rest of the way.
+  function pinPanelToTop(panel) {
+    sidebarTop -= panel.getBoundingClientRect().top - 24;
+    fitStickySidebar();
+    var rest = panel.getBoundingClientRect().top - 24;
+    if (rest > 1) window.scrollBy({ top: rest, behavior: 'instant' });
   }
   window.addEventListener('resize', fitStickySidebar);
   if (window.ResizeObserver) new ResizeObserver(fitStickySidebar).observe(sidebarEl);
@@ -11596,7 +11627,10 @@
       // the panel visibly opens downward.
       var drift = toggle.getBoundingClientRect().top - headerTop;
       if (Math.abs(drift) > 1) window.scrollBy({ top: drift, behavior: 'instant' });
-      if (!body.hidden) revealPanel(toggle.closest('.collapsible-panel'));
+      if (!body.hidden) {
+        if (toggle.id === 'formattingToggle' && wideLayout.matches) pinPanelToTop(toggle.closest('.collapsible-panel'));
+        else revealPanel(toggle.closest('.collapsible-panel'));
+      }
       if (toggle.id === 'formattingToggle' && body.hidden) formatStageWanted = false;
       if (toggle.id === 'coversToggle' || toggle.id === 'formattingToggle') {
         if (!body.hidden) lastStagePanel = toggle.id === 'coversToggle' ? 'matter' : 'format';
