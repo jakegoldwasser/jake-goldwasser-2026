@@ -1,4 +1,5 @@
-/* Shared content for the /tweak/ combinations. Everything is taken from the live
+/* Content for the live homepage (index.html), kept apart from /tweak/ so
+   experiments there never change the real site. Everything is taken from the live
    site (index.html, writing.html, illustrations.html); each option renders
    it its own way. Sections follow the live site: Me, Words, Pictures,
    Bookbug. No teaching links on purpose: tutoring stays its own site. */
@@ -119,7 +120,7 @@ window.JG = {
      (Jake_Goldwasser_Cartoonist.jpg), shown without a caption */
   FEATURE: 7,
   links: {
-    bookbug: "../bookbug/",
+    bookbug: "/bookbug/",
     instagram: "https://www.instagram.com/jakegoldwasser/",
     longread: "https://sundaylongread.com",
     museum: "https://www.materialinheritance.com/jake-goldwasser"
