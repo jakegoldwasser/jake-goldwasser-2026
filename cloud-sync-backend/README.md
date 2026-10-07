@@ -67,3 +67,13 @@ Also through `?fetch=`: a public PDF link comes back as `{ contentType: 'applica
 through Drive's public download link (following Google's "can't scan for viruses" page for large
 files). Anything that lands on Google's sign-in page answers `google_private`. The function's
 timeout is 30 s, since Drive's download host can take several seconds to answer.
+
+## Snapshots
+
+An entry's saved drafts sync with the account but stay out of the main
+item (which has a 400 KB cap): `GET ?snaps=<bookId>.<entryId>` returns
+`{ snaps: [...] }` and `PUT ?snaps=<bookId>.<entryId>` with `{ snaps }`
+replaces the list (at most 380 KB; the page keeps lists under 360 KB by
+dropping the oldest automatic snapshots). Each list is one item in the
+images table, `imageId` = `snaps:<bookId>.<entryId>`, under the writer's
+`userId` -- the role's existing GetItem/PutItem on that table covers it.
