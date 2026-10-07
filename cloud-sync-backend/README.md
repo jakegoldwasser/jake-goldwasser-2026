@@ -68,6 +68,17 @@ through Drive's public download link (following Google's "can't scan for viruses
 files). Anything that lands on Google's sign-in page answers `google_private`. The function's
 timeout is 30 s, since Drive's download host can take several seconds to answer.
 
+## Read-only share links
+
+`PUT ?share` (signed in) with `{ bookId }` makes a link to one of the
+writer's own text books and returns `{ token }`; `{ token, revoke: true }`
+ends one of theirs. `GET ?share=<token>` needs no sign-in and returns
+`{ title, book }` -- that book's latest saved version, without its
+comments, submissions, contact details or archive. Each link is an item
+in the main table keyed `share#<token>` (`{ owner, bookId, createdAt }`,
+plus `revoked` once ended), so no new table or permissions are needed.
+The page opens a link at `bookbug/?read=<token>`.
+
 ## Snapshots
 
 An entry's saved drafts sync with the account but stay out of the main
