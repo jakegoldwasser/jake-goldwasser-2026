@@ -14692,14 +14692,17 @@
   }
   // A read-only way to fetch a book as Markdown from this page (the same
   // text Export as Markdown saves), for the person's own scheduled backup
-  // email: bookbugMarkdown('Desert News') finds the book by title (or id)
-  // and says whether this page has synced with the account yet.
+  // email: bookbugMarkdown('Desert News') finds the book by id, by title,
+  // or by the start of its title ("Desert News - Oct 2026"), the newest
+  // unarchived one first, and says whether this page has synced with the
+  // account yet.
   window.bookbugMarkdown = function (titleOrId) {
     flushPendingSave();
     var want = String(titleOrId || '').trim().toLowerCase();
-    var matches = library.filter(function (c) {
-      return c.data && (c.id === titleOrId || String(c.title || '').trim().toLowerCase() === want);
-    }).sort(function (a, b) { return (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0); });
+    var byTitle = function (c) { return String(c.title || '').trim().toLowerCase(); };
+    var exact = library.filter(function (c) { return c.data && (c.id === titleOrId || byTitle(c) === want); });
+    var matches = (exact.length ? exact : library.filter(function (c) { return c.data && want && byTitle(c).indexOf(want) === 0; }))
+      .sort(function (a, b) { return (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0); });
     var entry = matches[0];
     if (!entry) return { synced: signedInThisLoad, found: false };
     var data = entry.id === state.chapbookId ? state : entry.data;
