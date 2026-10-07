@@ -12,7 +12,7 @@
 <meta name="robots" content="noindex">
 <title>72nd Street Trains</title>
 <style>
-/* Layout: one panel per direction (Uptown, Downtown), each with the 1/2/3 trains and then the B/C trains, clock bar on top. Dark by design. */
+/* Layout: one panel per direction (Uptown, Downtown), each with the 1/2/3 trains and then the B/C trains (Uptown: the weather in the B/C's place), clock bar on top. Dark by design. */
 :root {
   --bg: #0b0c0e;
   --panel: #15171b;
@@ -112,8 +112,9 @@ main {
 .bullet.rB { background: var(--orange); }
 .bullet.rC { background: var(--blue); }
 .empty { color: var(--muted); font-size: calc(var(--row) * 0.6); margin: auto 0; }
-/* Morning weather (takes the Downtown panel's place 4–9 a.m.), drawn in the
-   board's subway language. Each hour is a countdown-clock row: a line bullet
+/* Weather, drawn in the board's subway language. It always takes the Uptown
+   B/C's place (now and the next few hours), and takes the Downtown B/C's place
+   with tomorrow's forecast whenever no downtown B/C can be caught. Each hour is a countdown-clock row: a line bullet
    holding the temperature, the conditions where a train's destination goes,
    and the hour where its minutes go. Temperatures are colored cold to hot
    (violet under 45°, blue, green from 60°, yellow from 65°, orange from 80°,
@@ -146,20 +147,8 @@ main {
 .diamond.p-snow > span, .diamond.p-drizzle > span { color: #000; }
 .row .dest.wx { display: flex; align-items: center; overflow: visible; }
 .row .dest.wx .cond { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.wx-now { display: flex; align-items: center; gap: 0.45em; font-size: var(--row); margin: auto 0; }
-.wx-now .bullet.temp { font-size: 1.5em; width: 1.9em; height: 1.9em; font-weight: 800; }
-.wx-cond { font-weight: 700; line-height: 1.15; display: flex; align-items: center; }
-.wx-sub { color: var(--muted); font-size: 0.7em; margin-top: 0.2em; font-variant-numeric: tabular-nums; }
-.wx-day { display: flex; align-items: center; gap: 0.3em; font-size: calc(var(--row) * 0.75); white-space: nowrap; margin-bottom: auto; }
-.wx-day .bullet.temp { font-size: 0.85em; }
-.wx-day .gap { width: 0.6em; }
-/* Today's summary takes only the room it needs; the hours get the rest. */
-.group.wx-top { flex: none; padding: 1.2vh 0 1.6vh; display: flex; flex-direction: column; gap: 1.2vh; }
-.wx-top .wx-now, .wx-top .wx-day { margin: 0; }
-@media (orientation: portrait) {
-  .wx-now .bullet.temp { font-size: 1em; }
-  .group.wx-top { padding: 0.6vh 0 1vh; gap: 0.6vh; }
-}
+.row .dest .lo { color: var(--muted); font-size: 0.7em; margin-right: 0.45em; }
+.row .dest .lo span { font-weight: 700; }
 footer {
   display: flex; justify-content: space-between; gap: 16px;
   font-size: clamp(11px, 1.3vw, 15px); color: var(--muted);
@@ -189,19 +178,17 @@ var CONFIG = {
   // If the MTA ever blocks direct browser access, put a CORS proxy prefix here,
   // e.g. "https://your-proxy.example.com/?url=" (the feed URL is appended, encoded).
   proxy: "",
-  // Mornings, the Downtown panel shows today's weather instead (from 4:00 up to 9:00).
-  weatherFromHour: 4,
-  weatherUntilHour: 9,
   weatherRefreshMinutes: 15,
-  weatherHours: [9, 12, 15, 18]   // the day's forecast is shown at these hours
+  weatherStepHours: 3,            // Uptown: now, then the forecast every this many hours
+  tomorrowHours: [9, 13, 17]      // Downtown, when no B/C can be caught: tomorrow at these hours
 };
 
-// Today's forecast for 71st & Columbus from Open-Meteo (free, no key needed).
+// The forecast for 71st & Columbus from Open-Meteo (free, no key needed).
 var WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=40.7776&longitude=-73.9790" +
   "&current=temperature_2m,apparent_temperature,weather_code" +
   "&hourly=temperature_2m,precipitation_probability,weather_code" +
   "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code" +
-  "&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=1";
+  "&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=3";
 
 var FEED_BASE = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/";
 
@@ -391,11 +378,6 @@ function refreshWeather() {
   });
 }
 
-function isWeatherTime(d) {
-  var h = d.getHours();
-  return h >= CONFIG.weatherFromHour && h < CONFIG.weatherUntilHour;
-}
-
 // WMO weather codes, as Open-Meteo reports them.
 function conditionText(code) {
   if (code === 0) return "Clear";
@@ -436,46 +418,60 @@ function tempBullet(t) { return '<span class="bullet temp ' + tempClass(t) + '">
 function diamond(chance, cls) { return '<span class="diamond ' + cls + '"><span>' + chance + '%</span></span>'; }
 function deg(t) { return Math.round(t) + "&deg;"; }
 
-function weatherPanel() {
-  var head = '<section class="panel"><h2>Today</h2>';
-  if (!weather) {
-    return head + '<div class="group"><div class="empty">' +
-      (weatherError ? "Can't load the weather right now. Retrying." : "Loading the weather&hellip;") +
-      '</div></div></section>';
+// Open-Meteo's local times read "2026-10-07T09:00"; this is the same for a Date.
+function dayKey(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function hourIndex(d) {
+  var key = dayKey(d) + "T" + pad(d.getHours()) + ":00";
+  return ((weather.hourly || {}).time || []).indexOf(key);
+}
+function hourText(h) { return (h % 12 || 12) + '<small>' + (h < 12 ? "AM" : "PM") + '</small>'; }
+// One countdown-clock row: temperature bullet, conditions (+ chance of
+// precipitation in a diamond, shown from 20%), and a label where the minutes go.
+function wxRow(temp, code, chance, label, lead) {
+  var p = precipClass(code);
+  var chanceCls = p && p !== "p-fog" ? p : "p-rain"; // a chance in dry weather reads as rain
+  return '<div class="row">' + tempBullet(temp) +
+    '<span class="dest wx' + (p ? ' ' + p : '') + '">' + (lead || '') + '<span class="cond">' + conditionText(code) + '</span>' +
+    (chance >= 20 ? diamond(chance, chanceCls) : '') + '</span>' +
+    '<span class="mins">' + label + '</span></div>';
+}
+function hourRow(d, label) {
+  var hr = weather.hourly, i = hourIndex(d);
+  if (i === -1) return "";
+  return wxRow(hr.temperature_2m[i], hr.weather_code[i],
+    hr.precipitation_probability ? hr.precipitation_probability[i] : 0, label || hourText(d.getHours()));
+}
+function wxWaiting() {
+  return '<div class="empty">' + (weatherError ? "Can't load the weather right now. Retrying." : "Loading the weather&hellip;") + '</div>';
+}
+
+// Uptown, in the B/C's place: now, then every few hours.
+function weatherNowRows() {
+  if (!weather) return wxWaiting();
+  var now = new Date(), cur = weather.current || {};
+  var i = hourIndex(now), hr = weather.hourly;
+  var rows = [wxRow(cur.temperature_2m, cur.weather_code,
+    i === -1 || !hr.precipitation_probability ? 0 : hr.precipitation_probability[i], "Now")];
+  var t = new Date(now); t.setMinutes(0, 0, 0);
+  for (var n = 1; n < CONFIG.perDirection; n++) {
+    t.setHours(t.getHours() + (n === 1 ? 1 : CONFIG.weatherStepHours));
+    rows.push(hourRow(t));
   }
-  var cur = weather.current || {}, day = weather.daily || {}, hr = weather.hourly || {};
-  var rainMax = day.precipitation_probability_max ? day.precipitation_probability_max[0] : null;
+  return rows.join("");
+}
 
-  // Each precipitation word and chance takes that kind's color; a chance in
-  // dry weather (say, 30% under clouds) reads as rain.
-  var dayCode = day.weather_code ? day.weather_code[0] : 0;
-  var dayP = precipClass(dayCode);
-  var dayWord = { "p-snow": "Snow", "p-storm": "Storms", "p-freezing": "Freezing rain" }[dayP] || "Rain";
-  var dayRainCls = dayP && dayP !== "p-fog" ? dayP : "p-rain";
-  var curP = precipClass(cur.weather_code);
-
-  var top = '<div class="group wx-top"><div class="wx-now">' + tempBullet(cur.temperature_2m) +
-    '<div><div class="wx-cond' + (curP ? ' ' + curP : '') + '">' + (conditionText(cur.weather_code) || "Now") + '</div>' +
-    '<div class="wx-sub">Feels like ' + tempSpan(cur.apparent_temperature) + '</div></div></div>' +
-    '<div class="wx-day">High ' + tempBullet(day.temperature_2m_max[0]) + '<span class="gap"></span>' +
-    'Low ' + tempBullet(day.temperature_2m_min[0]) +
-    (rainMax >= 20 ? '<span class="gap"></span><span class="' + dayRainCls + '">' + dayWord + '</span>' + diamond(rainMax, dayRainCls) : '') +
-    '</div></div>';
-
-  var rows = CONFIG.weatherHours.map(function (h) {
-    var i = (hr.time || []).findIndex(function (t) { return parseInt(t.slice(11, 13), 10) === h; });
-    if (i === -1) return "";
-    var code = hr.weather_code[i], p = precipClass(code);
-    var rain = hr.precipitation_probability ? hr.precipitation_probability[i] : 0;
-    var chanceCls = p && p !== "p-fog" ? p : "p-rain";
-    var hour = (h % 12 || 12) + '<small>' + (h < 12 ? "AM" : "PM") + '</small>';
-    return '<div class="row">' + tempBullet(hr.temperature_2m[i]) +
-      '<span class="dest wx' + (p ? ' ' + p : '') + '"><span class="cond">' + conditionText(code) + '</span>' +
-      (rain >= 20 ? diamond(rain, chanceCls) : '') + '</span>' +
-      '<span class="mins">' + hour + '</span></div>';
-  }).join("");
-
-  return head + top + '<div class="group"><div class="rows">' + rows + '</div></div></section>';
+// Downtown, when no B/C can be caught: tomorrow's high (with its low), then a few hours.
+// Before 4 a.m. the coming day is still today's date.
+function weatherTomorrowRows() {
+  var d = new Date(); if (d.getHours() >= 4) d.setDate(d.getDate() + 1);
+  var day = weather.daily || {}, j = (day.time || []).indexOf(dayKey(d));
+  if (j === -1) return "";
+  var name = d.toLocaleDateString("en-US", { weekday: "short" });
+  var lead = '<span class="lo">low <span class="' + tempClass(day.temperature_2m_min[j]) + '">' + deg(day.temperature_2m_min[j]) + '</span></span>';
+  var rows = [wxRow(day.temperature_2m_max[j], day.weather_code[j],
+    day.precipitation_probability_max ? day.precipitation_probability_max[j] : 0, name, lead)];
+  CONFIG.tomorrowHours.forEach(function (h) { d.setHours(h, 0, 0, 0); rows.push(hourRow(d)); });
+  return rows.join("");
 }
 
 // ---------- Display ----------
@@ -486,12 +482,17 @@ function clockText(d) {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
-function rowsHtml(list, walk) {
+function catchable(list) {
   var now = Date.now() / 1000;
   // Judged by the minutes shown, so nothing reading "2 min" or less appears.
-  var upcoming = (list || []).filter(function (a) { return Math.floor((a.time - now) / 60) > CONFIG.hideWithinMinutes; })
+  return (list || []).filter(function (a) { return Math.floor((a.time - now) / 60) > CONFIG.hideWithinMinutes; })
     .sort(function (a, b) { return a.time - b.time; })
     .slice(0, CONFIG.perDirection);
+}
+
+function rowsHtml(list, walk) {
+  var now = Date.now() / 1000;
+  var upcoming = catchable(list);
   if (!upcoming.length) return '<div class="empty">No catchable trains right now</div>';
   return upcoming.map(function (a) {
     var mins = Math.max(0, Math.floor((a.time - now) / 60));
@@ -508,11 +509,13 @@ function render() {
   var now = new Date();
   document.getElementById("clock").textContent = clockText(now);
 
-  var morning = isWeatherTime(now);
   document.getElementById("board").innerHTML = [["N", "Uptown"], ["S", "Downtown"]].map(function (d) {
-    if (d[0] === "S" && morning) return weatherPanel();
     return '<section class="panel"><h2>' + d[1] + '</h2>' + STATIONS.map(function (st) {
-      return '<div class="group"><div class="rows">' + rowsHtml(arrivals[st.stop + "|" + d[0]], st.walk) + '</div></div>';
+      var list = arrivals[st.stop + "|" + d[0]], inner;
+      if (st.stop === "A22" && d[0] === "N") inner = weatherNowRows();
+      // Only once the trains have loaded and none can be caught (nights, mostly).
+      else if (st.stop === "A22" && list && !catchable(list).length && weather) inner = weatherTomorrowRows();
+      return '<div class="group"><div class="rows">' + (inner || rowsHtml(list, st.walk)) + '</div></div>';
     }).join("") + '</section>';
   }).join("");
 
