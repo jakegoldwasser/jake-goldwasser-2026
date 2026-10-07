@@ -14690,6 +14690,21 @@
     });
     return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
   }
+  // A read-only way to fetch a book as Markdown from this page (the same
+  // text Export as Markdown saves), for the person's own scheduled backup
+  // email: bookbugMarkdown('Desert News') finds the book by title (or id)
+  // and says whether this page has synced with the account yet.
+  window.bookbugMarkdown = function (titleOrId) {
+    flushPendingSave();
+    var want = String(titleOrId || '').trim().toLowerCase();
+    var matches = library.filter(function (c) {
+      return c.data && (c.id === titleOrId || String(c.title || '').trim().toLowerCase() === want);
+    }).sort(function (a, b) { return (a.archived ? 1 : 0) - (b.archived ? 1 : 0) || (b.updatedAt || 0) - (a.updatedAt || 0); });
+    var entry = matches[0];
+    if (!entry) return { synced: signedInThisLoad, found: false };
+    var data = entry.id === state.chapbookId ? state : entry.data;
+    return { synced: signedInThisLoad, found: true, id: entry.id, title: entry.title, updatedAt: entry.updatedAt, archived: !!entry.archived, markdown: bookAsMarkdown(data) };
+  };
   document.getElementById('exportMarkdownBtn').addEventListener('click', function () {
     if (countEntries(state.poems) === 0) return;
     saveExport(slugify(state.bookTitle) + '.md', new TextEncoder().encode(bookAsMarkdown(state)), 'text/markdown');
