@@ -2724,8 +2724,8 @@
   <div class="cb-view" id="cbView" hidden>
     <div class="chapbook-header">
       <div class="book-title-row">
-        <textarea id="cbTitleInput" rows="1" placeholder="Cartoon book title"></textarea>
-        <button class="dots-btn" id="cbBookMenuBtn" type="button" title="Cartoon book options" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false">⋯</button>
+        <textarea id="cbTitleInput" rows="1" placeholder="Cartoon batch title"></textarea>
+        <button class="dots-btn" id="cbBookMenuBtn" type="button" title="Cartoon batch options" aria-label="Cartoon batch options" aria-haspopup="menu" aria-expanded="false">⋯</button>
       </div>
       <input type="text" id="cbAuthorInput" placeholder="Cartoonist">
       <button class="btn tools-toggle" id="cbToolsToggleBtn" type="button" aria-pressed="true" aria-controls="cbSidebar" title="Show or hide Preview, Formatting and Export">
@@ -2764,7 +2764,7 @@
       </div>
       <div class="sidebar" id="cbSidebar">
         <div class="panel preview-panel">
-          <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="cbPreviewOpenBtn" type="button" title="Read the book page by page, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
+          <div class="preview-head"><div class="panel-title">Preview</div><button class="btn btn-sm preview-open-btn" id="cbPreviewOpenBtn" type="button" title="Read the batch page by page, full screen"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 1h4v4M5 11H1V7M11 1 7 5M1 11l4-4"/></svg>Full screen</button></div>
           <div class="preview-stage"><canvas class="cb-preview-canvas" id="cbPreview" title="Click to read full screen"></canvas></div>
           <div class="preview-nav">
             <button type="button" id="cbPrevFirst" aria-label="First page"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2.5v9M11 2.5 6.5 7l4.5 4.5"/></svg></button>
@@ -4003,7 +4003,7 @@
     screenplay: { shelf: 'Screenplays', add: 'Screenplay', plural: 'Screenplays', about: 'Scenes in standard screenplay format: Courier, sluglines, dialogue.', newLabel: 'New screenplay', cover: 'courierprime' },
     play: { shelf: 'Plays', add: 'Stage play', plural: 'Plays', about: 'Acts and scenes, set in standard stage play format.', newLabel: 'New play', cover: 'courierprime' },
     picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and illustrations.', newLabel: 'New picture book', cover: 'poppins' },
-    cartoon: { shelf: 'Cartoon books', add: 'Cartoon book', plural: 'Cartoon books', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon book', cover: 'caslon' }
+    cartoon: { shelf: 'Cartoon batches', add: 'Cartoon batch', plural: 'Cartoon batches', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon batch', cover: 'caslon' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
   function storedHomeForms() {
@@ -12906,7 +12906,7 @@
     delList.innerHTML = '';
     if (recentlyDeleted.length) {
       var sec = recentlyDeletedSection(recentlyDeleted.slice().sort(function (a, b) { return b.deletedAt - a.deletedAt; }), function (d) {
-        return (d.entry.title || 'Untitled book') + ' · ' + (d.kind === 'picture' ? 'picture book' : d.kind === 'cartoon' ? 'cartoon book' : BOOK_FORMS[bookFormOf(d.entry.data)].add.toLowerCase());
+        return (d.entry.title || 'Untitled book') + ' · ' + (d.kind === 'picture' ? 'picture book' : d.kind === 'cartoon' ? 'cartoon batch' : BOOK_FORMS[bookFormOf(d.entry.data)].add.toLowerCase());
       }, restoreDeletedBook);
       sec.removeChild(sec.firstChild);
       delList.appendChild(sec);
@@ -19136,7 +19136,7 @@
     }
     var entry = cbEntry(cbId);
     if (!entry) return;
-    entry.title = cbState.title || 'Untitled cartoon book';
+    entry.title = cbState.title || 'Untitled cartoon batch';
     entry.updatedAt = Date.now();
     entry.data = JSON.parse(JSON.stringify(cbState));
     persistCbLibrary();
@@ -19201,7 +19201,7 @@
     cbFlushPending();
     var src = cbEntry(id);
     if (!src || !src.data) return;
-    var title = 'Copy of ' + (src.title || 'Untitled cartoon book');
+    var title = 'Copy of ' + (src.title || 'Untitled cartoon batch');
     var copy = { id: makeCartoonBookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(src.data)) };
     copy.data.title = title;
     cbLibrary.push(copy);
@@ -19232,7 +19232,7 @@
   async function deleteCartoonBookForever(id) {
     var entry = cbEntry(id);
     if (!entry || !entry.archived) return;
-    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled cartoon book') + '”? You can restore it from Recently deleted, at the bottom of Home, for ' + RECOVER_DAYS + ' days.', 'Delete');
+    var ok = await confirmDialog('Delete “' + (entry.title || 'Untitled cartoon batch') + '”? You can restore it from Recently deleted, at the bottom of Home, for ' + RECOVER_DAYS + ' days.', 'Delete');
     if (!ok) return;
     rememberDeletedBook('cartoon', entry);
     cbLibrary = cbLibrary.filter(function (c) { return c.id !== id; });
@@ -19267,8 +19267,8 @@
     card.setAttribute('role', 'button');
     card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div><div class="home-cover-author"></div></div>' +
       '<div class="home-card-meta"></div>' +
-      '<button class="home-card-more" type="button" title="More" aria-label="Cartoon book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
-    var title = entry.title || 'Untitled cartoon book';
+      '<button class="home-card-more" type="button" title="More" aria-label="Cartoon batch options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
+    var title = entry.title || 'Untitled cartoon batch';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     coverTitle.style.fontFamily = CASLON_STACK;
@@ -19296,7 +19296,7 @@
     row.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>' +
       (archivedView ? '<button class="chapbook-restore" type="button" title="Unarchive">↺</button><button class="chapbook-del" type="button" title="Delete (restorable for 7 days)">×</button>'
         : '<button class="chapbook-restore" type="button" title="Archive">⤓</button>');
-    row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled cartoon book';
+    row.querySelector('.chapbook-title').textContent = entry.title || 'Untitled cartoon batch';
     row.querySelector('.chapbook-meta').textContent = relTime(entry.updatedAt);
     row.addEventListener('click', function () { openCartoonBook(entry.id); });
     row.querySelector('.chapbook-restore').addEventListener('click', function (e) { e.stopPropagation(); setCartoonBookArchived(entry.id, !archivedView); });
