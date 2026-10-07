@@ -570,6 +570,8 @@
   .menu .pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 12px; padding: 4px; }
   .menu .pop button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: 400 15px var(--ui); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
   .menu .pop button:hover { background: var(--hover); }
+  .menu .pop button.danger { color: var(--tomato-deep); border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
+  .menu .pop button.danger:hover { background: var(--tomato-tint); }
   /* The prompt stays pinned above the writing, however far they scroll. */
   #promptBar { flex: none; max-height: 34vh; overflow-y: auto; display: flex; gap: 14px; align-items: flex-start; padding: 12px 18px; background: var(--sun-tint); color: var(--ink); border-bottom: 1.5px solid var(--edge); }
   #promptBar .ptext { flex: 1; font: 400 17px/1.5 var(--ui); white-space: pre-wrap; max-width: 760px; margin: 0 auto; }
@@ -676,6 +678,35 @@
   .rcard .del:hover, .rcard .del:focus-visible { background: var(--tomato-tint); color: var(--tomato-deep); }
   .panel .grouphead .pasthide { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
   .classesbtn { margin-top: 14px; }
+  /* ---- A writing session's page: one "what's next" band, then color-coded panels
+     (the same colors as Home) with one row per student. The band takes the color
+     of its step: yellow to grade, green to hand back, blue when it's all done. ---- */
+  .nextstep { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; padding: 14px 18px; border-radius: 16px; border: 1.5px solid; }
+  .nextstep p { flex: 1; min-width: 200px; margin: 0; font: 400 20px/1.3 var(--display); }
+  .nextstep.todo { background: var(--sun-tint); border-color: var(--sun); }
+  .nextstep.ready { background: var(--mint-tint); border-color: var(--mint); }
+  .nextstep.done { background: var(--sky-tint); border-color: var(--sky); }
+  #roomBody .panelhead .btn { flex: none; }
+  .item.person { flex-wrap: nowrap; gap: 10px; }
+  .item.person.click { cursor: pointer; }
+  .item.person .who { min-width: 0; }
+  .item.person .who span { display: block; }
+  .warntext { font-style: normal; color: var(--tomato-deep); }
+  /* Fixed slots, so the status tags and ⋯ buttons line up down the list. */
+  .item.person .mainslot { flex: none; width: 112px; display: flex; justify-content: flex-end; }
+  .item.person .status { flex: none; }
+  .rowmenu { flex: none; }
+  .rowmenu > summary.iconbtn { width: 32px; height: 32px; font-size: 18px; }
+  .rowmenu > summary::-webkit-details-marker { display: none; }
+  .pill.status.todo { background: var(--sun-tint); color: var(--sun-deep); box-shadow: inset 0 0 0 1.5px var(--sun); }
+  .pill.status.ready, .pill.status.writing { background: var(--card); color: var(--mint-deep); box-shadow: inset 0 0 0 1.5px var(--mint); }
+  .pill.status.back { background: var(--sky-tint); color: var(--sky-deep); box-shadow: inset 0 0 0 1.5px var(--sky); }
+  .pill.status.warn { background: var(--tomato-tint); color: var(--tomato-deep); }
+  @media (max-width: 560px) {
+    .item.person { flex-wrap: wrap; }
+    .item.person .who { flex-basis: 100%; }
+    .item.person .mainslot { width: auto; margin-left: auto; }
+  }
   .casualcheck { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink); font-size: 15px; }
   #classesBox { margin-top: 4px; }
   #classesBox #newClassToggle { margin-top: 10px; }
@@ -966,41 +997,42 @@
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
+            <button type="button" id="reopenBtn">Open it again now</button>
+            <button type="button" id="printAllRoom">Print all papers</button>
             <button type="button" id="handBackAllBtn">Hand back all papers</button>
+            <button type="button" id="deleteRoomBtn" class="danger">Delete this writing session</button>
           </div>
         </details>
       </div>
     </div>
 
+    <!-- What to do next, in one line and one button: grade, hand back, or nothing left to do. -->
+    <div class="nextstep" id="nextStep" hidden><p id="nextStepText"></p><button class="btn" id="nextStepBtn" type="button"></button></div>
+
     <div id="roomBody">
-      <div id="secWaiting" style="order:2">
-        <h3><span>Waiting room</span> <button class="btn small" id="admitAllBtn">Let everyone in</button></h3>
+      <section class="panel tint-sun" id="secWaiting" style="order:1">
+        <div class="panelhead"><h3 class="sect">Waiting room</h3><button class="btn small" id="admitAllBtn">Let everyone in</button></div>
         <div id="waitingList"></div>
-      </div>
+      </section>
 
-      <div id="secIn" style="order:3">
-        <h3>In this writing session</h3>
-        <div id="admittedList"></div>
-      </div>
+      <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
+      <section class="panel tint-mint" id="secPeople" style="order:2">
+        <div class="panelhead"><h3 class="sect">Students</h3></div>
+        <div id="peopleList"></div>
+      </section>
 
-      <div id="notHereSection" style="order:4" hidden>
-        <h3><span id="notHereTitle">On the class list, not here yet</span></h3>
+      <section class="panel tint-sky" id="notHereSection" style="order:3" hidden>
+        <div class="panelhead"><h3 class="sect" id="notHereTitle">Not here yet</h3></div>
         <div id="notHereList"></div>
-      </div>
+      </section>
 
-      <div id="secPapers" style="order:5">
-        <h3><span id="papersTitle">Handed in</span> <button class="btn small ghost" id="printAllRoom" hidden>Print all papers</button></h3>
-        <div id="submissionList"></div>
-      </div>
-
-      <div id="removedSection" style="order:6" hidden>
-        <h3>Removed</h3>
+      <section class="panel" id="removedSection" style="order:4" hidden>
+        <div class="panelhead"><h3 class="sect">Removed</h3></div>
         <div id="removedList"></div>
-      </div>
+      </section>
     </div>
 
     <p class="fine" id="roomNote"></p>
-    <p class="fine" style="margin-top:28px"><button class="btn small danger" id="deleteRoomBtn">Delete this writing session</button></p>
   </div>
 </section>
 
@@ -2499,7 +2531,7 @@
     var w = sessionWindow(r);
     return state === 'running' ? '● Happening now'
       : state === 'upcoming' ? '◔ Coming up · starts ' + whenLabel(w.start)
-      : '✓ Past · ended ' + (r.endedAt ? whenLabel(r.endedAt) : w.end ? whenLabel(w.end) : '');
+      : '✓ Past';
   }
   function classNameOf(id) {
     var c = classes.filter(function (x) { return x.id === id; })[0];
@@ -3105,7 +3137,7 @@
     $('roomTitle').textContent = '';
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
-    ['waitingList', 'admittedList', 'submissionList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
+    ['waitingList', 'peopleList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
     show('roomScreen');
     poll(loadRoom, POLL_ROOM_MS);
   }
@@ -3198,25 +3230,24 @@
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
-    $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : state === 'ended' ? 'ghost' : ''); // once it's over, grading is the main thing
+    $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : '');
+    // Once it's over, grading is the main thing: reopening goes in the More menu.
+    $('openCloseBtn').hidden = state === 'ended';
+    $('reopenBtn').hidden = state !== 'ended';
     renderDrive($('driveBox'), drive);
     $('roomNote').textContent = '';
     chip.setAttribute('data-tip', state === 'ended' ? 'Over: nobody new can get in. Students already in can finish and hand in; what they handed in is below.'
       : state === 'upcoming' ? 'Not started. ' + (teacherRoster ? 'Your class is let in on its own when it does.' : 'The Entry Phrase starts working then.')
       : 'Students can write now. ' + (teacherRoster ? 'Your class is let in on its own.' : 'Anyone with the Entry Phrase can ask in.'));
-    // A past session is for reading what was handed in, so its papers come first.
-    $('secPapers').style.order = state === 'ended' ? '0' : '5';
-    $('secWaiting').style.order = state === 'ended' ? '6' : '2';
-
     var students = Object.keys(room.students).map(function (sub) { var s = room.students[sub]; s.sub = sub; return s; });
-    var byName = function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); };
     var waiting = students.filter(function (s) { return s.status === 'waiting'; }).sort(function (a, b) { return a.requestedAt - b.requestedAt; });
-    var admitted = students.filter(function (s) { return s.status === 'admitted'; }).sort(byName);
+    var admitted = students.filter(function (s) { return s.status === 'admitted'; });
     var removed = students.filter(function (s) { return s.status === 'removed'; });
 
     $('admitAllBtn').hidden = waiting.length < 2;
-    // A casual session lets everyone straight in, so it has no waiting room to show.
-    $('secWaiting').hidden = !!room.casual && !waiting.length;
+    // A casual session lets everyone straight in, and a past one takes nobody new,
+    // so neither shows an empty waiting room.
+    $('secWaiting').hidden = (!!room.casual || state === 'ended') && !waiting.length;
     fill('waitingList', waiting, 'Nobody’s waiting. Anyone who types the Entry Phrase and isn’t on the class list shows up here.', function (s, row) {
       var asked = el('span', 'pill');
       asked.setAttribute('data-asked', s.requestedAt);
@@ -3225,30 +3256,47 @@
       row.appendChild(button('Remove', 'btn small danger', function () { roomAction('remove', [s.sub]); }));
     });
 
-    fill('admittedList', admitted, 'Nobody’s in yet.', function (s, row) {
-      var live = isLive(s);
-      if (s.askedAt && (s.handedIn || s.lockedOut)) row.appendChild(el('span', 'pill flag', '\u2691 Asks to be unlocked'));
-      if (s.lockedOut) row.appendChild(el('span', 'pill warn', 'Locked out'));
-      else if (s.away) row.appendChild(el('span', 'pill warn', 'Off the page now'));
-      else row.appendChild(el('span', 'pill' + (live ? ' good' : ''), live ? 'Writing' : 'Not writing'));
-      if (s.words) row.appendChild(el('span', 'pill', plural(s.words, 'word', 'words')));
-      if (s.leaves) row.appendChild(el('span', 'pill warn', 'Left the page ' + s.leaves + '×'));
-      if (s.submittedAt) row.appendChild(el('span', 'pill good', 'Handed in ' + clock(s.submittedAt)));
-      var ol = ownLabel(room, (s.email || '').toLowerCase());
-      if (ol) row.appendChild(el('span', 'pill own', ol));
-      // The buttons always sit on a row of their own, under the name and tags; grading comes first.
-      var acts = el('div', 'acts');
-      var paper = (room.submissions || []).filter(function (x) { return x.sub === s.sub && x.stored; })[0];
-      if (paper) acts.appendChild(gradeButton(paper));
-      if (s.lockedOut && !s.handedIn) acts.appendChild(button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); }));
-      if (s.handedIn) acts.appendChild(button('Unlock so they can write again', 'btn small ghost', function () { roomAction('release', [s.sub]); }));
-      var ob = ownButton(room, (s.email || '').toLowerCase(), who(s.name, s.email));
-      if (ob) acts.appendChild(ob);
-      acts.appendChild(button('Remove', 'btn small danger', async function () {
-        if (await ask({ title: 'Take ' + who(s.name, s.email) + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
-      }));
-      row.appendChild(acts);
-    });
+    // One row per student: everyone let in, plus anyone else who handed in.
+    var subs = latestPerStudent(room.submissions);
+    var paperOf = {};
+    subs.forEach(function (x) { paperOf[x.sub || x.email] = x; });
+    var people = admitted.map(function (s) { return { s: s, x: paperOf[s.sub] || null }; });
+    var listed = {};
+    admitted.forEach(function (s) { listed[s.sub] = 1; });
+    subs.forEach(function (x) { if (!listed[x.sub || x.email]) people.push({ s: null, x: x }); });
+    people.forEach(function (p) { p.name = p.s ? who(p.s.name, p.s.email) : who(p.x.name, p.x.email); p.email = (p.s ? p.s.email : p.x.email) || ''; });
+    people.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var nameCount = {};
+    people.forEach(function (p) { nameCount[p.name] = (nameCount[p.name] || 0) + 1; });
+
+    // What's next across the session's papers, said once at the top.
+    var papers = people.map(function (p) { return p.x; }).filter(function (x) { return x && x.stored; });
+    var toGrade = papers.filter(function (x) { return paperStage(x) === 'tograde'; });
+    var toHand = papers.filter(function (x) { return paperStage(x) === 'graded'; });
+    var ns = $('nextStep'), nb = $('nextStepBtn');
+    ns.hidden = !papers.length;
+    nb.hidden = false;
+    nb.onclick = null;
+    if (toGrade.length) {
+      ns.className = 'nextstep todo';
+      $('nextStepText').textContent = plural(toGrade.length, 'paper', 'papers') + ' to grade.';
+      nb.textContent = toGrade.length === papers.length ? 'Start grading' : 'Grade the next one';
+      nb.onclick = function () { openMark(toGrade[0].id, function () { openRoom(teacherRoom.code); }); };
+    } else if (toHand.length) {
+      ns.className = 'nextstep ready';
+      $('nextStepText').textContent = 'All graded. Hand ' + (toHand.length === 1 ? 'it' : 'them') + ' back so students can read your comments.';
+      nb.textContent = toHand.length === 1 ? 'Hand it back' : 'Hand back all ' + toHand.length;
+      nb.onclick = function () { $('handBackAllBtn').click(); };
+    } else {
+      ns.className = 'nextstep done';
+      $('nextStepText').textContent = '✓ Every paper is graded and handed back.';
+      nb.hidden = true;
+    }
+
+    var pl = $('peopleList');
+    pl.innerHTML = '';
+    if (!people.length) pl.appendChild(el('div', 'empty', state === 'upcoming' ? 'Nobody yet. Students show up here once it starts.' : 'Nobody’s in yet.'));
+    people.forEach(function (p) { pl.appendChild(personRow(room, state, p, nameCount[p.name] > 1)); });
 
     // The class list: who hasn't come in yet, and who has their own time.
     var inEmails = {};
@@ -3256,7 +3304,7 @@
     var notHere = teacherRoster ? teacherRoster.emails.filter(function (e) { return !inEmails[e]; }) : [];
     $('notHereSection').hidden = !teacherRoster;
     if (teacherRoster) {
-      $('notHereTitle').textContent = (teacherRoster.id ? 'On the class list' : 'Invited') + ', not here yet (' + notHere.length + ')';
+      $('notHereTitle').textContent = state === 'ended' ? 'Didn’t come' : 'Not here yet';
       var nl = $('notHereList');
       nl.innerHTML = '';
       if (!notHere.length) nl.appendChild(el('div', 'empty', 'Everyone on the list has come in.'));
@@ -3273,45 +3321,93 @@
       });
     }
 
-    var subs = latestPerStudent(room.submissions);
-    $('papersTitle').textContent = 'Handed in (' + subs.length + ')';
-    $('printAllRoom').hidden = !subs.some(function (x) { return x.stored; });
-    var list = $('submissionList');
-    list.innerHTML = '';
-    if (!subs.length) list.appendChild(el('div', 'empty', 'Nothing handed in yet.'));
-    subs.slice().sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); }).forEach(function (x) {
-      var row = el('div', 'item');
-      var w = el('div', 'who');
-      w.appendChild(el('b', null, who(x.name, x.email)));
-      w.appendChild(el('span', null, new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) +
-        ' · ' + plural(x.words, 'word', 'words') + ' · left the page ' + plural(x.leaves, 'time', 'times')));
-      row.appendChild(w);
-      if (x.late) row.appendChild(el('span', 'pill warn', 'Late'));
-      if (x.grade) row.appendChild(el('span', 'pill gradepill', x.grade));
-      if (x.auto) row.appendChild(el('span', 'pill', 'Handed in when the session ended'));
-      if (x.marked && !x.returnedAt) row.appendChild(el('span', 'pill good', 'Marked'));
-      if (x.driveError && !x.link) row.appendChild(el('span', 'pill warn', 'Not in Drive'));
-      var acts = el('div', 'acts');
-      if (x.stored) acts.appendChild(gradeButton(x));
-      if (x.stored && x.marked && !x.returnedAt) acts.appendChild(button('Hand back', 'btn small ghost', async function () {
-        try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
-      }));
-      if (x.link) {
-        var a = el('a', 'btn small ghost', 'Open in Drive');
-        a.href = x.link;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.style.textDecoration = 'none';
-        acts.appendChild(a);
-      }
-      row.appendChild(acts);
-      list.appendChild(row);
-    });
-
     $('removedSection').hidden = !removed.length;
     fill('removedList', removed, '', function (s, row) {
       row.appendChild(button('Let back in', 'btn small ghost', function () { roomAction('admit', [s.sub]); }));
     });
+  }
+
+  // Where a paper is in grading: to grade, graded (comments or a grade, not yet
+  // handed back), or handed back.
+  function paperStage(x) {
+    if (!x) return null;
+    if (x.returnedAt) return 'back';
+    if (x.grade || x.marked) return 'graded';
+    return 'tograde';
+  }
+
+  // One student in a writing session: who they are, one colored status, and
+  // the one button for what to do next. Everything else is under ⋯, and the
+  // row itself opens their paper.
+  function personRow(room, state, p, showEmail) {
+    var s = p.s, x = p.x, stage = x && x.stored ? paperStage(x) : null;
+    var writingAgain = s && !s.handedIn && !(state === 'ended' && !isLive(s));
+    var row = el('div', 'item person' + (stage ? ' click' : ''));
+    var w = el('div', 'who');
+    w.appendChild(el('b', null, p.name));
+    var line = el('span');
+    var bits = [];
+    if (showEmail && p.email) bits.push(p.email);
+    // The session's date is in the header, so a same-day hand-in needs only its time.
+    if (x) bits.push('Handed in ' + (new Date(x.at).toDateString() === new Date(room.startAt || x.at).toDateString() ? clock(x.at)
+      : new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
+    var words = x ? x.words : s && s.words;
+    if (words) bits.push(plural(words, 'word', 'words'));
+    line.textContent = bits.join(' · ');
+    var leaves = x ? x.leaves : s && s.leaves;
+    if (leaves) line.appendChild(el('em', 'warntext', (bits.length ? ' · ' : '') + 'left the page ' + leaves + '×'));
+    if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
+    w.appendChild(line);
+    row.appendChild(w);
+
+    // One status, the most pressing first.
+    var tag;
+    if (s && s.askedAt && (s.handedIn || s.lockedOut)) tag = ['flag', '⚑ Asks to be unlocked'];
+    else if (s && s.lockedOut) tag = ['warn', 'Locked out'];
+    else if (writingAgain && s.away) tag = ['warn', 'Off the page'];
+    else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
+    else if (stage === 'tograde') tag = ['todo', 'To grade'];
+    else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
+    else if (stage === 'back') tag = ['back', 'Handed back' + (x.grade ? ': ' + x.grade : '')];
+    else if (x && !x.stored) tag = ['warn', 'Not saved'];
+    else tag = ['', state === 'ended' ? 'Didn’t hand in' : 'Not writing'];
+    row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
+
+    var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); };
+    var main = null;
+    if (s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
+    else if (stage === 'tograde') main = button('Grade', 'btn small', open);
+    else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    });
+    // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
+    var slot = el('div', 'mainslot');
+    if (main) slot.appendChild(main);
+    row.appendChild(slot);
+
+    var menu = el('details', 'menu rowmenu');
+    var sum = el('summary', 'iconbtn', '⋯');
+    sum.setAttribute('aria-label', 'More for ' + p.name);
+    menu.appendChild(sum);
+    var pop = el('div', 'pop');
+    var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
+    if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
+    if (s && s.handedIn) item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
+    if (s && s.email) {
+      var em = s.email.toLowerCase();
+      item(room.own && room.own[em] ? 'Change own time' : 'Own time', function () { openOwnTime(em, p.name); });
+    }
+    if (s) item('Remove from this session', async function () {
+      if (await ask({ title: 'Take ' + p.name + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
+    });
+    if (pop.children.length) { menu.appendChild(pop); row.appendChild(menu); }
+
+    if (stage) {
+      row.tabIndex = 0;
+      row.addEventListener('click', function (e) { if (!e.target.closest('button, a, details')) open(); });
+      row.addEventListener('keydown', function (e) { if (e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
+    }
+    return row;
   }
 
   // Grade, or once the paper's been handed back, a greyed "Handed back" that still opens it.
@@ -3340,6 +3436,7 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  $('reopenBtn').addEventListener('click', function () { $('roomMenu').open = false; roomAction('startNow'); });
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
@@ -3355,6 +3452,7 @@
     await roomAction('rename', [], { title: t.trim() });
   });
   $('deleteRoomBtn').addEventListener('click', async function () {
+    $('roomMenu').open = false;
     if (await ask({ title: 'Delete “' + teacherRoom.title + '”?', text: 'It leaves your list and nobody can join it. Work already handed in stays in your Drive.', ok: 'Delete', danger: true })) roomAction('delete');
   });
   $('copyLinkBtn').addEventListener('click', function () {

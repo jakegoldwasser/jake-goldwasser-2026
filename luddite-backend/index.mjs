@@ -355,8 +355,8 @@ function roomSummary(room) {
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
     submissions: (room.submissions || []).length,
-    // Papers with a grade or handed back, so Home can say whether a past session is graded.
-    graded: (room.submissions || []).filter((x) => x.grade || x.returnedAt).length
+    // Papers marked up, given a grade or handed back, so Home can say whether a past session is graded.
+    graded: (room.submissions || []).filter((x) => x.grade || x.marked || x.returnedAt).length
   };
 }
 
