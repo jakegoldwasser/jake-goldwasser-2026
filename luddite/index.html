@@ -113,7 +113,6 @@
   .newroombox > .newroom { border-radius: 0 0 14px 14px; padding: 22px 22px 24px; box-shadow: inset 0 0 0 2px var(--ink); }
   h3.sect { font: 400 28px Literata, Georgia, serif; letter-spacing: 0; text-transform: none; color: var(--ink); margin: 44px 0 4px;
     border-bottom: 3px solid var(--ink); padding-bottom: 6px; justify-content: flex-start; }
-  h3.sect #roomCount { font-size: 20px; color: var(--muted); }
   .more { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px; }
   .more > summary { font-size: 16px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .more > summary::before { content: '\25B8  '; }
@@ -630,7 +629,7 @@
   /* ---- Home: a few clear panels instead of loose titles. Each panel is a white
      card with its title (and its one action) on top, and its items as plain
      rows separated by hairlines, so nothing is a card inside a card. ---- */
-  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .actions { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 20px; }
   .btn.bigaction { padding: 14px 18px; font-size: 16px; width: 100%; }
   .btn.ghost.bigaction { border-color: var(--edge); }
   .btn.bigaction.on { background: #44501F; }
@@ -666,6 +665,21 @@
   .panel .rcard .facts { margin-top: 0; flex: none; gap: 8px; }
   .panel .empty { border: 0; border-top: 1px solid var(--rule); border-radius: 0; margin: 0; padding: 10px 4px; }
   @media (max-width: 480px) { .actions { grid-template-columns: 1fr; } .panel { padding: 14px 14px 16px; } }
+  /* Home's standing panels are color-coded so each is findable at a glance;
+     the New Writing Session form stays white, since it's a form being filled in,
+     not a place. Cards inside stay white, so they read as items on the color. */
+  .panel.tint-sky { background: var(--sky-tint); border-color: var(--sky); }
+  .panel.tint-sun { background: var(--sun-tint); border-color: var(--sun); }
+  .panel.tint-mint { background: var(--mint-tint); border-color: var(--mint); }
+  /* Delete on a session card is a bare X: it's on every card, so a worded button was noise. */
+  .rcard .del { width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 400 22px/1 var(--ui); cursor: pointer; padding: 0; }
+  .rcard .del:hover, .rcard .del:focus-visible { background: var(--tomato-tint); color: var(--tomato-deep); }
+  .panel .grouphead .pasthide { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .classesbtn { margin-top: 14px; }
+  .casualcheck { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink); font-size: 15px; }
+  #classesBox { margin-top: 4px; }
+  #classesBox #newClassToggle { margin-top: 10px; }
+  #classesBox #newClassBox { border-top: 0; padding: 12px 0 4px; }
 
   /* Arrows: the teacher's green pen, drawn over the page between two points in
      the text. Only the lines themselves (and their numbers) take clicks; a
@@ -854,7 +868,7 @@
     </div>
 
     <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
-    <section class="panel" id="forYouBox" hidden>
+    <section class="panel tint-sky" id="forYouBox" hidden>
       <div class="panelhead"><h3 class="sect">For you to write <span class="q" tabindex="0" data-tip="Writing sessions another teacher has given to a class you are on. Enter one to write in it like a student.">?</span></h3></div>
       <div id="forYouList"></div>
     </section>
@@ -862,15 +876,14 @@
     <!-- The two things a teacher starts from Home -->
     <div class="actions">
       <button class="btn bigaction" id="newBtn" type="button">+ New writing session</button>
-      <button class="btn ghost bigaction" id="casualBtn" type="button">Casual session</button>
     </div>
-    <p class="fine warn" id="casualNote" hidden></p>
 
     <section class="panel" id="newRoomBox" hidden>
       <div class="panelhead"><h3 class="sect big">New Writing Session</h3><button class="iconbtn" id="newRoomClose" type="button" aria-label="Minimize">&ndash;</button></div>
       <form id="newRoomForm">
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
+          <label class="fine casualcheck"><input type="checkbox" id="newRoomCasual"> Casual session <span class="q" tabindex="0" data-tip="No name or class needed: anyone who types the Entry Phrase comes straight in, with no waiting room.">?</span></label>
 
           <div class="formrow">
             <label class="lbl" for="newRoomPrompt">Prompt <span class="q" tabindex="0" data-tip="Optional. Students see it pinned at the top of their writing page until they close it. You can change it later.">?</span></label>
@@ -900,37 +913,37 @@
         </form>
     </section>
 
-    <section class="panel">
-      <div class="panelhead"><h3 class="sect">Writing sessions <span class="n" id="roomCount"></span> <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. A casual session starts right away: no name, no class, anyone with the Entry Phrase comes straight in. Deleting a session only takes it off this list; work handed in stays under Student work.">?</span></h3></div>
+    <section class="panel tint-sun">
+      <div class="panelhead"><h3 class="sect">Writing sessions <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. Deleting a session only takes it off this list; work handed in stays under Student work.">?</span></h3></div>
       <div id="roomList"></div>
     </section>
 
-    <section class="panel">
-      <div class="panelhead"><h3 class="sect">Classes <span class="n" id="classCount"></span> <span class="q" tabindex="0" data-tip="A class is a list of email addresses. Give a writing session a class and everyone on the list is let in on their own when it starts.">?</span></h3>
-        <button class="iconbtn" id="newClassToggle" type="button" aria-label="Make a new class" data-tip="Make a new class">+</button></div>
-      <div id="newClassBox" hidden>
-        <form id="newClassForm">
-          <label class="lbl" for="newClassName">Class name</label>
-          <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off">
-          <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
-          <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
-          <div class="row" style="justify-content:flex-start; margin-top:8px">
-            <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
-          </div>
-          <p class="fine" id="newClassFound" style="margin-top:8px"></p>
-          <button class="btn" type="submit" style="margin-top:6px">Make the class</button>
-        </form>
-      </div>
-      <div id="classList"></div>
-    </section>
-
-    <section class="panel">
+    <section class="panel tint-mint">
       <div class="panelhead"><h3 class="sect">Student work <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3></div>
       <div class="row" style="justify-content:flex-start; margin-bottom:6px">
         <select class="field" id="studentClass" aria-label="Show students from" hidden></select>
         <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
       </div>
       <div id="studentList"></div>
+      <!-- Classes live here, folded away: they're set up once a term, so they don't need a panel of their own. -->
+      <button class="btn small ghost classesbtn" id="classesToggle" type="button" aria-expanded="false">Add or edit classes</button>
+      <div id="classesBox" hidden>
+        <div id="classList"></div>
+        <button class="btn small ghost" id="newClassToggle" type="button">+ New class</button>
+        <div id="newClassBox" hidden>
+          <form id="newClassForm">
+            <label class="lbl" for="newClassName">Class name</label>
+            <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off">
+            <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
+            <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
+            <div class="row" style="justify-content:flex-start; margin-top:8px">
+              <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
+            </div>
+            <p class="fine" id="newClassFound" style="margin-top:8px"></p>
+            <button class="btn" type="submit" style="margin-top:6px">Make the class</button>
+          </form>
+        </div>
+      </div>
     </section>
 
   </div>
@@ -2653,13 +2666,15 @@
 
   // Three clear groups: what's happening now, what's coming, what's over.
   // Past sessions pile up over a year, so Home shows only the latest few;
-  // the rest are a click away.
+  // the rest are a click away, and the whole group can be hidden (remembered
+  // in this browser).
   var PAST_ON_HOME = 2, showAllPast = false, lastSessions = [];
+  var hidePast = false;
+  try { hidePast = localStorage.getItem('luddite.hidePast') === '1'; } catch (e) {}
   function drawSessions(list) {
     lastSessions = list;
     var box = $('roomList');
     box.innerHTML = '';
-    $('roomCount').textContent = list.length ? String(list.length) : '';
     if (!list.length) {
       if (!loadRooms.seen) setNewOpen(true);
       loadRooms.seen = true;
@@ -2681,9 +2696,20 @@
       var h = el('h4', 'grouphead ' + g[0]);
       h.appendChild(el('span', 'dot'));
       h.appendChild(document.createTextNode(g[1] + ' '));
-      h.appendChild(el('span', 'n', String(items.length)));
       h.appendChild(tipEl(g[2]));
       box.appendChild(h);
+      if (g[0] === 'ended' && items.length) {
+        var hide = el('button', 'linkish pasthide', hidePast ? 'Show' : 'Hide');
+        hide.type = 'button';
+        hide.setAttribute('aria-expanded', String(!hidePast));
+        hide.addEventListener('click', function () {
+          hidePast = !hidePast;
+          try { localStorage.setItem('luddite.hidePast', hidePast ? '1' : '0'); } catch (e) {}
+          drawSessions(lastSessions);
+        });
+        h.appendChild(hide);
+        if (hidePast) return;
+      }
       if (!items.length) box.appendChild(el('p', 'groupempty', g[3]));
       var shown = g[0] === 'ended' && !showAllPast ? items.slice(0, PAST_ON_HOME) : items;
       shown.forEach(function (r) { box.appendChild(sessionCard(r)); });
@@ -2710,7 +2736,17 @@
     // Home keeps it short: the details are on the session's own page. Only
     // students waiting to be let in, which needs doing, show here.
     if (r.waiting) facts.appendChild(el('span', 'badge', r.waiting + (r.waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
-    var del = el('button', 'linkish del', 'Delete');
+    // A past session says whether its papers are graded yet: a paper counts
+    // once it has a grade or has been handed back.
+    if (r.state === 'ended' && typeof r.graded === 'number') {
+      if (!r.submissions) facts.appendChild(el('span', 'pill', 'Nothing handed in'));
+      else if (r.graded >= r.submissions) facts.appendChild(el('span', 'pill good', 'Graded'));
+      else facts.appendChild(el('span', 'pill own', r.graded ? r.graded + ' of ' + r.submissions + ' graded' : 'Not graded'));
+    }
+    var del = el('button', 'del', '\u00d7');
+    del.type = 'button';
+    del.setAttribute('aria-label', 'Delete ' + r.title);
+    del.title = 'Delete';
     del.addEventListener('click', function () { deleteRoom(r); });
     facts.appendChild(del);
     card.appendChild(facts);
@@ -2740,15 +2776,21 @@
   $('newRoomClose').addEventListener('click', function () { setNewOpen(false); });
   function setClassFormOpen(open) {
     $('newClassBox').hidden = !open;
-    $('newClassToggle').textContent = open ? '\u2013' : '+';
-    $('newClassToggle').setAttribute('aria-label', open ? 'Close the new class form' : 'Make a new class');
+    $('newClassToggle').textContent = open ? 'Cancel' : '+ New class';
     if (open) $('newClassName').focus();
   }
   $('newClassToggle').addEventListener('click', function () { setClassFormOpen($('newClassBox').hidden); });
+  function setClassesOpen(open) {
+    $('classesBox').hidden = !open;
+    $('classesToggle').setAttribute('aria-expanded', String(open));
+    $('classesToggle').textContent = open ? 'Done with classes' : 'Add or edit classes';
+    if (open && !classes.length) setClassFormOpen(true);
+  }
+  $('classesToggle').addEventListener('click', function () { setClassesOpen($('classesBox').hidden); });
   function fillClassSelects() {
     var sel = $('newRoomClass'), keep = sel.value;
     sel.innerHTML = '';
-    var none = el('option', null, classes.length ? 'No class (students use the Entry Phrase)' : 'No classes yet — make one below');
+    var none = el('option', null, classes.length ? 'No class (students use the Entry Phrase)' : 'No classes yet (add one under Student work)');
     none.value = '';
     sel.appendChild(none);
     classes.forEach(function (c) { var o = el('option', null, c.name + ' (' + c.count + ')'); o.value = c.id; sel.appendChild(o); });
@@ -2783,8 +2825,9 @@
     var title = $('newRoomTitle').value.trim();
     var note = $('newRoomWhenNote');
     note.hidden = true;
-    $('newRoomNote').hidden = !!title;
-    if (!title) { $('newRoomTitle').focus(); return; }
+    var casual = $('newRoomCasual').checked;
+    $('newRoomNote').hidden = !!title || casual;
+    if (!title && !casual) { $('newRoomTitle').focus(); return; }
     var startAt = null;
     if (newWhen === 'later') {
       startAt = newPicker && newPicker.get();
@@ -2792,35 +2835,32 @@
       if (startAt < Date.now() - 60000) { note.textContent = 'That time has already passed. Pick a later one.'; note.hidden = false; return; }
     }
     // A list typed in for this session alone, in place of a class.
-    var listOnly = $('newRoomClass').value === '__list';
+    var listOnly = !casual && $('newRoomClass').value === '__list';
     var listed = listOnly ? extractEmails($('newRoomEmails').value) : [];
     if (listOnly && !listed.length) { note.textContent = 'Type in at least one email address, or pick a class.'; note.hidden = false; $('newRoomEmails').focus(); return; }
     try {
-      var data = await api('/luddite/assignments', { title: title, prompt: $('newRoomPrompt').value.trim(), classId: listOnly ? null : $('newRoomClass').value || null, emails: listOnly ? listed : undefined, startAt: startAt });
+      var data = await api('/luddite/assignments', casual
+        ? { casual: true, title: title, prompt: $('newRoomPrompt').value.trim(), startAt: startAt }
+        : { title: title, prompt: $('newRoomPrompt').value.trim(), classId: listOnly ? null : $('newRoomClass').value || null, emails: listOnly ? listed : undefined, startAt: startAt });
       $('newRoomTitle').value = '';
       $('newRoomPrompt').value = '';
       $('newRoomEmails').value = '';
       $('newRoomEmailsFound').textContent = '';
+      if (casual) { phraseNext = true; $('newRoomCasual').checked = false; $('newRoomCasual').dispatchEvent(new Event('change')); }
       openRoom(data.room.code);
     } catch (err) {
       if (err.message === 'signed_out') return;
       note.textContent = 'Couldn’t make it. Try again.'; note.hidden = false;
     }
   });
-  // A casual session: no name, no class; starts now and shows its Entry Phrase to hand out.
+  // A casual session: the name is optional and there's no class; it opens
+  // on its Entry Phrase to hand out.
   var phraseNext = false;
-  $('casualBtn').addEventListener('click', async function () {
-    var btn = $('casualBtn');
-    btn.disabled = true;
-    try {
-      var data = await api('/luddite/assignments', { casual: true });
-      phraseNext = true;
-      openRoom(data.room.code);
-    } catch (err) {
-      if (err.message === 'signed_out') return;
-      $('casualNote').hidden = false;
-      $('casualNote').textContent = 'Couldn’t start it. Try again.';
-    } finally { btn.disabled = false; }
+  $('newRoomCasual').addEventListener('change', function () {
+    var casual = $('newRoomCasual').checked;
+    $('classRow').hidden = casual;
+    $('newRoomTitle').placeholder = casual ? 'Name (optional)' : 'Type the writing session name here';
+    if (casual) $('newRoomNote').hidden = true;
   });
   $('newRoomTitle').addEventListener('input', function () { if ($('newRoomTitle').value.trim()) $('newRoomNote').hidden = true; });
 
@@ -2828,7 +2868,6 @@
   function drawClasses() {
     var box = $('classList');
     box.innerHTML = '';
-    $('classCount').textContent = classes.length ? String(classes.length) : '';
     if (!classes.length) box.appendChild(el('div', 'empty', 'No classes yet.'));
     classes.forEach(function (c) {
       var card = el('div', 'classcard click');
@@ -3053,7 +3092,7 @@
     try {
       var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
       note.className = 'fine good';
-      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Classes.';
+      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Student work.';
       lastDrawn = '';
       loadRooms();
     } catch (e) { note.className = 'fine warn'; note.textContent = 'Couldn’t make it. Try again.'; }

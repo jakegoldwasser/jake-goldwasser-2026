@@ -354,7 +354,9 @@ function roomSummary(room) {
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
     admitted: students.filter((s) => s.status === 'admitted').length,
-    submissions: (room.submissions || []).length
+    submissions: (room.submissions || []).length,
+    // Papers with a grade or handed back, so Home can say whether a past session is graded.
+    graded: (room.submissions || []).filter((x) => x.grade || x.returnedAt).length
   };
 }
 
