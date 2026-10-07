@@ -500,6 +500,40 @@ export const handler = async (event) => {
     return putShare(userId, payload);
   }
 
+  // ---- Snapshots ----
+  // An entry's saved drafts, too big to ride in the account's one item:
+  // GET ?snaps=<book>.<entry> -> { snaps: [...] }, PUT with { snaps } to
+  // replace them. Each entry's list is one item in the images table,
+  // keyed "snaps:<book>.<entry>" under the writer's account (the page
+  // keeps a list under 360 KB, dropping its oldest automatic snapshots).
+  const snapsKey = event.queryStringParameters?.snaps;
+  if (snapsKey !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,80}\.[A-Za-z0-9_-]{1,80}$/.test(snapsKey)) return respond(400, { error: 'Bad snapshots key' });
+    const key = { userId: { S: userId }, imageId: { S: 'snaps:' + snapsKey } };
+    if (method === 'GET') {
+      const result = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: key }));
+      return respond(200, { snaps: result.Item && result.Item.json ? JSON.parse(result.Item.json.S) : [] });
+    }
+    if (method === 'PUT') {
+      let payload;
+      try {
+        const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+        payload = JSON.parse(raw);
+      } catch (e) {
+        return respond(400, { error: 'Invalid JSON body' });
+      }
+      if (!payload || !Array.isArray(payload.snaps)) return respond(400, { error: 'Expected { snaps }' });
+      const json = JSON.stringify(payload.snaps);
+      if (Buffer.byteLength(json) > 380 * 1024) return respond(413, { error: 'Too large' });
+      await ddb.send(new PutItemCommand({
+        TableName: IMAGE_TABLE_NAME,
+        Item: { ...key, json: { S: json }, updatedAt: { N: String(Date.now()) } }
+      }));
+      return respond(200, { ok: true });
+    }
+    return respond(405, { error: 'Method not allowed' });
+  }
+
   // ---- Picture-book images ----
   // GET ?image=<id> -> { type, data (base64) }; PUT ?image=<id> with
   // { type, data } stores it, or { delete: true } removes it. PUT rather

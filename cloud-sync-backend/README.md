@@ -78,3 +78,13 @@ comments, submissions, contact details or archive. Each link is an item
 in the main table keyed `share#<token>` (`{ owner, bookId, createdAt }`,
 plus `revoked` once ended), so no new table or permissions are needed.
 The page opens a link at `bookbug/?read=<token>`.
+
+## Snapshots
+
+An entry's saved drafts sync with the account but stay out of the main
+item (which has a 400 KB cap): `GET ?snaps=<bookId>.<entryId>` returns
+`{ snaps: [...] }` and `PUT ?snaps=<bookId>.<entryId>` with `{ snaps }`
+replaces the list (at most 380 KB; the page keeps lists under 360 KB by
+dropping the oldest automatic snapshots). Each list is one item in the
+images table, `imageId` = `snaps:<bookId>.<entryId>`, under the writer's
+`userId` -- the role's existing GetItem/PutItem on that table covers it.

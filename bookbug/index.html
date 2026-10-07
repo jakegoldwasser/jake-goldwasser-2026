@@ -4570,6 +4570,7 @@
     saveStateCache();
     syncCurrentIntoLibrary();
     scheduleCloudAutosave();
+    autoSnapshots();
   }
   function persist() {
     clearTimeout(saveTimer);
@@ -11221,8 +11222,11 @@
 
   // ---------------------------------------------------------------------
   // Snapshots: saved copies of an entry to compare with or go back to.
-  // Kept on this device (IndexedDB), not synced: a book's synced copy has
-  // a size limit, and a few drafts of every chapter would pass it.
+  // Signed in, they're kept with the account -- each entry's list as its
+  // own item (the account's main item has a size limit a few drafts of
+  // every chapter would pass), so they follow the writer to any device;
+  // signed out, on this device (IndexedDB). Snapshots made on this device
+  // move to the account the first time the entry's list is opened signed in.
   // ---------------------------------------------------------------------
   var snapDbPromise = null;
   function snapDb() {
@@ -11247,16 +11251,136 @@
       });
     });
   }
-  function snapList(poemId) {
+  function localSnapList(poemId) {
     return snapTx('readonly', function (st) { return st.index('poemId').getAll(poemId); })
       .then(function (rows) { return (rows || []).sort(function (a, b) { return b.at - a.at; }); });
   }
-  function snapTake(poem, name) {
-    var rec = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), poemId: poem.id, bookId: state.chapbookId || null,
-      at: Date.now(), name: name || '', title: poem.title || '', lines: (poem.lines || []).slice() };
-    return snapTx('readwrite', function (st) { return st.put(rec); }).then(function () { return rec; });
+  function localSnapPut(rec) { return snapTx('readwrite', function (st) { return st.put(rec); }); }
+  function localSnapDelete(id) { return snapTx('readwrite', function (st) { return st.delete(id); }); }
+  function snapCloudKey(poem) {
+    var b = state.chapbookId || '', p = poem.id || '';
+    return cloudAuthToken && /^[A-Za-z0-9_-]{1,80}$/.test(b) && /^[A-Za-z0-9_-]{1,80}$/.test(p) ? b + '.' + p : null;
   }
-  function snapDelete(id) { return snapTx('readwrite', function (st) { return st.delete(id); }); }
+  async function cloudSnapsGet(key) {
+    var res = await fetch(CLOUD_API_URL + '?snaps=' + encodeURIComponent(key), { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
+    var data = res.ok ? await res.json() : null;
+    // (An older backend answers with the whole account instead: no `snaps`.)
+    if (!data || !Array.isArray(data.snaps)) throw new Error('snaps_unavailable');
+    return data.snaps;
+  }
+  // Newest first, at most 15 automatic ones, and small enough for one item:
+  // the oldest automatic snapshots go first, then the oldest of the rest.
+  var AUTO_SNAPS_KEPT = 15, SNAPS_MAX_BYTES = 360 * 1024;
+  function fitSnaps(list) {
+    list = list.slice().sort(function (a, b) { return b.at - a.at; });
+    var autos = 0;
+    list = list.filter(function (r) { return !r.auto || ++autos <= AUTO_SNAPS_KEPT; });
+    while (list.length > 1 && new Blob([JSON.stringify(list)]).size > SNAPS_MAX_BYTES) {
+      var i = -1;
+      for (var k = list.length - 1; k >= 0; k--) if (list[k].auto) { i = k; break; }
+      list.splice(i >= 0 ? i : list.length - 1, 1);
+    }
+    return list;
+  }
+  async function cloudSnapsPut(key, list) {
+    var res = await fetch(CLOUD_API_URL + '?snaps=' + encodeURIComponent(key), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cloudAuthToken }, body: JSON.stringify({ snaps: fitSnaps(list) })
+    });
+    if (!res.ok) throw new Error('snaps_save_failed');
+  }
+  async function snapList(poem) {
+    var local = await localSnapList(poem.id).catch(function () { return []; });
+    var key = snapCloudKey(poem);
+    if (key) {
+      try {
+        var cloud = await cloudSnapsGet(key);
+        var ids = {};
+        cloud.forEach(function (r) { ids[r.id] = true; });
+        var moving = local.filter(function (r) { return !ids[r.id]; });
+        if (moving.length) { cloud = fitSnaps(cloud.concat(moving)); await cloudSnapsPut(key, cloud); }
+        await Promise.all(local.map(function (r) { return localSnapDelete(r.id).catch(function () {}); }));
+        return fitSnaps(cloud);
+      } catch (e) { /* offline, or the account can't hold them yet: this device's */ }
+    }
+    return local;
+  }
+  async function snapAdd(poem, rec) {
+    var key = snapCloudKey(poem);
+    if (key) {
+      try { await cloudSnapsPut(key, (await cloudSnapsGet(key)).concat([rec])); return rec; } catch (e) { /* fall back to this device */ }
+    }
+    await localSnapPut(rec);
+    return rec;
+  }
+  function snapTake(poem, name, from, auto) {
+    var src = from || poem;
+    var rec = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), poemId: poem.id, bookId: state.chapbookId || null,
+      at: Date.now(), name: name || '', title: src.title || '', lines: (src.lines || []).slice() };
+    if (auto) rec.auto = true;
+    return snapAdd(poem, rec);
+  }
+  async function snapDelete(poem, id) {
+    var key = snapCloudKey(poem);
+    if (key) {
+      try { await cloudSnapsPut(key, (await cloudSnapsGet(key)).filter(function (r) { return r.id !== id; })); } catch (e) { /* this device's, then */ }
+    }
+    await localSnapDelete(id).catch(function () {});
+  }
+
+  // Automatic snapshots: when an entry changes a lot from how it stood
+  // (300 or more characters, or a third of it, edited away or in), the
+  // version from before goes into its snapshots as "Before a big edit",
+  // so a rewrite, a big cut or a slip of Replace all can be undone.
+  // Checked as each save lands; compared against the entry as it was when
+  // the book was opened or last auto-saved.
+  var snapBase = {};
+  function editSize(a, b) {
+    // Lines the two share at the start and end can't have changed: only
+    // the stretch between is compared (typing touches a line or two).
+    var s0 = 0, e0 = 0;
+    while (s0 < a.length && s0 < b.length && a[s0] === b[s0]) s0++;
+    while (e0 < a.length - s0 && e0 < b.length - s0 && a[a.length - 1 - e0] === b[b.length - 1 - e0]) e0++;
+    var rows = lineDiff(a.slice(s0, a.length - e0), b.slice(s0, b.length - e0)), n = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], nx = rows[i + 1];
+      // A line edited in place counts only what changed in it.
+      if (r.del && nx && nx.add) {
+        var x = r.t || '', y = nx.t || '', p = 0, q = 0;
+        while (p < x.length && p < y.length && x[p] === y[p]) p++;
+        while (q < x.length - p && q < y.length - p && x[x.length - 1 - q] === y[y.length - 1 - q]) q++;
+        n += (x.length - p - q) + (y.length - p - q);
+        i++;
+      } else if (r.del || r.add) n += (r.t || '').length + 1;
+    }
+    return n;
+  }
+  // Each entry's starting point, as soon as the book is shown (before any
+  // edit can land), for entries not seen yet.
+  function seedSnapBases() {
+    if (!state || !state.poems) return;
+    var book = state.chapbookId || '';
+    state.poems.forEach(function (poem) {
+      var key = book + '.' + poem.id;
+      if (!isSection(poem) && !snapBase[key]) snapBase[key] = { title: poem.title || '', lines: (poem.lines || []).slice() };
+    });
+  }
+  function autoSnapshots() {
+    if (!state || !state.poems || window.BOOKBUG_READ_TOKEN) return;
+    var book = state.chapbookId || '';
+    state.poems.forEach(function (poem) {
+      if (isSection(poem)) return;
+      var key = book + '.' + poem.id, cur = { title: poem.title || '', lines: (poem.lines || []).slice() };
+      var base = snapBase[key];
+      if (!base) { snapBase[key] = cur; return; }
+      if (base.title === cur.title && base.lines.join('\n') === cur.lines.join('\n')) return;
+      var a = [base.title].concat(base.lines), b = [cur.title].concat(cur.lines);
+      var changed = editSize(a, b), size = a.join('\n').length;
+      if (changed < 300 && (changed < size / 3 || size < 60)) return;
+      snapBase[key] = cur;
+      if (!base.lines.join('').trim() && !base.title.trim()) return;
+      snapTake(poem, 'Before a big edit', base, true).catch(function () {});
+    });
+  }
   // A line-by-line comparison (longest common run of lines), oldest first.
   function lineDiff(a, b) {
     var n = a.length, m = b.length, dp = [];
@@ -11299,10 +11423,11 @@
     var d = makeDialog('snap-box', 'Snapshots',
       '<p style="margin-top:0;"></p>' +
       '<div class="snap-take"><input type="text" placeholder="Name this snapshot (optional)" autocomplete="off"><button class="btn btn-primary" type="button">Take snapshot</button></div>' +
-      '<p class="snap-note">Kept on this device.</p>' +
+      '<p class="snap-note"></p>' +
       '<div class="snap-list"></div><div class="snap-diff-wrap"></div>' +
       '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
     d.box.querySelector('p').textContent = 'Snapshots of “' + entryLabel(poem) + '”';
+    d.box.querySelector('.snap-note').textContent = snapCloudKey(poem) ? 'Kept with your account. Big edits are saved here automatically.' : 'Kept on this device (sign in to keep them with your account). Big edits are saved here automatically.';
     var nameIn = d.box.querySelector('.snap-take input'), listEl = d.box.querySelector('.snap-list'), diffWrap = d.box.querySelector('.snap-diff-wrap');
     d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
     function take() {
@@ -11326,7 +11451,7 @@
       if (!rows.some(function (r) { return r.del || r.add; })) box.appendChild(document.createTextNode('No differences.'));
     }
     function refresh() {
-      snapList(poem.id).then(function (rows) {
+      snapList(poem).then(function (rows) {
         listEl.innerHTML = '';
         if (!rows.length) { listEl.innerHTML = '<div class="snap-empty">No snapshots yet.</div>'; return; }
         rows.forEach(function (rec) {
@@ -11336,7 +11461,7 @@
             '<div class="snap-row-actions"><button class="btn btn-sm" type="button">Compare</button><button class="btn btn-sm" type="button">Restore</button>' +
             '<button class="btn btn-ghost btn-danger btn-sm" type="button" title="Delete snapshot" aria-label="Delete snapshot">×</button></div>';
           row.querySelector('.snap-row-name').textContent = rec.name || fmtWhen(rec.at);
-          row.querySelector('.snap-row-meta').textContent = (rec.name ? fmtWhen(rec.at) + ' · ' : '') + rec.lines.length + (rec.lines.length === 1 ? ' line' : ' lines');
+          row.querySelector('.snap-row-meta').textContent = (rec.name ? fmtWhen(rec.at) + ' · ' : '') + (rec.auto ? 'automatic · ' : '') + rec.lines.length + (rec.lines.length === 1 ? ' line' : ' lines');
           var bs = row.querySelectorAll('button');
           bs[0].addEventListener('click', function () { showDiff(rec); });
           bs[1].addEventListener('click', async function () {
@@ -11346,6 +11471,8 @@
             await snapTake(poem, 'Before restoring');
             poem.title = rec.title;
             poem.lines = rec.lines.slice();
+            // The restore is its own snapshot already, not a "big edit".
+            snapBase[(state.chapbookId || '') + '.' + poem.id] = { title: poem.title || '', lines: poem.lines.slice() };
             state.isExample = false;
             persist();
             renderAll();
@@ -11355,7 +11482,7 @@
           bs[2].addEventListener('click', async function () {
             var ok = await confirmDialog('Delete this snapshot? This can’t be undone.', 'Delete');
             if (!ok) return;
-            await snapDelete(rec.id);
+            await snapDelete(poem, rec.id);
             diffWrap.innerHTML = '';
             refresh();
           });
@@ -14298,6 +14425,7 @@
     TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
+    seedSnapBases();
     applyFormWording();
     updateArchiveButton();
     if (archiveOpen) renderArchiveList();
