@@ -1169,6 +1169,15 @@
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
   /* A note's reference numeral: small and raised, as the PDF sets it. */
   .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
+  .ed-note { cursor: pointer; color: var(--accent); font-weight: 600; padding: 0 0.05em; }
+  .ed-note:hover { text-decoration: underline; }
+  /* An entry's notes, under its text, a little smaller, as at a page's foot. */
+  .poem-notes { margin: 6px 0.5in 10px; padding-top: 6px; border-top: 1px solid var(--line); font-size: 0.82em; }
+  .poem-notes:empty { display: none; }
+  .poem-note { display: flex; gap: 6px; padding: 2px 0; cursor: pointer; color: var(--ink-soft); }
+  .poem-note:hover { color: var(--accent); }
+  .poem-note-num { font-size: 0.75em; vertical-align: super; color: var(--accent); flex: 0 0 auto; }
+  @media (max-width: 700px) { .poem-notes { margin: 6px 0 10px; } }
   .opener-caps > .is-opener::first-line { text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.05em; }
   .opener-drop > .is-opener::first-letter {
     float: left; font-size: var(--dc-size); line-height: var(--dc-lh); margin: 0 var(--dc-gap) var(--dc-mb) 0; padding: 0;
@@ -8733,6 +8742,60 @@
   var BLOCK_TAGS = { DIV: 1, P: 1, LI: 1, UL: 1, OL: 1, BLOCKQUOTE: 1, PRE: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1 };
 
   function wrapIn(tag, node) { var el = document.createElement(tag); el.appendChild(node); return el; }
+  // A note in an editor reads as it prints: a small raised numeral (an
+  // uneditable chip holding the note's words) -- click it to change them
+  // -- with the notes listed, numbered, under the entry. Saved, it's the
+  // ^[note] it always was (serializeEditor).
+  function makeNoteChip(text) {
+    var chip = document.createElement('span');
+    chip.className = 'ed-note note-ref';
+    chip.contentEditable = 'false';
+    chip.dataset.note = text;
+    chip.title = text;
+    return chip;
+  }
+  function noteChipsIn(root) {
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [], n;
+    while ((n = walker.nextNode())) if (/\^\[[^\]]*\]/.test(n.data)) nodes.push(n);
+    nodes.forEach(function (tn) {
+      var parts = tn.data.split(/\^\[([^\]]*)\]/), frag = document.createDocumentFragment();
+      parts.forEach(function (part, i) {
+        if (i % 2) frag.appendChild(makeNoteChip(part.trim()));
+        else if (part) frag.appendChild(document.createTextNode(part));
+      });
+      tn.parentNode.replaceChild(frag, tn);
+    });
+  }
+  // Numbers the chips in order and lists the notes (when there's a list).
+  function syncNotes(ed, listEl) {
+    var chips = ed.querySelectorAll('.ed-note');
+    Array.prototype.forEach.call(chips, function (c, i) { c.textContent = String(i + 1); });
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    Array.prototype.forEach.call(chips, function (c, i) {
+      var row = document.createElement('div');
+      row.className = 'poem-note';
+      row.innerHTML = '<span class="poem-note-num"></span><span class="poem-note-text"></span>';
+      row.firstChild.textContent = (i + 1) + '';
+      row.lastChild.textContent = c.dataset.note || 'Empty note';
+      row.title = 'Click to change this note';
+      row.addEventListener('click', function () { editNoteChip(c, ed); });
+      listEl.appendChild(row);
+    });
+  }
+  async function editNoteChip(chip, ed) {
+    var text = await promptDialog('Note ' + chip.textContent + ' (empty it to remove the note)', chip.dataset.note || '');
+    if (text === null) return;
+    if (!text.trim()) chip.remove();
+    else { chip.dataset.note = text.trim(); chip.title = text.trim(); }
+    ed.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest && e.target.closest('.ed-note');
+    if (!chip) return;
+    var ed = chip.closest('.poem-text, .stage-edit-body');
+    if (ed) { e.preventDefault(); editNoteChip(chip, ed); }
+  });
   function makeEditorLine(line) {
     var div = document.createElement('div');
     var imgKey = imageKeyForLine(line, state);
@@ -8766,6 +8829,7 @@
       div.appendChild(node);
     });
     if (!div.firstChild) div.appendChild(document.createElement('br'));
+    noteChipsIn(div);
     return div;
   }
   // Beside each image: where it sits on its page, and a way to add a
@@ -9071,6 +9135,7 @@
           lines.push(c.dataset.token);
           continue;
         }
+        if (c.dataset && c.dataset.note !== undefined) { addText('^[' + c.dataset.note + ']', fmt); continue; }
         if (c.tagName === 'BR') {
           if (isTrailingBr(c, root)) cur = cur || [];
           else { flush(); cur = []; }
@@ -9246,17 +9311,21 @@
     });
     addBtn('format-btn-indent', ICON_OUTDENT, 'Outdent line', function () { indentEditorLines(ed, true); });
     addBtn('format-btn-indent', ICON_INDENT, 'Indent line', function () { indentEditorLines(ed, false); });
-    // A note: ^[ ] at the cursor, the cursor between them to type it.
-    addBtn('format-btn-note', '<span style="font-size:11px; font-weight:700;">x<sup style="font-size:8px;">1</sup></span>', 'Add a note: type it between ^[ and ]', function () {
-      ed.focus();
-      document.execCommand('insertText', false, '^[]');
+    // A note at the cursor: its words asked for, then a numeral there.
+    addBtn('format-btn-note', '<span style="font-size:11px; font-weight:700;">x<sup style="font-size:8px;">1</sup></span>', 'Add a note', async function () {
       var sel = window.getSelection();
-      if (sel.rangeCount && sel.anchorNode && sel.anchorNode.nodeType === 3 && sel.anchorOffset > 0) {
-        var r = document.createRange();
-        r.setStart(sel.anchorNode, sel.anchorOffset - 1);
-        r.collapse(true);
-        sel.removeAllRanges(); sel.addRange(r);
-      }
+      var range = sel.rangeCount && ed.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+      var text = await promptDialog('Note', '');
+      if (!text || !text.trim()) return;
+      ed.focus();
+      if (!range) { range = document.createRange(); range.selectNodeContents(ed.lastElementChild || ed); range.collapse(false); }
+      range.collapse(false);
+      var chip = makeNoteChip(text.trim());
+      range.insertNode(chip);
+      var after = document.createRange();
+      after.setStartAfter(chip); after.collapse(true);
+      sel.removeAllRanges(); sel.addRange(after);
+      ed.dispatchEvent(new Event('input', { bubbles: true }));
     });
     var fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -10041,6 +10110,7 @@
     if (initialPlan) editor.style.fontSize = (initialPlan.globalSize * editorPxPerPt()).toFixed(2) + 'px';
     editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * editorPxPerPt());
     editor.addEventListener('input', function () {
+      syncNotes(editor, notesEl);
       poem.lines = serializeEditor(editor);
       if (poem.comments && poem.comments.length) { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }
       state.isExample = false;
@@ -10064,7 +10134,10 @@
     // A faint suggested character name in scripts (Right arrow fills it).
     editor.addEventListener('keyup', function () { updateNameSuggest(editor); });
     editor.addEventListener('click', function () { updateNameSuggest(editor); });
-    editor.addEventListener('blur', function () { clearNameSuggest(editor); });
+    editor.addEventListener('blur', function () {
+      clearNameSuggest(editor);
+      if (/\^\[[^\]]*\]/.test(editor.textContent)) { noteChipsIn(editor); syncNotes(editor, notesEl); }
+    });
     // Pasted text comes in plain (no stray fonts or colors from other
     // apps); a pasted image becomes an image line.
     editor.addEventListener('paste', function (e) {
@@ -10191,12 +10264,17 @@
     writerBar.appendChild(writerTools);
     writerBar.appendChild(doneBtn);
 
+    // The entry's notes, numbered as in the text.
+    var notesEl = document.createElement('div');
+    notesEl.className = 'poem-notes';
+    syncNotes(editor, notesEl);
     // Margin comments on this entry's lines (see renderComments).
     var commentsEl = document.createElement('div');
     commentsEl.className = 'poem-comments';
     body.appendChild(writerBar);
     body.appendChild(titleRow);
     body.appendChild(editor);
+    body.appendChild(notesEl);
     body.appendChild(commentsEl);
     body.appendChild(metaRow);
     var formatRow = makeFormatToolbar(editor);
@@ -12619,6 +12697,7 @@
     body.style.cssText = 'font-family:' + printStackFor(state.bodyFontChoice) + '; font-size:' + (layout.sizePt * scale).toFixed(2) +
       'px; line-height:' + (layout.lineHeight * scale).toFixed(2) + 'px; text-align:' + editorAlign(poem) + '; tab-size:' + tabSizeFor(printStackFor(state.bodyFontChoice), layout.sizePt * scale, TAB_STOP_PT * scale) + ';';
     renderEditor(body, poem.lines);
+    syncNotes(body, null);
     tagProseLines(body, poem, TAB_STOP_PT * scale);
     // Hyphenated prose breaks where the typesetter would: soft hyphens
     // at its syllables (the browser's own dictionary differs). Typing
@@ -12634,7 +12713,7 @@
     applyOpener(body, layout.opener, scale, layout.lineHeight * scale);
     function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
-    body.addEventListener('input', function () { poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
+    body.addEventListener('input', function () { syncNotes(body, null); poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
     body.addEventListener('keydown', function (ev) {
       if (ev.key === 'Tab') { ev.preventDefault(); indentEditorLines(body, ev.shiftKey); }
     });
