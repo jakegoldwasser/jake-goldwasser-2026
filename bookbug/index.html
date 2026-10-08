@@ -899,19 +899,43 @@
     html.is-writing, html.is-writing body { overflow: hidden; }
     .poem-card.is-writing {
       position: fixed; inset: 0; z-index: 65; margin: 0 !important; border: none; border-radius: 0; background: var(--surface);
-      padding: 18px max(24px, calc(50vw - 380px)) 0; overflow-y: auto; height: auto !important;
+      padding: 0 max(24px, calc(50vw - 380px)); overflow-y: auto; height: auto !important;
     }
     .poem-card.is-writing::before { display: none; }
     .poem-card.is-writing .poem-handle { display: none; }
-    .poem-card.is-writing .poem-body { min-height: 100%; }
+    /* The page scrolls as one long sheet (the card is the scroller), so
+       nothing in it may shrink to the window's height: a long poem used
+       to be squeezed into a window-tall box, its lines spilling out under
+       the page count and the formatting bar. */
+    /* flex-start, not the default stretch: stretched, the body was only
+       window-tall, and the sticky bars (which stick only inside it) let
+       go a screen into a long poem. */
+    .poem-card.is-writing .poem-body { min-height: 100%; height: auto; flex-shrink: 0; align-self: flex-start; }
+    .poem-card.is-writing .poem-body > * { flex-shrink: 0; }
+    /* The caret is kept clear of the sticky bars above and below it when
+       the page scrolls to follow typing or arrow keys. */
+    .poem-card.is-writing { scroll-padding: 90px 0 70px; }
+    /* The scrollbar's room is kept even for a short poem, so stepping
+       between a long one and a short one doesn't shift the arrows. */
+    .poem-card.is-writing { scrollbar-gutter: stable both-edges; }
     .poem-card.is-writing .poem-writer-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      position: sticky; top: -18px; z-index: 1; background: var(--surface); padding: 6px 0 10px; margin-bottom: 18px;
+      /* Sticks at the very top (the card has no top padding to scroll
+         past), so previous / next sit in the same spot scrolled or not. */
+      position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 24px 0 10px; margin-bottom: 18px;
       border-bottom: 1px solid var(--line);
     }
     .poem-card.is-writing .poem-writer-title { visibility: hidden; }
     .poem-card.is-writing .poem-writer-fmt { display: none; }
-    .poem-card.is-writing textarea.poem-title { font-size: calc(30px * var(--editor-zoom, 1)) !important; }
+    /* The formatting bar stays in reach at the window's foot however far
+       down a long poem you are, instead of waiting below its last line. */
+    .poem-card.is-writing .format-toolbar {
+      position: sticky; bottom: 0; z-index: 1; background: var(--surface); padding: 8px 0 12px; margin-top: auto;
+      border-top: 1px solid var(--line);
+    }
+    /* Its title spans the column: the width fitted to the list's smaller
+       title would wrap it here. */
+    .poem-card.is-writing textarea.poem-title { flex: 1 1 auto; width: auto !important; font-size: calc(30px * var(--editor-zoom, 1)) !important; }
     .poem-card.is-writing .poem-text { font-size: calc(21px * var(--editor-zoom, 1)) !important; border: none; background: transparent; min-height: 60vh; }
   }
 
@@ -8438,7 +8462,9 @@
   var writingPoemId = null;
   function syncWriterViewport() {
     var vv = window.visualViewport;
-    if (!writingCard || !vv) return;
+    // Desktop focus mode fills the window by CSS alone (and its page,
+    // not the text box, is what scrolls); this is for the phone keyboard.
+    if (!writingCard || !vv || !writerMQ.matches) return;
     writingCard.style.top = vv.offsetTop + 'px';
     writingCard.style.height = vv.height + 'px';
     var ta = writingCard.querySelector('.poem-text');
@@ -8464,11 +8490,40 @@
       var el = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
       if (el) rect = el.getBoundingClientRect();
     }
-    var box = ed.getBoundingClientRect();
+    // A phone's writer scrolls the text box; desktop focus mode scrolls
+    // the whole page, under its sticky bars.
+    var scroller = writerMQ.matches ? ed : (ed.closest('.poem-card.is-writing') || ed);
+    var box = scroller.getBoundingClientRect();
     var lineH = parseFloat(getComputedStyle(ed).lineHeight) || 24;
-    if (rect.top < box.top + lineH || rect.bottom > box.bottom - lineH) {
-      ed.scrollTop += rect.top - box.top - ed.clientHeight / 3;
+    var padTop = scroller === ed ? lineH : 90, padBottom = scroller === ed ? lineH : 70;
+    if (rect.top < box.top + padTop || rect.bottom > box.bottom - padBottom) {
+      scroller.scrollTop += rect.top - box.top - scroller.clientHeight / 3;
     }
+  }
+  // A re-render while writing (a cloud sync landing, a rename) builds a
+  // fresh card: it should open where the old one was scrolled to, with
+  // the caret where it was, not back at the top of a long poem.
+  var writingSpot = null;
+  function rememberWritingSpot() {
+    writingSpot = null;
+    if (!writingCard || !writingCard.isConnected) return;
+    var ed = writingCard.querySelector('.poem-text');
+    writingSpot = {
+      id: writingCard.dataset.poemId,
+      cardTop: writingCard.scrollTop,
+      edTop: ed ? ed.scrollTop : 0,
+      caret: ed && document.activeElement === ed ? editorCaretInfo(ed) : null
+    };
+  }
+  function restoreWritingSpot(card, spot) {
+    if (!spot) return;
+    var ed = card.querySelector('.poem-text');
+    if (spot.caret && ed) {
+      ed.focus({ preventScroll: true });
+      setEditorSelection(ed, spot.caret.startLine, spot.caret.startOffset, spot.caret.endLine, spot.caret.endOffset);
+    }
+    card.scrollTop = spot.cardTop;
+    if (ed) ed.scrollTop = spot.edTop;
   }
   // Where the list was when the writer opened: the entry's row's
   // distance from the top of the window, so leaving the writer puts that
@@ -10166,8 +10221,10 @@
     if (writingPoemId === poem.id) {
       writingCard = card;
       card.classList.add('is-writing');
+      var spot = writingSpot && writingSpot.id === poem.id ? writingSpot : null;
+      writingSpot = null;
       setTimeout(function () {
-        if (writingCard === card) { markWritingPath(card, true); updateWriterNav(card); }
+        if (writingCard === card) { markWritingPath(card, true); updateWriterNav(card); restoreWritingSpot(card, spot); }
         syncWriterViewport();
       }, 0);
     }
@@ -11745,6 +11802,7 @@
   }
 
   function renderPoems() {
+    rememberWritingSpot();
     poemList.innerHTML = '';
     var searchRow = document.getElementById('entrySearchRow');
     if (searchRow) {
