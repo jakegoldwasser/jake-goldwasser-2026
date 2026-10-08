@@ -288,8 +288,15 @@ async function getRoom(code) {
   return state;
 }
 
+// An owner's reach into other teachers' work stops at Horace Mann teachers:
+// Luddite HM's students' work is not open to the site's owner (Jake asked for
+// this). Horace Mann's own administrators read it through routeHmAdmin.
+function ownerMayOpen(role, teacherEmail) {
+  return role === 'owner' && !isHm(teacherEmail);
+}
+
 function ownsRoom(room, info, role) {
-  return room.teacher.sub === info.sub || role === 'owner';
+  return room.teacher.sub === info.sub || ownerMayOpen(role, room.teacher.email);
 }
 
 // ---- When an assignment runs ----
@@ -422,7 +429,7 @@ async function getClass(id, me, role) {
   if (!/^[a-f0-9]{12}$/.test(key)) throw new HttpError(404, 'no_class');
   const { state } = await readItem('luddite:class:' + key);
   if (!state || state.deletedAt) throw new HttpError(404, 'no_class');
-  if (state.teacher.sub !== me.sub && role !== 'owner') throw new HttpError(403, 'not_your_class');
+  if (state.teacher.sub !== me.sub && !ownerMayOpen(role, state.teacher.email)) throw new HttpError(403, 'not_your_class');
   return state;
 }
 
@@ -625,13 +632,16 @@ async function updateDriveDoc(teacherSub, piece) {
 }
 
 // ---- Marks ----
-// The piece's own teacher (or an owner) may read and mark it.
+// The piece's own teacher (or an owner, except for Horace Mann teachers' papers) may read and mark it.
 async function ownSub(id, me, role) {
   const key = String(id || '');
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(key)) throw new HttpError(404, 'no_sub');
   const { state } = await readItem('luddite:sub:' + key);
   if (!state) throw new HttpError(404, 'no_sub');
-  if (state.teacherSub !== me.sub && role !== 'owner') throw new HttpError(403, 'not_your_student');
+  if (state.teacherSub !== me.sub) {
+    const { state: room } = await readItem('luddite:room:' + state.code);
+    if (!room || !ownerMayOpen(role, room.teacher.email)) throw new HttpError(403, 'not_your_student');
+  }
   return state;
 }
 
@@ -1234,15 +1244,19 @@ async function routeLuddite(event, method, path, info) {
 //     is on the administrator list;
 //   - and they only ever see work whose teacher has an @horacemann.org
 //     address (never a regular Luddite teacher's).
-// The primary administrators (HM_PRIMARY_ADMINS) can't be removed, and are
-// the only ones who can add or remove other administrators (any
-// @horacemann.org address). Every look an administrator takes is written
+// The primary administrator (HM_PRIMARY_ADMINS, Cassandra Parets) can't be
+// removed, and adds or removes other administrators (any @horacemann.org
+// address). Jake (HM_ADMIN_MANAGERS) can also add and remove them, but sees
+// nothing else: no work, no access log. Every look an administrator takes is written
 // to a log that the administrators can read.
 //   luddite:hmadmins     { emails: { [email]: { addedAt, addedBy } } }
 //   luddite:hmadminlog   { entries: [{ at, email, what, id, label }] } newest first
 // Listing everything needs dynamodb:Scan on the table (README.md, step 3).
 const HM_ORIGIN = 'https://jakegoldwasser-hm.github.io';
-const HM_PRIMARY_ADMINS = ['cassandra_parets@horacemann.org', 'jake_goldwasser@horacemann.org'];
+const HM_PRIMARY_ADMINS = ['cassandra_parets@horacemann.org'];
+// Can add and remove administrators, but can't read anyone's work or the
+// access log: Jake runs the service and asked not to see Horace Mann's data.
+const HM_ADMIN_MANAGERS = ['jake_goldwasser@horacemann.org'];
 const HM_LOG_MAX = 1500;
 const isHm = (email) => /@horacemann\.org$/.test(lower(email));
 
@@ -1250,6 +1264,7 @@ async function hmAdminOf(email) {
   const em = lower(email);
   if (!isHm(em)) return null;
   if (HM_PRIMARY_ADMINS.includes(em)) return 'primary';
+  if (HM_ADMIN_MANAGERS.includes(em)) return 'manager';
   const { state } = await readItem('luddite:hmadmins');
   return state && state.emails && state.emails[em] ? 'admin' : null;
 }
@@ -1298,7 +1313,8 @@ async function adminList() {
   const emails = (state && state.emails) || {};
   return {
     primary: HM_PRIMARY_ADMINS,
-    admins: Object.keys(emails).filter((e) => !HM_PRIMARY_ADMINS.includes(e)).sort()
+    managers: HM_ADMIN_MANAGERS,
+    admins: Object.keys(emails).filter((e) => !HM_PRIMARY_ADMINS.includes(e) && !HM_ADMIN_MANAGERS.includes(e)).sort()
       .map((email) => ({ email, addedAt: emails[email].addedAt, addedBy: emails[email].addedBy || '' }))
   };
 }
@@ -1308,11 +1324,15 @@ async function routeHmAdmin(event, method, path, q, body, me) {
   if (origin !== HM_ORIGIN) return respond(404, { error: 'Not found' });
   const level = await hmAdminOf(me.email);
   if (!level) return respond(403, { error: 'not_admin' });
+  const canGrant = level === 'primary' || level === 'manager';
 
   // GET /luddite/admin/me -- am I an administrator? (The page's banner.)
   if (path === '/luddite/admin/me' && method === 'GET') {
-    return respond(200, { admin: { email: lower(me.email), primary: level === 'primary' } });
+    return respond(200, { admin: { email: lower(me.email), primary: level === 'primary', manager: level === 'manager', canGrant } });
   }
+
+  // A manager only manages the list of administrators.
+  if (level === 'manager' && path !== '/luddite/admin/admins') return respond(403, { error: 'manager_only_admins' });
 
   // GET /luddite/admin/overview -- every Horace Mann teacher, with their
   // writing sessions, classes and rubrics.
@@ -1398,13 +1418,13 @@ async function routeHmAdmin(event, method, path, q, body, me) {
   // (primary administrators only).
   if (path === '/luddite/admin/admins') {
     if (method === 'PUT') {
-      if (level !== 'primary') throw new HttpError(403, 'primary_only');
+      if (!canGrant) throw new HttpError(403, 'primary_only');
       const add = lower(body.add), remove = lower(body.remove);
       if (add && (!EMAIL_RE.test(add) || !isHm(add))) throw new HttpError(400, 'horacemann_only');
-      if (remove && HM_PRIMARY_ADMINS.includes(remove)) throw new HttpError(400, 'cannot_remove_primary');
+      if (remove && (HM_PRIMARY_ADMINS.includes(remove) || HM_ADMIN_MANAGERS.includes(remove))) throw new HttpError(400, 'cannot_remove_primary');
       await mutate('luddite:hmadmins', (a) => {
         const emails = { ...((a && a.emails) || {}) };
-        if (add && !HM_PRIMARY_ADMINS.includes(add) && !emails[add]) emails[add] = { addedAt: Date.now(), addedBy: lower(me.email) };
+        if (add && !HM_PRIMARY_ADMINS.includes(add) && !HM_ADMIN_MANAGERS.includes(add) && !emails[add]) emails[add] = { addedAt: Date.now(), addedBy: lower(me.email) };
         if (remove) delete emails[remove];
         return { emails };
       });
