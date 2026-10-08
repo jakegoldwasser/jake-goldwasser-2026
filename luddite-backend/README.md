@@ -13,9 +13,10 @@ Bookbug (`cloud-sync-backend/`). Source: `index.mjs`, one file, no build step.
    22.x (or the newest offered), us-east-1. Paste `index.mjs` into the Code tab
    (replacing the sample) and **Deploy**.
 3. **Permissions.** Configuration -> Permissions -> click the role name -> Add
-   permissions -> Create inline policy -> JSON, allowing `dynamodb:GetItem` and
-   `dynamodb:PutItem` on the `LudditeData` table's ARN. Name it
-   `luddite-table-access`.
+   permissions -> Create inline policy -> JSON, allowing `dynamodb:GetItem`,
+   `dynamodb:PutItem` and `dynamodb:Scan` on the `LudditeData` table's ARN. Name it
+   `luddite-table-access`. (Scan is only for Luddite HM's administrator overview,
+   which lists every Horace Mann writing session; nothing else uses it.)
 4. **Environment variables** (Configuration -> Environment variables):
    - `SESSION_SECRET` isn't needed: the function makes its own on first use and keeps
      it in the table. (Set it only to force a value; changing it signs everyone out.)
@@ -49,6 +50,21 @@ old function won't be valid here, so everyone signs in once more.
 This version renames the routes (`/luddite/assignment(s)`, `/luddite/class(es)`, `/luddite/mine`); the old `/room(s)` ones still work for pages loaded before the change. Deploy the Lambda first, then the page. No new table or permissions are needed.
 
 Replace the function's `index.mjs` with this folder's and click **Deploy**.
+
+## Luddite HM administrators
+
+`routeHmAdmin` in `index.mjs` (the `/luddite/admin/*` routes) lets Horace Mann's
+administration read, never change, everything Horace Mann teachers and their students
+have written in Luddite HM. It answers only requests from the Luddite HM page
+(`Origin: https://jakegoldwasser-hm.github.io`), only for `@horacemann.org`
+accounts on the administrator list, and only about work whose teacher has an
+`@horacemann.org` address, so regular Luddite is untouched. The primary
+administrators are `HM_PRIMARY_ADMINS` (Cassandra Parets and Jake); they add and
+remove the others. Every look is logged in `luddite:hmadminlog`.
+
+To turn it on: add `dynamodb:Scan` to the `luddite-table-access` policy (step 3),
+then deploy this `index.mjs`. Until then the Luddite HM admin page says the
+server isn't ready, and nothing else changes.
 
 ## Data
 
