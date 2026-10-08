@@ -1967,14 +1967,31 @@
      the stage hugs the canvas exactly. It takes drags (to box a doodle),
      so it doesn't scroll the dialog under a finger. */
   .scan-stage { position: relative; max-width: 100%; touch-action: none; cursor: crosshair; }
-  .scan-region { position: absolute; padding: 0; border: 2px solid var(--accent); border-radius: 4px; background: transparent; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
-  .scan-region:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-  .scan-region span { position: absolute; top: -10px; left: -10px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; }
+  /* A fixed height (and two lines kept for the note), so turning a page
+     from portrait to landscape never moves the turn buttons, the dialog
+     or Add between clicks. */
+  .scan-view { position: relative; height: calc(52vh + 22px); box-sizing: border-box; }
+  /* Quarter turns, over the page's top-right corner. */
+  .scan-turn { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+  .scan-turn button { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 17px; line-height: 1; cursor: pointer; padding: 0; }
+  .scan-turn button:hover { border-color: var(--accent); color: var(--accent); }
+  .scan-region { position: absolute; padding: 0; border: 2px solid var(--accent); border-radius: 4px; background: transparent; cursor: move; touch-action: none; transition: border-color .15s ease, background-color .15s ease; }
+  .scan-region:hover, .scan-region.is-moving { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .scan-region.is-moving { transition: none; }
+  /* Corner handles to resize, with a finger-sized reach around each. */
+  .scan-region i { position: absolute; width: 12px; height: 12px; background: var(--surface); border: 2px solid var(--accent); border-radius: 2px; }
+  .scan-region i::before { content: ''; position: absolute; inset: -10px; }
+  .scan-region i[data-c="nw"] { top: -7px; left: -7px; cursor: nwse-resize; }
+  .scan-region i[data-c="se"] { bottom: -7px; right: -7px; cursor: nwse-resize; }
+  .scan-region i[data-c="ne"] { top: -7px; right: -7px; cursor: nesw-resize; }
+  .scan-region i[data-c="sw"] { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .scan-region.is-off i { display: none; }
+  .scan-region .scan-num { position: absolute; top: -11px; left: 14px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; }
   /* Left out: a dashed outline over a paper veil, no number. */
   .scan-region.is-off { border-style: dashed; border-color: var(--ink-faint); background: color-mix(in srgb, var(--surface) 60%, transparent); }
   .scan-region.is-drawing { border-style: dashed; pointer-events: none; }
   .scan-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
-  .scan-note:empty { display: none; }
+  .scan-note { min-height: 2.6em; }
   /* Take photos: the camera live in the dialog, a shutter under it. */
   .scan-cam { margin-bottom: 12px; }
   .scan-cam[hidden] { display: none; }
@@ -19735,12 +19752,13 @@
   // shape will do, not just a circle.
   // `ink` is the page as 1s (ink) and 0s; returns each circle's inside as
   // a box and a mask, in the page's pixels.
-  // Looked for three times, the ink thickened a little, more, then a lot
+  // Looked for four times, the ink thickened a little, then more and more
   // (for a circle whose ends were left further apart), keeping what each
-  // later look finds anew.
+  // later look finds anew. Erring toward finding too many: a box that
+  // isn't a doodle is one tap to leave out.
   function scanFindCircles(ink, W, H) {
     var found = [];
-    [220, 110, 65].forEach(function (div) {
+    [220, 110, 65, 40].forEach(function (div) {
       scanCirclesAt(ink, W, H, div).forEach(function (f) {
         var cx = f.x + f.w / 2, cy = f.y + f.h / 2;
         if (!found.some(function (e) { return cx >= e.x && cx <= e.x + e.w && cy >= e.y && cy <= e.y + e.h; })) found.push(f);
@@ -19775,7 +19793,9 @@
     var pen = Math.max(1, 2 * area / Math.max(1, edge));
     // Thicken the ink so a circle whose ends don't quite meet still closes.
     var r = Math.max(2, Math.round(Math.max(W, H) / closeDiv));
-    var D = scanGrow(ink, W, H, r);
+    // D closes gaps; Dg, barely thickened, is for the clear-paper check, so
+    // a loose scribble's open spaces between strokes don't read as clear.
+    var D = scanGrow(ink, W, H, r), Dg = scanGrow(ink, W, H, 2);
     var queue = new Int32Array(N), qh, qt;
     function nb8(i, fn) {
       var x = i % W, y = (i - x) / W;
@@ -19821,7 +19841,12 @@
     function deeper(j) { if (!out[j] && !dep[j]) { dep[j] = dep[queue[qh - 1]] + 1; queue[qt++] = j; } }
     while (qh < qt) nb4(queue[qh++], deeper);
     // Each separate enclosed shape (a blob), and its measures.
-    var k = Math.ceil(1.25 * (pen + 2 * r)) + 1, g = Math.max(2, r);
+    // The open paper stops r short of the real stroke (the ink was
+    // thickened by r), so the stroke runs from depth r to about r + pen.
+    // The clear-paper check starts just past it (kGap), on the barely
+    // thickened ink, so a tight circle with only a sliver of paper inside still counts;
+    // what's kept starts a little further in (k), to leave the stroke out.
+    var kGap = r + Math.ceil(pen * 1.5) + 1, k = Math.max(kGap, Math.ceil(1.25 * (pen + 2 * r)) + 1), g = Math.max(2, Math.round(pen * 1.5));
     var lab = new Int32Array(N), blobs = [];
     for (i = 0; i < N; i++) {
       if (out[i] || lab[i]) continue;
@@ -19837,12 +19862,12 @@
         if (x < b.bx0) b.bx0 = x; if (x > b.bx1) b.bx1 = x; if (y < b.by0) b.by0 = y; if (y > b.by1) b.by1 = y;
         n = dep[q];
         if (n === 1) b.perim++;
+        if (n > kGap && n <= kGap + g) { b.layer++; if (!Dg[q]) b.layerWhite++; }
         if (n <= k) { if (ink[q]) b.ringInk++; }
         else {
           b.inner++;
           if (ink[q]) b.innerInk++;
           if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
-          if (n <= k + g) { b.layer++; if (!D[q]) b.layerWhite++; }
         }
         nb8(q, join);
       }
@@ -19865,15 +19890,15 @@
     }
     var found = [];
     blobs.forEach(function (b) {
-      if (b.area < N * 0.003 || b.inner < b.area * 0.25) return;
+      if (b.area < N * 0.002 || b.inner < b.area * 0.15) return;
       // Clear paper just inside the loop, nearly all the way round...
-      if (b.layer < b.perim * g * 0.4 || b.layerWhite < b.layer * 0.55) return;
-      // ...and plenty of drawing within: at least as much ink as the loop
-      // itself, whatever its shape (a shoe, a football). A smooth round or
-      // oval loop needs less, for a sparse doodle -- but a drawing's own
-      // outline (a face, a house) holds little and isn't that round.
-      if (b.innerInk < N * 0.0003) return;
-      if (b.innerInk < b.ringInk && (b.innerInk < b.ringInk * 0.4 || scanRoundness(b) < 0.9)) return;
+      if (b.layer < b.perim * g * 0.3 || b.layerWhite < b.layer * 0.5) return;
+      // ...and drawing within: most of as much ink as the loop itself,
+      // whatever its shape (a shoe, a football); a smooth round or oval
+      // loop needs less, for a sparse doodle. A drawing's own outline (a
+      // face, a head, a house) holds less than that.
+      if (b.innerInk < N * 0.0002) return;
+      if (b.innerInk < b.ringInk * 0.7 && (b.innerInk < b.ringInk * 0.35 || scanRoundness(b) < 0.88)) return;
       var mw = b.x1 - b.x0 + 1, mh = b.y1 - b.y0 + 1, mask = new Uint8Array(mw * mh);
       // Shave off narrow spikes (where a pointed loop's two sides meet,
       // as at a football's tips, the stroke runs deep): shrink the inside
@@ -19888,7 +19913,14 @@
       for (y = 0; y < mh; y++) for (x = 0; x < mw; x++) {
         if (kept[(y + k) * pw + x + k] && !notIn[(y + k) * pw + x + k]) mask[y * mw + x] = 1;
       }
-      found.push({ x: b.x0, y: b.y0, w: mw, h: mh, mask: mask });
+      // The loop itself (everything of the shape within k of its edge),
+      // to white out when the box is moved or resized off the inside.
+      var rw = b.bx1 - b.bx0 + 1, rh = b.by1 - b.by0 + 1, ring = new Uint8Array(rw * rh);
+      for (y = b.by0; y <= b.by1; y++) for (x = b.bx0; x <= b.bx1; x++) {
+        i = y * W + x;
+        if (lab[i] === b.id && dep[i] <= k) ring[(y - b.by0) * rw + (x - b.bx0)] = 1;
+      }
+      found.push({ x: b.x0, y: b.y0, w: mw, h: mh, mask: mask, ring: { x: b.bx0, y: b.by0, w: rw, h: rh, mask: ring } });
     });
     return found;
   }
@@ -19904,7 +19936,8 @@
     return [].concat.apply([], rows.map(function (row) { return row.items.sort(function (a, b) { return a.fx - b.fx; }); }));
   }
   // One circled doodle, cut from the cleaned page: its box, with the paper
-  // outside the circle's inside (the circle itself) whited out.
+  // outside the circle's inside (the circle itself) whited out -- or, for
+  // a box moved or resized by hand, just the circle's own line.
   function scanCutRegion(page, rg, aw, ah) {
     var W = page.width, H = page.height;
     var x0 = Math.max(0, Math.floor(rg.fx * W)), y0 = Math.max(0, Math.floor(rg.fy * H));
@@ -19912,13 +19945,21 @@
     var c = document.createElement('canvas'); c.width = Math.max(1, x1 - x0); c.height = Math.max(1, y1 - y0);
     var ctx = c.getContext('2d');
     ctx.drawImage(page, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
-    if (rg.mask) {
+    var ring = rg.edited ? rg.ring : null;
+    if (ring || (rg.mask && !rg.edited)) {
       var im = ctx.getImageData(0, 0, c.width, c.height), d = im.data, sx = aw / W, sy = ah / H;
       for (var y = 0; y < c.height; y++) {
-        var my = Math.floor((y0 + y) * sy) - rg.ay;
+        var ay = Math.floor((y0 + y) * sy);
         for (var x = 0; x < c.width; x++) {
-          var mx = Math.floor((x0 + x) * sx) - rg.ax;
-          if (mx >= 0 && my >= 0 && mx < rg.mw && my < rg.mh && rg.mask[my * rg.mw + mx]) continue;
+          var ax = Math.floor((x0 + x) * sx), keep;
+          if (ring) {
+            var rx = ax - ring.x, ry = ay - ring.y;
+            keep = !(rx >= 0 && ry >= 0 && rx < ring.w && ry < ring.h && ring.mask[ry * ring.w + rx]);
+          } else {
+            var mx = ax - rg.ax, my = ay - rg.ay;
+            keep = mx >= 0 && my >= 0 && mx < rg.mw && my < rg.mh && rg.mask[my * rg.mw + mx];
+          }
+          if (keep) continue;
           var t = (y * c.width + x) * 4; d[t] = d[t + 1] = d[t + 2] = 255;
         }
       }
@@ -20014,6 +20055,17 @@
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
+        var turns = document.createElement('div');
+        turns.className = 'scan-turn';
+        turns.innerHTML = '<button type="button" data-turn="-1" title="Turn the page left" aria-label="Turn the page left">↺</button><button type="button" data-turn="1" title="Turn the page right" aria-label="Turn the page right">↻</button>';
+        turns.addEventListener('click', function (e) {
+          var b = e.target.closest('[data-turn]');
+          if (!b) return;
+          turnSource(src, Number(b.dataset.turn));
+          lastTurn = src.turn;
+          refresh();
+        });
+        view.appendChild(turns);
         drawRegions(src, stage, cv);
       }, 30);
     }
@@ -20034,18 +20086,57 @@
         el.style.left = a[0] + '%'; el.style.top = a[1] + '%'; el.style.width = (b[0] - a[0]) + '%'; el.style.height = (b[1] - a[1]) + '%';
       }
       var regs = src.regions || [], num = 0;
+      // A box: tap it to leave it out (or back in), drag it to move it,
+      // drag a corner to resize it. Once moved or resized it's cut as the
+      // box shows, with just the circle's line whited out (`edited`).
       regs.forEach(function (rg) {
-        var el = document.createElement('button');
-        el.type = 'button';
+        var el = document.createElement('div');
         el.className = 'scan-region' + (rg.on ? '' : ' is-off');
-        el.title = rg.on ? 'Leave this one out' : 'Bring this one in';
-        if (rg.on) el.innerHTML = '<span>' + (++num) + '</span>';
+        el.setAttribute('role', 'button');
+        el.tabIndex = 0;
+        el.title = rg.on ? 'Tap to leave this one out; drag it or its corners to fit' : 'Tap to bring this one in';
+        el.innerHTML = (rg.on ? '<span class="scan-num">' + (++num) + '</span>' : '') +
+          '<i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i>';
         place(el, rg.fx, rg.fy, rg.fw, rg.fh);
-        el.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-        el.addEventListener('click', function () { rg.on = !rg.on; refresh(); });
+        el.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); rg.on = !rg.on; refresh(); }
+        });
+        el.addEventListener('pointerdown', function (e) {
+          if (e.button > 0) return;
+          e.stopPropagation(); e.preventDefault();
+          var corner = e.target.dataset && e.target.dataset.c, p0 = toPage(e), sx = e.clientX, sy = e.clientY, moved = false;
+          var r0 = { fx: rg.fx, fy: rg.fy, fw: rg.fw, fh: rg.fh }, r = r0;
+          el.setPointerCapture(e.pointerId);
+          function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+          function mv(e) {
+            if (!moved && Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) < 6) return;
+            moved = true;
+            el.classList.add('is-moving');
+            var p = toPage(e), dx = p[0] - p0[0], dy = p[1] - p0[1];
+            if (!corner) r = { fx: clamp(r0.fx + dx, 0, 1 - r0.fw), fy: clamp(r0.fy + dy, 0, 1 - r0.fh), fw: r0.fw, fh: r0.fh };
+            else {
+              var x0 = r0.fx, y0 = r0.fy, x1 = r0.fx + r0.fw, y1 = r0.fy + r0.fh;
+              if (corner[1] === 'w') x0 = clamp(x0 + dx, 0, x1 - 0.03); else x1 = clamp(x1 + dx, x0 + 0.03, 1);
+              if (corner[0] === 'n') y0 = clamp(y0 + dy, 0, y1 - 0.03); else y1 = clamp(y1 + dy, y0 + 0.03, 1);
+              r = { fx: x0, fy: y0, fw: x1 - x0, fh: y1 - y0 };
+            }
+            place(el, r.fx, r.fy, r.fw, r.fh);
+          }
+          function up(e) {
+            el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+            if (e.type === 'pointercancel') { refresh(); return; }
+            if (!moved) rg.on = !rg.on;
+            else {
+              rg.fx = r.fx; rg.fy = r.fy; rg.fw = r.fw; rg.fh = r.fh; rg.edited = true; rg.on = true;
+              src.regions = scanReadingOrder(src.regions.slice());
+            }
+            refresh();
+          }
+          el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+        });
         stage.appendChild(el);
       });
-      note.textContent = !src.regions ? '' : regs.length ? 'Tap a doodle to leave it out, or drag across one to add it.' : '';
+      note.textContent = !src.regions ? 'Looking for circled doodles…' : regs.length ? 'Tap a box to leave it out. Drag a box or its corners to fit; drag across the page to add one.' : '';
       stage.addEventListener('pointerdown', function (e) {
         if (!src.regions || e.button > 0) return;
         e.preventDefault();
@@ -20063,12 +20154,34 @@
           box.remove();
           var r = rect(e);
           if (e.type === 'pointercancel' || r.fw < 0.03 || r.fh < 0.03) return;
-          r.on = true; r.mask = null;
+          r.on = true; r.mask = null; r.edited = true;
           src.regions = scanReadingOrder(src.regions.concat([r]));
           refresh();
         }
         stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
       });
+    }
+    // Turning a page a quarter turn (a landscape page photographed upright).
+    // Pages added after a turn come in turned the same way, as a run of
+    // photos is usually all held alike.
+    var lastTurn = 0;
+    function turnCanvas(c, q) {
+      q = ((q % 4) + 4) % 4;
+      if (!q) return c;
+      var t = document.createElement('canvas');
+      t.width = q % 2 ? c.height : c.width; t.height = q % 2 ? c.width : c.height;
+      var x = t.getContext('2d');
+      x.translate(t.width / 2, t.height / 2);
+      x.rotate(q * Math.PI / 2);
+      x.drawImage(c, -c.width / 2, -c.height / 2);
+      return t;
+    }
+    function turnSource(src, dir) {
+      src.canvas = turnCanvas(src.canvas, dir);
+      src.turn = (((src.turn || 0) + dir) % 4 + 4) % 4;
+      src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
+      src.regions = null;
+      findRegions(src);
     }
     // Each page is searched for circles as it comes in, one page at a
     // time, so taking photos never waits on it.
@@ -20081,11 +20194,11 @@
             try {
               var a = scanClean(src.canvas, { mode: 'gray', shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, trim: false }, 900);
               var aw = a.width, ah = a.height, d = a.getContext('2d').getImageData(0, 0, aw, ah).data, ink = new Uint8Array(aw * ah);
-              var cut = o.mode === 'bw' ? o.threshold : 165;
+              var cut = o.mode === 'bw' ? o.threshold : 180;
               for (var i = 0; i < ink.length; i++) ink[i] = d[i * 4] < cut ? 1 : 0;
               src.aw = aw; src.ah = ah;
               src.regions = scanReadingOrder(scanFindCircles(ink, aw, ah).map(function (f) {
-                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, on: true };
+                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, ring: f.ring, on: true };
               }));
             } catch (err) { src.regions = []; }
             if (src.regions.length) refresh();
@@ -20128,8 +20241,9 @@
       if (has) renderView(); else view.innerHTML = '';
     }
     function addSource(canvas, fromPdf) {
+      canvas = turnCanvas(canvas, lastTurn);
       var th = pbCanvasFrom(canvas, 120);
-      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null };
+      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: lastTurn };
       sources.push(src);
       // A PDF is already clean; a photo has shadows to lift.
       if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
