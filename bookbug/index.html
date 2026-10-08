@@ -2315,6 +2315,7 @@
   .cb-art img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
   .cb-art.is-empty { border-style: dashed; color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px; }
   .cb-art.is-drop { outline: 3px solid var(--accent); }
+  .cb-art.is-missing { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px 24px; }
   .cb-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   textarea.cb-caption {
     width: 100%; resize: none; overflow: hidden; min-height: 64px; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line);
@@ -2322,7 +2323,7 @@
     font-family: 'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif; font-size: 18px; font-style: italic;
   }
   textarea.cb-caption:focus { border-color: var(--accent); }
-  textarea.cb-caption::placeholder { color: var(--ink-faint); font-style: italic; }
+  textarea.cb-caption::placeholder { color: var(--ink-faint); font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif; font-style: normal; font-size: 14px; }
   .cb-caption-shown { font-family: 'Libre Caslon Text', Georgia, serif; font-style: italic; font-size: 13px; color: var(--ink-soft); text-align: center; min-height: 1em; }
   .cb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cb-row .checkline { margin: 0; }
@@ -15344,6 +15345,7 @@
       pbState = normalizePictureBook(open.data);
       if (isPictureBookShown()) renderPictureBook();
     }
+    pbResendLocalImages();
     pbFlushImageQueue();
     return merged.changed || formsChanged || (firstTime && pbLibrary.length > 0);
   }
@@ -15430,13 +15432,21 @@
   var PB_IMG_QUEUE_KEY = 'bookbug.pbImageQueue.v1';
   function pbImgQueue() { try { return JSON.parse(localStorage.getItem(PB_IMG_QUEUE_KEY) || '[]'); } catch (e) { return []; } }
   function pbSetImgQueue(q) { try { localStorage.setItem(PB_IMG_QUEUE_KEY, JSON.stringify(q)); } catch (e) {} }
+  // Pictures known to be on the account, so the one-time sweep below
+  // doesn't send them again.
+  var PB_IMG_SENT_KEY = 'bookbug.pbImagesSent.v1';
+  function pbImgSent() { try { return JSON.parse(localStorage.getItem(PB_IMG_SENT_KEY) || '{}'); } catch (e) { return {}; } }
+  function pbMarkImgSent(id) { var s = pbImgSent(); s[id] = 1; try { localStorage.setItem(PB_IMG_SENT_KEY, JSON.stringify(s)); } catch (e) {} }
   var pbImgFlushing = false;
   async function pbFlushImageQueue() {
     if (pbImgFlushing || !cloudAuthToken || !signedInThisLoad) return;
     pbImgFlushing = true;
     try {
-      var q = pbImgQueue();
-      while (q.length) {
+      // The queue is read fresh each time round: pictures added while one
+      // is uploading (a batch import) join it meanwhile, and writing back
+      // an old copy used to drop them, so they never reached the account.
+      var q;
+      while ((q = pbImgQueue()).length) {
         var id = q[0];
         var rec = await pbDbDo('readonly', function (st) { return st.get(id); }).catch(function () { return null; });
         if (rec && rec.blob) {
@@ -15446,12 +15456,26 @@
             body: JSON.stringify({ type: rec.type || rec.blob.type, data: await pbBlobToBase64(rec.blob) })
           });
           if (!res.ok) break; // try again later
+          pbMarkImgSent(id);
         }
-        q.shift();
-        pbSetImgQueue(q);
+        pbSetImgQueue(pbImgQueue().filter(function (x) { return x !== id; }));
       }
     } catch (e) {}
     pbImgFlushing = false;
+  }
+  // Once per device: every picture kept here that isn't known to be on the
+  // account goes in the queue, to send any the old queue lost.
+  var PB_IMG_SWEPT_KEY = 'bookbug.pbImagesSwept.v1';
+  async function pbResendLocalImages() {
+    try { if (localStorage.getItem(PB_IMG_SWEPT_KEY)) return; } catch (e) { return; }
+    if (!cloudAuthToken || !signedInThisLoad) return;
+    var keys = await pbDbDo('readonly', function (st) { return st.getAllKeys(); }).catch(function () { return null; });
+    if (!keys) return;
+    var sent = pbImgSent(), q = pbImgQueue();
+    keys.forEach(function (k) { if (typeof k === 'string' && !sent[k] && q.indexOf(k) === -1) q.push(k); });
+    pbSetImgQueue(q);
+    try { localStorage.setItem(PB_IMG_SWEPT_KEY, '1'); } catch (e) {}
+    pbFlushImageQueue();
   }
   setInterval(pbFlushImageQueue, 60000);
   async function pbStoreImage(blob, w, h) {
@@ -19563,6 +19587,7 @@
       confirmDialog('Couldn’t add that drawing: ' + (err && err.message ? err.message : 'unknown error'));
     }
   }
+  var cbMissingText = 'This drawing isn’t on this device or your account yet. Open this batch on the device it was added on, signed in, to send it.';
   function cbMakeItem(c, i) {
     var wrap = document.createElement('div');
     wrap.className = 'cb-item' + (cbPageIndexOf(c) === cbCur ? ' is-current' : '');
@@ -19581,6 +19606,7 @@
     if (c.img) {
       var el = pbImgEls[c.img];
       if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; art.appendChild(im); }
+      else if (pbImgMissing[c.img]) { art.textContent = cbMissingText; art.classList.add('is-missing'); }
       else { art.textContent = 'Loading drawing…'; pbLoadImage(c.img); }
       var fb = document.createElement('button');
       fb.type = 'button'; fb.className = 'cb-frame-btn'; fb.textContent = 'Frame';
@@ -20982,7 +21008,24 @@
     // Whole pages kept for reframing load only when reframed.
     Object.keys(cbState.images).forEach(function (id) { if (!cbState.images[id].page) pbLoadImage(id); });
   }
-  function cbOnImageReady() { if (isCartoonShown() && cbState) { cbRenderList(); } }
+  // A drawing that has loaded (or turned out to be missing) is swapped in
+  // where it shows, without redrawing the list: a redraw replaced the
+  // caption being typed in and closed any open ⋯ menu.
+  function cbOnImageReady(id) {
+    if (!isCartoonShown() || !cbState) return;
+    cbState.cartoons.forEach(function (c) {
+      if (c.img !== id) return;
+      var item = cbList.querySelector('.cb-item[data-id="' + c.id + '"]'), art = item && item.querySelector('.cb-art');
+      if (!art) return;
+      var fb = art.querySelector('.cb-frame-btn');
+      art.textContent = '';
+      if (pbImgEls[id]) { var im = document.createElement('img'); im.src = pbImgEls[id].src; im.alt = ''; art.appendChild(im); }
+      else art.textContent = cbMissingText;
+      art.classList.toggle('is-missing', !pbImgEls[id]);
+      if (fb) art.appendChild(fb);
+    });
+    renderCbPreview();
+  }
 
   // ---- Export: a landscape PDF, one cartoon to a page ----
   cbFmt('cbExportBtn').addEventListener('click', async function () {
