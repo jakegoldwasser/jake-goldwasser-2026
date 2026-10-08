@@ -2318,11 +2318,11 @@
   textarea.cb-caption {
     width: 100%; resize: none; overflow: hidden; min-height: 64px; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line);
     background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
-    font-family: 'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif; font-size: 18px; font-style: italic;
+    font-family: 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif; font-size: 20px; font-style: italic;
   }
   textarea.cb-caption:focus { border-color: var(--accent); }
   textarea.cb-caption::placeholder { color: var(--ink-faint); font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif; font-style: normal; font-size: 14px; }
-  .cb-caption-shown { font-family: 'Libre Caslon Text', Georgia, serif; font-style: italic; font-size: 13px; color: var(--ink-soft); text-align: center; min-height: 1em; }
+  .cb-caption-shown { font-family: 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif; font-style: italic; font-size: 14px; color: var(--ink-soft); text-align: center; min-height: 1em; }
   .cb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cb-row .checkline { margin: 0; }
   .cb-row .dots-btn { margin-left: auto; }
@@ -2866,7 +2866,7 @@
               <input type="checkbox" id="cbNumbers">
               <label for="cbNumbers" style="text-transform:none;letter-spacing:0;font-weight:400;">Number the cartoons</label>
             </div>
-            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in Caslon italic, spoken lines in quotation marks, with curly quotes and proper dashes.</p>
+            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in a Caslon-like italic, spoken lines in quotation marks, with curly quotes and proper dashes.</p>
           </div>
         </div>
         <div class="panel collapsible-panel" id="cbExportPanel">
@@ -4500,6 +4500,11 @@
   function archivedCartoonBooks() { return cbLibrary.filter(function (c) { return c.archived; }); }
   function makeCartoonBookId() { return 'cbk' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   var CASLON_STACK = "'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif";
+  // Cartoon captions: the New Yorker's own Adobe Caslon where it's
+  // installed, otherwise EB Garamond, whose light, narrow italic with a
+  // small x-height is nearer it than Libre Caslon Text (drawn taller and
+  // heavier for screens).
+  var CAPTION_STACK = "'Adobe Caslon Pro', 'EB Garamond', Georgia, serif";
 
   function cbNormalizeCartoon(c) {
     c = c || {};
@@ -20882,7 +20887,7 @@
     if (!pg) return H;
     var c = pg.c, m = 0.75 * s;
     var capPx = cbState.captionSize * pt, lh = capPx * 1.35;
-    ctx.font = 'italic 400 ' + capPx + 'px ' + CASLON_STACK;
+    ctx.font = 'italic 400 ' + capPx + 'px ' + CAPTION_STACK;
     var caption = cbTypeset(c.caption, c.spoken);
     var lines = caption ? pbWrapCanvas(ctx, caption, Math.min(W - 2 * m, 7 * s)) : [];
     var capH = lines.length * lh, gap = lines.length ? 0.28 * s : 0, numH = cbState.numbers ? 0.35 * s : 0;
@@ -20899,10 +20904,10 @@
     var top = m + Math.max(0, (H - 2 * m - numH - blockH) * 0.45);
     if (el) ctx.drawImage(el, (W - dw) / 2, top, dw, dh);
     else if (dw && placeholders) { ctx.fillStyle = '#EFECE6'; ctx.fillRect((W - dw) / 2, top, dw, dh); ctx.fillStyle = '#1B1A18'; }
-    ctx.font = 'italic 400 ' + capPx + 'px ' + CASLON_STACK;
+    ctx.font = 'italic 400 ' + capPx + 'px ' + CAPTION_STACK;
     lines.forEach(function (l, i) { ctx.fillText(l, W / 2, top + dh + gap + i * lh + capPx); });
     if (cbState.numbers) {
-      ctx.font = '400 ' + (10 * pt) + 'px ' + CASLON_STACK;
+      ctx.font = '400 ' + (10 * pt) + 'px ' + CAPTION_STACK;
       ctx.fillStyle = '#57524A';
       ctx.fillText(String(pg.n), W / 2, H - m * 0.6);
     }
@@ -21029,7 +21034,7 @@
     btn.disabled = true;
     status.textContent = 'Building PDF…';
     try {
-      await Promise.all(['400 16px ', 'italic 400 16px '].map(function (w) { return document.fonts.load(w + '"Libre Caslon Text"').catch(function () {}); }));
+      await Promise.all(['400 16px ', 'italic 400 16px '].map(function (w) { return document.fonts.load(w + '"EB Garamond"').catch(function () {}); }));
       await Promise.all(Object.keys(cbState.images).filter(function (id) { return !cbState.images[id].page; }).map(pbLoadImage));
       var ps = cbPageSize(), DPI = 200, out = [];
       for (var i = 0; i < pages.length; i++) {
