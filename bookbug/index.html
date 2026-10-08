@@ -1998,8 +1998,6 @@
   .cbf-stage .scan-region { box-shadow: 0 0 0 9999px rgba(27, 26, 24, 0.38); background: transparent; }
   .cbf-stage .scan-region:hover { background: transparent; }
   .cbf-zoom { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .cb-frame-btn { position: absolute; top: 6px; right: 6px; z-index: 1; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
-  .cb-frame-btn:hover { border-color: var(--accent); }
   .scan-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
   .scan-note { min-height: 2.6em; }
   /* Take photos: the camera live in the dialog, a shutter under it. */
@@ -19602,19 +19600,15 @@
     body.className = 'cb-body';
     var art = document.createElement('div');
     art.className = 'cb-art' + (c.img ? '' : ' is-empty');
-    art.title = c.img ? 'Click to replace the drawing' : 'Add a drawing';
+    art.title = c.img ? 'Click to frame the drawing: move it, or zoom out to take in more of the page' : 'Add a drawing';
     if (c.img) {
       var el = pbImgEls[c.img];
       if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; art.appendChild(im); }
       else if (pbImgMissing[c.img]) { art.textContent = cbMissingText; art.classList.add('is-missing'); }
       else { art.textContent = 'Loading drawing…'; pbLoadImage(c.img); }
-      var fb = document.createElement('button');
-      fb.type = 'button'; fb.className = 'cb-frame-btn'; fb.textContent = 'Frame';
-      fb.title = 'Move the drawing in its frame, or zoom out to take in more of the page';
-      fb.addEventListener('click', function (e) { e.stopPropagation(); cbOpenFrame(c); });
-      art.appendChild(fb);
     } else art.textContent = 'Click or drop a drawing here';
-    art.addEventListener('click', function () { cbPick(c.id); });
+    // A drawing opens its framing; replacing it is in the ⋯ menu.
+    art.addEventListener('click', function () { if (c.img) cbOpenFrame(c); else cbPick(c.id); });
     art.addEventListener('dragover', function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1) { e.preventDefault(); e.stopPropagation(); art.classList.add('is-drop'); } });
     art.addEventListener('dragleave', function () { art.classList.remove('is-drop'); });
     art.addEventListener('drop', function (e) {
@@ -20759,7 +20753,7 @@
     var i = cbState.cartoons.indexOf(c);
     cbMenuFor = c;
     cbItemMenu.innerHTML =
-      (c.img ? '<button type="button" data-a="frame">Frame the drawing…</button><button type="button" data-a="shadows">Remove paper shadows</button><button type="button" data-a="ink">Clean up line art</button>' +
+      (c.img ? '<button type="button" data-a="frame">Frame the drawing…</button><button type="button" data-a="replace">Replace drawing…</button><button type="button" data-a="shadows">Remove paper shadows</button><button type="button" data-a="ink">Clean up line art</button>' +
         (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') : '') +
       (i > 0 ? '<button type="button" data-a="up">Move up</button>' : '') +
       (i < cbState.cartoons.length - 1 ? '<button type="button" data-a="down">Move down</button>' : '') +
@@ -20777,6 +20771,7 @@
     var c = cbMenuFor, a = b.dataset.a, list = cbState.cartoons, i = list.indexOf(c);
     cbItemMenu.hidden = true;
     if (a === 'frame') { cbOpenFrame(c); return; }
+    if (a === 'replace') { cbPick(c.id); return; }
     if (a === 'up' || a === 'down') {
       var j = a === 'up' ? i - 1 : i + 1;
       list.splice(j, 0, list.splice(i, 1)[0]);
@@ -21017,12 +21012,10 @@
       if (c.img !== id) return;
       var item = cbList.querySelector('.cb-item[data-id="' + c.id + '"]'), art = item && item.querySelector('.cb-art');
       if (!art) return;
-      var fb = art.querySelector('.cb-frame-btn');
       art.textContent = '';
       if (pbImgEls[id]) { var im = document.createElement('img'); im.src = pbImgEls[id].src; im.alt = ''; art.appendChild(im); }
       else art.textContent = cbMissingText;
       art.classList.toggle('is-missing', !pbImgEls[id]);
-      if (fb) art.appendChild(fb);
     });
     renderCbPreview();
   }
