@@ -683,6 +683,9 @@
      of its step: yellow to grade, green to hand back, blue when it's all done. ---- */
   .nextstep { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; padding: 14px 18px; border-radius: 16px; border: 1.5px solid; }
   .nextstep p { flex: 1; min-width: 200px; margin: 0; font: 400 20px/1.3 var(--display); }
+  /* Grading still to do is yellow, never the green that reads as done. */
+  .btn.tograde, .btn.tograde:hover:not(:disabled) { background: var(--sun); border-color: var(--sun-deep); color: var(--on-sun); }
+  .btn.tograde:hover:not(:disabled) { background: #D6AE45; }
   .nextstep.todo { background: var(--sun-tint); border-color: var(--sun); }
   .nextstep.ready { background: var(--mint-tint); border-color: var(--mint); }
   .nextstep.done { background: var(--sky-tint); border-color: var(--sky); }
@@ -3279,11 +3282,13 @@
     nb.onclick = null;
     if (toGrade.length) {
       ns.className = 'nextstep todo';
+      nb.className = 'btn tograde';
       $('nextStepText').textContent = plural(toGrade.length, 'paper', 'papers') + ' to grade.';
       nb.textContent = toGrade.length === papers.length ? 'Start grading' : 'Grade the next one';
       nb.onclick = function () { openMark(toGrade[0].id, function () { openRoom(teacherRoom.code); }); };
     } else if (toHand.length) {
       ns.className = 'nextstep ready';
+      nb.className = 'btn';
       $('nextStepText').textContent = 'All graded. Hand ' + (toHand.length === 1 ? 'it' : 'them') + ' back so students can read your comments.';
       nb.textContent = toHand.length === 1 ? 'Hand it back' : 'Hand back all ' + toHand.length;
       nb.onclick = function () { $('handBackAllBtn').click(); };
@@ -3366,17 +3371,17 @@
     else if (s && s.lockedOut) tag = ['warn', 'Locked out'];
     else if (writingAgain && s.away) tag = ['warn', 'Off the page'];
     else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
-    else if (stage === 'tograde') tag = ['todo', 'To grade'];
+    else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
     else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
     else if (stage === 'back') tag = ['back', 'Handed back' + (x.grade ? ': ' + x.grade : '')];
     else if (x && !x.stored) tag = ['warn', 'Not saved'];
     else tag = ['', state === 'ended' ? 'Didn’t hand in' : 'Not writing'];
-    row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
+    if (tag) row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
 
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }); };
     var main = null;
     if (s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
-    else if (stage === 'tograde') main = button('Grade', 'btn small', open);
+    else if (stage === 'tograde') main = button('Grade', 'btn small tograde', open);
     else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
     });
