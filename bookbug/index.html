@@ -2000,6 +2000,7 @@
   .cbf-zoom { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .scan-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
   .scan-note { min-height: 2.6em; }
+  .scan-note .scan-all { font-size: inherit; font-weight: 600; color: var(--accent); }
   /* Take photos: the camera live in the dialog, a shutter under it. */
   .scan-cam { margin-bottom: 12px; }
   .scan-cam[hidden] { display: none; }
@@ -19928,6 +19929,41 @@
     }
     return scanGrow(off, W, H, 2);
   }
+  // Separate drawings on a page with no circles: the ink thickened until a
+  // drawing's own strokes run together (but not into the next drawing),
+  // then each clump that's big enough is one. Clumps on two sides of the
+  // page, or solid dark ones on an edge, are the table round a photo, not
+  // drawings. Fewer than two is just a page. Same shape as
+  // scanFindCircles; the mask is the clump, so a neighbor's stray lines
+  // inside the box are whited out.
+  function scanFindDrawings(ink, W, H) {
+    var N = W * H, r = Math.max(4, Math.round(Math.max(W, H) / 45)), D = scanGrow(ink, W, H, r);
+    var lab = new Int32Array(N), queue = new Int32Array(N), blobs = [], id = 0, minSide = Math.max(W, H) * 0.04;
+    for (var s = 0; s < N; s++) {
+      if (!D[s] || lab[s]) continue;
+      var b = { id: ++id, x0: W, y0: H, x1: -1, y1: -1, ink: 0 }, qh = 0, qt = 0;
+      lab[s] = id; queue[qt++] = s;
+      while (qh < qt) {
+        var i = queue[qh++], x = i % W, y = (i - x) / W;
+        if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
+        if (ink[i]) b.ink++;
+        if (x > 0 && D[i - 1] && !lab[i - 1]) { lab[i - 1] = id; queue[qt++] = i - 1; }
+        if (x < W - 1 && D[i + 1] && !lab[i + 1]) { lab[i + 1] = id; queue[qt++] = i + 1; }
+        if (y > 0 && D[i - W] && !lab[i - W]) { lab[i - W] = id; queue[qt++] = i - W; }
+        if (y < H - 1 && D[i + W] && !lab[i + W]) { lab[i + W] = id; queue[qt++] = i + W; }
+      }
+      var bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1, edges = (b.x0 <= 1) + (b.y0 <= 1) + (b.x1 >= W - 2) + (b.y1 >= H - 2);
+      if (Math.max(bw, bh) < minSide || b.ink < N * 0.0002) continue;
+      if (edges >= 2 || (edges && b.ink > bw * bh * 0.35) || bw * bh > N * 0.8) continue;
+      blobs.push(b);
+    }
+    if (blobs.length < 2) return [];
+    return blobs.map(function (b) {
+      var mw = b.x1 - b.x0 + 1, mh = b.y1 - b.y0 + 1, mask = new Uint8Array(mw * mh);
+      for (var y = 0; y < mh; y++) for (var x = 0; x < mw; x++) if (lab[(y + b.y0) * W + x + b.x0] === b.id) mask[y * mw + x] = 1;
+      return { x: b.x0, y: b.y0, w: mw, h: mh, mask: mask };
+    });
+  }
   // Everything within r pixels (a square) of a 1 in `m`.
   function scanGrow(m, W, H, r) {
     var pre = new Int32Array(Math.max(W, H) + 1), tmp = new Uint8Array(W * H), out = new Uint8Array(W * H), x, y;
@@ -20242,7 +20278,7 @@
       '<input type="file" accept="image/*" capture="environment" hidden data-in="camera"></div>' +
       '<div class="scan-cam" hidden><video playsinline muted></video>' +
         '<div class="scan-cam-row"><span class="scan-cam-count"></span><button class="btn" type="button" data-cam="done">Done</button><button class="btn btn-primary" type="button" data-cam="shoot">Take photo</button></div></div>' +
-      '<p class="snap-empty scan-empty">Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption. Circle doodles on a page to bring each one in on its own.</p>' +
+      '<p class="snap-empty scan-empty">Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption. On a page of several drawings, tap the ones to bring in, each as its own cartoon.</p>' +
       '<div class="scan-main" hidden><div><div class="scan-view"></div><p class="scan-note"></p><div class="scan-strip"></div></div>' +
       '<div class="scan-controls">' +
         '<div class="field"><label>Scan as</label><div class="seg seg-3" data-mode><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
@@ -20319,7 +20355,7 @@
         view.innerHTML = '';
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
-        var cv = scanClean(src.canvas, Object.assign({}, o, { frames: !(src.regions && src.regions.length) }), 900), stage = document.createElement('div');
+        var cv = scanClean(src.canvas, Object.assign({}, o, { frames: wholePage(src) }), 900), stage = document.createElement('div');
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
@@ -20404,7 +20440,18 @@
         });
         stage.appendChild(el);
       });
-      note.textContent = !src.regions ? 'Looking for circled doodles…' : regs.length ? 'Tap a box to leave it out. Drag a box or its corners to fit; drag across the page to add one.' : '';
+      // Circles are already chosen; separate drawings wait to be tapped,
+      // with Choose all for a page of them.
+      var picking = regs.length && !regs.some(function (r) { return r.loop; });
+      note.textContent = !src.regions ? 'Looking for drawings…' : !regs.length ? '' : picking
+        ? 'Tap each drawing to bring in as its own cartoon. With none chosen, the whole page comes in. '
+        : 'Tap a box to leave it out. Drag a box or its corners to fit; drag across the page to add one.';
+      if (picking && regs.some(function (r) { return !r.on; })) {
+        var all = document.createElement('button');
+        all.type = 'button'; all.className = 'btn-link scan-all'; all.textContent = 'Choose all';
+        all.addEventListener('click', function () { regs.forEach(function (r) { r.on = true; }); refresh(); });
+        note.appendChild(all);
+      }
       stage.addEventListener('pointerdown', function (e) {
         if (!src.regions || e.button > 0) return;
         e.preventDefault();
@@ -20474,8 +20521,15 @@
               // (A clean scan in pen has no faint ink to speak of: read once.)
               var nInk = 0, nFaint = 0;
               for (i = 0; i < ink.length; i++) { nInk += ink[i]; nFaint += faint[i]; }
-              src.regions = scanReadingOrder(scanFindCircles(nFaint > nInk * 1.15 ? [ink, faint] : [ink], aw, ah, dark).map(function (f) {
-                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: f.ring, on: !f.off };
+              // Circled doodles come in as circled. Without circles, the
+              // page's separate drawings wait to be chosen (or, with fewer
+              // than two, any loops left out, like a frame round the page).
+              var loops = scanFindCircles(nFaint > nInk * 1.15 ? [ink, faint] : [ink], aw, ah, dark);
+              var circled = loops.some(function (f) { return !f.off; });
+              var list = circled ? loops : scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
+              if (!list.length) list = loops;
+              src.regions = scanReadingOrder(list.map(function (f) {
+                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: f.ring || null, on: circled && !f.off, loop: circled };
               }));
             } catch (err) { src.regions = []; }
             if (src.regions.length) refresh();
@@ -20485,10 +20539,12 @@
         });
       });
     }
-    // A page with circles brings in the circled doodles; one without, the page.
-    function cartoonsFrom(src) {
-      return src.regions && src.regions.length ? src.regions.filter(function (r) { return r.on; }).length : 1;
-    }
+    // A page brings in its chosen boxes, each a cartoon. With none chosen,
+    // a page of circles brings in nothing (each circle was left out) and
+    // any other page comes in whole.
+    function chosen(src) { return (src.regions || []).filter(function (r) { return r.on; }); }
+    function wholePage(src) { return !chosen(src).length && !(src.regions || []).some(function (r) { return r.loop; }); }
+    function cartoonsFrom(src) { return chosen(src).length || (wholePage(src) ? 1 : 0); }
     function cartoonCount() { return sources.reduce(function (n, s) { return n + cartoonsFrom(s); }, 0); }
     function renderStrip() {
       strip.innerHTML = '';
@@ -20578,20 +20634,20 @@
             var cb = c.cropBox || { x: 0, y: 0 };
             return { canvas: c, crop: { fx: (x0 + cb.x) / page.width, fy: (y0 + cb.y) / page.height, fw: c.width / page.width, fh: c.height / page.height } };
           }
-          if (src.regions && src.regions.length) {
+          if (chosen(src).length) {
             page = scanClean(src.canvas, Object.assign({}, o, { trim: false }), 2400);
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
-            cuts = src.regions.filter(function (r) { return r.on; }).map(function (r) {
+            cuts = chosen(src).map(function (r) {
               var c = scanStripFrame(scanCutRegion(page, r, src.aw, src.ah));
               return placed(o.trim ? scanTrim(c) : c, Math.max(0, Math.floor(r.fx * page.width)), Math.max(0, Math.floor(r.fy * page.height)));
             });
-            scanWhiteRings(page, src.regions.filter(function (r) { return r.on; }), src.aw, src.ah);
-          } else {
+            scanWhiteRings(page, chosen(src), src.aw, src.ah);
+          } else if (wholePage(src)) {
             page = scanClean(src.canvas, Object.assign({}, o, { trim: false }), 2400);
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
             scanStripFrame(page);
             cuts = [placed(o.trim ? scanTrim(page) : page, 0, 0)];
-          }
+          } else continue;
           var pageId = null;
           try {
             var penc = await pbEncode(page, false);
