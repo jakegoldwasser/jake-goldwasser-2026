@@ -1998,6 +1998,12 @@
   .cbf-stage .scan-region { box-shadow: 0 0 0 9999px rgba(27, 26, 24, 0.38); background: transparent; }
   .cbf-stage .scan-region:hover { background: transparent; }
   .cbf-zoom { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .cbf-zoom .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .cbf-angle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .cbf-angle[hidden] { display: none; }
+  .cbf-angle input { flex: 1; min-width: 0; }
+  .cbf-angle output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+  .cbf-stage.is-angle .scan-region { background-image: linear-gradient(to right, transparent calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% + .5px), transparent calc(66.67% + .5px)), linear-gradient(to bottom, transparent calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% + .5px), transparent calc(66.67% + .5px)); }
   .scan-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
   .scan-note { min-height: 2.6em; }
   .scan-note .scan-all { font-size: inherit; font-weight: 600; color: var(--accent); }
@@ -4517,6 +4523,7 @@
     // run past its edges, for paper round it), so it can be reframed.
     if (c.page && c.crop && ['fx', 'fy', 'fw', 'fh'].every(function (k) { return typeof c.crop[k] === 'number'; })) {
       out.page = c.page; out.crop = { fx: c.crop.fx, fy: c.crop.fy, fw: c.crop.fw, fh: c.crop.fh };
+      if (typeof c.rot === 'number' && isFinite(c.rot) && c.rot) out.rot = c.rot;
     }
     return out;
   }
@@ -19843,68 +19850,6 @@
     cr.cropBox = { x: x0, y: y0, W: W, H: H };
     return cr;
   }
-  // Circled doodles: on a page of doodles, each one with a circle drawn
-  // round it comes in as a cartoon of its own, the circle left out; the
-  // rest are passed over. The circle is the same pen as the drawing, so
-  // it's told apart by its shape: one loop all the way round, clear paper
-  // just inside it, and a good deal of drawing within. (A drawing has
-  // lines running every which way out to its edge; a drawn face, a loop
-  // with a little inside, has too little within to count.) Any loop
-  // shape will do, not just a circle.
-  // `ink` is the page as 1s (ink) and 0s; returns each circle's inside as
-  // a box and a mask, in the page's pixels.
-  // Looked for four times, the ink thickened a little, then more and more
-  // (for a circle whose ends were left further apart), keeping what each
-  // later look finds anew. Erring toward finding too many: a box that
-  // isn't a doodle is one tap to leave out.
-  // `dark`, if given, is the page's darkest ink (1s), for finding what's
-  // around the paper.
-  function scanFindCircles(ink, W, H, dark) {
-    var found = [];
-    // What's around the paper in a photo (the table, a cutting mat, a lap)
-    // reads as ink running off the edge. It's taken out first, as open
-    // space, so a circle drawn near the paper's edge isn't joined to it.
-    // Only dark stuff is followed in from the edge, so a light pencil line
-    // near the paper's edge stays.
-    // `ink` may be a list of masks (the same page read at different
-    // darknesses, for faint pencil); each is looked in, least thickened
-    // first. A loop found again later (another darkness, more thickened)
-    // is the same loop, and the first find of it is kept.
-    var inks = Array.isArray(ink) ? ink : [ink], off = [];
-    function midIn(a, f) { var x = a.x + a.w / 2, y = a.y + a.h / 2; return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h; }
-    function area(f) { return f.w * f.h; }
-    function overlap(a, f) {
-      var w = Math.min(a.x + a.w, f.x + f.w) - Math.max(a.x, f.x), h = Math.min(a.y + a.h, f.y + f.h) - Math.max(a.y, f.y);
-      return w > 0 && h > 0 ? w * h / (area(a) + area(f) - w * h) : 0;
-    }
-    inks.forEach(function (m) {
-      m = scanOffPaper(m, W, H, dark || m);
-      [220, 110, 65, 40].forEach(function (div) {
-        var list = scanCirclesAt(m, W, H, div).sort(function (a, b) { return area(b) - area(a); });
-        list.forEach(function (f) {
-          // A loop round two or more good-sized ones is the paper's edge,
-          // a frame, or a circle round several: those are the doodles. It's
-          // still offered, left out, unless it's most of the page.
-          var kids = list.filter(function (e) { return e !== f && area(e) < area(f) * 0.85 && area(e) > area(f) * 0.06 && midIn(e, f); });
-          kids = kids.filter(function (e) { return !kids.some(function (o) { return o !== e && area(o) > area(e) && midIn(e, o); }); });
-          if (kids.length >= 2) { f.off = true; return; }
-          // The same loop found already, or one inside one found already.
-          if (found.some(function (e) { return overlap(e, f) > 0.7 || (midIn(f, e) && area(e) >= area(f)); })) return;
-          var inside = found.filter(function (e) { return midIn(e, f) && area(e) < area(f); });
-          if (inside.length >= 2) { f.off = true; return; }
-          // A loop round one found already is that doodle's circle, and
-          // what was found inside is part of the drawing.
-          if (inside.length) found.splice(found.indexOf(inside[0]), 1);
-          found.push(f);
-        });
-        list.forEach(function (f) {
-          if (f.off && area(f) < W * H * 0.5 && !off.some(function (e) { return midIn(f, e) && midIn(e, f); })) off.push(f);
-        });
-      });
-    });
-    off.forEach(function (f) { if (!found.some(function (e) { return midIn(f, e) && midIn(e, f); })) found.push(f); });
-    return found;
-  }
   // The ink with the dark stuff joined to the image's edge taken out (and
   // a little round it, its soft edge).
   function scanOffPaper(ink, W, H, dark) {
@@ -19915,17 +19860,27 @@
   // The dark stuff joined to the image's edge (in a photo, what's round the
   // paper), grown a little for its soft edge: 1s.
   function scanOffMask(W, H, dark) {
-    var N = W * H, off = new Uint8Array(N), queue = new Int32Array(N), qh = 0, qt = 0, i, x, y;
-    for (i = 0; i < N; i++) {
-      x = i % W; y = (i - x) / W;
-      if ((x === 0 || y === 0 || x === W - 1 || y === H - 1) && dark[i]) { off[i] = 1; queue[qt++] = i; }
-    }
-    while (qh < qt) {
-      i = queue[qh++]; x = i % W; y = (i - x) / W;
-      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-        var xx = x + dx, yy = y + dy, j = yy * W + xx;
-        if (xx >= 0 && yy >= 0 && xx < W && yy < H && dark[j] && !off[j]) { off[j] = 1; queue[qt++] = j; }
+    // Each dark patch touching the image's edge is looked at on its own: the
+    // table round the paper is big and solid, but a pen line running off the
+    // edge of a close-up photo is thin and spread out, and stays.
+    var N = W * H, lab = new Int32Array(N), off = new Uint8Array(N), queue = new Int32Array(N), i, x, y, id = 0;
+    for (var s0 = 0; s0 < N; s0++) {
+      x = s0 % W; y = (s0 - x) / W;
+      if (!(x === 0 || y === 0 || x === W - 1 || y === H - 1) || !dark[s0] || lab[s0]) continue;
+      id++;
+      var qh = 0, qt = 0, x0 = W, y0 = H, x1 = -1, y1 = -1;
+      lab[s0] = id; queue[qt++] = s0;
+      while (qh < qt) {
+        i = queue[qh++]; x = i % W; y = (i - x) / W;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+          var xx = x + dx, yy = y + dy, j = yy * W + xx;
+          if (xx >= 0 && yy >= 0 && xx < W && yy < H && dark[j] && !lab[j]) { lab[j] = id; queue[qt++] = j; }
+        }
       }
+      var box = (x1 - x0 + 1) * (y1 - y0 + 1);
+      if (qt < N * 0.01 || qt < box * 0.3) continue;
+      for (var q = 0; q < qt; q++) off[queue[q]] = 1;
     }
     return scanGrow(off, W, H, 2);
   }
@@ -19934,7 +19889,7 @@
   // then each clump that's big enough is one. Clumps on two sides of the
   // page, or solid dark ones on an edge, are the table round a photo, not
   // drawings. Fewer than two is just a page. Same shape as
-  // scanFindCircles; the mask is the clump, so a neighbor's stray lines
+  // the regions list; the mask is the clump, so a neighbor's stray lines
   // inside the box are whited out.
   function scanFindDrawings(ink, W, H) {
     var N = W * H, r = Math.max(4, Math.round(Math.max(W, H) / 45)), D = scanGrow(ink, W, H, r);
@@ -19976,176 +19931,6 @@
       for (y = 0; y < H; y++) out[y * W + x] = pre[Math.min(H, y + r + 1)] - pre[Math.max(0, y - r)] > 0 ? 1 : 0;
     }
     return out;
-  }
-  function scanCirclesAt(ink, W, H, closeDiv) {
-    var N = W * H, i, x, y, n, q, L;
-    // The pen's width: ink area over half its edge.
-    var area = 0, edge = 0;
-    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
-      i = y * W + x;
-      if (!ink[i]) continue;
-      area++;
-      if (x === 0 || x === W - 1 || y === 0 || y === H - 1 || !ink[i - 1] || !ink[i + 1] || !ink[i - W] || !ink[i + W]) edge++;
-    }
-    if (area < N * 0.0005) return [];
-    var pen = Math.max(1, 2 * area / Math.max(1, edge));
-    // Thicken the ink so a circle whose ends don't quite meet still closes.
-    var r = Math.max(2, Math.round(Math.max(W, H) / closeDiv));
-    // D closes gaps; Dg, barely thickened, is for the clear-paper check, so
-    // a loose scribble's open spaces between strokes don't read as clear.
-    var D = scanGrow(ink, W, H, r), Dg = scanGrow(ink, W, H, 2);
-    var queue = new Int32Array(N), qh, qt;
-    function nb8(i, fn) {
-      var x = i % W, y = (i - x) / W;
-      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
-        if (!dx && !dy) continue;
-        var xx = x + dx, yy = y + dy;
-        if (xx >= 0 && yy >= 0 && xx < W && yy < H) fn(yy * W + xx);
-      }
-    }
-    function nb4(i, fn) {
-      var x = i % W;
-      if (x > 0) fn(i - 1); if (x < W - 1) fn(i + 1);
-      if (i >= W) fn(i - W); if (i < N - W) fn(i + W);
-    }
-    // Ink that runs off the edge (the table, the page's own edge, a
-    // drawing cut off) can't be inside a circle; clear it so the paper
-    // around everything opens onto the edge.
-    qh = qt = 0;
-    for (i = 0; i < N; i++) {
-      x = i % W; y = (i - x) / W;
-      if ((x === 0 || y === 0 || x === W - 1 || y === H - 1) && D[i]) { D[i] = 0; queue[qt++] = i; }
-    }
-    function clearInk(j) { if (D[j]) { D[j] = 0; queue[qt++] = j; } }
-    while (qh < qt) nb8(queue[qh++], clearInk);
-    // The open paper: everything reachable from the edge without crossing ink.
-    var out = new Uint8Array(N);
-    qh = qt = 0;
-    for (i = 0; i < N; i++) {
-      x = i % W; y = (i - x) / W;
-      if (x === 0 || y === 0 || x === W - 1 || y === H - 1) { out[i] = 1; queue[qt++] = i; }
-    }
-    function openUp(j) { if (!out[j] && !D[j]) { out[j] = 1; queue[qt++] = j; } }
-    while (qh < qt) nb4(queue[qh++], openUp);
-    // The open paper stops r short of the real stroke (the ink was
-    // thickened by r), so the stroke runs from depth r to about r + pen.
-    // The clear-paper check starts just past it (kGap), on the barely
-    // thickened ink, so a tight circle with only a sliver of paper inside
-    // still counts; the box starts there too. The ink counts split at k.
-    var kGap = r + Math.ceil(pen * 1.5) + 1, k = Math.max(kGap, Math.ceil(1.25 * (pen + 2 * r)) + 1), g = Math.max(2, Math.round(pen * 1.5));
-    var kPeel = Math.ceil(pen) + 2 * r + 2, kSeed = kGap + Math.max(6, Math.round(Math.max(W, H) * 0.015));
-    var dep = new Int32Array(N), lab = new Int32Array(N), blobs, found = [];
-    function scanRoundness(b) {
-      var mx = b.sx / b.area, my = b.sy / b.area;
-      var cxx = b.sxx / b.area - mx * mx, cyy = b.syy / b.area - my * my, cxy = b.sxy / b.area - mx * my;
-      var det = cxx * cyy - cxy * cxy;
-      if (det <= 0) return 0;
-      // A filled ellipse's spread is a quarter of its semi-axes squared, so
-      // its edge sits where this distance reaches 4.
-      var ixx = cyy / det, iyy = cxx / det, ixy = -cxy / det, inside = 0;
-      for (var y = b.by0; y <= b.by1; y++) for (var x = b.bx0; x <= b.bx1; x++) {
-        if (lab[y * W + x] !== b.id) continue;
-        var dx = x - mx, dy = y - my;
-        if (dx * dx * ixx + 2 * dx * dy * ixy + dy * dy * iyy <= 4) inside++;
-      }
-      var ell = 4 * Math.PI * Math.sqrt(det);
-      return inside / (b.area + ell - inside);
-    }
-    function isCircled(b) {
-      if (b.area < N * 0.002 || b.inner < b.area * 0.15) return false;
-      // Clear paper just inside the loop, nearly all the way round...
-      if (b.layer < b.perim * g * 0.3 || b.layerWhite < b.layer * 0.5) return false;
-      // ...and drawing within: most of as much ink as the loop itself,
-      // whatever its shape (a shoe, a football); a smooth round or oval
-      // loop needs less, for a sparse doodle. A drawing's own outline (a
-      // face, a head, a house) holds less than that.
-      if (b.innerInk < N * 0.0002) return false;
-      if (b.innerInk < b.ringInk * 0.7 && (b.innerInk < b.ringInk * 0.35 || scanRoundness(b) < 0.88)) return false;
-      return true;
-    }
-    function cut(b) {
-      // The box: the loop's line and all inside it. The mask keeps what's
-      // inside the line (1s); the ring is the line itself, whited out.
-      var lineIn = Math.max(1, r - 3), lineOut = r + Math.ceil(pen) + 5, x0 = W, y0 = H, x1 = -1, y1 = -1;
-      for (y = b.by0; y <= b.by1; y++) for (x = b.bx0; x <= b.bx1; x++) {
-        i = y * W + x;
-        if (lab[i] !== b.id || dep[i] < lineIn) continue;
-        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-      }
-      var mw = x1 - x0 + 1, mh = y1 - y0 + 1, mask = new Uint8Array(mw * mh), ring = new Uint8Array(mw * mh), depth = new Uint8Array(mw * mh), maxDep = lineOut + 1;
-      for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) { i = y * W + x; if (lab[i] === b.id && dep[i] > maxDep) maxDep = dep[i]; }
-      for (y = y0; y <= y1; y++) for (x = x0; x <= x1; x++) {
-        i = y * W + x;
-        if (lab[i] !== b.id || dep[i] < lineIn) continue;
-        if (dep[i] <= lineOut) ring[(y - y0) * mw + (x - x0)] = 1;
-        else {
-          mask[(y - y0) * mw + (x - x0)] = 1;
-          // How far in from the line, out of the way to the middle: 1-255.
-          depth[(y - y0) * mw + (x - x0)] = Math.max(1, Math.round(254 * (dep[i] - lineOut) / (maxDep - lineOut)));
-        }
-      }
-      return { x: x0, y: y0, w: mw, h: mh, mask: mask, depth: depth, ring: { x: x0, y: y0, w: mw, h: mh, mask: ring }, round: scanRoundness(b) };
-    }
-    // Looked at in rounds, from the outside in. A big loop that isn't a
-    // circled doodle (the paper's own edge in a photo, a frame round the
-    // page, a circle round several circles) is peeled away, its line
-    // made open paper, and what's inside it looked at again on its own.
-    for (var round = 0; round < 5; round++) {
-      // How far each enclosed pixel is in from the open paper.
-      dep.fill(0);
-      qh = qt = 0;
-      for (i = 0; i < N; i++) {
-        if (out[i]) continue;
-        var edgeOn = false;
-        nb4(i, function (j) { if (out[j]) edgeOn = true; });
-        if (edgeOn) { dep[i] = 1; queue[qt++] = i; }
-      }
-      while (qh < qt) { q = queue[qh++]; nb4(q, function (j) { if (!out[j] && !dep[j]) { dep[j] = dep[q] + 1; queue[qt++] = j; } }); }
-      // Each shape is found from deep inside it, so two circles that
-      // touch, or cross a little, stay two: where they meet is shallow.
-      // Then the rest of each (its line, the band just inside it) goes to
-      // whichever inside is nearest.
-      lab.fill(0); blobs = [];
-      for (i = 0; i < N; i++) {
-        if (out[i] || lab[i] || dep[i] <= kSeed) continue;
-        blobs.push({ id: blobs.length + 1, area: 0, perim: 0, ringInk: 0, innerInk: 0, layer: 0, layerWhite: 0, inner: 0, x0: W, y0: H, x1: -1, y1: -1, sx: 0, sy: 0, sxx: 0, syy: 0, sxy: 0, bx0: W, by0: H, bx1: -1, by1: -1 });
-        var id = blobs.length;
-        lab[i] = id; qh = qt = 0; queue[qt++] = i;
-        while (qh < qt) nb4(queue[qh++], function (j) { if (!out[j] && !lab[j] && dep[j] > kSeed) { lab[j] = id; queue[qt++] = j; } });
-      }
-      qh = qt = 0;
-      for (i = 0; i < N; i++) if (lab[i]) queue[qt++] = i;
-      while (qh < qt) { q = queue[qh++]; nb4(q, function (j) { if (!out[j] && !lab[j]) { lab[j] = lab[q]; queue[qt++] = j; } }); }
-      for (q = 0; q < N; q++) {
-        if (!lab[q]) continue;
-        var b = blobs[lab[q] - 1];
-        b.area++;
-        x = q % W; y = (q - x) / W;
-        b.sx += x; b.sy += y; b.sxx += x * x; b.syy += y * y; b.sxy += x * y;
-        if (x < b.bx0) b.bx0 = x; if (x > b.bx1) b.bx1 = x; if (y < b.by0) b.by0 = y; if (y > b.by1) b.by1 = y;
-        n = dep[q];
-        if (n === 1) b.perim++;
-        if (n > kGap && n <= kGap + g) { b.layer++; if (!Dg[q]) b.layerWhite++; }
-        if (n <= k) { if (ink[q]) b.ringInk++; }
-        else { b.inner++; if (ink[q]) b.innerInk++; }
-        // The box: everything just inside the loop's line.
-        if (n > kGap) { if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y; }
-      }
-      // Every big loop is looked inside too, found or not: a found one may
-      // hold circled doodles of its own (it's then the paper, or a circle
-      // round several), which scanFindCircles sorts out.
-      var peel = new Uint8Array(blobs.length + 1), any = false;
-      blobs.forEach(function (b) {
-        if (isCircled(b)) found.push(cut(b));
-        else if (b.area < N * 0.01) return;
-        if (b.area >= N * 0.004) { peel[b.id] = 1; any = true; }
-      });
-      if (!any) break;
-      qh = qt = 0;
-      for (i = 0; i < N; i++) if (peel[lab[i]] && dep[i] <= kPeel && !out[i]) { out[i] = 1; queue[qt++] = i; }
-      while (qh < qt) nb4(queue[qh++], openUp);
-    }
-    return found;
   }
   // Circles in reading order: row by row, then left to right.
   function scanReadingOrder(list) {
@@ -20509,27 +20294,18 @@
             try {
               var a = scanClean(src.canvas, { mode: 'gray', shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, trim: false }, 900);
               var aw = a.width, ah = a.height, d = a.getContext('2d').getImageData(0, 0, aw, ah).data, ink = new Uint8Array(aw * ah);
-              // Read twice: at the ink's usual darkness, and again for light
-              // pencil (a circle drawn lightly round a doodle); `dark` is what
-              // around the paper is followed in from the edge.
-              var cut = o.mode === 'bw' ? o.threshold : 180, faint = new Uint8Array(aw * ah), dark = new Uint8Array(aw * ah);
-              for (var i = 0; i < ink.length; i++) { var v = d[i * 4]; ink[i] = v < cut ? 1 : 0; faint[i] = v < 228 ? 1 : 0; dark[i] = v < 140 ? 1 : 0; }
+              // `dark` is what around the paper is followed in from the edge.
+              var cut = o.mode === 'bw' ? o.threshold : 180, dark = new Uint8Array(aw * ah);
+              for (var i = 0; i < ink.length; i++) { var v = d[i * 4]; ink[i] = v < cut ? 1 : 0; dark[i] = v < 140 ? 1 : 0; }
               src.aw = aw; src.ah = ah;
               // A photo's surroundings, to white out of the page kept for
               // reframing (a PDF page has none).
               src.off = src.fromPdf ? null : scanOffMask(aw, ah, dark);
-              // (A clean scan in pen has no faint ink to speak of: read once.)
-              var nInk = 0, nFaint = 0;
-              for (i = 0; i < ink.length; i++) { nInk += ink[i]; nFaint += faint[i]; }
-              // Circled doodles come in as circled. Without circles, the
-              // page's separate drawings wait to be chosen (or, with fewer
-              // than two, any loops left out, like a frame round the page).
-              var loops = scanFindCircles(nFaint > nInk * 1.15 ? [ink, faint] : [ink], aw, ah, dark);
-              var circled = loops.some(function (f) { return !f.off; });
-              var list = circled ? loops : scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
-              if (!list.length) list = loops;
+              // A page of separate drawings shows each as a box to tap to
+              // choose; with none chosen the page comes in whole.
+              var list = scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
               src.regions = scanReadingOrder(list.map(function (f) {
-                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: f.ring || null, on: circled && !f.off, loop: circled };
+                return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: null, on: false, loop: false };
               }));
             } catch (err) { src.regions = []; }
             if (src.regions.length) refresh();
@@ -20674,37 +20450,77 @@
 
   // Framing a cartoon: its whole page (kept from the import), or for one
   // added as a drawing, the drawing itself, with the frame over it. Drag the
-  // frame to move it, a corner (or two fingers, or the wheel, or Zoom out /
-  // Zoom in) to size it. It may run past the page's edge a little, for more
-  // paper round the drawing. Saved, the drawing is cut again from the page.
+  // frame to move it, a corner (or two fingers, or the wheel, or Smaller /
+  // Larger) to size it: spreading two fingers makes the frame larger, as if
+  // stretching it. Turn 90° turns the page a quarter turn; Any angle shows a
+  // slider (and two fingers twist) to straighten it by any amount. The frame
+  // may run past the page's edge a little, for more paper round the drawing.
+  // Saved, the drawing is cut again from the page, turned (`rot`, degrees
+  // clockwise; `crop` is in fractions of the turned page's bounding box).
   async function cbOpenFrame(c) {
     var fromPage = !!(c.page && c.crop && cbState.images[c.page]);
     var srcId = fromPage ? c.page : c.img, src = await pbLoadImage(srcId);
     if (!src) { confirmDialog('This drawing isn’t on this device yet.'); return; }
     var crop = fromPage ? Object.assign({}, c.crop) : { fx: 0, fy: 0, fw: 1, fh: 1 };
+    var rot = fromPage && typeof c.rot === 'number' ? c.rot : 0;
     var PAD = 0.15, SW = src.naturalWidth || src.width, SH = src.naturalHeight || src.height;
     var d = makeDialog('cbf-box', 'Frame the drawing',
       '<p style="margin-top:0;">Frame the drawing</p>' +
       '<div class="cbf-view"><div class="cbf-stage"><canvas></canvas></div></div>' +
-      '<div class="cbf-zoom"><button class="btn" type="button" data-z="out">Zoom out</button><button class="btn" type="button" data-z="in">Zoom in</button>' +
+      '<div class="cbf-zoom"><button class="btn" type="button" data-z="out">Smaller</button><button class="btn" type="button" data-z="in">Larger</button>' +
         (fromPage ? '<button class="btn" type="button" data-z="page">Whole page</button>' : '') + '</div>' +
-      '<p class="scan-note">Drag the frame to move it; drag a corner, pinch, or zoom to take in more or less.</p>' +
+      '<div class="cbf-zoom"><button class="btn" type="button" data-r="turn" title="Turn the page a quarter turn clockwise">↻ Turn 90°</button><button class="btn" type="button" data-r="free" aria-pressed="false">Any angle</button></div>' +
+      '<div class="cbf-angle" hidden><input type="range" min="-45" max="45" step="0.5" value="0" aria-label="Angle"><output></output><button class="btn-link" type="button" data-r="zero">Reset</button></div>' +
+      '<p class="scan-note">Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.</p>' +
       '<p class="scan-status" aria-live="polite"></p>' +
       '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="save">Save</button></div>');
     var box = d.box, stage = box.querySelector('.cbf-stage'), cv = stage.querySelector('canvas'), status = box.querySelector('.scan-status');
+    var angleRow = box.querySelector('.cbf-angle'), angleIn = angleRow.querySelector('input'), angleOut = angleRow.querySelector('output'), freeBtn = box.querySelector('[data-r="free"]');
+    var note = box.querySelector('.scan-note'), freeMode = false;
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
-    // The stage shows the page with a margin of PAD all round.
-    var VW = 1 + 2 * PAD, aspect = (SW * VW) / (SH * VW);
+    // The turned page's bounding box, in the page's pixels.
+    var RW, RH;
+    function dims(deg) {
+      var a = deg * Math.PI / 180, co = Math.abs(Math.cos(a)), si = Math.abs(Math.sin(a));
+      return [SW * co + SH * si, SW * si + SH * co];
+    }
+    function turnPt(x, y, deg) { var a = deg * Math.PI / 180; return [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)]; }
+    var rd = dims(rot); RW = rd[0]; RH = rd[1];
+    // A quarter turn plus the fine angle, the fine part kept within ±45°.
+    function split(deg) { var q = Math.round(deg / 90); return { q: ((q % 4) + 4) % 4, fine: deg - q * 90 }; }
+    // Turning keeps the frame over the same part of the drawing.
+    function setRot(deg) {
+      deg = Math.round(deg * 10) / 10;
+      var oldDims = [RW, RH], nd = dims(deg);
+      var cx = (crop.fx + crop.fw / 2) * oldDims[0] - oldDims[0] / 2, cy = (crop.fy + crop.fh / 2) * oldDims[1] - oldDims[1] / 2;
+      var p = turnPt(cx, cy, -rot), np = turnPt(p[0], p[1], deg);
+      var w = crop.fw * oldDims[0], h = crop.fh * oldDims[1];
+      var quarter = Math.abs(Math.round((deg - rot) / 90)) % 2 === 1 && Math.abs(((deg - rot) % 90 + 90) % 90) < 1e-6;
+      if (quarter) { var t = w; w = h; h = t; }
+      rot = deg; RW = nd[0]; RH = nd[1];
+      crop = fit({ fx: (np[0] + RW / 2 - w / 2) / RW, fy: (np[1] + RH / 2 - h / 2) / RH, fw: w / RW, fh: h / RH });
+      sizeStage(); place(); syncAngle();
+    }
+    function syncAngle() {
+      var f = split(rot).fine;
+      angleIn.value = f; angleOut.textContent = (Math.round(f * 10) / 10) + '°';
+    }
+    // The stage shows the turned page with a margin of PAD all round.
+    var VW = 1 + 2 * PAD;
     function sizeStage() {
-      var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20), maxH = Math.max(220, window.innerHeight * 0.58);
-      var w = Math.min(avail, maxH * aspect);
-      stage.style.width = Math.round(w) + 'px'; stage.style.height = Math.round(w / aspect) + 'px';
-      var dpr = window.devicePixelRatio || 1, ctx = pbCanvasFor(cv, w, w / aspect);
-      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, w / aspect);
-      var pw = w / VW, ph = (w / aspect) / VW;
-      ctx.drawImage(src, PAD * pw, PAD * ph, pw, ph);
-      ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(27,26,24,0.35)'; ctx.lineWidth = 1;
-      ctx.strokeRect(PAD * pw + 0.5, PAD * ph + 0.5, pw - 1, ph - 1);
+      var aspect = RW / RH;
+      var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20), maxH = Math.max(220, window.innerHeight * 0.5);
+      var w = Math.min(avail, maxH * aspect), h = w / aspect;
+      stage.style.width = Math.round(w) + 'px'; stage.style.height = Math.round(h) + 'px';
+      var ctx = pbCanvasFor(cv, w, h);
+      ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+      var pw = w / VW, k = pw / RW;
+      ctx.save();
+      ctx.translate(w / 2, h / 2); ctx.rotate(rot * Math.PI / 180); ctx.scale(k, k);
+      ctx.drawImage(src, -SW / 2, -SH / 2, SW, SH);
+      ctx.setLineDash([4 / k, 4 / k]); ctx.strokeStyle = 'rgba(27,26,24,0.35)'; ctx.lineWidth = 1 / k;
+      ctx.strokeRect(-SW / 2, -SH / 2, SW, SH);
+      ctx.restore();
     }
     var frame = document.createElement('div');
     frame.className = 'scan-region';
@@ -20730,12 +20546,26 @@
     box.querySelectorAll('[data-z]').forEach(function (b) {
       b.addEventListener('click', function () {
         if (b.dataset.z === 'page') { crop = { fx: 0, fy: 0, fw: 1, fh: 1 }; place(); }
-        else zoom(b.dataset.z === 'out' ? 1.2 : 1 / 1.2);
+        else zoom(b.dataset.z === 'in' ? 1.2 : 1 / 1.2);
       });
     });
-    stage.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY > 0 ? 1.08 : 1 / 1.08); }, { passive: false });
+    box.querySelector('[data-r="turn"]').addEventListener('click', function () { setRot(rot + 90 > 180 ? rot - 270 : rot + 90); });
+    freeBtn.addEventListener('click', function () {
+      freeMode = !freeMode;
+      freeBtn.setAttribute('aria-pressed', String(freeMode)); freeBtn.classList.toggle('active', freeMode);
+      angleRow.hidden = !freeMode; stage.classList.toggle('is-angle', freeMode);
+      note.textContent = freeMode
+        ? 'Slide to straighten the drawing, or twist two fingers on it. The lines in the frame help line it up.'
+        : 'Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.';
+      syncAngle();
+    });
+    angleIn.addEventListener('input', function () { var sp = split(rot); setRot(sp.q * 90 + Number(angleIn.value)); });
+    angleRow.querySelector('[data-r="zero"]').addEventListener('click', function () { setRot(split(rot).q * 90); });
+    // Scrolling up makes the frame larger, like spreading two fingers.
+    stage.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.08 : 1 / 1.08); }, { passive: false });
     // One finger (or the mouse) on the frame moves it, on a corner sizes
-    // it; two fingers anywhere pinch it.
+    // it; two fingers anywhere spread or pinch it (or, in Any angle, twist
+    // the page).
     var pts = {}, drag = null, pinch = null;
     stage.addEventListener('pointerdown', function (e) {
       if (e.button > 0) return;
@@ -20745,7 +20575,7 @@
       var ids = Object.keys(pts);
       if (ids.length === 2) {
         var a = pts[ids[0]], b = pts[ids[1]];
-        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, crop: Object.assign({}, crop) }; drag = null;
+        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, crop: Object.assign({}, crop) }; drag = null;
       } else if (frame.contains(e.target)) {
         drag = { corner: e.target.dataset && e.target.dataset.c, p0: toPage(e), r0: Object.assign({}, crop) };
       }
@@ -20756,7 +20586,15 @@
       if (pinch) {
         var ids = Object.keys(pts), a = pts[ids[0]], b = pts[ids[1]];
         if (!a || !b) return;
-        var k = pinch.d / (Math.hypot(a[0] - b[0], a[1] - b[1]) || 1), r0 = pinch.crop;
+        if (freeMode) {
+          var da = (Math.atan2(b[1] - a[1], b[0] - a[0]) - pinch.ang) * 180 / Math.PI;
+          da = ((da + 540) % 360) - 180;
+          var q = split(pinch.rot);
+          setRot(q.q * 90 + clamp(q.fine + da, -45, 45));
+          return;
+        }
+        // Fingers spread apart: a larger frame.
+        var k = (Math.hypot(a[0] - b[0], a[1] - b[1]) || 1) / pinch.d, r0 = pinch.crop;
         var cx = r0.fx + r0.fw / 2, cy = r0.fy + r0.fh / 2;
         crop = fit({ fx: cx - r0.fw * k / 2, fy: cy - r0.fh * k / 2, fw: r0.fw * k, fh: r0.fh * k }); place();
         return;
@@ -20777,23 +20615,27 @@
     stage.addEventListener('pointercancel', lift);
     function onResize() { if (!d.ov.isConnected) { window.removeEventListener('resize', onResize); return; } sizeStage(); }
     window.addEventListener('resize', onResize);
-    requestAnimationFrame(function () { sizeStage(); place(); });
+    requestAnimationFrame(function () { sizeStage(); place(); syncAngle(); });
     box.querySelector('[data-act="save"]').addEventListener('click', async function (e) {
       var btn = e.currentTarget;
       btn.disabled = true; status.textContent = 'Saving…';
       try {
-        var sc = Math.min(1, 2400 / Math.max(crop.fw * SW, crop.fh * SH));
+        var sc = Math.min(1, 2400 / Math.max(crop.fw * RW, crop.fh * RH));
         var out = document.createElement('canvas');
-        out.width = Math.max(1, Math.round(crop.fw * SW * sc)); out.height = Math.max(1, Math.round(crop.fh * SH * sc));
+        out.width = Math.max(1, Math.round(crop.fw * RW * sc)); out.height = Math.max(1, Math.round(crop.fh * RH * sc));
         var ctx = out.getContext('2d');
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, out.width, out.height);
-        ctx.drawImage(src, -crop.fx * SW * sc, -crop.fy * SH * sc, SW * sc, SH * sc);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.scale(sc, sc);
+        ctx.translate(-crop.fx * RW + RW / 2, -crop.fy * RH + RH / 2);
+        ctx.rotate(rot * Math.PI / 180);
+        ctx.drawImage(src, -SW / 2, -SH / 2, SW, SH);
         scanStripFrame(out);
         var enc = await pbEncode(out, false);
         var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
         // A drawing added on its own becomes the page it's framed on.
         if (!fromPage) { cbState.images[srcId] = Object.assign({}, cbState.images[srcId], { page: true }); }
-        c.page = srcId; c.crop = crop; c.img = id; c.orig = null; c.clean = null;
+        c.page = srcId; c.crop = crop; c.rot = rot; c.img = id; c.orig = null; c.clean = null;
         cbPersist(); cbRenderList();
         d.close();
       } catch (err) {
