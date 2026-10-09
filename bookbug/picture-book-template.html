@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
+<title>Picture Book Template</title>
+<style>
+  @font-face { font-family: "Zilla Slab"; font-weight: 600; src: url(fonts/ZillaSlab-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "Poppins"; font-weight: 400; src: url(fonts/Poppins-Regular.ttf) format("truetype"); }
+  @font-face { font-family: "Poppins"; font-weight: 700; src: url(fonts/Poppins-Bold.ttf) format("truetype"); }
+
+  @page { size: letter landscape; margin: 0.4in; }
+
+  :root {
+    --ink: #1f2a37;
+    --soft: #6b7684;
+    --rule: #b9c1cb;
+    --slate: #4a6386;
+    --desk: #e6e9ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--desk);
+    color: var(--ink);
+    font-family: "Poppins", system-ui, sans-serif;
+  }
+
+  .bar {
+    max-width: 11in; margin: 0 auto; padding: 20px 16px 8px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .bar p { margin: 0; color: var(--soft); font-size: 14px; }
+  .bar button {
+    font: 700 14px "Poppins", system-ui, sans-serif; color: #fff; background: var(--slate);
+    border: 0; border-radius: 999px; padding: 10px 22px; cursor: pointer;
+  }
+  .bar button:hover { background: var(--ink); }
+
+  /* One sheet of US Letter, landscape, inside 0.4in margins. */
+  .sheet {
+    width: 10.2in; height: 7.7in;
+    margin: 12px auto 28px; padding: 0.4in;
+    box-sizing: content-box;
+    background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    display: flex; flex-direction: column;
+  }
+  .head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 0.3in;
+    margin-bottom: 0.18in;
+  }
+  .head h1 { margin: 0; font: 600 20pt "Zilla Slab", Georgia, serif; }
+  .fill { flex: 1; display: flex; gap: 0.3in; font-size: 9pt; color: var(--soft); }
+  .fill span { flex: 1; border-bottom: 1px solid var(--ink); padding-bottom: 2px; }
+  .sheetno { font-size: 9pt; color: var(--soft); white-space: nowrap; }
+
+  .grid {
+    flex: 1;
+    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+    column-gap: 0.25in; row-gap: 0.1in;
+  }
+  .slot { width: 2.9in; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .spread { display: flex; }
+  .pg {
+    width: 1.45in; height: 1.45in;
+    border: 1.2px solid var(--ink);
+    position: relative;
+  }
+  .pg + .pg { border-left-width: 0.6px; }
+  .pg.l { border-right-width: 0.6px; }
+  .pg.none { border: 0; }
+  .num {
+    position: absolute; bottom: 3px; font-size: 7.5pt; color: var(--soft);
+  }
+  .l .num { left: 5px; }
+  .r .num { right: 5px; }
+  .role {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 6px; font-size: 7.5pt; color: var(--slate); line-height: 1.25;
+  }
+  .lines { margin-top: 2px; }
+  .lines div { height: 0.2in; border-bottom: 0.6px solid var(--rule); }
+  .tag { font-size: 7.5pt; line-height: 1.3; color: var(--soft); text-align: center; margin-top: 2px; }
+  .tag.r { padding-left: 50%; }
+  .tag.l { padding-right: 50%; }
+
+  @media print {
+    body { background: #fff; }
+    .bar { display: none; }
+    .sheet { margin: 0; box-shadow: none; padding: 0; break-after: page; }
+    .sheet:last-child { break-after: auto; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @media screen and (max-width: 11.2in) {
+    .sheet { zoom: 0.5; }
+  }
+  @media screen and (max-width: 6in) {
+    .sheet { zoom: 0.33; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <p>A blank 32-page picture book, by the spread, for sketching thumbnails by hand. Prints on US Letter, landscape.</p>
+  <button type="button" onclick="window.print()">Print</button>
+</div>
+
+<div id="sheets"></div>
+
+<script>
+(function () {
+  // 32 pages: page 1 alone, spreads 2–3 … 30–31, page 32 alone -- 17
+  // spreads, as Bookbug lays a picture book out. The front matter follows
+  // Bookbug's default layout (Title spread).
+  var PAGES = 32, PER_SHEET = 9;
+  var ROLES = { 1: 'Half title', 2: 'Title spread<br>copyright at the foot', 3: 'Title spread' };
+  var spreads = [];
+  for (var s = 0; s <= PAGES / 2; s++) {
+    spreads.push({ left: s === 0 ? null : 2 * s, right: 2 * s + 1 > PAGES ? null : 2 * s + 1 });
+  }
+
+  function page(n, side) {
+    if (n == null) return '<div class="pg none ' + side + '"></div>';
+    return '<div class="pg ' + side + '">' +
+      (ROLES[n] ? '<div class="role">' + ROLES[n] + '</div>' : '') +
+      '<span class="num">' + n + '</span></div>';
+  }
+  function slot(sp) {
+    var tag = sp.left == null ? 'Page 1' : sp.right == null ? 'Page ' + sp.left : 'Pages ' + sp.left + '–' + sp.right;
+    return '<div class="slot"><div class="spread">' + page(sp.left, 'l') + page(sp.right, 'r') + '</div>' +
+      '<div class="tag' + (sp.left == null ? ' r' : sp.right == null ? ' l' : '') + '">' + tag + '</div>' +
+      '<div class="lines"><div></div><div></div><div></div></div></div>';
+  }
+
+  var html = '', nSheets = Math.ceil(spreads.length / PER_SHEET);
+  for (var i = 0; i < nSheets; i++) {
+    html += '<section class="sheet"><div class="head"><h1>Picture book</h1>' +
+      '<div class="fill"><span>Title</span><span>Author</span></div>' +
+      '<div class="sheetno">Sheet ' + (i + 1) + ' of ' + nSheets + '</div></div><div class="grid">' +
+      spreads.slice(i * PER_SHEET, (i + 1) * PER_SHEET).map(slot).join('') + '</div></section>';
+  }
+  document.getElementById('sheets').innerHTML = html;
+})();
+</script>
+</body>
+</html>
