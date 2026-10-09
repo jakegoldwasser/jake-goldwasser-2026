@@ -20358,6 +20358,28 @@
       if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
       refresh();
       findRegions(src);
+      if (!fromPdf) guessUpright(src);
+    }
+    // Which way up: a photo is sent small to Claude (through Bookbug's
+    // server, signed in only), which says how far to turn it. It's turned
+    // only if no one has turned it by hand meanwhile; ↺ ↻ still undo it.
+    // Without a server key, or offline, nothing happens.
+    function guessUpright(src) {
+      if (!cloudAuthToken || typeof CLOUD_API_URL !== 'string') return;
+      var turnAtStart = src.turn, small = pbCanvasFrom(src.canvas, 768);
+      var data = small.toDataURL('image/jpeg', 0.8).split(',')[1];
+      fetch(CLOUD_API_URL + '?orient', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'image/jpeg', data: data })
+      }).then(function (res) { return res.ok ? res.json() : null; }).then(function (r) {
+        var q = r && [0, 90, 180, 270].indexOf(r.turn) > 0 ? r.turn / 90 : 0;
+        if (!q || sources.indexOf(src) === -1 || src.turn !== turnAtStart || !d.ov.isConnected) return;
+        turnSource(src, q);
+        src.autoTurned = true;
+        refresh();
+        status.textContent = 'Turned ' + (sources.length > 1 ? 'photo ' + (sources.indexOf(src) + 1) + ' ' : '') + 'upright. If it’s wrong, turn it with ↺ ↻.';
+      }).catch(function () {});
     }
     box.querySelectorAll('[data-pick]').forEach(function (b) {
       b.addEventListener('click', function () {

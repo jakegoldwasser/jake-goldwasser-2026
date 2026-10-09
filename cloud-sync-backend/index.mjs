@@ -38,6 +38,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // random string; changing it signs everyone out. If unset, no sessions
 // are issued and the tools fall back to Google's ~1hr ID tokens alone.
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
+// Claude, for guessing which way up a photographed cartoon goes (PUT
+// ?orient). Without a key the route answers 501 and Bookbug skips the guess.
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const ORIENT_MODEL = process.env.ORIENT_MODEL || 'claude-haiku-5-5';
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 const ddb = new DynamoDBClient({});
@@ -498,6 +502,43 @@ export const handler = async (event) => {
       return respond(400, { error: 'Invalid JSON body' });
     }
     return putShare(userId, payload);
+  }
+
+  // ---- Which way up ----
+  // PUT ?orient with { type, data (base64, a small JPEG) } -> { turn }: how
+  // many degrees clockwise (0, 90, 180 or 270) Claude thinks the photo of a
+  // drawing needs turning to stand upright.
+  if (event.queryStringParameters?.orient !== undefined) {
+    if (method !== 'PUT') return respond(405, { error: 'Method not allowed' });
+    if (!ANTHROPIC_API_KEY) return respond(501, { error: 'not_configured' });
+    let payload;
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+      payload = JSON.parse(raw);
+    } catch (e) {
+      return respond(400, { error: 'Invalid JSON body' });
+    }
+    if (!payload || !/^image\/(jpeg|png|webp)$/.test(payload.type || '') || typeof payload.data !== 'string' || payload.data.length > 400 * 1024) return respond(400, { error: 'Expected { type, data } under 300 KB' });
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: ORIENT_MODEL, max_tokens: 10,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: payload.type, data: payload.data } },
+            { type: 'text', text: 'This is a photo of a hand-drawn cartoon on paper. It may have been photographed sideways or upside down. Look at the figures, any writing or signature, the ground and the furniture. How many degrees clockwise must the photo be turned so the drawing stands upright? Answer with only one number: 0, 90, 180 or 270.' }
+          ] }]
+        })
+      });
+      if (!res.ok) return respond(502, { error: 'claude_' + res.status });
+      const out = await res.json();
+      const text = (out.content || []).map(c => c.text || '').join(' ');
+      const m = text.match(/\b(0|90|180|270)\b/);
+      return respond(200, { turn: m ? Number(m[1]) : 0 });
+    } catch (e) {
+      return respond(502, { error: 'claude_unreachable' });
+    }
   }
 
   // ---- Snapshots ----
