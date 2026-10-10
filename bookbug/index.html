@@ -1999,6 +1999,18 @@
   .cbf-stage .scan-region:hover { background: transparent; }
   .cbf-zoom { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .cbf-zoom .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .cbf-zoom { align-items: center; }
+  .cbf-zoom .seg { display: inline-flex; border-radius: 999px; }
+  .cbf-zoom .seg button { flex: 0 0 auto; padding: 7px 16px; }
+  .cbf-zoom [data-act="undo"] { margin-left: auto; }
+  .cbf-zoom [data-act="undo"]:disabled { color: var(--ink-faint); border-color: var(--line); cursor: default; transform: none; }
+  /* Erase mode: the frame stops taking the pointer, so a drag anywhere
+     (inside the frame too) draws the box to clear. */
+  .cbf-stage.is-erasing { cursor: crosshair; }
+  .cbf-stage.is-erasing .scan-region { pointer-events: none; }
+  .cbf-erase { position: absolute; border: 2px dashed var(--ink); background: color-mix(in srgb, #fff 60%, transparent); pointer-events: none; }
+  .cbf-tone { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin-top: 12px; }
+  .cbf-tone .field { margin-bottom: 0; }
   .cbf-angle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
   .cbf-angle[hidden] { display: none; }
   .cbf-angle input { flex: 1; min-width: 0; }
@@ -4526,6 +4538,11 @@
     if (c.page && c.crop && ['fx', 'fy', 'fw', 'fh'].every(function (k) { return typeof c.crop[k] === 'number'; })) {
       out.page = c.page; out.crop = { fx: c.crop.fx, fy: c.crop.fy, fw: c.crop.fw, fh: c.crop.fh };
       if (typeof c.rot === 'number' && isFinite(c.rot) && c.rot) out.rot = c.rot;
+    }
+    // Contrast and brightness set in Frame the drawing, kept apart from the
+    // page so moving them again never compounds.
+    if (c.tone && (c.tone.contrast || c.tone.brightness)) {
+      out.tone = { contrast: +c.tone.contrast || 0, brightness: +c.tone.brightness || 0 };
     }
     return out;
   }
@@ -20459,27 +20476,63 @@
   // may run past the page's edge a little, for more paper round the drawing.
   // Saved, the drawing is cut again from the page, turned (`rot`, degrees
   // clockwise; `crop` is in fractions of the turned page's bounding box).
+  // Contrast and brightness on a cleaned drawing, in place on a canvas,
+  // for when the import's filter read the lines too faint or too heavy.
+  // Contrast turns on a light gray (P), not the middle: on white paper
+  // nearly every pencil line is lighter than mid-gray, and turning on 128
+  // bleached faint lines away instead of darkening them.
+  function cbApplyTone(cv, t) {
+    if (!t || (!t.contrast && !t.brightness)) return cv;
+    var ctx = cv.getContext('2d'), im = ctx.getImageData(0, 0, cv.width, cv.height), d = im.data;
+    var C = (t.contrast || 0) * 2.55, f = (259 * (C + 255)) / (255 * (259 - C)), B = (t.brightness || 0) * 1.28, P = 200;
+    for (var i = 0; i < d.length; i += 4) {
+      d[i] = f * (d[i] - P) + P + B; d[i + 1] = f * (d[i + 1] - P) + P + B; d[i + 2] = f * (d[i + 2] - P) + P + B;
+    }
+    ctx.putImageData(im, 0, 0);
+    return cv;
+  }
   async function cbOpenFrame(c) {
     var fromPage = !!(c.page && c.crop && cbState.images[c.page]);
     var srcId = fromPage ? c.page : c.img, src = await pbLoadImage(srcId);
     if (!src) { confirmDialog('This drawing isn’t on this device yet.'); return; }
     var crop = fromPage ? Object.assign({}, c.crop) : { fx: 0, fy: 0, fw: 1, fh: 1 };
     var rot = fromPage && typeof c.rot === 'number' ? c.rot : 0;
-    var PAD = 0.15, SW = src.naturalWidth || src.width, SH = src.naturalHeight || src.height;
+    var tone = { contrast: (c.tone && c.tone.contrast) || 0, brightness: (c.tone && c.tone.brightness) || 0 };
+    // Erasing works on a copy of the page (`work`); it's only stored, as a
+    // new page so other cartoons cut from the same sheet keep theirs, if
+    // something was erased. `toned` is a smaller copy with the contrast
+    // and brightness on, for the stage.
+    var work = pbCanvasFrom(src, 3200), wctx = work.getContext('2d');
+    var PAD = 0.15, SW = work.width, SH = work.height;
+    var wdata = wctx.getImageData(0, 0, SW, SH), wd = wdata.data, undo = [], toned = null;
+    function retone() { toned = cbApplyTone(pbCanvasFrom(work, 1600), tone); }
+    retone();
     var d = makeDialog('cbf-box', 'Frame the drawing',
       '<p style="margin-top:0;">Frame the drawing</p>' +
       '<div class="cbf-view"><div class="cbf-stage"><canvas></canvas></div></div>' +
-      '<div class="cbf-zoom"><button class="btn" type="button" data-z="out">Smaller</button><button class="btn" type="button" data-z="in">Larger</button>' +
-        (fromPage ? '<button class="btn" type="button" data-z="page">Whole page</button>' : '') + '</div>' +
+      '<div class="cbf-zoom"><div class="seg" data-mode><button type="button" data-val="frame" class="active">Frame</button><button type="button" data-val="erase">Erase</button></div>' +
+        '<button class="btn" type="button" data-z="out">Smaller</button><button class="btn" type="button" data-z="in">Larger</button>' +
+        (fromPage ? '<button class="btn" type="button" data-z="page">Whole page</button>' : '') +
+        '<button class="btn" type="button" data-act="undo" disabled>Undo</button></div>' +
       '<div class="cbf-zoom"><button class="btn" type="button" data-r="turn" title="Turn the page a quarter turn clockwise">↻ Turn 90°</button><button class="btn" type="button" data-r="free" aria-pressed="false">Any angle</button></div>' +
       '<div class="cbf-angle" hidden><input type="range" min="-45" max="45" step="0.5" value="0" aria-label="Angle"><output></output><button class="btn-link" type="button" data-r="zero">Reset</button></div>' +
-      '<p class="scan-note">Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.</p>' +
+      '<p class="scan-note"></p>' +
+      '<div class="scan-controls cbf-tone">' +
+        '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
+        '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
+      '</div>' +
       '<p class="scan-status" aria-live="polite"></p>' +
       '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="save">Save</button></div>');
     var box = d.box, stage = box.querySelector('.cbf-stage'), cv = stage.querySelector('canvas'), status = box.querySelector('.scan-status');
     var angleRow = box.querySelector('.cbf-angle'), angleIn = angleRow.querySelector('input'), angleOut = angleRow.querySelector('output'), freeBtn = box.querySelector('[data-r="free"]');
-    var note = box.querySelector('.scan-note'), freeMode = false;
+    var note = box.querySelector('.scan-note'), freeMode = false, mode = 'frame', undoBtn = box.querySelector('[data-act="undo"]');
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
+    function syncNote() {
+      note.textContent = mode === 'erase' ? 'Drag a box round anything to erase it, or tap a stray mark to take it away.'
+        : freeMode ? 'Slide to straighten the drawing, or twist two fingers on it. The lines in the frame help line it up.'
+        : 'Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.';
+    }
+    syncNote();
     // The turned page's bounding box, in the page's pixels.
     var RW, RH;
     function dims(deg) {
@@ -20508,18 +20561,19 @@
       angleIn.value = f; angleOut.textContent = (Math.round(f * 10) / 10) + '°';
     }
     // The stage shows the turned page with a margin of PAD all round.
-    var VW = 1 + 2 * PAD;
+    var VW = 1 + 2 * PAD, stageW = 0;
     function sizeStage() {
       var aspect = RW / RH;
       var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20), maxH = Math.max(220, window.innerHeight * 0.5);
       var w = Math.min(avail, maxH * aspect), h = w / aspect;
+      stageW = w;
       stage.style.width = Math.round(w) + 'px'; stage.style.height = Math.round(h) + 'px';
       var ctx = pbCanvasFor(cv, w, h);
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
       var pw = w / VW, k = pw / RW;
       ctx.save();
       ctx.translate(w / 2, h / 2); ctx.rotate(rot * Math.PI / 180); ctx.scale(k, k);
-      ctx.drawImage(src, -SW / 2, -SH / 2, SW, SH);
+      ctx.drawImage(toned, -SW / 2, -SH / 2, SW, SH);
       ctx.setLineDash([4 / k, 4 / k]); ctx.strokeStyle = 'rgba(27,26,24,0.35)'; ctx.lineWidth = 1 / k;
       ctx.strokeRect(-SW / 2, -SH / 2, SW, SH);
       ctx.restore();
@@ -20556,19 +20610,123 @@
       freeMode = !freeMode;
       freeBtn.setAttribute('aria-pressed', String(freeMode)); freeBtn.classList.toggle('active', freeMode);
       angleRow.hidden = !freeMode; stage.classList.toggle('is-angle', freeMode);
-      note.textContent = freeMode
-        ? 'Slide to straighten the drawing, or twist two fingers on it. The lines in the frame help line it up.'
-        : 'Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.';
-      syncAngle();
+      syncNote(); syncAngle();
     });
     angleIn.addEventListener('input', function () { var sp = split(rot); setRot(sp.q * 90 + Number(angleIn.value)); });
     angleRow.querySelector('[data-r="zero"]').addEventListener('click', function () { setRot(split(rot).q * 90); });
+    box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
+      var k = r.dataset.k, out = box.querySelector('[data-out="' + k + '"]');
+      r.value = tone[k]; out.textContent = tone[k];
+      r.addEventListener('input', function () { tone[k] = +r.value; out.textContent = r.value; retone(); sizeStage(); });
+    });
+    box.querySelectorAll('[data-mode] button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        mode = b.dataset.val;
+        box.querySelectorAll('[data-mode] button').forEach(function (x) { x.classList.toggle('active', x === b); });
+        stage.classList.toggle('is-erasing', mode === 'erase');
+        syncNote(); status.textContent = '';
+      });
+    });
+
+    // ---- Erasing, in the page's own (unturned) pixels. Each erase saves
+    // the pixels it changes, for Undo.
+    function toSrc(p) {
+      var q = turnPt(p[0] * RW - RW / 2, p[1] * RH - RH / 2, -rot);
+      return [q[0] + SW / 2, q[1] + SH / 2];
+    }
+    function lum(i) { return 0.299 * wd[i] + 0.587 * wd[i + 1] + 0.114 * wd[i + 2]; }
+    function snapshot(x0, y0, x1, y1) {
+      var w = x1 - x0, h = y1 - y0, keep = new Uint8ClampedArray(w * h * 4);
+      for (var y = 0; y < h; y++) keep.set(wd.subarray(((y0 + y) * SW + x0) * 4, ((y0 + y) * SW + x1) * 4), y * w * 4);
+      undo.push({ x: x0, y: y0, w: w, h: h, px: keep });
+      undoBtn.disabled = false;
+    }
+    function commit(x0, y0, x1, y1) {
+      wctx.putImageData(wdata, 0, 0, x0, y0, x1 - x0, y1 - y0);
+      retone(); sizeStage();
+      status.textContent = '';
+    }
+    // The box is square to the stage, so on a turned page it's a turned
+    // box on the page: every pixel whose turned position falls in it goes.
+    function eraseRect(a, b) {
+      var ax = Math.min(a[0], b[0]), bx = Math.max(a[0], b[0]), ay = Math.min(a[1], b[1]), by = Math.max(a[1], b[1]);
+      var cs = [toSrc([ax, ay]), toSrc([bx, ay]), toSrc([ax, by]), toSrc([bx, by])];
+      var x0 = Math.max(0, Math.floor(Math.min.apply(null, cs.map(function (q) { return q[0]; })))), x1 = Math.min(SW, Math.ceil(Math.max.apply(null, cs.map(function (q) { return q[0]; }))));
+      var y0 = Math.max(0, Math.floor(Math.min.apply(null, cs.map(function (q) { return q[1]; })))), y1 = Math.min(SH, Math.ceil(Math.max.apply(null, cs.map(function (q) { return q[1]; }))));
+      if (x1 <= x0 || y1 <= y0) return;
+      snapshot(x0, y0, x1, y1);
+      for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) {
+        var t = turnPt(x + 0.5 - SW / 2, y + 0.5 - SH / 2, rot), fx = (t[0] + RW / 2) / RW, fy = (t[1] + RH / 2) / RH;
+        if (fx >= ax && fx <= bx && fy >= ay && fy <= by) { var i = (y * SW + x) * 4; wd[i] = wd[i + 1] = wd[i + 2] = 255; }
+      }
+      commit(x0, y0, x1, y1);
+    }
+    // A tap takes away the one connected mark under it (or nearest it),
+    // with the faint edge round its line. A mark joined to the drawing
+    // itself is too big to take this way, so it's left for a box.
+    var INK = 210;
+    function poof(p) {
+      var sp = toSrc(p), px = Math.round(sp[0]), py = Math.round(sp[1]);
+      var reach = Math.max(4, Math.round(14 * RW / (stageW / VW))), seed = -1, best = Infinity;
+      for (var y = Math.max(0, py - reach); y <= Math.min(SH - 1, py + reach); y++) for (var x = Math.max(0, px - reach); x <= Math.min(SW - 1, px + reach); x++) {
+        var dd = (x - px) * (x - px) + (y - py) * (y - py);
+        if (dd < best && dd <= reach * reach && lum((y * SW + x) * 4) < INK) { best = dd; seed = y * SW + x; }
+      }
+      if (seed < 0) { status.textContent = 'Nothing to erase there.'; return; }
+      var mark = new Uint8Array(SW * SH), stack = [seed], n = 0, inkAll = 0, bx0 = SW, by0 = SH, bx1 = 0, by1 = 0;
+      mark[seed] = 1;
+      for (var i = 0; i < wd.length; i += 4) if (lum(i) < INK) inkAll++;
+      while (stack.length) {
+        var q = stack.pop(), qx = q % SW, qy = (q - qx) / SW; n++;
+        if (qx < bx0) bx0 = qx; if (qx > bx1) bx1 = qx; if (qy < by0) by0 = qy; if (qy > by1) by1 = qy;
+        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+          var nx = qx + dx, ny = qy + dy;
+          if (nx < 0 || ny < 0 || nx >= SW || ny >= SH) continue;
+          var nq = ny * SW + nx;
+          if (!mark[nq] && lum(nq * 4) < INK) { mark[nq] = 1; stack.push(nq); }
+        }
+      }
+      if (n > inkAll * 0.3 || (bx1 - bx0) * (by1 - by0) > crop.fw * RW * crop.fh * RH * 0.5) {
+        status.textContent = 'That mark is joined to the drawing. Drag a box round the part to erase instead.';
+        return;
+      }
+      var G = 2, x0 = Math.max(0, bx0 - G), y0 = Math.max(0, by0 - G), x1 = Math.min(SW, bx1 + G + 1), y1 = Math.min(SH, by1 + G + 1);
+      snapshot(x0, y0, x1, y1);
+      for (var yy = y0; yy < y1; yy++) for (var xx = x0; xx < x1; xx++) {
+        var k = yy * SW + xx, near = mark[k] === 1;
+        if (!near) {
+          if (lum(k * 4) >= 250) continue;
+          for (var ey = Math.max(0, yy - G); ey <= Math.min(SH - 1, yy + G) && !near; ey++)
+            for (var ex = Math.max(0, xx - G); ex <= Math.min(SW - 1, xx + G); ex++) if (mark[ey * SW + ex] === 1) { near = true; break; }
+        }
+        if (near) { wd[k * 4] = wd[k * 4 + 1] = wd[k * 4 + 2] = 255; }
+      }
+      commit(x0, y0, x1, y1);
+    }
+    function undoLast() {
+      var u = undo.pop();
+      if (!u) return;
+      for (var y = 0; y < u.h; y++) wd.set(u.px.subarray(y * u.w * 4, (y + 1) * u.w * 4), ((u.y + y) * SW + u.x) * 4);
+      commit(u.x, u.y, u.x + u.w, u.y + u.h);
+      undoBtn.disabled = !undo.length;
+    }
+    undoBtn.addEventListener('click', undoLast);
+    box.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && undo.length) { e.preventDefault(); undoLast(); }
+    });
     // Scrolling up makes the frame larger, like spreading two fingers.
     stage.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.08 : 1 / 1.08); }, { passive: false });
     // One finger (or the mouse) on the frame moves it, on a corner sizes
     // it; two fingers anywhere spread or pinch it (or, in Any angle, twist
-    // the page).
-    var pts = {}, drag = null, pinch = null;
+    // the page). In Erase, one finger draws the box to clear (or taps a
+    // mark away).
+    var pts = {}, drag = null, pinch = null, rub = null;
+    function placeRub() {
+      var a = rub.p0, b = rub.p1;
+      rub.el.style.left = (Math.min(a[0], b[0]) + PAD) / VW * 100 + '%'; rub.el.style.top = (Math.min(a[1], b[1]) + PAD) / VW * 100 + '%';
+      rub.el.style.width = Math.abs(a[0] - b[0]) / VW * 100 + '%'; rub.el.style.height = Math.abs(a[1] - b[1]) / VW * 100 + '%';
+    }
+    function dropRub() { if (rub) { rub.el.remove(); rub = null; } }
     stage.addEventListener('pointerdown', function (e) {
       if (e.button > 0) return;
       e.preventDefault();
@@ -20577,7 +20735,12 @@
       var ids = Object.keys(pts);
       if (ids.length === 2) {
         var a = pts[ids[0]], b = pts[ids[1]];
-        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, crop: Object.assign({}, crop) }; drag = null;
+        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, crop: Object.assign({}, crop) }; drag = null; dropRub();
+      } else if (mode === 'erase') {
+        var el = document.createElement('div'), p0 = toPage(e);
+        el.className = 'cbf-erase'; stage.appendChild(el);
+        rub = { el: el, p0: p0, p1: p0, x: e.clientX, y: e.clientY, moved: false };
+        placeRub();
       } else if (frame.contains(e.target)) {
         drag = { corner: e.target.dataset && e.target.dataset.c, p0: toPage(e), r0: Object.assign({}, crop) };
       }
@@ -20601,6 +20764,11 @@
         crop = fit({ fx: cx - r0.fw * k / 2, fy: cy - r0.fh * k / 2, fw: r0.fw * k, fh: r0.fh * k }); place();
         return;
       }
+      if (rub) {
+        if (Math.hypot(e.clientX - rub.x, e.clientY - rub.y) > 6) rub.moved = true;
+        rub.p1 = toPage(e); placeRub();
+        return;
+      }
       if (!drag) return;
       var p = toPage(e), dx = p[0] - drag.p0[0], dy = p[1] - drag.p0[1], r0 = drag.r0;
       if (!drag.corner) crop = fit({ fx: r0.fx + dx, fy: r0.fy + dy, fw: r0.fw, fh: r0.fh });
@@ -20612,7 +20780,16 @@
       }
       place();
     });
-    function lift(e) { delete pts[e.pointerId]; if (Object.keys(pts).length < 2) pinch = null; if (!Object.keys(pts).length) drag = null; }
+    function lift(e) {
+      var done = rub && e.type === 'pointerup' && Object.keys(pts).length === 1 ? rub : null;
+      delete pts[e.pointerId];
+      if (Object.keys(pts).length < 2) pinch = null;
+      if (!Object.keys(pts).length) { drag = null; dropRub(); }
+      if (done) {
+        if (done.moved) eraseRect(done.p0, done.p1);
+        else if (done.p0[0] >= 0 && done.p0[1] >= 0 && done.p0[0] <= 1 && done.p0[1] <= 1) poof(done.p0);
+      }
+    }
     stage.addEventListener('pointerup', lift);
     stage.addEventListener('pointercancel', lift);
     function onResize() { if (!d.ov.isConnected) { window.removeEventListener('resize', onResize); return; } sizeStage(); }
@@ -20622,6 +20799,11 @@
       var btn = e.currentTarget;
       btn.disabled = true; status.textContent = 'Saving…';
       try {
+        var pageId = srcId;
+        if (undo.length) {
+          var penc = await pbEncode(work, false);
+          pageId = await cbStoreImage(penc.blob, penc.canvas.width, penc.canvas.height, true);
+        }
         var sc = Math.min(1, 2400 / Math.max(crop.fw * RW, crop.fh * RH));
         var out = document.createElement('canvas');
         out.width = Math.max(1, Math.round(crop.fw * RW * sc)); out.height = Math.max(1, Math.round(crop.fh * RH * sc));
@@ -20631,13 +20813,15 @@
         ctx.scale(sc, sc);
         ctx.translate(-crop.fx * RW + RW / 2, -crop.fy * RH + RH / 2);
         ctx.rotate(rot * Math.PI / 180);
-        ctx.drawImage(src, -SW / 2, -SH / 2, SW, SH);
+        ctx.drawImage(work, -SW / 2, -SH / 2, SW, SH);
+        cbApplyTone(out, tone);
         scanStripFrame(out);
         var enc = await pbEncode(out, false);
         var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
         // A drawing added on its own becomes the page it's framed on.
-        if (!fromPage) { cbState.images[srcId] = Object.assign({}, cbState.images[srcId], { page: true }); }
-        c.page = srcId; c.crop = crop; c.rot = rot; c.img = id; c.orig = null; c.clean = null;
+        if (!fromPage && pageId === srcId) { cbState.images[srcId] = Object.assign({}, cbState.images[srcId], { page: true }); }
+        c.page = pageId; c.crop = crop; c.rot = rot; c.img = id; c.orig = null; c.clean = null;
+        if (tone.contrast || tone.brightness) c.tone = { contrast: tone.contrast, brightness: tone.brightness }; else delete c.tone;
         cbPersist(); cbRenderList();
         d.close();
       } catch (err) {
