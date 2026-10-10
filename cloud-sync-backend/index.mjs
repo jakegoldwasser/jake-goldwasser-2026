@@ -39,6 +39,12 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 // are issued and the tools fall back to Google's ~1hr ID tokens alone.
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+// Find cartoons with Claude: only for the accounts listed in CLAUDE_USERS
+// (comma-separated Google sign-in emails), and only once ANTHROPIC_API_KEY
+// is set. Everyone else never sees the button, and the route refuses them.
+const CLAUDE_USERS = (process.env.CLAUDE_USERS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 
 const ddb = new DynamoDBClient({});
 
@@ -104,6 +110,102 @@ function migrateLegacyState(state) {
     return { chapbookbuilder: { chapbooks: state.chapbooks || [], trash: state.trash || [] } };
   }
   return state || {};
+}
+
+// ---- Find cartoons with Claude ----
+function claudeAllowed(info) {
+  return !!(ANTHROPIC_API_KEY && info && info.email && CLAUDE_USERS.includes(String(info.email).toLowerCase()));
+}
+
+// What comes back: a few ways to read the page (one cartoon, each panel
+// on its own, ...), most likely first, each a list of boxes in the
+// image's own pixels, with any caption written under a drawing.
+const CARTOON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['options'],
+  properties: {
+    options: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'cartoons'],
+        properties: {
+          label: { type: 'string' },
+          cartoons: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['x', 'y', 'w', 'h', 'caption'],
+              properties: {
+                x: { type: 'integer' }, y: { type: 'integer' }, w: { type: 'integer' }, h: { type: 'integer' },
+                caption: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
+const CARTOON_PROMPT = `This is a photo or scan of a page from a cartoonist's sketchbook or a printed sheet. It may hold one cartoon or several separate ones, plus stray marks, notes, scribbles, page edges or the table around the paper.
+
+Find each cartoon on the page: a single drawing meant to stand on its own (one gag, one panel). Give a box round each one that takes in the whole drawing, including any caption or speech written with it, with a little paper margin, but leaves out neighbouring cartoons, stray scribbles, doodled notes and anything off the paper.
+
+Where the page could reasonably be read more than one way (for example a multi-panel strip that could be one cartoon or several, or a small doodle that might or might not count), give up to three options, the likeliest first. Otherwise give just one. Each option's label is a few plain words for the person choosing, such as "4 separate cartoons" or "The strip as one cartoon".
+
+Boxes are in this image's pixels: x and y are the top-left corner, w and h the size. The image is {W} by {H} pixels. List cartoons in reading order.
+
+caption: if a cartoon has a caption line written beneath it (the gag line, outside the drawing), give its words exactly; otherwise an empty string. Words inside the drawing, like signs or speech balloons, are not a caption.`;
+
+async function findCartoons(payload) {
+  const data = payload && typeof payload.image === 'string' ? payload.image : '';
+  const W = Math.round(Number(payload && payload.width)), H = Math.round(Number(payload && payload.height));
+  if (!data || data.length > 5_000_000 || !(W > 0 && H > 0)) return respond(400, { error: 'Bad image' });
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'server-side-fallback-2026-07-01'
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: CARTOON_SCHEMA } },
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+          { type: 'text', text: CARTOON_PROMPT.replace('{W}', W).replace('{H}', H) }
+        ]
+      }]
+    })
+  });
+  if (!res.ok) {
+    console.error('Claude', res.status, (await res.text()).slice(0, 500));
+    return respond(502, { error: res.status === 429 ? 'claude_busy' : 'claude_failed' });
+  }
+  const msg = await res.json();
+  if (msg.stop_reason === 'refusal') return respond(422, { error: 'claude_declined' });
+  const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+  let out;
+  try { out = JSON.parse(text); } catch (e) { return respond(502, { error: 'claude_failed' }); }
+  // Boxes go back as fractions of the page, clipped to it.
+  const clip = v => Math.max(0, Math.min(1, v));
+  const options = (out.options || []).slice(0, 3).map(o => ({
+    label: String(o.label || '').slice(0, 80),
+    cartoons: (o.cartoons || []).map(c => {
+      const fx = clip(c.x / W), fy = clip(c.y / H);
+      return { fx, fy, fw: clip((c.x + c.w) / W) - fx, fh: clip((c.y + c.h) / H) - fy, caption: String(c.caption || '').slice(0, 500) };
+    }).filter(c => c.fw > 0.02 && c.fh > 0.02)
+  })).filter(o => o.cartoons.length);
+  return respond(200, { options });
 }
 
 // ---- Merging a save into what's stored ----
@@ -489,6 +591,21 @@ export const handler = async (event) => {
     }
   }
 
+  // PUT ?claude=cartoons with { image (base64 JPEG), width, height }:
+  // Claude's reading of where the cartoons on a page are (findCartoons).
+  if (method === 'PUT' && event.queryStringParameters?.claude === 'cartoons') {
+    if (!claudeAllowed(info)) return respond(403, { error: 'Not available' });
+    let payload;
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '');
+      payload = JSON.parse(raw);
+    } catch (e) {
+      return respond(400, { error: 'Invalid JSON body' });
+    }
+    try { return await findCartoons(payload); }
+    catch (e) { console.error('Claude', e); return respond(502, { error: 'claude_failed' }); }
+  }
+
   if (method === 'PUT' && event.queryStringParameters?.share !== undefined) {
     let payload;
     try {
@@ -576,7 +693,9 @@ export const handler = async (event) => {
   if (method === 'GET') {
     const { state, updatedAt } = await getStoredState(userId);
     const session = issueSession(info);
-    return respond(200, session ? { state, updatedAt, session } : { state, updatedAt });
+    const body = session ? { state, updatedAt, session } : { state, updatedAt };
+    if (claudeAllowed(info)) body.claude = true;
+    return respond(200, body);
   }
 
   if (method === 'PUT') {

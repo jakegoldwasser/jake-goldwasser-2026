@@ -1960,6 +1960,15 @@
   .scan-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .scan-main { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
   .scan-main[hidden] { display: none; }
+  /* Find cartoons with Claude (one account only): the button, then each
+     way Claude read the page, as choices. */
+  .scan-claude { margin-bottom: 16px; }
+  .scan-claude[hidden], .scan-claude-opts:empty { display: none; }
+  .scan-claude .btn { width: 100%; }
+  .scan-claude-opts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .scan-claude-opts button { text-align: left; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink-soft); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+  .scan-claude-opts button:hover { border-color: var(--accent); }
+  .scan-claude-opts button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   @media (max-width: 700px) { .scan-main { grid-template-columns: 1fr; } }
   .scan-view { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 10px; }
   .scan-view canvas { max-width: 100%; max-height: 52vh; display: block; background: #fff; }
@@ -4767,6 +4776,9 @@
   // sign-in, swapped for the backend's own 30-day session token (see
   // cloud-sync-backend/index.mjs) as soon as the first cloud read returns one.
   var cloudAuthToken = null;
+  // The account may use Find cartoons with Claude (the server says so; see
+  // CLAUDE_USERS in cloud-sync-backend). Off for everyone else.
+  var cloudClaude = false;
   // Set once a cloud read has succeeded on this page load. Until then a
   // missing/expired sign-in shows the full-page sign-in gate; after it, a
   // lapse mid-session only shows the amber badge, so the editor isn't
@@ -4952,6 +4964,7 @@
 
   function signOut() {
     cloudAuthToken = null;
+    cloudClaude = false;
     signedInThisLoad = false;
     initialLoadDone = false;
     googleUserEmail = '';
@@ -5004,6 +5017,7 @@
         scheduleCloudAuthExpiry(decodeJwtPayload(data.session).exp);
       }
       signedInThisLoad = true;
+      cloudClaude = !!data.claude;
       // The cloud blob is namespaced per app (see CLOUD_API_URL's
       // Lambda); Bookbug's data lives under state.chapbookbuilder, the
       // key from before it was renamed.
@@ -20085,6 +20099,7 @@
       '<p class="snap-empty scan-empty">Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption. On a page of several drawings, tap the ones to bring in, each as its own cartoon.</p>' +
       '<div class="scan-main" hidden><div><div class="scan-view"></div><p class="scan-note"></p><div class="scan-strip"></div></div>' +
       '<div class="scan-controls">' +
+        '<div class="scan-claude" hidden><button class="btn" type="button" data-claude>Find cartoons with Claude</button><div class="scan-claude-opts"></div></div>' +
         '<div class="field"><label>Scan as</label><div class="seg seg-3" data-mode><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
         '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
@@ -20098,6 +20113,79 @@
     var o = { mode: 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true };
     var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status'), note = box.querySelector('.scan-note');
     var addBtn = box.querySelector('[data-act="add"]');
+    // Find cartoons with Claude (only for an account the server allows):
+    // each page goes to Claude, which boxes what it takes for the cartoons,
+    // sometimes with a few readings of the page (the strip as one, or each
+    // panel). The first is chosen; the others are a tap away, and the
+    // boxes can still be tapped out or dragged to fit. Once asked, pages
+    // added later are asked too.
+    var claudeBox = box.querySelector('.scan-claude'), claudeBtn = claudeBox.querySelector('[data-claude]'), claudeOpts = claudeBox.querySelector('.scan-claude-opts');
+    var claudeOn = false, claudeQueue = [], claudeRunning = 0;
+    function hasReading(src) { return !!(src && src.claude && src.claude.options); }
+    function claudeRegions(opt) {
+      return opt.cartoons.map(function (c) { return { fx: c.fx, fy: c.fy, fw: c.fw, fh: c.fh, on: true, edited: true, mask: null, ring: null, loop: false, caption: c.caption || '' }; });
+    }
+    function syncClaude() {
+      var src = sources[cur];
+      claudeBox.hidden = !cloudClaude || !src;
+      if (claudeBox.hidden) return;
+      var asking = src.claude === 'asking';
+      claudeBtn.disabled = asking;
+      claudeBtn.textContent = asking ? 'Claude is looking…' : hasReading(src) ? 'Ask Claude again' : 'Find cartoons with Claude';
+      claudeOpts.innerHTML = '';
+      if (!hasReading(src)) return;
+      src.claude.options.forEach(function (opt, i) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = opt.label || (opt.cartoons.length + (opt.cartoons.length === 1 ? ' cartoon' : ' cartoons'));
+        b.className = i === src.claude.pick ? 'active' : '';
+        b.setAttribute('aria-pressed', String(i === src.claude.pick));
+        b.addEventListener('click', function () { src.claude.pick = i; src.regions = claudeRegions(opt); refresh(); });
+        claudeOpts.appendChild(b);
+      });
+    }
+    function askClaude(src) {
+      if (src.claude === 'asking' || claudeQueue.indexOf(src) !== -1) return;
+      src.claude = 'asking';
+      claudeQueue.push(src);
+      pumpClaude();
+    }
+    // A few pages at a time, so a long PDF doesn't send them all at once.
+    function pumpClaude() {
+      while (claudeRunning < 3 && claudeQueue.length) {
+        claudeRunning++;
+        readWithClaude(claudeQueue.shift()).then(function () { claudeRunning--; pumpClaude(); });
+      }
+    }
+    async function readWithClaude(src) {
+      try {
+        var c = scanClean(src.canvas, Object.assign({}, o, { trim: false }), 1568);
+        var res = await fetch(CLOUD_API_URL + '?claude=cartoons', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cloudAuthToken },
+          body: JSON.stringify({ image: c.toDataURL('image/jpeg', 0.85).split(',')[1], width: c.width, height: c.height })
+        });
+        var out = await res.json().catch(function () { return {}; });
+        if (res.status === 403) cloudClaude = false;
+        if (!res.ok) throw new Error(out.error || 'claude_failed');
+        var opts = (out.options || []).filter(function (op) { return op.cartoons && op.cartoons.length; });
+        src.claude = { options: opts, pick: 0 };
+        if (opts.length) src.regions = claudeRegions(opts[0]);
+        else if (sources[cur] === src) status.textContent = 'Claude didn’t find a cartoon on this page.';
+      } catch (err) {
+        src.claude = null;
+        var code = err && err.message;
+        if (sources[cur] === src || !sources[cur]) status.textContent = code === 'claude_busy' ? 'Claude is busy. Try again in a minute.'
+          : code === 'claude_declined' ? 'Claude wouldn’t read this page.' : 'Couldn’t reach Claude. Try again.';
+      }
+      if (!d.ov.isConnected || sources.indexOf(src) === -1) return;
+      if (sources[cur] === src) refresh(); else syncClaude();
+    }
+    claudeBtn.addEventListener('click', function () {
+      claudeOn = true; status.textContent = '';
+      var src = sources[cur];
+      if (hasReading(src)) { src.claude = null; askClaude(src); }
+      else sources.forEach(function (s) { if (!hasReading(s)) askClaude(s); });
+      syncClaude();
+    });
     // Take photos: the camera opens live in the dialog (a phone's back
     // camera, a laptop's webcam) and each Take photo adds one to the batch,
     // as many as you like, until Done. Where the browser can't show the
@@ -20246,7 +20334,7 @@
       });
       // Circles are already chosen; separate drawings wait to be tapped,
       // with Choose all for a page of them.
-      var picking = regs.length && !regs.some(function (r) { return r.loop; });
+      var picking = regs.length && !regs.some(function (r) { return r.loop; }) && !hasReading(src);
       note.textContent = !src.regions ? 'Looking for drawings…' : !regs.length ? '' : picking
         ? 'Tap each drawing to bring in as its own cartoon. With none chosen, the whole page comes in. '
         : 'Tap a box to leave it out. Drag a box or its corners to fit; drag across the page to add one.';
@@ -20300,6 +20388,7 @@
       src.turn = (((src.turn || 0) + dir) % 4 + 4) % 4;
       src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
       src.regions = null;
+      if (hasReading(src)) { src.claude = null; if (claudeOn) askClaude(src); }
       findRegions(src);
     }
     // Each page is searched for circles as it comes in, one page at a
@@ -20323,6 +20412,7 @@
               // A page of separate drawings shows each as a box to tap to
               // choose; with none chosen the page comes in whole.
               var list = scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
+              if (hasReading(src) && src.claude.options.length) return done();
               src.regions = scanReadingOrder(list.map(function (f) {
                 return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: null, on: false, loop: false };
               }));
@@ -20365,6 +20455,7 @@
       addBtn.disabled = !n || busy;
       addBtn.textContent = n ? 'Add ' + n + (n === 1 ? ' cartoon' : ' cartoons') : 'Add cartoons';
       syncControls();
+      syncClaude();
       renderStrip();
       if (has) renderView(); else view.innerHTML = '';
     }
@@ -20377,6 +20468,7 @@
       if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
       refresh();
       findRegions(src);
+      if (claudeOn && cloudClaude) askClaude(src);
     }
     box.querySelectorAll('[data-pick]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -20434,7 +20526,9 @@
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
             cuts = chosen(src).map(function (r) {
               var c = scanStripFrame(scanCutRegion(page, r, src.aw, src.ah));
-              return placed(o.trim ? scanTrim(c) : c, Math.max(0, Math.floor(r.fx * page.width)), Math.max(0, Math.floor(r.fy * page.height)));
+              var cut = placed(o.trim ? scanTrim(c) : c, Math.max(0, Math.floor(r.fx * page.width)), Math.max(0, Math.floor(r.fy * page.height)));
+              cut.caption = r.caption || '';
+              return cut;
             });
             scanWhiteRings(page, chosen(src), src.aw, src.ah);
           } else if (wholePage(src)) {
@@ -20452,7 +20546,7 @@
             status.textContent = 'Adding ' + (++done) + ' of ' + n + '…';
             var enc = await pbEncode(cuts[j].canvas, o.mode === 'bw');
             var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
-            cbState.cartoons.push(cbNormalizeCartoon({ img: id, page: pageId, crop: cuts[j].crop }));
+            cbState.cartoons.push(cbNormalizeCartoon({ img: id, page: pageId, crop: cuts[j].crop, caption: cuts[j].caption || '' }));
           }
         }
         cbPersist();
