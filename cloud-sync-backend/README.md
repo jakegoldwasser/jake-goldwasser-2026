@@ -28,6 +28,25 @@ Set under **Configuration → Environment variables**:
   sign-ins last only as long as Google's ~1hr ID token. Changing it signs
   everyone out.
 
+- `CLAUDE_USERS` — comma-separated Google sign-in emails allowed to use
+  **Find cartoons with Claude** in a cartoon batch's import dialog.
+- `ANTHROPIC_API_KEY` — the Claude API key it uses (from
+  console.anthropic.com). Without it, or for anyone not in `CLAUDE_USERS`,
+  the button never shows and the route answers 403.
+- `CLAUDE_MODEL` (optional) — defaults to `claude-opus-5-5`.
+
+## Find cartoons with Claude
+
+`PUT ?claude=cartoons` with `{ image, width, height }` (a base64 JPEG of
+one page, at most 1568 px on its long side) sends the page to Claude and
+returns `{ options: [{ label, cartoons: [{ fx, fy, fw, fh, caption }] }] }`:
+up to three readings of the page, likeliest first, each box a fraction of
+the page, with any caption written under a drawing. The signed-in GET
+answers `claude: true` for allowed accounts, which is what shows the
+button. A page takes Claude anywhere from a few seconds to most of a
+minute, so the function's timeout should be at least 2 minutes
+(Configuration → General configuration).
+
 ## Storage
 
 One DynamoDB table (`ChapbookBuilderUsers`, despite the name — it now
