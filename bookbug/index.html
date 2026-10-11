@@ -20725,19 +20725,26 @@
       var f = split(rot).fine;
       angleIn.value = f; angleOut.textContent = (Math.round(f * 10) / 10) + '°';
     }
-    // The stage shows the turned page with a margin of PAD all round.
-    var VW = 1 + 2 * PAD, stageW = 0;
+    // The stage shows a window `V` onto the turned page (fractions of its
+    // bounding box): in Frame, the whole page with a margin of PAD all
+    // round; in Erase, just the framed cartoon with a little round it, so
+    // the drawing fills the view and small marks are big enough to hit.
+    var VW = 1 + 2 * PAD, stageW = 0, V = { x: -PAD, y: -PAD, w: VW, h: VW };
     function sizeStage() {
-      var aspect = RW / RH;
+      if (mode === 'erase') {
+        var mx = crop.fw * 0.06, my = crop.fh * 0.06;
+        V = { x: crop.fx - mx, y: crop.fy - my, w: crop.fw + 2 * mx, h: crop.fh + 2 * my };
+      } else V = { x: -PAD, y: -PAD, w: VW, h: VW };
+      var aspect = (V.w * RW) / (V.h * RH);
       var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20), maxH = Math.max(220, window.innerHeight * 0.5);
       var w = Math.min(avail, maxH * aspect), h = w / aspect;
       stageW = w;
       stage.style.width = Math.round(w) + 'px'; stage.style.height = Math.round(h) + 'px';
       var ctx = pbCanvasFor(cv, w, h);
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
-      var pw = w / VW, k = pw / RW;
+      var k = w / (V.w * RW);
       ctx.save();
-      ctx.translate(w / 2, h / 2); ctx.rotate(rot * Math.PI / 180); ctx.scale(k, k);
+      ctx.translate((0.5 - V.x) / V.w * w, (0.5 - V.y) / V.h * h); ctx.rotate(rot * Math.PI / 180); ctx.scale(k, k);
       ctx.drawImage(toned, -SW / 2, -SH / 2, SW, SH);
       ctx.setLineDash([4 / k, 4 / k]); ctx.strokeStyle = 'rgba(27,26,24,0.35)'; ctx.lineWidth = 1 / k;
       ctx.strokeRect(-SW / 2, -SH / 2, SW, SH);
@@ -20753,8 +20760,9 @@
       return { fx: clamp(r.fx, -PAD, 1 + PAD - fw), fy: clamp(r.fy, -PAD, 1 + PAD - fh), fw: fw, fh: fh };
     }
     function place() {
-      frame.style.left = (crop.fx + PAD) / VW * 100 + '%'; frame.style.top = (crop.fy + PAD) / VW * 100 + '%';
-      frame.style.width = crop.fw / VW * 100 + '%'; frame.style.height = crop.fh / VW * 100 + '%';
+      if (mode === 'erase') sizeStage();
+      frame.style.left = (crop.fx - V.x) / V.w * 100 + '%'; frame.style.top = (crop.fy - V.y) / V.h * 100 + '%';
+      frame.style.width = crop.fw / V.w * 100 + '%'; frame.style.height = crop.fh / V.h * 100 + '%';
     }
     function zoom(k) {
       var cx = crop.fx + crop.fw / 2, cy = crop.fy + crop.fh / 2, fw = crop.fw * k, fh = crop.fh * k;
@@ -20762,7 +20770,7 @@
     }
     function toPage(e) {
       var r = stage.getBoundingClientRect();
-      return [(e.clientX - r.left) / r.width * VW - PAD, (e.clientY - r.top) / r.height * VW - PAD];
+      return [(e.clientX - r.left) / r.width * V.w + V.x, (e.clientY - r.top) / r.height * V.h + V.y];
     }
     box.querySelectorAll('[data-z]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -20790,6 +20798,7 @@
         box.querySelectorAll('[data-mode] button').forEach(function (x) { x.classList.toggle('active', x === b); });
         stage.classList.toggle('is-erasing', mode === 'erase');
         box.querySelector('.cbf-view').classList.toggle('is-erasing', mode === 'erase');
+        sizeStage(); place();
         syncNote(); status.textContent = '';
       });
     });
@@ -20834,7 +20843,7 @@
     var INK = 210;
     function poof(p) {
       var sp = toSrc(p), px = Math.round(sp[0]), py = Math.round(sp[1]);
-      var reach = Math.max(4, Math.round(14 * RW / (stageW / VW))), seed = -1, best = Infinity;
+      var reach = Math.max(4, Math.round(14 * V.w * RW / stageW)), seed = -1, best = Infinity;
       for (var y = Math.max(0, py - reach); y <= Math.min(SH - 1, py + reach); y++) for (var x = Math.max(0, px - reach); x <= Math.min(SW - 1, px + reach); x++) {
         var dd = (x - px) * (x - px) + (y - py) * (y - py);
         if (dd < best && dd <= reach * reach && lum((y * SW + x) * 4) < INK) { best = dd; seed = y * SW + x; }
@@ -20891,8 +20900,8 @@
     var pts = {}, drag = null, pinch = null, rub = null;
     function placeRub() {
       var a = rub.p0, b = rub.p1;
-      rub.el.style.left = (Math.min(a[0], b[0]) + PAD) / VW * 100 + '%'; rub.el.style.top = (Math.min(a[1], b[1]) + PAD) / VW * 100 + '%';
-      rub.el.style.width = Math.abs(a[0] - b[0]) / VW * 100 + '%'; rub.el.style.height = Math.abs(a[1] - b[1]) / VW * 100 + '%';
+      rub.el.style.left = (Math.min(a[0], b[0]) - V.x) / V.w * 100 + '%'; rub.el.style.top = (Math.min(a[1], b[1]) - V.y) / V.h * 100 + '%';
+      rub.el.style.width = Math.abs(a[0] - b[0]) / V.w * 100 + '%'; rub.el.style.height = Math.abs(a[1] - b[1]) / V.h * 100 + '%';
     }
     function dropRub() { if (rub) { rub.el.remove(); rub = null; } }
     stage.addEventListener('pointerdown', function (e) {
