@@ -2081,6 +2081,12 @@
   .pb-fmt-row { display: flex; gap: 8px; align-items: center; }
   .pb-fmt-row > * { flex: 1; min-width: 0; }
   .pb-range { display: flex; align-items: center; gap: 8px; }
+  /* Caption font, then Bold and Italic as square toggles beside it. */
+  .cb-type-row { display: flex; align-items: center; gap: 6px; }
+  .cb-type-row select { flex: 1; min-width: 0; }
+  .cb-type-btn { flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: 16px Georgia, serif; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+  .cb-type-btn:hover { border-color: var(--accent); }
+  .cb-type-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .pb-range input[type="range"] { flex: 1; accent-color: var(--accent); }
   .pb-range output { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; }
   .pb-bi { display: flex; gap: 6px; }
@@ -2375,7 +2381,7 @@
   textarea.cb-caption {
     display: block; width: 100%; resize: none; overflow: hidden; min-height: 0; margin-top: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
     background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
-    font-family: 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif; font-size: 20px; font-style: italic;
+    font-family: var(--cb-cap-font, 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif); font-size: 20px; font-style: var(--cb-cap-style, italic); font-weight: var(--cb-cap-weight, 400);
     transition: border-color .15s ease;
   }
   textarea.cb-caption:hover { border-color: var(--line); }
@@ -2926,8 +2932,12 @@
               <div class="seg seg-3" id="cbPageSeg"><button type="button" data-val="letter">US Letter, landscape</button><button type="button" data-val="a4">A4, landscape</button></div>
             </div>
             <div class="field">
+              <label for="cbCaptionFont">Caption font</label>
+              <div class="cb-type-row"><select id="cbCaptionFont"></select><button type="button" class="cb-type-btn" id="cbCaptionBold" aria-pressed="false" title="Bold captions"><b>B</b></button><button type="button" class="cb-type-btn" id="cbCaptionItalic" aria-pressed="true" title="Italic captions"><i>I</i></button></div>
+            </div>
+            <div class="field">
               <label>Caption size</label>
-              <div class="pb-range"><input type="range" id="cbCaptionSize" min="12" max="28" step="2"><output id="cbCaptionSizeOut"></output></div>
+              <div class="pb-range"><input type="range" id="cbCaptionSize" min="10" max="36" step="2"><output id="cbCaptionSizeOut"></output></div>
             </div>
             <div class="field">
               <label>Drawing size</label>
@@ -2941,7 +2951,6 @@
               <input type="checkbox" id="cbNumbers">
               <label for="cbNumbers" style="text-transform:none;letter-spacing:0;font-weight:400;">Number the cartoons</label>
             </div>
-            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in a Caslon-like italic, with curly quotes and proper dashes.</p>
           </div>
         </div>
         <div class="panel collapsible-panel" id="cbExportPanel">
@@ -4580,6 +4589,26 @@
   // small x-height is nearer it than Libre Caslon Text (drawn taller and
   // heavier for screens).
   var CAPTION_STACK = "'Adobe Caslon Pro', 'EB Garamond', Georgia, serif";
+  // A batch's caption type (Formatting): one of these faces, all loaded
+  // with the page, at its size, bold and/or italic. Caslon italic is the
+  // New Yorker default.
+  var CAPTION_FONTS = [
+    { key: 'caslon', label: 'Caslon', stack: CAPTION_STACK },
+    { key: 'librecaslon', label: 'Libre Caslon', stack: "'Libre Caslon Text', Georgia, serif" },
+    { key: 'baskerville', label: 'Baskerville', stack: "'Libre Baskerville', Baskerville, Georgia, serif" },
+    { key: 'bodoni', label: 'Bodoni', stack: "'Bodoni Moda', 'Bodoni 72', Didot, serif" },
+    { key: 'sourceserif', label: 'Source Serif', stack: "'Source Serif 4', Georgia, serif" },
+    { key: 'zilla', label: 'Zilla Slab', stack: "'Zilla Slab', Rockwell, serif" },
+    { key: 'courier', label: 'Courier', stack: "'Courier Prime', 'Courier New', monospace" },
+    { key: 'jost', label: 'Jost', stack: "Jost, 'Futura', ui-sans-serif, sans-serif" },
+    { key: 'ptsans', label: 'PT Sans', stack: "'PT Sans', 'Helvetica Neue', Arial, sans-serif" }
+  ];
+  function cbCaptionStack(d) {
+    var f = CAPTION_FONTS.filter(function (x) { return x.key === (d && d.captionFont); })[0];
+    return f ? f.stack : CAPTION_STACK;
+  }
+  // The canvas font for a batch's captions at `px` pixels.
+  function cbCaptionCss(d, px) { return (d.captionItalic ? 'italic ' : '') + (d.captionBold ? '700 ' : '400 ') + px + 'px ' + cbCaptionStack(d); }
 
   // Which way a sideways cartoon is turned on import: 1 clockwise, -1
   // counterclockwise. Learned from Frame the drawing: an imported cartoon
@@ -4615,6 +4644,9 @@
       v: 1, title: d.title || '', author: d.author || '',
       page: d.page === 'a4' ? 'a4' : 'letter',
       captionSize: typeof d.captionSize === 'number' ? d.captionSize : 16,
+      captionFont: CAPTION_FONTS.some(function (f) { return f.key === d.captionFont; }) ? d.captionFont : 'caslon',
+      captionItalic: d.captionItalic !== false,
+      captionBold: !!d.captionBold,
       artSize: typeof d.artSize === 'number' ? d.artSize : 0.9,
       numbers: !!d.numbers,
       quoted: d.quoted !== false,
@@ -21205,7 +21237,7 @@
     // A 1 in margin all round (¾ in crowded the drawing against the edge).
     var c = pg.c, m = 1 * s;
     var capPx = cbState.captionSize * pt, lh = capPx * 1.35;
-    ctx.font = 'italic 400 ' + capPx + 'px ' + CAPTION_STACK;
+    ctx.font = cbCaptionCss(cbState, capPx);
     var caption = cbTypeset(c.caption, c.spoken);
     var lines = caption ? pbWrapCanvas(ctx, caption, Math.min(W - 2 * m, 7 * s)) : [];
     var capH = lines.length * lh, gap = lines.length ? 0.28 * s : 0, numH = cbState.numbers ? 0.35 * s : 0;
@@ -21222,10 +21254,10 @@
     var top = m + Math.max(0, (H - 2 * m - numH - blockH) * 0.45);
     if (el) ctx.drawImage(el, (W - dw) / 2, top, dw, dh);
     else if (dw && placeholders) { ctx.fillStyle = '#EFECE6'; ctx.fillRect((W - dw) / 2, top, dw, dh); ctx.fillStyle = '#1B1A18'; }
-    ctx.font = 'italic 400 ' + capPx + 'px ' + CAPTION_STACK;
+    ctx.font = cbCaptionCss(cbState, capPx);
     lines.forEach(function (l, i) { ctx.fillText(l, W / 2, top + dh + gap + i * lh + capPx); });
     if (cbState.numbers) {
-      ctx.font = '400 ' + (10 * pt) + 'px ' + CAPTION_STACK;
+      ctx.font = '400 ' + (10 * pt) + 'px ' + cbCaptionStack(cbState);
       ctx.fillStyle = '#57524A';
       ctx.fillText(String(pg.n), W / 2, H - m * 0.6);
     }
@@ -21289,6 +21321,16 @@
   cbFmt('cbPageSeg').querySelectorAll('button').forEach(function (b) {
     b.addEventListener('click', function () { cbState.page = b.dataset.val; cbSyncFormatting(); cbPersist(); });
   });
+  cbFmt('cbCaptionFont').innerHTML = CAPTION_FONTS.map(function (f) { return '<option value="' + f.key + '" style="font-family:' + f.stack.replace(/"/g, '&quot;') + '">' + f.label + '</option>'; }).join('');
+  // A face is drawn on the preview's canvas only once the browser has it,
+  // so the preview redraws when a newly chosen one arrives.
+  function cbCaptionTypeChanged() {
+    cbSyncFormatting(); cbPersist();
+    if (document.fonts && document.fonts.load) document.fonts.load(cbCaptionCss(cbState, 20), 'Aa').then(function () { renderCbPreview(); }, function () {});
+  }
+  cbFmt('cbCaptionFont').addEventListener('change', function () { cbState.captionFont = cbFmt('cbCaptionFont').value; cbCaptionTypeChanged(); });
+  cbFmt('cbCaptionBold').addEventListener('click', function () { cbState.captionBold = !cbState.captionBold; cbCaptionTypeChanged(); });
+  cbFmt('cbCaptionItalic').addEventListener('click', function () { cbState.captionItalic = !cbState.captionItalic; cbCaptionTypeChanged(); });
   cbFmt('cbCaptionSize').addEventListener('input', function () { cbState.captionSize = +cbFmt('cbCaptionSize').value; cbSyncFormatting(); cbPersist(); });
   cbFmt('cbArtSize').addEventListener('input', function () { cbState.artSize = +cbFmt('cbArtSize').value / 100; cbSyncFormatting(); cbPersist(); });
   cbFmt('cbNumbers').addEventListener('change', function () { cbState.numbers = cbFmt('cbNumbers').checked; cbPersist(); });
@@ -21305,6 +21347,13 @@
   function cbSyncFormatting() {
     cbFmt('cbPageSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === cbState.page); });
     cbFmt('cbCaptionSize').value = cbState.captionSize; cbFmt('cbCaptionSizeOut').textContent = cbState.captionSize + ' pt';
+    cbFmt('cbCaptionFont').value = cbState.captionFont;
+    cbFmt('cbCaptionBold').setAttribute('aria-pressed', String(!!cbState.captionBold));
+    cbFmt('cbCaptionItalic').setAttribute('aria-pressed', String(!!cbState.captionItalic));
+    // The editor's caption fields wear the same type.
+    cbList.style.setProperty('--cb-cap-font', cbCaptionStack(cbState));
+    cbList.style.setProperty('--cb-cap-style', cbState.captionItalic ? 'italic' : 'normal');
+    cbList.style.setProperty('--cb-cap-weight', cbState.captionBold ? '700' : '400');
     cbFmt('cbArtSize').value = Math.round(cbState.artSize * 100); cbFmt('cbArtSizeOut').textContent = Math.round(cbState.artSize * 100) + '%';
     cbFmt('cbNumbers').checked = cbState.numbers;
     cbFmt('cbQuoted').checked = cbState.quoted;
