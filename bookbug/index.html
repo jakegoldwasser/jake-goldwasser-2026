@@ -4550,6 +4550,10 @@
   // heavier for screens).
   var CAPTION_STACK = "'Adobe Caslon Pro', 'EB Garamond', Georgia, serif";
 
+  // Which way a sideways cartoon is turned on import: 1 clockwise, -1
+  // counterclockwise. Learned from Frame the drawing: an imported cartoon
+  // that was turned for you and then turned the other way there.
+  function cbTurnPref() { try { return localStorage.getItem('bookbug.cartoonTurn') === '-1' ? -1 : 1; } catch (e) { return 1; } }
   function cbNormalizeCartoon(c) {
     c = c || {};
     var out = { id: c.id || ('ct' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
@@ -4561,6 +4565,7 @@
     if (c.page && c.crop && ['fx', 'fy', 'fw', 'fh'].every(function (k) { return typeof c.crop[k] === 'number'; })) {
       out.page = c.page; out.crop = { fx: c.crop.fx, fy: c.crop.fy, fw: c.crop.fw, fh: c.crop.fh };
       if (typeof c.rot === 'number' && isFinite(c.rot) && c.rot) out.rot = c.rot;
+      if (c.autoTurn === 90 || c.autoTurn === -90) out.autoTurn = c.autoTurn;
     }
     // Contrast and brightness set in Frame the drawing, kept apart from the
     // page so moving them again never compounds.
@@ -20221,7 +20226,6 @@
           var b = e.target.closest('[data-turn]');
           if (!b) return;
           turnSource(src, Number(b.dataset.turn));
-          lastTurn = src.turn;
           refresh();
         });
         view.appendChild(turns);
@@ -20381,7 +20385,7 @@
     // Turning a page a quarter turn (a landscape page photographed upright).
     // Pages added after a turn come in turned the same way, as a run of
     // photos is usually all held alike.
-    var lastTurn = 0;
+
     function turnCanvas(c, q) {
       q = ((q % 4) + 4) % 4;
       if (!q) return c;
@@ -20473,9 +20477,8 @@
       if (has) renderView(); else view.innerHTML = '';
     }
     function addSource(canvas, fromPdf) {
-      canvas = turnCanvas(canvas, lastTurn);
       var th = pbCanvasFrom(canvas, 120);
-      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: lastTurn, fromPdf: !!fromPdf };
+      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: 0, fromPdf: !!fromPdf };
       sources.push(src);
       // A PDF is already clean; a photo has shadows to lift.
       if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
@@ -20559,9 +20562,22 @@
           } catch (e) { pageId = null; }
           for (var j = 0; j < cuts.length; j++) {
             status.textContent = 'Adding ' + (++done) + ' of ' + n + '…';
-            var enc = await pbEncode(cuts[j].canvas, o.mode === 'bw');
+            // Cartoons are nearly always landscape: a cut taller than it is
+            // wide was photographed sideways, so it's turned a quarter turn,
+            // the way the last one was set right in Frame the drawing
+            // (clockwise until then). It stays reframable: `rot` turns the
+            // page and `crop` is redone in the turned page's fractions.
+            var cv = cuts[j].canvas, cr = cuts[j].crop, rot = 0;
+            if (cv.height > cv.width * 1.1) {
+              var q = cbTurnPref();
+              cv = turnCanvas(cv, q); rot = q * 90;
+              cr = q > 0 ? { fx: 1 - cr.fy - cr.fh, fy: cr.fx, fw: cr.fh, fh: cr.fw } : { fx: cr.fy, fy: 1 - cr.fx - cr.fw, fw: cr.fh, fh: cr.fw };
+            }
+            var enc = await pbEncode(cv, o.mode === 'bw');
             var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
-            cbState.cartoons.push(cbNormalizeCartoon({ img: id, page: pageId, crop: cuts[j].crop }));
+            var nc = cbNormalizeCartoon({ img: id, page: pageId, crop: cr, rot: rot });
+            if (rot) nc.autoTurn = rot;
+            cbState.cartoons.push(nc);
           }
         }
         cbPersist();
@@ -20929,6 +20945,8 @@
         var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
         // A drawing added on its own becomes the page it's framed on.
         if (!fromPage && pageId === srcId) { cbState.images[srcId] = Object.assign({}, cbState.images[srcId], { page: true }); }
+        if (c.autoTurn && (rot === 90 || rot === -90) && rot !== c.autoTurn) { try { localStorage.setItem('bookbug.cartoonTurn', rot > 0 ? '1' : '-1'); } catch (err) {} }
+        delete c.autoTurn;
         c.page = pageId; c.crop = crop; c.rot = rot; c.img = id; c.orig = null; c.clean = null;
         if (tone.contrast || tone.brightness) c.tone = { contrast: tone.contrast, brightness: tone.brightness }; else delete c.tone;
         cbPersist(); cbRenderList();
