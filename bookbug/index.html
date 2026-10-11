@@ -2019,7 +2019,14 @@
      (inside the frame too) draws the box to clear. */
   .cbf-stage.is-erasing { cursor: crosshair; }
   .cbf-stage.is-erasing .scan-region { pointer-events: none; }
-  .cbf-erase { position: absolute; border: 2px dashed var(--ink); background: color-mix(in srgb, #fff 60%, transparent); pointer-events: none; }
+  /* Erase is destructive, so it reads as such: the view gets a red rule,
+     the Erase button turns red, and the box being drawn is red with the
+     drawing under it already showing white, labeled Erase. */
+  .cbf-view { outline: 3px solid transparent; outline-offset: -3px; transition: outline-color .15s ease; }
+  .cbf-view.is-erasing { outline-color: var(--danger); }
+  .cbf-zoom .seg button[data-val="erase"].active { background: var(--danger); color: #fff; }
+  .cbf-erase { position: absolute; border: 2px dashed var(--danger); background: rgba(255, 255, 255, 0.9); pointer-events: none; }
+  .cbf-erase span { position: absolute; top: 2px; left: 2px; padding: 1px 6px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
   .cbf-tone { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; margin-top: 12px; }
   .cbf-tone .field { margin-bottom: 0; }
   .cbf-angle { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
@@ -20653,7 +20660,7 @@
     var note = box.querySelector('.scan-note'), freeMode = false, mode = 'frame', undoBtn = box.querySelector('[data-act="undo"]');
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
     function syncNote() {
-      note.textContent = mode === 'erase' ? 'Drag a box round anything to erase it, or tap a stray mark to take it away.'
+      note.textContent = mode === 'erase' ? 'Erasing: anything inside a box you draw is wiped white. Tap a stray mark to wipe just that mark. Undo puts it back.'
         : freeMode ? 'Slide to straighten the drawing, or twist two fingers on it. The lines in the frame help line it up.'
         : 'Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.';
     }
@@ -20749,6 +20756,7 @@
         mode = b.dataset.val;
         box.querySelectorAll('[data-mode] button').forEach(function (x) { x.classList.toggle('active', x === b); });
         stage.classList.toggle('is-erasing', mode === 'erase');
+        box.querySelector('.cbf-view').classList.toggle('is-erasing', mode === 'erase');
         syncNote(); status.textContent = '';
       });
     });
@@ -20785,6 +20793,7 @@
         if (fx >= ax && fx <= bx && fy >= ay && fy <= by) { var i = (y * SW + x) * 4; wd[i] = wd[i + 1] = wd[i + 2] = 255; }
       }
       commit(x0, y0, x1, y1);
+      status.textContent = 'Erased. Undo puts it back.';
     }
     // A tap takes away the one connected mark under it (or nearest it),
     // with the faint edge round its line. A mark joined to the drawing
@@ -20827,6 +20836,7 @@
         if (near) { wd[k * 4] = wd[k * 4 + 1] = wd[k * 4 + 2] = 255; }
       }
       commit(x0, y0, x1, y1);
+      status.textContent = 'Erased. Undo puts it back.';
     }
     function undoLast() {
       var u = undo.pop();
@@ -20863,7 +20873,7 @@
         pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, crop: Object.assign({}, crop) }; drag = null; dropRub();
       } else if (mode === 'erase') {
         var el = document.createElement('div'), p0 = toPage(e);
-        el.className = 'cbf-erase'; stage.appendChild(el);
+        el.className = 'cbf-erase'; el.innerHTML = '<span>Erase</span>'; stage.appendChild(el);
         rub = { el: el, p0: p0, p1: p0, x: e.clientX, y: e.clientY, moved: false };
         placeRub();
       } else if (frame.contains(e.target)) {
