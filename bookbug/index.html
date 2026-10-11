@@ -1956,7 +1956,15 @@
   .pb-sheet-foot { display: flex; gap: 8px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
   /* Import cartoons: sources on the left (the current one large, as it
      will be cleaned up), the cleanup settings on the right. */
-  .modal-box.scan-box { max-width: 880px; width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto; }
+  .modal-box.scan-box { max-width: 880px; width: calc(100vw - 32px); max-height: calc(100vh - 32px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+  /* On a phone these dialogs are taller than the screen: they scroll, and
+     Cancel/Save stay pinned to the bottom so they can always be reached. */
+  .modal-box.cbf-box { max-height: calc(100vh - 32px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+  .modal-box.cbf-box > .modal-actions, .modal-box.scan-box > .modal-actions {
+    position: sticky; bottom: -22px; z-index: 3; background: var(--surface);
+    margin: 12px -24px -22px; padding: 12px 24px calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line);
+  }
+  @media (max-width: 600px) { .modal-overlay:has(> .cbf-box), .modal-overlay:has(> .scan-box) { padding: 12px; } }
   .scan-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .scan-main { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
   .scan-main[hidden] { display: none; }
@@ -1988,6 +1996,9 @@
   .scan-region.is-off i { display: none; }
   .scan-region .scan-num { position: absolute; top: -11px; left: 14px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 600; line-height: 22px; text-align: center; }
   /* Left out: a dashed outline over a paper veil, no number. */
+  .scan-region .scan-x { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 999px; background: var(--surface); color: var(--ink); border: 1.5px solid var(--ink-soft); font: 600 16px/21px system-ui, sans-serif; text-align: center; cursor: pointer; z-index: 2; }
+  .scan-region .scan-x::before { content: ''; position: absolute; inset: -9px; }
+  .scan-region.is-off .scan-x { display: none; }
   .scan-region.is-off { border-style: dashed; border-color: var(--ink-faint); background: color-mix(in srgb, var(--surface) 60%, transparent); }
   .scan-region.is-drawing { border-style: dashed; pointer-events: none; }
   /* Framing a cartoon: its page with a frame over it to move and size. */
@@ -2350,6 +2361,14 @@
   .cb-row .dots-btn { margin-left: auto; }
   .cb-preview-canvas { display: block; cursor: zoom-in; outline: 1px solid var(--line-strong); background: #FFFFFF; }
   .cb-view .preview-stage { height: auto; }
+  /* The preview looks nothing like a cartoon card: the printed page on a
+     dark mat, labelled as the PDF, so it isn't taken for another cartoon. */
+  .cb-view .preview-panel .preview-stage { background: #34302B; border-radius: 8px; padding: 20px 14px; }
+  .cb-view .preview-panel .cb-preview-canvas, .cb-view .preview-panel .preview-stage:hover .cb-preview-canvas { outline: none; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); }
+  .cb-view .preview-panel .preview-head .panel-title::after {
+    content: 'The PDF'; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; vertical-align: 2px;
+    background: #34302B; color: #F4EFE6; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  }
   @media (max-width: 700px) {
     .cb-item { margin-left: 0; }
     .cb-num { display: none; }
@@ -2841,8 +2860,9 @@
           <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption beside it.</p>
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
-            <button class="btn add-poem-btn" id="cbAddBtn" type="button">+ Add cartoon</button>
-            <button class="btn" id="cbImportBtn" type="button" title="A PDF of drawings, or photos of them: each page or photo becomes a cartoon">Import a PDF or photos…</button>
+            <button class="btn add-poem-btn" id="cbImportBtn" type="button" data-start="camera" title="Photograph drawings one after another; each becomes a cartoon">Take photos</button>
+            <button class="btn" type="button" data-start="photos" title="Photos of drawings from your library; each becomes a cartoon">Choose photos</button>
+            <button class="btn" type="button" data-start="pdf" title="A PDF of drawings; each page becomes a cartoon">Choose a PDF</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
@@ -19718,7 +19738,7 @@
     if (!cbState.cartoons.length) {
       var hint = document.createElement('div');
       hint.className = 'chapbooks-empty';
-      hint.textContent = 'No cartoons yet. Drop drawings here, or use + Add cartoon.';
+      hint.textContent = 'No cartoons yet. Take photos of your drawings, choose photos or a PDF, or drop drawings here.';
       cbList.appendChild(hint);
     }
     cbState.cartoons.forEach(function (c, i) { cbList.appendChild(cbMakeItem(c, i)); });
@@ -19736,8 +19756,11 @@
     e.preventDefault();
     cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files), null);
   });
-  cbFmt('cbAddBtn').addEventListener('click', function () { cbPick(null); });
-  cbFmt('cbImportBtn').addEventListener('click', openCartoonImport);
+  // Take photos, Choose photos and Choose a PDF open the import dialog
+  // straight onto the camera or the file picker.
+  cbFmt('cbImportBtn').parentNode.querySelectorAll('[data-start]').forEach(function (b) {
+    b.addEventListener('click', function () { openCartoonImport(b.dataset.start); });
+  });
 
   // ---------------------------------------------------------------------
   // Importing cartoons from a PDF (each page a cartoon; read with PDF.js,
@@ -20101,7 +20124,7 @@
     }
     ctx.putImageData(im, 0, 0);
   }
-  function openCartoonImport() {
+  function openCartoonImport(start) {
     var d = makeDialog('scan-box', 'Import cartoons',
       '<p style="margin-top:0;">Import cartoons</p>' +
       '<div class="scan-pick"><button class="btn" type="button" data-pick="pdf">Choose a PDF</button><button class="btn" type="button" data-pick="photos">Choose photos</button>' +
@@ -20222,6 +20245,21 @@
         el.style.left = a[0] + '%'; el.style.top = a[1] + '%'; el.style.width = (b[0] - a[0]) + '%'; el.style.height = (b[1] - a[1]) + '%';
       }
       var regs = src.regions || [], num = 0;
+      // One cartoon per page unless "Several cartoons on this page" is
+      // chosen: choosing a box then sets the others aside, and a drawn box
+      // replaces the one before it.
+      function choose(rg) {
+        if (!src.multi) {
+          src.regions = src.regions.filter(function (r) { return r === rg || !r.drawn; });
+          src.regions.forEach(function (r) { if (r !== rg) r.on = false; });
+        }
+        rg.on = true;
+      }
+      function unchoose(rg) {
+        if (rg.drawn) src.regions = src.regions.filter(function (r) { return r !== rg; });
+        else rg.on = false;
+      }
+      function toggle(rg) { if (rg.on) unchoose(rg); else choose(rg); }
       // A box: tap it to leave it out (or back in), drag it to move it,
       // drag a corner to resize it. Once moved or resized it's cut as the
       // box shows, with just the circle's line whited out (`edited`).
@@ -20231,15 +20269,18 @@
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.title = rg.on ? 'Tap to leave this one out; drag it or its corners to fit' : 'Tap to bring this one in';
-        el.innerHTML = (rg.on ? '<span class="scan-num">' + (++num) + '</span>' : '') +
+        el.innerHTML = (rg.on && src.multi ? '<span class="scan-num">' + (++num) + '</span>' : '') +
+          (rg.on ? '<b class="scan-x" role="button" aria-label="Remove this box" title="Remove this box">×</b>' : '') +
           '<i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i>';
         place(el, rg.fx, rg.fy, rg.fw, rg.fh);
         el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); rg.on = !rg.on; refresh(); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(rg); refresh(); }
+          if ((e.key === 'Delete' || e.key === 'Backspace') && rg.on) { e.preventDefault(); unchoose(rg); refresh(); }
         });
         el.addEventListener('pointerdown', function (e) {
           if (e.button > 0) return;
           e.stopPropagation(); e.preventDefault();
+          if (e.target.closest('.scan-x')) { unchoose(rg); refresh(); return; }
           var corner = e.target.dataset && e.target.dataset.c, p0 = toPage(e), sx = e.clientX, sy = e.clientY, moved = false;
           var r0 = { fx: rg.fx, fy: rg.fy, fw: rg.fw, fh: rg.fh }, r = r0;
           el.setPointerCapture(e.pointerId);
@@ -20261,9 +20302,9 @@
           function up(e) {
             el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
             if (e.type === 'pointercancel') { refresh(); return; }
-            if (!moved) rg.on = !rg.on;
+            if (!moved) toggle(rg);
             else {
-              rg.fx = r.fx; rg.fy = r.fy; rg.fw = r.fw; rg.fh = r.fh; rg.edited = true; rg.on = true;
+              rg.fx = r.fx; rg.fy = r.fy; rg.fw = r.fw; rg.fh = r.fh; rg.edited = true; choose(rg);
               src.regions = scanReadingOrder(src.regions.slice());
             }
             refresh();
@@ -20275,12 +20316,39 @@
       // Circles are already chosen; separate drawings wait to be tapped,
       // with Choose all for a page of them.
       var picking = regs.length && !regs.some(function (r) { return r.loop; });
-      note.textContent = !src.regions ? 'Looking for drawings…' : !regs.length ? '' : picking
-        ? 'Tap each drawing to bring in as its own cartoon. With none chosen, the whole page comes in. '
-        : 'Tap a box to leave it out. Drag a box or its corners to fit; drag across the page to add one.';
-      if (picking && regs.some(function (r) { return !r.on; })) {
+      var anyOn = regs.some(function (r) { return r.on; });
+      note.textContent = !src.regions ? 'Looking for drawings…'
+        : !regs.length ? 'The whole page comes in. Drag across it to frame just the drawing. '
+        : src.multi ? 'Each box comes in as its own cartoon. Tap × to remove a box; drag across the page to add one. '
+        : anyOn ? 'Only the box comes in. Drag it or its corners to fit, tap × to remove it, or drag across the page to draw a new one. '
+        : 'Tap the drawing to bring in, or drag across the page to frame it. With none chosen, the whole page comes in. ';
+      if (src.regions) {
+        var several = document.createElement('button');
+        several.type = 'button'; several.className = 'btn-link scan-all';
+        several.textContent = src.multi ? 'Just one cartoon from this page' : 'Several cartoons on this page…';
+        several.addEventListener('click', function () {
+          if (src.multi) {
+            var keep = null;
+            src.regions.forEach(function (r) { if (r.on && !keep) keep = r; });
+            src.multi = false;
+            if (keep) choose(keep);
+            refresh(); return;
+          }
+          // Asked for here, in the note, rather than in a second dialog.
+          note.textContent = 'Bring in several separate cartoons from this one page? Each box will become its own cartoon. ';
+          var yes = document.createElement('button'), no = document.createElement('button');
+          yes.type = no.type = 'button'; yes.className = no.className = 'btn-link scan-all';
+          yes.textContent = 'Yes, several'; no.textContent = 'No, just one'; no.style.marginLeft = '12px';
+          yes.addEventListener('click', function () { src.multi = true; refresh(); });
+          no.addEventListener('click', function () { refresh(); });
+          note.appendChild(yes); note.appendChild(no);
+        });
+        note.appendChild(several);
+      }
+      if (picking && src.multi && regs.some(function (r) { return !r.on; })) {
         var all = document.createElement('button');
         all.type = 'button'; all.className = 'btn-link scan-all'; all.textContent = 'Choose all';
+        all.style.marginLeft = '12px';
         all.addEventListener('click', function () { regs.forEach(function (r) { r.on = true; }); refresh(); });
         note.appendChild(all);
       }
@@ -20301,8 +20369,10 @@
           box.remove();
           var r = rect(e);
           if (e.type === 'pointercancel' || r.fw < 0.03 || r.fh < 0.03) return;
-          r.on = true; r.mask = null; r.edited = true;
-          src.regions = scanReadingOrder(src.regions.concat([r]));
+          r.mask = null; r.edited = true; r.drawn = true;
+          src.regions = src.regions.concat([r]);
+          choose(r);
+          src.regions = scanReadingOrder(src.regions);
           refresh();
         }
         stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
@@ -20354,6 +20424,12 @@
               src.regions = scanReadingOrder(list.map(function (f) {
                 return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: null, on: false, loop: false };
               }));
+              // One drawing found, or one far bigger than anything else
+              // (a stray mark, the table's edge): it comes in chosen, so
+              // the box that's shown is what's added, not the whole sheet.
+              var bySize = src.regions.slice().sort(function (a, b) { return b.fw * b.fh - a.fw * a.fh; });
+              if (bySize.length && !src.regions.some(function (r) { return r.on; }) &&
+                  (bySize.length === 1 || bySize[0].fw * bySize[0].fh >= 3 * bySize[1].fw * bySize[1].fh)) bySize[0].on = true;
             } catch (err) { src.regions = []; }
             if (src.regions.length) refresh();
             else if (sources[cur] === src) renderView();
@@ -20411,6 +20487,11 @@
         if (b.dataset.pick === 'camera' && canStream) { startCamera(); return; }
         var inp = box.querySelector('[data-in="' + b.dataset.pick + '"]'); inp.value = ''; inp.click(); });
     });
+    if (typeof start === 'string') {
+      var startBtn = box.querySelector('[data-pick="' + start + '"]');
+      if (start === 'camera' && startBtn.hidden) startBtn = box.querySelector('[data-pick="photos"]');
+      startBtn.click();
+    }
     box.querySelector('[data-in="pdf"]').addEventListener('change', async function (e) {
       var file = e.target.files && e.target.files[0];
       if (!file) return;
