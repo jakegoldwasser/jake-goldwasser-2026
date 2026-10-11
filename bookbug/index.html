@@ -2344,7 +2344,7 @@
   .cb-body { display: flex; flex-direction: column; gap: 8px; }
   /* The drawing and its caption on one white sheet, the caption under the
      drawing as it prints, so what's typed is what the page will show. */
-  .cb-sheet { background: #FFFFFF; border: 1px solid var(--line-strong); padding: 14px 18px 10px; }
+  .cb-sheet { background: #FFFFFF; border: 1px solid var(--line-strong); padding: 18px 24px 24px; } /* bottom margin matches the sides, so the caption doesn't sit on the edge */
   .cb-art {
     position: relative; aspect-ratio: 4 / 3; background: #FFFFFF; display: flex; align-items: center; justify-content: center;
     cursor: pointer; overflow: hidden;
@@ -2354,6 +2354,17 @@
   .cb-art.is-drop { outline: 3px solid var(--accent); }
   .cb-art.is-missing { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px 24px; }
   .cb-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  /* Caption below / beside: only how this list is laid out (the page always
+     prints it below). Beside puts the caption next to the drawing, in
+     larger type, wherever the card is wide enough for two columns. */
+  .cb-cap-mode { display: inline-flex; border-radius: 999px; margin-left: auto; }
+  .cb-cap-mode button { flex: 0 0 auto; padding: 6px 14px; }
+  #cbList.is-side .cb-sheet { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: center; padding: 24px; }
+  #cbList.is-side textarea.cb-caption { margin-top: 0; font-size: 28px; line-height: 1.35; }
+  @container (max-width: 519px) {
+    #cbList.is-side .cb-sheet { display: block; padding: 18px 24px 24px; }
+    #cbList.is-side textarea.cb-caption { margin-top: 10px; font-size: 20px; }
+  }
   textarea.cb-caption {
     display: block; width: 100%; resize: none; overflow: hidden; min-height: 0; margin-top: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
     background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
@@ -2863,8 +2874,9 @@
           <div class="poems-head">
             <div class="panel-title" style="margin:0;">Cartoons</div>
             <div class="poems-count" id="cbCount"></div>
+            <div class="seg cb-cap-mode" role="group" aria-label="Where the caption goes in this list"><button type="button" data-cap="below">Caption below</button><button type="button" data-cap="side">Caption beside</button></div>
           </div>
-          <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption beside it.</p>
+          <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption with it.</p>
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
             <button class="btn add-poem-btn" id="cbImportBtn" type="button" data-start="camera" title="Photograph drawings one after another; each becomes a cartoon">Take photos</button>
@@ -2914,10 +2926,14 @@
               <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="100" step="5"><output id="cbArtSizeOut"></output></div>
             </div>
             <div class="checkline">
+              <input type="checkbox" id="cbQuoted">
+              <label for="cbQuoted" style="text-transform:none;letter-spacing:0;font-weight:400;">Captions in quotation marks</label>
+            </div>
+            <div class="checkline">
               <input type="checkbox" id="cbNumbers">
               <label for="cbNumbers" style="text-transform:none;letter-spacing:0;font-weight:400;">Number the cartoons</label>
             </div>
-            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in a Caslon-like italic, spoken lines in quotation marks, with curly quotes and proper dashes.</p>
+            <p class="field-note" style="margin:6px 0 0;">Captions are set the New Yorker way: centered under the drawing in a Caslon-like italic, with curly quotes and proper dashes.</p>
           </div>
         </div>
         <div class="panel collapsible-panel" id="cbExportPanel">
@@ -4565,7 +4581,11 @@
     c = c || {};
     var out = { id: c.id || ('ct' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
       img: c.img || null, orig: c.orig || null, clean: c.clean || null,
-      caption: String(c.caption || ''), spoken: c.spoken !== false };
+      caption: String(c.caption || ''), spoken: false };
+    // A caption's quotation marks live in its text now (the batch's
+    // "Captions in quotation marks" puts them on new ones as typed). One
+    // saved as spoken before that gets them folded in, once.
+    if (c.spoken !== false && out.caption.trim() && !/^[“‘"]/.test(out.caption.trim())) out.caption = '“' + out.caption.trim() + '”';
     if (typeof c.archivedFrom === 'number') out.archivedFrom = c.archivedFrom;
     // The page the drawing was cut from, and where (fractions of it; may
     // run past its edges, for paper round it), so it can be reframed.
@@ -4589,6 +4609,7 @@
       captionSize: typeof d.captionSize === 'number' ? d.captionSize : 16,
       artSize: typeof d.artSize === 'number' ? d.artSize : 0.9,
       numbers: !!d.numbers,
+      quoted: d.quoted !== false,
       cartoons: (d.cartoons || []).map(cbNormalizeCartoon),
       archived: (d.archived || []).map(cbNormalizeCartoon),
       // `from: 'book'` (with its old place, `at`) when deleted straight
@@ -19599,6 +19620,25 @@
     return t;
   }
 
+  // Caption below / beside in the list, remembered on this device.
+  function cbSyncCapMode() {
+    var side = prefs.cbCaptionSide === true;
+    cbList.classList.toggle('is-side', side);
+    document.querySelectorAll('.cb-cap-mode [data-cap]').forEach(function (b) {
+      var on = (b.dataset.cap === 'side') === side;
+      b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on));
+    });
+    cbList.querySelectorAll('textarea.cb-caption').forEach(autoGrow);
+  }
+  document.querySelectorAll('.cb-cap-mode [data-cap]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      prefs.cbCaptionSide = b.dataset.cap === 'side';
+      try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+      cbSyncCapMode();
+    });
+  });
+  cbSyncCapMode();
+
   // A caption as the editor shows it (and now stores it): the typeset
   // punctuation as typed, without cbTypeset's trimming, so typing isn't
   // fought; a spoken caption wrapped in quotation marks; and an empty
@@ -19706,12 +19746,15 @@
     ta.placeholder = 'Caption';
     ta.spellcheck = prefs.spellcheck;
     // The field shows the caption as it will be set: curly quotes, dashes
-    // and ellipses as they're typed, and a spoken caption's quotation
-    // marks round it (cbShownCaption).
-    ta.value = cbShownCaption(c.caption, c.spoken);
+    // and ellipses as they're typed (cbShownCaption). In a batch with
+    // captions in quotation marks, a caption started from empty gets them
+    // round it; taking them out of one caption by hand leaves it so.
+    ta.value = cbShownCaption(c.caption, false);
     ta.addEventListener('input', function () {
-      var at = ta.selectionStart, v = cbShownCaption(ta.value, c.spoken), lead = cbShownCaption(ta.value.slice(0, at), false).length;
-      if (c.spoken && v && !/^[“‘"]/.test(ta.value)) lead++;
+      var wrapNew = cbState.quoted && !c.caption.trim();
+      var at = ta.selectionStart, v = cbShownCaption(ta.value, wrapNew), lead = cbShownCaption(ta.value.slice(0, at), false).length;
+      if (cbState.quoted && /^“\s*”$/.test(v)) v = '';
+      if (wrapNew && v && !/^[“‘"]/.test(ta.value)) lead++;
       if (v !== ta.value) { ta.value = v; ta.setSelectionRange(Math.min(lead, v.length), Math.min(lead, v.length)); }
       c.caption = v; autoGrow(ta); cbPersist();
     });
@@ -19722,16 +19765,6 @@
     side.className = 'cb-side';
     var row = document.createElement('div');
     row.className = 'cb-row';
-    var spoken = document.createElement('label');
-    spoken.className = 'checkline';
-    spoken.innerHTML = '<input type="checkbox"><span style="font-size:12.5px;">Spoken (in quotation marks)</span>';
-    spoken.firstChild.checked = c.spoken;
-    spoken.firstChild.addEventListener('change', function (e) {
-      c.spoken = e.target.checked;
-      ta.value = c.caption = cbShownCaption(c.spoken ? c.caption : cbUnquote(c.caption), c.spoken);
-      autoGrow(ta); cbPersist();
-    });
-    row.appendChild(spoken);
     var dots = document.createElement('button');
     dots.type = 'button'; dots.className = 'dots-btn'; dots.textContent = '⋯';
     dots.setAttribute('aria-label', 'Options for cartoon ' + (i + 1));
@@ -21213,11 +21246,22 @@
   cbFmt('cbCaptionSize').addEventListener('input', function () { cbState.captionSize = +cbFmt('cbCaptionSize').value; cbSyncFormatting(); cbPersist(); });
   cbFmt('cbArtSize').addEventListener('input', function () { cbState.artSize = +cbFmt('cbArtSize').value / 100; cbSyncFormatting(); cbPersist(); });
   cbFmt('cbNumbers').addEventListener('change', function () { cbState.numbers = cbFmt('cbNumbers').checked; cbPersist(); });
+  // Captions in quotation marks: for the whole batch, putting them round
+  // every caption (or taking them off) and on each new one as it's typed.
+  cbFmt('cbQuoted').addEventListener('change', function () {
+    cbState.quoted = cbFmt('cbQuoted').checked;
+    cbState.cartoons.concat(cbState.archived).forEach(function (c) {
+      var t = cbUnquote(c.caption.trim());
+      c.caption = cbState.quoted && t ? '“' + t + '”' : t;
+    });
+    cbPersist(); cbRenderList();
+  });
   function cbSyncFormatting() {
     cbFmt('cbPageSeg').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === cbState.page); });
     cbFmt('cbCaptionSize').value = cbState.captionSize; cbFmt('cbCaptionSizeOut').textContent = cbState.captionSize + ' pt';
     cbFmt('cbArtSize').value = Math.round(cbState.artSize * 100); cbFmt('cbArtSizeOut').textContent = Math.round(cbState.artSize * 100) + '%';
     cbFmt('cbNumbers').checked = cbState.numbers;
+    cbFmt('cbQuoted').checked = cbState.quoted;
   }
   // Show / Hide Tools.
   var cbToolsHidden = false;
