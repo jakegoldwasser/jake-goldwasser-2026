@@ -4556,7 +4556,9 @@
       numbers: !!d.numbers,
       cartoons: (d.cartoons || []).map(cbNormalizeCartoon),
       archived: (d.archived || []).map(cbNormalizeCartoon),
-      deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, cartoon: cbNormalizeCartoon(x.cartoon) }; }),
+      // `from: 'book'` (with its old place, `at`) when deleted straight
+      // from the batch with ⋯ › Delete…, so Restore puts it back there.
+      deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, cartoon: cbNormalizeCartoon(x.cartoon), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
       images: d.images && typeof d.images === 'object' ? d.images : {}
     };
   }
@@ -20846,7 +20848,8 @@
         (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') : '') +
       (i > 0 ? '<button type="button" data-a="up">Move up</button>' : '') +
       (i < cbState.cartoons.length - 1 ? '<button type="button" data-a="down">Move down</button>' : '') +
-      '<button type="button" data-a="archive">' + (cbCartoonIsEmpty(c) ? 'Delete' : 'Archive') + '</button>';
+      '<button type="button" data-a="archive">' + (cbCartoonIsEmpty(c) ? 'Delete' : 'Archive') + '</button>' +
+      (cbCartoonIsEmpty(c) ? '' : '<button type="button" data-a="delete">Delete…</button>');
     cbItemMenu.hidden = false;
     var r = btn.getBoundingClientRect(), mh = cbItemMenu.offsetHeight, mw = cbItemMenu.offsetWidth;
     var top = r.bottom + 4;
@@ -20861,6 +20864,17 @@
     cbItemMenu.hidden = true;
     if (a === 'frame') { cbOpenFrame(c); return; }
     if (a === 'replace') { cbPick(c.id); return; }
+    // Delete… skips the archive; it can still be restored, to its old
+    // place, from Recently deleted for RECOVER_DAYS.
+    if (a === 'delete') {
+      if (!(await confirmDialog('Delete this cartoon? You can restore it from Recently deleted for ' + RECOVER_DAYS + ' days.', 'Delete'))) return;
+      i = list.indexOf(c);
+      if (i === -1) return;
+      list.splice(i, 1);
+      cbState.deleted = freshDeleted(cbState.deleted).concat([{ deletedAt: Date.now(), cartoon: c, from: 'book', at: i }]);
+      cbPersist(); cbRenderList();
+      return;
+    }
     if (a === 'up' || a === 'down') {
       var j = a === 'up' ? i - 1 : i + 1;
       list.splice(j, 0, list.splice(i, 1)[0]);
@@ -20901,8 +20915,13 @@
     if (cbState.deleted.length) {
       list.appendChild(recentlyDeletedSection(cbState.deleted, function (d) { return cbTypeset(d.cartoon.caption, d.cartoon.spoken) || 'A cartoon with no caption'; }, function (d) {
         cbState.deleted = cbState.deleted.filter(function (x) { return x !== d; });
-        cbState.archived.unshift(d.cartoon);
-        cbPersist(); cbRenderArchive(); cbUpdateStats();
+        if (d.from === 'book') {
+          cbState.cartoons.splice(typeof d.at === 'number' ? Math.min(d.at, cbState.cartoons.length) : cbState.cartoons.length, 0, d.cartoon);
+          cbPersist(); cbRenderList();
+        } else {
+          cbState.archived.unshift(d.cartoon);
+          cbPersist(); cbRenderArchive(); cbUpdateStats();
+        }
       }));
     }
     var deletedEl = list.firstChild;
