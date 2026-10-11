@@ -1966,6 +1966,7 @@
   }
   @media (max-width: 600px) { .modal-overlay:has(> .cbf-box), .modal-overlay:has(> .scan-box) { padding: 12px; } }
   .scan-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .scan-pick[hidden] { display: none; }
   .scan-main { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
   .scan-main[hidden] { display: none; }
   @media (max-width: 700px) { .scan-main { grid-template-columns: 1fr; } }
@@ -2882,6 +2883,7 @@
             <button class="btn add-poem-btn" id="cbImportBtn" type="button" data-start="camera" title="Photograph drawings one after another; each becomes a cartoon">Take photos</button>
             <button class="btn" type="button" data-start="photos" title="Photos of drawings from your library; each becomes a cartoon">Choose photos</button>
             <button class="btn" type="button" data-start="pdf" title="A PDF of drawings; each page becomes a cartoon">Choose a PDF</button>
+            <button class="btn" type="button" id="cbAddEmptyBtn" title="A blank cartoon: drop or click a drawing into it, and write its caption">+ Add cartoon</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
@@ -19803,8 +19805,27 @@
   });
   // Take photos, Choose photos and Choose a PDF open the import dialog
   // straight onto the camera or the file picker.
+  // + Add cartoon: a blank one at the end, its drawing area ready for a
+  // drawing dropped (or clicked) into it, and its caption field focused.
+  cbFmt('cbAddEmptyBtn').addEventListener('click', function () {
+    var c = cbNormalizeCartoon({});
+    cbState.cartoons.push(c);
+    cbPersist(); cbRenderList();
+    var item = cbList.querySelector('.cb-item[data-id="' + c.id + '"]');
+    if (item) { item.scrollIntoView({ behavior: 'smooth', block: 'center' }); var ta = item.querySelector('textarea.cb-caption'); if (ta) ta.focus({ preventScroll: true }); }
+  });
+  // The list's own Choose photos / Choose a PDF go straight to the file
+  // picker, and the import dialog opens with what was picked (never on its
+  // own buttons again); Take photos opens it on the live camera.
   cbFmt('cbImportBtn').parentNode.querySelectorAll('[data-start]').forEach(function (b) {
-    b.addEventListener('click', function () { openCartoonImport(b.dataset.start); });
+    b.addEventListener('click', function () {
+      var kind = b.dataset.start;
+      if (kind === 'camera') { openCartoonImport('camera'); return; }
+      var inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = kind === 'pdf' ? 'application/pdf' : 'image/*'; inp.multiple = kind !== 'pdf';
+      inp.addEventListener('change', function () { if (inp.files && inp.files.length) openCartoonImport(kind, Array.prototype.slice.call(inp.files)); });
+      inp.click();
+    });
   });
 
   // ---------------------------------------------------------------------
@@ -20169,7 +20190,7 @@
     }
     ctx.putImageData(im, 0, 0);
   }
-  function openCartoonImport(start) {
+  function openCartoonImport(start, files) {
     var d = makeDialog('scan-box', 'Import cartoons',
       '<p style="margin-top:0;">Import cartoons</p>' +
       '<div class="scan-pick"><button class="btn" type="button" data-pick="pdf">Choose a PDF</button><button class="btn" type="button" data-pick="photos">Choose photos</button>' +
@@ -20215,7 +20236,10 @@
       } catch (err) {
         camStream = null;
         if (window.matchMedia('(pointer: coarse)').matches) { var inp = box.querySelector('[data-in="camera"]'); inp.value = ''; inp.click(); }
-        else status.textContent = err && err.name === 'NotAllowedError' ? 'The camera is blocked. Allow it for this site in the browser’s address bar, then try again.' : 'Couldn’t open a camera on this device.';
+        else {
+          box.querySelector('.scan-pick').hidden = false;
+          status.textContent = err && err.name === 'NotAllowedError' ? 'The camera is blocked. Allow it for this site in the browser’s address bar, then try again.' : 'Couldn’t open a camera on this device.';
+        }
         return;
       }
       camVideo.srcObject = camStream;
@@ -20508,7 +20532,7 @@
     function refresh() {
       var has = sources.length > 0;
       box.querySelector('.scan-main').hidden = !has;
-      box.querySelector('.scan-empty').hidden = has;
+      box.querySelector('.scan-empty').hidden = has || typeof start === 'string';
       var n = cartoonCount();
       addBtn.disabled = !n || busy;
       addBtn.textContent = n ? 'Add ' + n + (n === 1 ? ' cartoon' : ' cartoons') : 'Add cartoons';
@@ -20530,20 +20554,27 @@
         if (b.dataset.pick === 'camera' && canStream) { startCamera(); return; }
         var inp = box.querySelector('[data-in="' + b.dataset.pick + '"]'); inp.value = ''; inp.click(); });
     });
+    // Opened from the list's own buttons: the choice is made, so the
+    // dialog's buttons and intro line stay out of the way.
     if (typeof start === 'string') {
-      var startBtn = box.querySelector('[data-pick="' + start + '"]');
-      if (start === 'camera' && startBtn.hidden) startBtn = box.querySelector('[data-pick="photos"]');
-      startBtn.click();
+      box.querySelector('.scan-pick').hidden = true;
+      box.querySelector('.scan-empty').hidden = true;
+      if (files) { if (start === 'pdf') readPdf(files[0]); else takeImages(files); }
+      else {
+        var startBtn = box.querySelector('[data-pick="' + start + '"]');
+        if (start === 'camera' && startBtn.hidden) startBtn = box.querySelector('[data-pick="photos"]');
+        startBtn.click();
+      }
     }
-    box.querySelector('[data-in="pdf"]').addEventListener('change', async function (e) {
-      var file = e.target.files && e.target.files[0];
+    box.querySelector('[data-in="pdf"]').addEventListener('change', function (e) { readPdf(e.target.files && e.target.files[0]); });
+    async function readPdf(file) {
       if (!file) return;
       try {
         status.textContent = 'Reading the PDF…';
         await pdfPagesToCanvases(file, function (c, p, n) { status.textContent = 'Reading page ' + p + ' of ' + n + '…'; addSource(c, true); });
         status.textContent = '';
       } catch (err) { status.textContent = 'Couldn’t read that PDF: ' + (err && err.message ? err.message : 'unknown error'); }
-    });
+    }
     async function takeImages(files) {
       files = Array.prototype.filter.call(files || [], function (f) { return /^image\//.test(f.type); });
       for (var i = 0; i < files.length; i++) {
