@@ -2323,10 +2323,12 @@
   .cb-num { position: absolute; left: -36px; top: 14px; width: 32px; text-align: center; font-weight: 600; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .cb-card { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 12px 14px; }
   .cb-item.is-current .cb-card { border-color: var(--accent); }
-  .cb-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  @container (min-width: 560px) { .cb-body { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; } }
+  .cb-body { display: flex; flex-direction: column; gap: 8px; }
+  /* The drawing and its caption on one white sheet, the caption under the
+     drawing as it prints, so what's typed is what the page will show. */
+  .cb-sheet { background: #FFFFFF; border: 1px solid var(--line-strong); padding: 14px 18px 10px; }
   .cb-art {
-    position: relative; aspect-ratio: 4 / 3; background: #FFFFFF; border: 1px solid var(--line-strong); display: flex; align-items: center; justify-content: center;
+    position: relative; aspect-ratio: 4 / 3; background: #FFFFFF; display: flex; align-items: center; justify-content: center;
     cursor: pointer; overflow: hidden;
   }
   .cb-art img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
@@ -2335,13 +2337,14 @@
   .cb-art.is-missing { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px 24px; }
   .cb-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   textarea.cb-caption {
-    width: 100%; resize: none; overflow: hidden; min-height: 64px; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line);
+    display: block; width: 100%; resize: none; overflow: hidden; min-height: 0; margin-top: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
     background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
     font-family: 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif; font-size: 20px; font-style: italic;
+    transition: border-color .15s ease;
   }
+  textarea.cb-caption:hover { border-color: var(--line); }
   textarea.cb-caption:focus { border-color: var(--accent); }
   textarea.cb-caption::placeholder { color: var(--ink-faint); font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif; font-style: normal; font-size: 14px; }
-  .cb-caption-shown { font-family: 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif; font-style: italic; font-size: 14px; color: var(--ink-soft); text-align: center; min-height: 1em; }
   .cb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cb-row .checkline { margin: 0; }
   .cb-row .dots-btn { margin-left: auto; }
@@ -19564,6 +19567,19 @@
     return t;
   }
 
+  // A caption as the editor shows it (and now stores it): the typeset
+  // punctuation as typed, without cbTypeset's trimming, so typing isn't
+  // fought; a spoken caption wrapped in quotation marks; and an empty
+  // pair of them taken away.
+  function cbShownCaption(text, spoken) {
+    var t = String(text || '').replace(/\s?---?\s?/g, '—').replace(/\.\.\./g, '…');
+    t = t.replace(/(^|[\s(\[{—–“‘])"/g, '$1“').replace(/"/g, '”').replace(/(^|[\s(\[{—–“])'/g, '$1‘').replace(/'/g, '’');
+    if (spoken && /^“\s*”?$/.test(t)) return '';
+    if (spoken && t.trim() && !/^[“‘]/.test(t)) t = '“' + t + (/[”’]$/.test(t) ? '' : '”');
+    return t;
+  }
+  function cbUnquote(t) { return /^“[\s\S]*”$/.test(t) ? t.slice(1, -1) : t; }
+
   // ---- The list of cartoons ----
   function cbUpdateStats() {
     if (!cbState) return;
@@ -19649,30 +19665,40 @@
       e.preventDefault(); e.stopPropagation(); art.classList.remove('is-drop');
       cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files || []), c.id);
     });
-    body.appendChild(art);
-    var side = document.createElement('div');
-    side.className = 'cb-side';
+    var sheet = document.createElement('div');
+    sheet.className = 'cb-sheet';
+    sheet.appendChild(art);
     var ta = document.createElement('textarea');
     ta.className = 'cb-caption';
-    ta.rows = 2;
+    ta.rows = 1;
     ta.placeholder = 'Caption';
-    ta.value = c.caption;
     ta.spellcheck = prefs.spellcheck;
-    var shown = document.createElement('div');
-    shown.className = 'cb-caption-shown';
-    shown.title = 'How the caption will be set';
-    function refreshShown() { shown.textContent = c.caption.trim() ? 'Set as: ' + cbTypeset(c.caption, c.spoken) : ''; }
-    refreshShown();
-    ta.addEventListener('input', function () { c.caption = ta.value; autoGrow(ta); refreshShown(); cbPersist(); });
+    // The field shows the caption as it will be set: curly quotes, dashes
+    // and ellipses as they're typed, and a spoken caption's quotation
+    // marks round it (cbShownCaption).
+    ta.value = cbShownCaption(c.caption, c.spoken);
+    ta.addEventListener('input', function () {
+      var at = ta.selectionStart, v = cbShownCaption(ta.value, c.spoken), lead = cbShownCaption(ta.value.slice(0, at), false).length;
+      if (c.spoken && v && !/^[“‘"]/.test(ta.value)) lead++;
+      if (v !== ta.value) { ta.value = v; ta.setSelectionRange(Math.min(lead, v.length), Math.min(lead, v.length)); }
+      c.caption = v; autoGrow(ta); cbPersist();
+    });
     ta.addEventListener('focus', function () { cbFollow(cbPageIndexOf(c)); });
-    side.append(ta, shown);
+    sheet.appendChild(ta);
+    body.appendChild(sheet);
+    var side = document.createElement('div');
+    side.className = 'cb-side';
     var row = document.createElement('div');
     row.className = 'cb-row';
     var spoken = document.createElement('label');
     spoken.className = 'checkline';
     spoken.innerHTML = '<input type="checkbox"><span style="font-size:12.5px;">Spoken (in quotation marks)</span>';
     spoken.firstChild.checked = c.spoken;
-    spoken.firstChild.addEventListener('change', function (e) { c.spoken = e.target.checked; refreshShown(); cbPersist(); });
+    spoken.firstChild.addEventListener('change', function (e) {
+      c.spoken = e.target.checked;
+      ta.value = c.caption = cbShownCaption(c.spoken ? c.caption : cbUnquote(c.caption), c.spoken);
+      autoGrow(ta); cbPersist();
+    });
     row.appendChild(spoken);
     var dots = document.createElement('button');
     dots.type = 'button'; dots.className = 'dots-btn'; dots.textContent = '⋯';
