@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Bookbug Stats</title>
+<link rel="icon" type="image/svg+xml" sizes="any" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&family=BioRhyme+Expanded:wght@800&display=swap">
+<style>
+  /* Bookbug's paint-swatch card (aged paper, umber ink, mossy green),
+     with each book type's swatch from its editor colorway. */
+  :root {
+    --paper: #EFE3C8;
+    --surface: #FBF5E6;
+    --ink: #2E2013;
+    --ink-soft: #6B5A42;
+    --ink-faint: #9A876A;
+    --line: #E1D1AC;
+    --accent: #6E7B3E;
+    --accent-deep: #55602F;
+    --accent-tint: #E4E3C0;
+    --t-collection: #8FA86A;
+    --t-novel: #C1602A;
+    --t-essays: #7D4E74;
+    --t-screenplay: #C99A2E;
+    --t-play: #3F8A7F;
+    --t-picture: #5C7A93;
+    --t-cartoon: #7A4E2B;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #231A10; --surface: #2E2317; --ink: #F1E6CE; --ink-soft: #C8B593; --ink-faint: #8E7C60;
+      --line: #4A3B28; --accent: #A3B26A; --accent-deep: #C3D08C; --accent-tint: #3A3A22;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #231A10; --surface: #2E2317; --ink: #F1E6CE; --ink-soft: #C8B593; --ink-faint: #8E7C60;
+    --line: #4A3B28; --accent: #A3B26A; --accent-deep: #C3D08C; --accent-tint: #3A3A22;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.55 "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    padding: 32px 16px 80px;
+  }
+  main { max-width: 980px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    border-bottom: 4px solid var(--ink); padding-bottom: 10px; }
+  .appname { font-family: "BioRhyme Expanded", "Work Sans", ui-sans-serif, sans-serif; font-weight: 800;
+    font-size: clamp(24px, 5vw, 34px); color: var(--ink); text-decoration: none; letter-spacing: 0.03em; }
+  .appname span { color: var(--accent); }
+  #asof { color: var(--ink-soft); font-size: 14px; }
+  .label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-soft); }
+  h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-soft);
+    margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 3px solid var(--line); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0;
+    border: 3px solid var(--ink); margin-top: 28px; background: var(--surface); }
+  .tile { padding: 16px 18px; border-right: 3px solid var(--ink); }
+  .tile:last-child { border-right: 0; }
+  .tile .num { font-size: clamp(34px, 6vw, 48px); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tile .sub { color: var(--ink-soft); font-size: 14px; }
+  /* Tiles wrap to two rows on narrow screens; swap the side rules for top rules then. */
+  @media (max-width: 860px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .tile { border-right: 0; border-top: 3px solid var(--ink); }
+    .tile:nth-child(odd) { border-right: 3px solid var(--ink); }
+    .tile:nth-child(-n+2) { border-top: 0; }
+  }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 8px; vertical-align: -1px; }
+  td.zero { color: var(--ink-faint); }
+
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
+  .chart { position: relative; }
+  .chart .label { margin-bottom: 6px; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .bar { fill: var(--accent); }
+  .chart .bar.on { fill: var(--accent-deep); }
+  .chart .axis { stroke: var(--ink-soft); stroke-width: 1; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart text { fill: var(--ink-soft); font: 11px "Work Sans", ui-sans-serif, sans-serif; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .chart .dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+  .tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper); font-size: 13px;
+    padding: 4px 8px; border-radius: 4px; white-space: nowrap; transform: translate(-50%, -100%); display: none; }
+  .empty { color: var(--ink-soft); font-size: 14px; }
+
+  #msg { margin-top: 40px; }
+  #msg a { color: var(--accent-deep); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  footer { margin-top: 40px; color: var(--ink-faint); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <a class="appname" href="./">bookbug<span>.</span></a>
+    <span id="asof">Loading…</span>
+  </header>
+  <div id="msg" hidden></div>
+  <div id="stats" hidden>
+    <div class="tiles">
+      <div class="tile"><div class="label">Accounts</div><div class="num" id="tAccounts"></div><div class="sub" id="tAccountsSub"></div></div>
+      <div class="tile"><div class="label">Saved this week</div><div class="num" id="tActive"></div><div class="sub" id="tActiveSub"></div></div>
+      <div class="tile"><div class="label">New this week</div><div class="num" id="tNew"></div><div class="sub" id="tNewSub"></div></div>
+      <div class="tile"><div class="label">Books</div><div class="num" id="tBooks"></div><div class="sub" id="tBooksSub"></div></div>
+    </div>
+
+    <h2>Each week</h2>
+    <div class="charts">
+      <div class="chart" id="cAccounts"><div class="label">New accounts</div></div>
+      <div class="chart" id="cBooks"><div class="label">New books</div></div>
+      <div class="chart" id="cActive"><div class="label">Saved in the past 7 days</div></div>
+    </div>
+
+    <h2>Books by type</h2>
+    <table>
+      <thead><tr><th>Type</th><th>Books</th><th>New this week</th><th>Worked on this week</th></tr></thead>
+      <tbody id="types"></tbody>
+    </table>
+
+    <footer>Counts only, not counting your own account. Archived books aren't counted.</footer>
+  </div>
+</main>
+<script>
+  // Reads the stats from Bookbug's backend with the sign-in Bookbug itself
+  // keeps in this browser, so there's no sign-in here: open Bookbug first.
+  var CLOUD_API_URL = 'https://lpf3k6atmbmhwch2e47tjqu6sy0qqdpv.lambda-url.us-east-1.on.aws/';
+  var CLOUD_AUTH_KEY = 'poetryBooklet.cloudAuth.v1';
+  var TYPES = [
+    ['collection', 'Poetry collections'], ['novel', 'Novels'], ['essays', 'Essay collections'],
+    ['screenplay', 'Screenplays'], ['play', 'Stage plays'], ['picture', 'Picture books'], ['cartoon', 'Cartoon batches']
+  ];
+  var DAY = 864e5;
+
+  function $(id) { return document.getElementById(id); }
+  function fmtDate(t) { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function showMessage(html) {
+    $('asof').textContent = '';
+    $('msg').innerHTML = html;
+    $('msg').hidden = false;
+  }
+
+  // One series of bars (or a line, for daily snapshots) with a hover tip.
+  function chart(el, points, kind) {
+    el.querySelectorAll('svg, .tip, .empty').forEach(function (n) { n.remove(); });
+    if (!points.length) {
+      el.insertAdjacentHTML('beforeend', '<p class="empty">Fills in from today, one point a day.</p>');
+      return;
+    }
+    var W = 320, H = 150, L = 26, B = 20, T = 8;
+    var max = Math.max(1, Math.max.apply(null, points.map(function (p) { return p.v; })));
+    var step = Math.pow(10, Math.floor(Math.log10(max)));
+    var top = Math.ceil(max / step) * step;
+    var y = function (v) { return T + (H - T - B) * (1 - v / top); };
+    var slot = (W - L) / points.length;
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
+    [0, top / 2, top].forEach(function (g) {
+      if (g !== Math.round(g)) return;
+      svg += '<line class="grid" x1="' + L + '" x2="' + W + '" y1="' + y(g) + '" y2="' + y(g) + '"/>' +
+        '<text x="' + (L - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + g + '</text>';
+    });
+    if (kind === 'line') {
+      var xs = function (i) { return L + slot * (i + 0.5); };
+      svg += '<polyline class="line" points="' + points.map(function (p, i) { return xs(i) + ',' + y(p.v); }).join(' ') + '"/>';
+      points.forEach(function (p, i) {
+        svg += '<circle class="dot" cx="' + xs(i) + '" cy="' + y(p.v) + '" r="4"/>' +
+          '<rect class="hit" data-i="' + i + '" x="' + (L + slot * i) + '" y="0" width="' + slot + '" height="' + (H - B) + '" fill="transparent"/>';
+      });
+    } else {
+      var bw = Math.max(4, slot - 6);
+      points.forEach(function (p, i) {
+        var x = L + slot * i + (slot - bw) / 2, h = Math.max(0, y(0) - y(p.v));
+        // A rounded top on a square base: a rounded rect, then a square patch over its bottom corners.
+        // The bar, then a full-height hit area over its whole slot (on top, so it gets the hover).
+        svg += '<g class="bar" data-bar="' + i + '">' + (h ? '<rect x="' + x + '" y="' + y(p.v) + '" width="' + bw + '" height="' + h + '" rx="3"/>' +
+          '<rect x="' + x + '" y="' + (y(0) - Math.min(h, 3)) + '" width="' + bw + '" height="' + Math.min(h, 3) + '"/>' : '') + '</g>' +
+          '<rect class="hit" data-i="' + i + '" x="' + (L + slot * i) + '" y="0" width="' + slot + '" height="' + (H - B) + '" fill="transparent"/>';
+      });
+    }
+    svg += '<line class="axis" x1="' + L + '" x2="' + W + '" y1="' + y(0) + '" y2="' + y(0) + '"/>';
+    (points.length > 1 ? [0, points.length - 1] : [0]).forEach(function (i) {
+      svg += '<text x="' + (L + slot * (i + 0.5)) + '" y="' + (H - 4) + '" text-anchor="' + (points.length === 1 ? 'middle' : i ? 'end' : 'start') + '">' + points[i].label + '</text>';
+    });
+    svg += '</svg>';
+    el.insertAdjacentHTML('beforeend', svg + '<div class="tip"></div>');
+    var tip = el.querySelector('.tip'), box = el.querySelector('svg');
+    box.addEventListener('mousemove', function (e) {
+      var hit = e.target.closest('.hit');
+      el.querySelectorAll('.bar.on').forEach(function (b) { b.classList.remove('on'); });
+      if (!hit) { tip.style.display = 'none'; return; }
+      // SVG elements have no offsetLeft, so place the tip from the two boxes' screen positions.
+      var i = +hit.dataset.i, p = points[i], r = box.getBoundingClientRect(), o = el.getBoundingClientRect(), k = r.width / W;
+      var bar = el.querySelector('[data-bar="' + i + '"]');
+      if (bar) bar.classList.add('on');
+      tip.textContent = p.tip;
+      tip.style.left = (r.left - o.left + (L + slot * (i + 0.5)) * k) + 'px';
+      tip.style.top = (r.top - o.top + (y(p.v) - 6) * k) + 'px';
+      tip.style.display = 'block';
+    });
+    box.addEventListener('mouseleave', function () {
+      tip.style.display = 'none';
+      el.querySelectorAll('.bar.on').forEach(function (b) { b.classList.remove('on'); });
+    });
+  }
+
+  function render(s) {
+    window.bookbugStats = s;
+    var a = s.accounts;
+    $('asof').textContent = 'As of ' + new Date(s.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    $('tAccounts').textContent = a.total;
+    $('tAccountsSub').textContent = a.withBooks + ' with a book';
+    $('tActive').textContent = a.saved7;
+    $('tActiveSub').textContent = a.saved1 + ' today, ' + a.saved30 + ' this month';
+    $('tNew').textContent = a.new7;
+    $('tNewSub').textContent = a.new30 + ' this month';
+    $('tBooks').textContent = s.bookTotal;
+    var newBooks = TYPES.reduce(function (n, t) { return n + s.books[t[0]].new7; }, 0);
+    $('tBooksSub').textContent = newBooks + ' new this week · ' + plural(s.shares.total, 'share link', 'share links');
+
+    var weekTip = function (w, n, one, many) { return 'Week of ' + fmtDate(w.start) + ': ' + plural(n, one, many); };
+    chart($('cAccounts'), s.weeks.map(function (w) {
+      return { v: w.newAccounts, label: fmtDate(w.start), tip: weekTip(w, w.newAccounts, 'account', 'accounts') };
+    }));
+    chart($('cBooks'), s.weeks.map(function (w) {
+      return { v: w.newBooks, label: fmtDate(w.start), tip: weekTip(w, w.newBooks, 'book', 'books') };
+    }));
+    chart($('cActive'), (s.history || []).slice(-90).map(function (h) {
+      var t = Date.parse(h.day);
+      return { v: h.saved7, label: fmtDate(t), tip: fmtDate(t) + ': ' + plural(h.saved7, 'account', 'accounts') };
+    }), 'line');
+
+    $('types').innerHTML = TYPES.map(function (t) {
+      var b = s.books[t[0]];
+      var cell = function (n) { return '<td' + (n ? '' : ' class="zero"') + '>' + n + '</td>'; };
+      return '<tr><td><span class="swatch" style="background:var(--t-' + t[0] + ')"></span>' + t[1] + '</td>' +
+        cell(b.total) + cell(b.new7) + cell(b.edited7) + '</tr>';
+    }).join('');
+    $('msg').hidden = true;
+    $('stats').hidden = false;
+  }
+  window.renderStats = render;
+
+  (function load() {
+    var token = '';
+    try { token = localStorage.getItem(CLOUD_AUTH_KEY) || ''; } catch (e) {}
+    var signIn = 'Open <a href="./">Bookbug</a> and sign in, then come back here.';
+    if (!token) { showMessage(signIn); return; }
+    fetch(CLOUD_API_URL + '?stats', { headers: { Authorization: 'Bearer ' + token } })
+      .then(function (res) {
+        if (res.status === 401) throw new Error('signin');
+        if (res.status === 403) throw new Error('forbidden');
+        if (!res.ok) throw new Error('http');
+        return res.json();
+      })
+      .then(render)
+      .catch(function (e) {
+        window.bookbugStats = { error: e.message };
+        showMessage(e.message === 'signin' ? 'Your Bookbug sign-in has lapsed. ' + signIn
+          : e.message === 'forbidden' ? 'This account can’t see Bookbug’s stats.'
+          : 'Couldn’t load the stats. Try again in a minute.');
+      });
+  })();
+</script>
+</body>
+</html>

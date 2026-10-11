@@ -88,3 +88,23 @@ replaces the list (at most 380 KB; the page keeps lists under 360 KB by
 dropping the oldest automatic snapshots). Each list is one item in the
 images table, `imageId` = `snaps:<bookId>.<entryId>`, under the writer's
 `userId` -- the role's existing GetItem/PutItem on that table covers it.
+
+## Usage stats
+
+`GET ?stats` (signed in) returns counts for `bookbug/stats.html` and the
+weekly roundup email: accounts (total, new and saved in the last 1/7/30
+days), books by type (total, new this week, worked on this week), share
+links, new accounts and books per week for 12 weeks, and a daily history.
+Counts only, never titles, text, names or emails, and the asker's own
+account is left out.
+
+- Only accounts whose email is in `STATS_EMAILS` (an environment variable,
+  comma-separated) may ask; everyone else gets 403.
+- It scans the main table, so the Lambda's role needs `dynamodb:Scan` on
+  `ChapbookBuilderUsers`.
+- Each account gets a `createdAt` on its first save from now on; older
+  accounts are dated by their oldest book (a book's id holds the time it
+  was made).
+- The first stats call each day appends a snapshot to the item
+  `stats#history` (how many accounts had saved in the past 7 days, etc.),
+  since that can't be worked out afterwards.

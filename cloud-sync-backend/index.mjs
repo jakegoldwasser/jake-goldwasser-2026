@@ -1,4 +1,4 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
@@ -186,10 +186,11 @@ async function getStoredState(userId) {
     TableName: TABLE_NAME,
     Key: { userId: { S: userId } }
   }));
-  if (!result.Item) return { state: {}, updatedAt: 0, exists: false };
+  if (!result.Item) return { state: {}, updatedAt: 0, createdAt: 0, exists: false };
   return {
     state: migrateLegacyState(JSON.parse(result.Item.state.S)),
     updatedAt: Number(result.Item.updatedAt?.N || 0),
+    createdAt: Number(result.Item.createdAt?.N || 0),
     exists: true
   };
 }
@@ -450,6 +451,132 @@ async function putShare(userId, payload) {
   return respond(200, { token });
 }
 
+// ---- Usage stats ----
+// GET ?stats returns counts only -- how many accounts, how many saved
+// lately, books by type, share links -- for bookbug/stats.html and the
+// weekly roundup email. Never titles, text, names or emails. Only the
+// accounts listed in STATS_EMAILS (comma-separated) may ask, and the
+// asker's own account is left out of the counts. Needs dynamodb:Scan on
+// the main table.
+const STATS_EMAILS = (process.env.STATS_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+const HISTORY_KEY = { userId: { S: 'stats#history' } };
+const DAY = 24 * 3600 * 1000;
+const WEEKS_SHOWN = 12;
+const TEXT_FORM_KEYS = new Set(['collection', 'novel', 'essays', 'screenplay', 'play']);
+const BOOK_TYPES = ['collection', 'novel', 'essays', 'screenplay', 'play', 'picture', 'cartoon'];
+
+// Every book id is a prefix, Date.now() in base 36 (8 digits until 2059)
+// and 5 random digits, so a book's id says when it was made. Anything
+// that doesn't decode to a sane date is ignored.
+function idTime(id) {
+  if (typeof id !== 'string' || id.length < 14) return 0;
+  const t = parseInt(id.slice(-13, -5), 36);
+  return t > Date.UTC(2024, 0, 1) && t < Date.now() + DAY ? t : 0;
+}
+
+// Weeks start on Monday, UTC.
+function weekStart(t) {
+  const d = new Date(t);
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime() - ((d.getUTCDay() + 6) % 7) * DAY;
+}
+
+async function scanAll() {
+  const items = [];
+  let ExclusiveStartKey;
+  do {
+    const page = await ddb.send(new ScanCommand({ TableName: TABLE_NAME, ExclusiveStartKey }));
+    items.push(...(page.Items || []));
+    ExclusiveStartKey = page.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return items;
+}
+
+export function computeStats(items, selfId, now = Date.now()) {
+  const ago = days => now - days * DAY;
+  const accounts = { total: 0, withBooks: 0, new7: 0, new30: 0, saved1: 0, saved7: 0, saved30: 0 };
+  const books = {};
+  BOOK_TYPES.forEach(k => { books[k] = { total: 0, new7: 0, edited7: 0 }; });
+  const shares = { total: 0, new7: 0 };
+  const thisWeek = weekStart(now);
+  const weeks = [];
+  for (let i = WEEKS_SHOWN - 1; i >= 0; i--) weeks.push({ start: thisWeek - i * 7 * DAY, newAccounts: 0, newBooks: 0 });
+  const weekOf = t => weeks.find(w => t >= w.start && t < w.start + 7 * DAY);
+
+  items.forEach(item => {
+    const key = item.userId.S;
+    if (key.startsWith('stats#')) return;
+    if (key.startsWith('share#')) {
+      let link = {};
+      try { link = JSON.parse(item.state.S); } catch (e) {}
+      if (link.revoked || link.owner === selfId) return;
+      shares.total++;
+      if (link.createdAt > ago(7)) shares.new7++;
+      return;
+    }
+    if (key === selfId) return;
+    let state = {};
+    try { state = migrateLegacyState(JSON.parse(item.state.S)); } catch (e) {}
+    const bb = state.chapbookbuilder || {};
+    const saved = Number(item.updatedAt?.N || 0);
+    accounts.total++;
+    if (saved > ago(1)) accounts.saved1++;
+    if (saved > ago(7)) accounts.saved7++;
+    if (saved > ago(30)) accounts.saved30++;
+
+    // An account dates from its first save, or (from before that was
+    // recorded) its oldest book, kept, archived or deleted.
+    let first = Number(item.createdAt?.N || 0);
+    let live = 0;
+    const tally = (list, typeOf) => (list || []).forEach(b => {
+      if (!b || !b.id) return;
+      const made = idTime(b.id);
+      if (made && (!first || made < first)) first = made;
+      if (b.archived) return;
+      const type = books[typeOf(b)];
+      if (!type) return;
+      live++;
+      type.total++;
+      if (made > ago(7)) type.new7++;
+      if (Number(b.updatedAt) > ago(7)) type.edited7++;
+      const w = made && weekOf(made);
+      if (w) w.newBooks++;
+    });
+    tally(bb.chapbooks, b => (b.data && b.data.form && TEXT_FORM_KEYS.has(b.data.form)) ? b.data.form : 'collection');
+    tally(bb.pictureBooks, () => 'picture');
+    tally(bb.cartoonBooks, () => 'cartoon');
+    [bb.trash, bb.pictureBookTrash, bb.cartoonBookTrash].forEach(list => (list || []).forEach(b => {
+      const made = b && idTime(b.id);
+      if (made && (!first || made < first)) first = made;
+    }));
+    if (live) accounts.withBooks++;
+    if (first > ago(7)) accounts.new7++;
+    if (first > ago(30)) accounts.new30++;
+    const w = first && weekOf(first);
+    if (w) w.newAccounts++;
+  });
+  const bookTotal = BOOK_TYPES.reduce((n, k) => n + books[k].total, 0);
+  return { at: now, accounts, books, bookTotal, shares, weeks };
+}
+
+// Saved books can't say how many people were active in a past week (only
+// when each account last saved), so each day's first stats call keeps a
+// snapshot, and the page draws those as they pile up.
+async function usageStats(selfId) {
+  const items = await scanAll();
+  const stats = computeStats(items, selfId);
+  const stored = items.find(i => i.userId.S === HISTORY_KEY.userId.S);
+  let history = [];
+  try { history = stored ? JSON.parse(stored.state.S) : []; } catch (e) {}
+  const day = new Date(stats.at).toISOString().slice(0, 10);
+  if (!history.length || history[history.length - 1].day !== day) {
+    history.push({ day, accounts: stats.accounts.total, saved7: stats.accounts.saved7, books: stats.bookTotal });
+    history = history.slice(-400);
+    await ddb.send(new PutItemCommand({ TableName: TABLE_NAME, Item: { ...HISTORY_KEY, state: { S: JSON.stringify(history) } } }));
+  }
+  return { ...stats, history };
+}
+
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
   const path = event.rawPath || '/';
@@ -467,6 +594,11 @@ export const handler = async (event) => {
   if (!info) return respond(401, { error: 'Invalid or expired token' });
 
   const userId = info.sub;
+
+  if (method === 'GET' && event.queryStringParameters?.stats !== undefined) {
+    if (!STATS_EMAILS.includes(String(info.email || '').toLowerCase())) return respond(403, { error: 'Not allowed' });
+    return respond(200, await usageStats(userId));
+  }
 
   // GET ?drivefile=<id>: one file from a public Drive folder (see
   // listDriveFolder), as { contentType, name, data (base64 PDF) | text }.
@@ -596,16 +728,21 @@ export const handler = async (event) => {
     // Read, merge, write -- only if nobody else wrote in between (two
     // devices saving at once); on a clash, read again and redo the merge.
     for (let attempt = 0; attempt < 4; attempt++) {
-      const { state, updatedAt, exists } = await getStoredState(userId);
+      const { state, updatedAt, createdAt, exists } = await getStoredState(userId);
       state[app] = app === 'chapbookbuilder' ? mergeBookbugSave(state[app], payload.data) : payload.data;
       const now = Math.max(Date.now(), updatedAt + 1);
+      // createdAt (for usage stats) is stamped on an account's first save and
+      // carried forward, since PutItem replaces the whole item. Accounts from
+      // before it existed don't get one; stats date them by their books.
+      const created = createdAt || (exists ? 0 : now);
       try {
         await ddb.send(new PutItemCommand({
           TableName: TABLE_NAME,
           Item: {
             userId: { S: userId },
             state: { S: JSON.stringify(state) },
-            updatedAt: { N: String(now) }
+            updatedAt: { N: String(now) },
+            ...(created ? { createdAt: { N: String(created) } } : {})
           },
           ...(updatedAt
             ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
