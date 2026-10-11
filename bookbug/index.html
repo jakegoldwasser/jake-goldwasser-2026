@@ -2351,6 +2351,11 @@
     cursor: pointer; overflow: hidden;
   }
   .cb-art img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  /* With a drawing in it, the box takes the drawing's own shape rather than
+     a fixed 4:3, so a wide or tall drawing doesn't sit in bands of empty
+     white. Very tall ones are held to most of the screen's height. */
+  .cb-art.has-img { aspect-ratio: auto; }
+  .cb-art.has-img img { width: auto; max-width: 100%; height: auto; max-height: 70vh; }
   .cb-art.is-empty { border-style: dashed; color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px; }
   .cb-art.is-drop { outline: 3px solid var(--accent); }
   .cb-art.is-missing { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 12px 24px; }
@@ -19727,7 +19732,7 @@
     art.title = c.img ? 'Click to frame the drawing: move it, or zoom out to take in more of the page' : 'Add a drawing';
     if (c.img) {
       var el = pbImgEls[c.img];
-      if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; art.appendChild(im); }
+      if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; art.appendChild(im); art.classList.add('has-img'); }
       else if (pbImgMissing[c.img]) { art.textContent = cbMissingText; art.classList.add('is-missing'); }
       else { art.textContent = 'Loading drawing…'; pbLoadImage(c.img); }
     } else art.textContent = 'Click or drop a drawing here';
@@ -21344,6 +21349,7 @@
       if (pbImgEls[id]) { var im = document.createElement('img'); im.src = pbImgEls[id].src; im.alt = ''; art.appendChild(im); }
       else art.textContent = cbMissingText;
       art.classList.toggle('is-missing', !pbImgEls[id]);
+      art.classList.toggle('has-img', !!pbImgEls[id]);
     });
     renderCbPreview();
   }
