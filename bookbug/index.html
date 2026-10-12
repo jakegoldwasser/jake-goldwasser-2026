@@ -2486,7 +2486,10 @@
   .cm-kind-seg button svg { width: 18px; height: 18px; overflow: visible; }
 
   /* The page itself on a dark mat, at the size it fits. */
-  .cm-stage { background: #2E2A26; border-radius: 8px; padding: 22px 14px; display: flex; justify-content: center; }
+  .cm-stage { background: #2E2A26; border-radius: 8px; padding: 10px; display: flex; justify-content: center; }
+  /* Fixed width, so the zoom buttons don't shift as the number changes. */
+  .cm-zoom-label { width: 42px; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .cm-tool-sep { width: 1px; height: 22px; background: var(--line-strong); margin: 0 6px; }
   .cm-page-wrap { position: relative; line-height: 0; }
   .cm-page-wrap svg { display: block; background: #FFFFFF; touch-action: none; user-select: none; -webkit-user-select: none; }
   .cm-page-wrap.can-pan svg { touch-action: pan-x pan-y pinch-zoom; }
@@ -2531,7 +2534,7 @@
 
   @media (max-width: 700px) {
     #cmPagePanel { margin: 0 -12px; padding: 12px 8px; border-left: none; border-right: none; border-radius: 0; }
-    .cm-stage { padding: 12px 6px; border-radius: 0; }
+    .cm-stage { padding: 6px; border-radius: 0; }
     .cm-tool-label { display: none; }
     .cm-toolbar { gap: 4px 8px; }
     .cm-tool-undo { margin-left: 0; }
@@ -3154,6 +3157,10 @@
               <button type="button" class="cm-tool" data-tool="b-sfx" title="Sound effect lettering"><svg viewBox="0 0 20 20" aria-hidden="true"><text x="10" y="14.5" text-anchor="middle" font-family="Bangers, Impact, sans-serif" font-size="11" fill="currentColor" letter-spacing=".5">POW</text></svg></button>
             </div>
             <div class="cm-tool-group cm-tool-undo">
+              <button type="button" class="cm-tool" id="cmZoomOut" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 8.5h5M12.6 12.6 17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <span class="cm-zoom-label" id="cmZoomLabel">100%</span>
+              <button type="button" class="cm-tool" id="cmZoomIn" title="Zoom in (up to the full width)" aria-label="Zoom in"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 8.5h5M8.5 6v5M12.6 12.6 17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <span class="cm-tool-sep" aria-hidden="true"></span>
               <button type="button" class="cm-tool" id="cmUndoBtn" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 5 3 9l4 4M3.5 9H12a5 5 0 0 1 0 10h-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -2)"/></svg></button>
               <button type="button" class="cm-tool" id="cmRedoBtn" title="Redo (⇧⌘Z)" aria-label="Redo"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13 5l4 4-4 4M16.5 9H8a5 5 0 0 0 0 10h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -2)"/></svg></button>
             </div>
@@ -22623,11 +22630,32 @@
     var list = cmSel.type === 'panel' ? pg.panels : pg.balloons;
     return list.filter(function (x) { return x.id === cmSel.id; })[0] || null;
   }
+  // The page fills the stage's width (scrolling down it if it's tall),
+  // smaller only when zoomed out. Zoom is remembered on this device.
+  var CM_ZOOMS = [0.3, 0.4, 0.5, 0.65, 0.8, 1];
+  var cmZoom = 1;
+  try { cmZoom = +localStorage.getItem('bookbug.cmZoom.v1') || 1; } catch (e) {}
+  if (CM_ZOOMS.indexOf(cmZoom) === -1) cmZoom = 1;
   function cmFitScale(F) {
-    var stage = cmFmt('cmStage'), avail = Math.max(200, stage.clientWidth - 28);
-    var maxH = Math.max(420, window.innerHeight - 150);
-    return Math.min(avail / F.PW, maxH / F.PH, 2.4);
+    var stage = cmFmt('cmStage'), cs = getComputedStyle(stage);
+    var avail = Math.max(200, stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    return avail / F.PW * cmZoom;
   }
+  function cmSetZoom(d) {
+    var i = CM_ZOOMS.indexOf(cmZoom) + d;
+    if (i < 0 || i >= CM_ZOOMS.length) return;
+    cmZoom = CM_ZOOMS[i];
+    try { localStorage.setItem('bookbug.cmZoom.v1', String(cmZoom)); } catch (e) {}
+    cmCloseWords();
+    cmRenderPage();
+  }
+  function cmSyncZoom() {
+    cmFmt('cmZoomLabel').textContent = Math.round(cmZoom * 100) + '%';
+    cmFmt('cmZoomOut').disabled = cmZoom <= CM_ZOOMS[0];
+    cmFmt('cmZoomIn').disabled = cmZoom >= 1;
+  }
+  cmFmt('cmZoomOut').addEventListener('click', function () { cmSetZoom(-1); });
+  cmFmt('cmZoomIn').addEventListener('click', function () { cmSetZoom(1); });
   function cmRenderPage() {
     var pg = cmPage(), d = cmState, F = cmFrame(d);
     cmScale = cmFitScale(F);
@@ -22670,6 +22698,7 @@
     cmPageWrap.classList.toggle('tool-draw', cmTool !== 'select');
     cmPageWrap.classList.toggle('is-framing', !!cmFraming);
     cmRenderHandles();
+    cmSyncZoom();
     cmFmt('cmPageLabel').textContent = 'Page ' + (cmCur + 1) + ' of ' + cmState.pages.length;
     cmFmt('cmPrevPage').disabled = cmCur <= 0;
     cmFmt('cmNextPage').disabled = cmCur >= cmState.pages.length - 1;
