@@ -1926,6 +1926,18 @@
   .pb-tb-text:empty::before { content: attr(data-placeholder); color: #A5B0B8; font-style: italic; }
   .pb-stage:not(.is-printing) .pb-tb:hover::before { outline: 1px dashed #A5B7C4; }
   .pb-tb.is-selected::before, .pb-sel { outline: 1.5px solid var(--accent); }
+  /* Words on a path: the SVG may spill past its box (letters on a tight
+     bend); the path itself shows as a thin dashed line only while you work
+     on it, and never prints. */
+  .pb-path-svg { display: block; overflow: visible; }
+  .pb-path-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; opacity: 0; }
+  .pb-tb.is-selected .pb-path-line, .pb-tb:hover .pb-path-line, .pb-path-svg.is-empty .pb-path-line { opacity: .7; }
+  .pb-stage.is-printing .pb-path-line { opacity: 0; }
+  .pb-tb.is-path .pb-tb-text { white-space: normal; }
+  /* Drawing a path for words: the stroke follows the pointer. */
+  .pb-draw { position: absolute; inset: 0; z-index: 20; cursor: crosshair; touch-action: none; }
+  .pb-draw svg { width: 100%; height: 100%; display: block; }
+  .pb-draw polyline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
   .pb-sel { position: absolute; z-index: 6; pointer-events: none; transform-origin: 50% 50%; }
   .pb-h {
     position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #FFFFFF; border: 2px solid var(--accent);
@@ -4793,7 +4805,15 @@
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       rel: typeof it.rel === 'number' ? it.rel : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null,
-      copyright: !!it.copyright || undefined };
+      copyright: !!it.copyright || undefined, path: pbNormPath(it.path) };
+  }
+  // A text box's path (see pbPathLayout): points in pt from the box's
+  // corner, and whether it closes into a shape.
+  function pbNormPath(p) {
+    if (!p || !Array.isArray(p.pts)) return null;
+    var pts = p.pts.slice(0, 600).filter(function (q) { return Array.isArray(q) && isFinite(q[0]) && isFinite(q[1]); })
+      .map(function (q) { return [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10]; });
+    return pts.length >= 2 ? { pts: pts, closed: !!p.closed } : null;
   }
   function pbNormalizeSpread(sp) {
     sp = sp || {};
@@ -16326,6 +16346,7 @@
     var sp = pbState.spreads[s];
     var key = [pbItemText(it), it.x, it.y, it.w, it.rot, it.align, pbFontSize(it), pbLh(it), pbFontKey(it), it.bold, it.italic,
       pbState.trim, pbState.margin, pbState.gutter, pbState.snapOuter, sp && sp.left.role, sp && sp.right.role].join('|');
+    if (it.type === 'text' && it.path) return pbPathGeom(it);
     var hit = pbGeomCache.get(it);
     if (hit && hit.key === key) return hit.g;
     var g = { x: it.x, y: it.y, w: it.w, rot: it.rot, align: it.align, size: it.type === 'text' ? pbFontSize(it) : 0, h: 0, shrunk: false };
@@ -16520,6 +16541,217 @@
       }).join('');
     }).join('\n');
   }
+  // ---- Text on a path ----
+  // A text box can follow a path (`path`: points in pt from the box's
+  // corner it.x, it.y, and whether it closes into a shape): its words run
+  // along it on one line, letter by letter, each turned to the path's
+  // slope, at its start, middle or end by the box's alignment. Words longer
+  // than the path are set smaller, just enough to fit. This one layout
+  // feeds the editor (SVG), the preview and PDFs (canvas) and PowerPoint
+  // (baked into the slide's art), so they all match.
+  function pbSpreadPt() { var t = pbTrim(pbState.trim); return { W: 2 * t.pageW * 72, H: t.pageH * 72 }; }
+  function pbPathBox(pts) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    pts.forEach(function (q) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); });
+    return { x0: x0, y0: y0, x1: x1, y1: y1, w: x1 - x0, h: y1 - y0 };
+  }
+  // The point `d` pt along a polyline (past either end, straight on).
+  function pbPathWalker(pts, closed) {
+    var P = closed ? pts.concat([pts[0]]) : pts, cum = [0];
+    for (var i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+    var L = cum[cum.length - 1];
+    function at(d) {
+      if (closed && L) d = ((d % L) + L) % L;
+      var k = 1;
+      while (k < P.length - 1 && cum[k] < d) k++;
+      var a = P[k - 1], b = P[k], seg = cum[k] - cum[k - 1] || 1, f = (d - cum[k - 1]) / seg;
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    }
+    return { L: L, at: at };
+  }
+  var pbPathCache = new WeakMap();
+  function pbPathLayout(it) {
+    var text = pbItemText(it).replace(/\s*\n\s*/g, ' ');
+    var key = [text, pbFontSize(it), pbFontKey(it), it.bold, it.italic, it.align].join('|');
+    var hit = pbPathCache.get(it.path);
+    if (hit && hit.key === key) return hit.v;
+    var chars = [];
+    parseInlineRuns(text).forEach(function (run) {
+      Array.from(run.text || '').forEach(function (ch) { chars.push({ ch: ch, b: !!run.bold, i: !!run.italic }); });
+    });
+    var walk = pbPathWalker(it.path.pts, it.path.closed), ctx = pbMeasureCtx2, full = pbFontSize(it), size = full;
+    function measure(sz) {
+      var sum = 0;
+      chars.forEach(function (c) { ctx.font = pbRunFont(it, sz, c.b, c.i); c.w = ctx.measureText(c.ch).width; sum += c.w; });
+      return sum;
+    }
+    var A = measure(size);
+    if (A > walk.L && walk.L > 0) { size = Math.max(6, Math.floor(size * walk.L / A * 2) / 2); A = measure(size); }
+    var d = it.align === 'left' ? 0 : it.align === 'right' ? walk.L - A : (walk.L - A) / 2, glyphs = [];
+    chars.forEach(function (c) {
+      // Each letter sits on the chord under it: its left end on the path,
+      // turned to where its right end meets the path again.
+      var p0 = walk.at(d), p1 = walk.at(d + Math.max(c.w, 0.01));
+      glyphs.push({ ch: c.ch, b: c.b, i: c.i, x: p0[0], y: p0[1], a: Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) });
+      d += c.w;
+    });
+    var v = { glyphs: glyphs, size: size, shrunk: size < full, box: pbPathBox(it.path.pts), L: walk.L };
+    pbPathCache.set(it.path, { key: key, v: v });
+    return v;
+  }
+  // The box round a path's words, as pbGeom gives it: the path's bounds
+  // with room for the letters each side.
+  function pbPathGeom(it) {
+    var L = pbPathLayout(it), P = pbSpreadPt(), pad = L.size * 1.2, b = L.box;
+    return { x: it.x + (b.x0 - pad) / P.W, y: it.y + (b.y0 - pad) / P.H, w: (b.w + 2 * pad) / P.W, h: (b.h + 2 * pad) / P.H,
+      rot: it.rot, align: it.align, size: L.size, shrunk: L.shrunk, path: true, pad: pad };
+  }
+  // On a spread: an SVG in pt, the path itself drawn faintly (shown while
+  // selected, hovered, or before there are words).
+  function pbPathSvg(it, g) {
+    var L = pbPathLayout(it), b = L.box, pad = g.pad, pts = it.path.pts;
+    var dPath = 'M' + pts.map(function (q) { return q[0] + ' ' + q[1]; }).join(' L') + (it.path.closed ? ' Z' : '');
+    var color = pbColor(it.color);
+    return '<svg class="pb-path-svg' + (L.glyphs.length ? '' : ' is-empty') + '" viewBox="' + [b.x0 - pad, b.y0 - pad, b.w + 2 * pad, b.h + 2 * pad].join(' ') +
+      '" width="100%" aria-hidden="true"><path class="pb-path-line" d="' + dPath + '"/>' +
+      L.glyphs.map(function (gl) {
+        return '<text transform="translate(' + gl.x.toFixed(2) + ' ' + gl.y.toFixed(2) + ') rotate(' + (gl.a * 180 / Math.PI).toFixed(2) + ')" style="font:' +
+          escapeHtml(pbRunFont(it, L.size, gl.b, gl.i)) + '" fill="' + color + '">' + escapeHtml(gl.ch === ' ' ? '\u00A0' : gl.ch) + '</text>';
+      }).join('') + '</svg>';
+  }
+  function pbDrawPathText(ctx, it, s, W) {
+    var L = pbPathLayout(it), P = pbSpreadPt(), k = W / P.W, H = P.H * k, g = pbPathGeom(it);
+    var cx = (g.x + g.w / 2) * W, cy = (g.y + g.h / 2) * H;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(it.rot * Math.PI / 180); ctx.translate(-cx, -cy);
+    ctx.translate(it.x * W, it.y * H); ctx.scale(k, k);
+    ctx.fillStyle = pbColor(it.color);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    L.glyphs.forEach(function (gl) {
+      ctx.save(); ctx.translate(gl.x, gl.y); ctx.rotate(gl.a);
+      ctx.font = pbRunFont(it, L.size, gl.b, gl.i);
+      ctx.fillText(gl.ch, 0, 0);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+  // Gives a text box a path drawn in pt across the spread (`abs`), or takes
+  // it away (null: back to a plain box where the words were).
+  function pbSetPath(s, it, abs, closed) {
+    var P = pbSpreadPt();
+    pbCheckpoint();
+    if (!abs) {
+      var g = pbPathGeom(it), w = Math.max(0.15, Math.min(0.45, g.w));
+      it.x = g.x + g.w / 2 - w / 2; it.w = w; it.y = g.y + g.h / 2 - 0.03; it.path = null;
+    } else {
+      var b = pbPathBox(abs);
+      it.path = { pts: abs.map(function (q) { return [Math.round((q[0] - b.x0) * 10) / 10, Math.round((q[1] - b.y0) * 10) / 10]; }), closed: !!closed };
+      it.x = b.x0 / P.W; it.y = b.y0 / P.H; it.w = Math.max(0.02, b.w / P.W); it.rot = 0;
+    }
+    pbPersist();
+    pbSel = null;
+    pbSelect({ s: s, id: it.id });
+    pbRenderQuickbar();
+  }
+  // The ready-made paths, sized to the words and centered where the box is.
+  function pbPresetPath(kind, it, s) {
+    var P = pbSpreadPt(), g = pbGeom(it, s), cx = (g.x + g.w / 2) * P.W, cy = (g.y + g.h / 2) * P.H;
+    var ctx = pbMeasureCtx2, size = pbFontSize(it);
+    ctx.font = pbRunFont(it, size, false, false);
+    var A = ctx.measureText(stripFormatMarkers(pbItemText(it)).replace(/\s*\n\s*/g, ' ') || 'Words go here').width;
+    var page = P.W / 2 * 0.9, pts = [], i, N;
+    if (kind === 'circle') {
+      // Starting at the bottom and going round clockwise, so centered words
+      // sit over the top, upright.
+      var r = Math.min(P.H * 0.4, Math.max(30, A * 1.25 / (2 * Math.PI)));
+      for (i = 0, N = 72; i < N; i++) { var t = Math.PI / 2 + 2 * Math.PI * i / N; pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); }
+      return { pts: pts, closed: true };
+    }
+    var c = Math.min(page, Math.max(g.w * P.W, kind === 'arc' ? A / 1.1 : A * 1.05));
+    if (kind === 'arc') {
+      // A rainbow: a circle's arc rising a quarter of its width.
+      var sag = c * 0.25, R = (c * c / 4 + sag * sag) / (2 * sag), oy = cy - sag / 2 + R;
+      var t0 = Math.atan2(cy + sag / 2 - oy, -c / 2), t1 = Math.atan2(cy + sag / 2 - oy, c / 2);
+      for (i = 0, N = 48; i <= N; i++) { var a = t0 + (t1 - t0) * i / N; pts.push([cx + R * Math.cos(a), oy + R * Math.sin(a)]); }
+    } else {
+      for (i = 0, N = 64; i <= N; i++) { var u = i / N; pts.push([cx - c / 2 + c * u, cy + c * 0.08 * Math.sin(2 * Math.PI * 1.25 * u)]); }
+    }
+    return { pts: pts, closed: false };
+  }
+  // Draw your own: a stroke across the spread becomes the path. Nearly
+  // straight comes out straight (a line); ending back where it began closes
+  // it into a shape. Smoothed a little, so a hand's wobble doesn't jolt the
+  // letters. With no text box (`it` null) a new one is made on it.
+  function pbStartPathDraw(s, it) {
+    if (pbViewMode !== 'spreads') return;
+    var stage = pbStageEl(s);
+    if (!stage) return;
+    var P = pbSpreadPt();
+    pbSelect(null);
+    var layer = document.createElement('div');
+    layer.className = 'pb-draw';
+    layer.innerHTML = '<svg viewBox="0 0 ' + P.W + ' ' + P.H + '" preserveAspectRatio="none"><polyline/></svg>';
+    stage.appendChild(layer);
+    var line = layer.querySelector('polyline'), pts = [];
+    showToast('Draw the line for the words to follow. Esc cancels.');
+    function done() { layer.remove(); window.removeEventListener('keydown', esc, true); }
+    function esc(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(); } }
+    window.addEventListener('keydown', esc, true);
+    function at(e) { var r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * P.W, (e.clientY - r.top) / r.height * P.H]; }
+    layer.addEventListener('pointerdown', function (e) {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation();
+      try { layer.setPointerCapture(e.pointerId); } catch (err) {}
+      pts = [at(e)];
+      function move(ev) {
+        var q = at(ev), last = pts[pts.length - 1];
+        if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 2) return;
+        pts.push(q);
+        line.setAttribute('points', pts.map(function (p) { return p.join(','); }).join(' '));
+      }
+      function up(ev) {
+        layer.removeEventListener('pointermove', move); layer.removeEventListener('pointerup', up); layer.removeEventListener('pointercancel', up);
+        done();
+        if (ev.type !== 'pointerup') return;
+        var shaped = pbShapeStroke(pts);
+        if (!shaped) return;
+        if (!it) {
+          pbCheckpoint();
+          it = pbNormalizeItem({ id: pbUid('t'), type: 'text', text: '', align: 'center' });
+          pbState.spreads[s].items.push(it);
+        }
+        pbSetPath(s, it, shaped.pts, shaped.closed);
+        if (!pbItemText(it).trim()) pbOpenPopup(s, it.id);
+      }
+      layer.addEventListener('pointermove', move); layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
+    });
+  }
+  function pbShapeStroke(pts) {
+    if (pts.length < 2) return null;
+    var len = 0, i;
+    for (i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (len < 24) return null;
+    var a = pts[0], b = pts[pts.length - 1], chord = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (chord > 0) {
+      var dev = 0;
+      pts.forEach(function (p) { dev = Math.max(dev, Math.abs((b[0] - a[0]) * (a[1] - p[1]) - (a[0] - p[0]) * (b[1] - a[1])) / chord); });
+      if (dev < chord * 0.06) return { pts: [a, b], closed: false };
+    }
+    var closed = len > 90 && chord < Math.max(14, len * 0.08);
+    if (closed) while (pts.length > 3 && Math.hypot(pts[pts.length - 1][0] - a[0], pts[pts.length - 1][1] - a[1]) < len * 0.03) pts.pop();
+    // Two rounds of corner cutting (Chaikin), ends kept on an open line.
+    for (var round = 0; round < 2; round++) {
+      var out = closed ? [] : [pts[0]], n = pts.length;
+      for (i = 0; i < (closed ? n : n - 1); i++) {
+        var p = pts[i], q = pts[(i + 1) % n];
+        out.push([0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]], [0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1]]);
+      }
+      if (!closed) out.push(pts[n - 1]);
+      pts = out;
+    }
+    while (pts.length > 400) pts = pts.filter(function (p, k) { return k % 2 === 0 || k === pts.length - 1; });
+    return { pts: pts, closed: closed };
+  }
   function pbImgRect(it, W, H, el) {
     var iw = el.naturalWidth || el.width, ih = el.naturalHeight || el.height;
     var ax = it.area === 'right' ? W / 2 : 0, aw = it.area === 'spread' ? W : W / 2;
@@ -16572,9 +16804,10 @@
         }
         ctx.restore();
       } else {
-        if (opts.text === false) return;
+        if (opts.text === false && !(opts.pathText && it.path)) return;
         var text = pbItemText(it);
         if (!text.trim()) return;
+        if (it.path) { pbDrawPathText(ctx, it, s, W); return; }
         var g = pbGeom(it, s);
         var px = g.size * k, lineH = px * pbLh(it), bw = g.w * W;
         ctx.save();
@@ -17219,7 +17452,7 @@
     var from = pbState.spreads[fromS].items;
     from.splice(from.indexOf(it), 1);
     var mine = pbPageTexts(toS, side);
-    var w = pbStraddles(it) ? pbStoryW(side) : Math.min(it.w, pbStoryW(side));
+    var w = it.path ? it.w : pbStraddles(it) ? pbStoryW(side) : Math.min(it.w, pbStoryW(side));
     Object.assign(it, { x: pbCenterX(side, w), w: w, y: PB_BOTTOM, rot: 0 });
     pbState.spreads[toS].items.push(it);
     pbMakeRoomBelow(toS, mine, pbGeom(it, toS).h || 2 * pbLineFrac(it));
@@ -17793,8 +18026,9 @@
     var ed = document.createElement('div');
     ed.className = 'pb-tb-text';
     ed.dataset.placeholder = it.bind === 'title' ? 'Book title' : it.bind === 'author' ? 'Author name' : it.bind === 'byline' ? 'by Author name' : 'Type here';
-    ed.innerHTML = pbSetLines(it, g);
+    ed.innerHTML = it.path ? pbPathSvg(it, g) : pbSetLines(it, g);
     pbStyleText(ed, it, g);
+    if (it.path) { ed.style.background = ''; ed.style.boxShadow = ''; box.classList.add('is-path'); }
     box.appendChild(ed);
     box.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || e.target.closest('.pb-h')) return;
@@ -18093,8 +18327,8 @@
       });
       box.appendChild(h);
     }
-    widthHandle('pb-h-w', false);
-    widthHandle('pb-h-wl', true);
+    // A path's width is the path's own.
+    if (!it.path) { widthHandle('pb-h-w', false); widthHandle('pb-h-wl', true); }
     var rot = document.createElement('div');
     rot.className = 'pb-h pb-h-rot';
     rot.title = 'Drag to turn · Shift snaps to 15°';
@@ -18605,6 +18839,22 @@
           });
           return placeBtn;
         })(),
+        (function () {
+          var curveBtn = pbQb('Curve ▾', 'Set the words on an arc, a wave, a circle or a line you draw', !!it.path, function (e) {
+            e.stopPropagation();
+            pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-curve="arc">Arc</button>' +
+              '<button type="button" role="menuitem" data-curve="wave">Wave</button>' +
+              '<button type="button" role="menuitem" data-curve="circle">Circle</button>' +
+              '<button type="button" role="menuitem" data-curve="draw">Draw a line or shape…</button>' +
+              (it.path ? '<button type="button" role="menuitem" data-curve="flip">Flip to the other side</button>' +
+                '<button type="button" role="menuitem" data-curve="none">Straight again</button>' : '');
+            pbCleanMenu.hidden = false;
+            var r = curveBtn.getBoundingClientRect();
+            pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
+            pbCleanMenu.style.top = (r.bottom + 6) + 'px';
+          });
+          return curveBtn;
+        })(),
         pbQbSep(),
         (function () {
           var pair = pbMergePartner(pbSel.s, it);
@@ -18651,6 +18901,24 @@
   pbCleanMenu.addEventListener('click', function (e) {
     var pl = e.target.closest('[data-place]');
     if (pl) { pbCleanMenu.hidden = true; pbPlaceText(pl.dataset.place); return; }
+    var cv = e.target.closest('[data-curve]');
+    if (cv) {
+      pbCleanMenu.hidden = true;
+      var cit = pbSelected(), cs = pbSel && pbSel.s, P = pbSpreadPt();
+      if (!cit) return;
+      var kind = cv.dataset.curve;
+      if (kind === 'draw') { pbStartPathDraw(cs, cit); return; }
+      if (kind === 'none') { pbSetPath(cs, cit, null); return; }
+      if (kind === 'flip') {
+        // The same line run the other way: the letters cross to its other side.
+        var abs = cit.path.pts.map(function (q) { return [q[0] + cit.x * P.W, q[1] + cit.y * P.H]; }).reverse();
+        pbSetPath(cs, cit, abs, cit.path.closed);
+        return;
+      }
+      var pre = pbPresetPath(kind, cit, cs);
+      pbSetPath(cs, cit, pre.pts, pre.closed);
+      return;
+    }
     var b = e.target.closest('[data-clean]');
     if (!b) return;
     pbCleanMenu.hidden = true;
@@ -18840,6 +19108,7 @@
     pbSpreadMenu.innerHTML =
       (s < n - 1 ? '<button type="button" role="menuitem" data-action="after">Add spread after</button>' : '<button type="button" role="menuitem" data-action="before">Add spread before</button>') +
       (middle ? '<button type="button" role="menuitem" data-action="duplicate">Duplicate</button>' : '') +
+      (pbViewMode === 'spreads' ? '<button type="button" role="menuitem" data-action="pathtext">Draw words on a line or shape…</button>' : '') +
       (pbClip ? '<button type="button" role="menuitem" data-action="paste">Paste ' + (pbClip.item.type === 'image' ? 'the illustration' : 'the text box') + '</button>' : '') +
       '<button type="button" role="menuitem" data-action="clear">Clear the spread</button>' +
       (middle ? '<button type="button" role="menuitem" data-action="archive">Archive</button>' +
@@ -18864,6 +19133,7 @@
     else if (action === 'before') pbInsertSpread(s);
     else if (action === 'delete') pbDeleteSpread(s);
     else if (action === 'paste') pbPasteItem(s);
+    else if (action === 'pathtext') pbStartPathDraw(s, null);
     else if (action === 'duplicate') {
       pbCheckpoint();
       var copy = pbNormalizeSpread(JSON.parse(JSON.stringify(pbState.spreads[s])));
@@ -20048,7 +20318,8 @@
     var id = 3;
     var Wpt = 2 * t.pageW * 72;
     sp.items.forEach(function (it) {
-      if (it.type !== 'text') return;
+      // Words on a path are in the slide's art (PowerPoint can't set them).
+      if (it.type !== 'text' || it.path) return;
       var text = pbItemText(it);
       if (!text.trim()) return;
       var g = pbGeom(it, s), size = g.size, styled = pbHasStyles(pbFontKey(it));
@@ -20148,11 +20419,11 @@
     var W = Math.round(2 * t.pageW * PB_DPI);
     for (var k = 1; k <= n; k++) {
       var sp = spreads[k - 1];
-      var hasArt = sp.items.some(function (it) { return it.type === 'image'; }) || k === 1 || k === n;
+      var hasArt = sp.items.some(function (it) { return it.type === 'image' || (it.path && pbItemText(it).trim()); }) || k === 1 || k === n;
       if (hasArt) {
         var c = document.createElement('canvas');
         c.width = W; c.height = Math.round(pbSpreadH(W));
-        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, nonPages: 'shade' });
+        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, pathText: true, nonPages: 'shade' });
         add('ppt/media/image' + k + '.jpeg', await pbJpeg(c));
       }
       add('ppt/slides/slide' + k + '.xml', pptxSlide(sp, k - 1, SWe, SHe, hasArt));
