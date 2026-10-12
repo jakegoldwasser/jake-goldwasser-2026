@@ -2463,6 +2463,27 @@
   .cm-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
   .cm-tool-group { display: flex; align-items: center; gap: 3px; }
   .cm-tool-undo { margin-left: auto; }
+  /* Layout mode shows the panel tools, Edit mode the balloons and bucket. */
+  #cmToolbar[data-mode="layout"] .cm-only-edit, #cmToolbar[data-mode="edit"] .cm-only-layout { display: none; }
+  .cm-mode-seg { flex: 0 0 auto; border-radius: 999px; }
+  .cm-mode-seg button { flex: 0 0 auto; padding: 6px 14px; font-size: 12.5px; font-weight: 600; }
+  /* In Layout mode balloons are only shown, faintly, so arranging panels
+     can't move them. */
+  .cm-page-wrap.mode-layout .cm-balloon { pointer-events: none; opacity: .4; }
+  .cm-swatch { width: 26px; height: 26px; border-radius: 999px; border: 2px solid var(--line-strong); padding: 0; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+  .cm-swatch:hover { transform: translateY(-2px); }
+  .cm-swatch.is-on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+  /* No fill: white with a red slash, as on a print color chart. */
+  .cm-swatch.is-none { background: linear-gradient(135deg, #FFFFFF 45%, #B3262B 45%, #B3262B 55%, #FFFFFF 55%); }
+  .cm-swatch-custom { width: 30px; height: 30px; padding: 0; border: none; background: none; cursor: pointer; }
+  .cm-layers { display: flex; flex-direction: column; }
+  .cm-layer { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .cm-layer:first-child { border-top: none; }
+  .cm-layer.is-hidden .cm-layer-name { color: var(--ink-faint); text-decoration: line-through; }
+  .cm-layer-eye { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
+  .cm-layer-eye:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .cm-layer-name { flex: 1; }
+  .cm-layer select { font-size: 13px; }
   .cm-tool-label { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-right: 4px; }
   .cm-tool { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink); cursor: pointer; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
   .cm-tool svg { width: 20px; height: 20px; overflow: visible; }
@@ -3136,17 +3157,21 @@
             <button class="btn btn-sm cm-add-page" id="cmAddPageBtn" type="button" title="Add a page after this one">+ Page</button>
           </div>
           <div class="cm-toolbar" id="cmToolbar" role="toolbar" aria-label="Drawing tools">
+            <div class="seg cm-mode-seg" id="cmModeSeg" role="group" aria-label="Mode"><button type="button" data-mode="layout" title="Layout: draw, move, resize and split panels (L)">Layout</button><button type="button" data-mode="edit" title="Edit: art, balloons and color; panels stay put (E)">Edit</button></div>
             <div class="cm-tool-group" aria-label="Select">
               <button type="button" class="cm-tool" data-tool="select" title="Select and move (V)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l10 7-4.5 1.2L13 16l-2 1-2.5-4.8L5 15z" fill="currentColor"/></svg></button>
             </div>
-            <div class="cm-tool-group" aria-label="Panels">
+            <div class="cm-tool-group cm-only-layout" aria-label="Panels">
               <span class="cm-tool-label">Panels</span>
               <button type="button" class="cm-tool" data-tool="p-rect" title="Draw a rectangular panel"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="5" width="14" height="10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
               <button type="button" class="cm-tool" data-tool="p-oval" title="Draw a round panel"><svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="10" rx="7" ry="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
               <button type="button" class="cm-tool" data-tool="p-slant" title="Draw a slanted panel"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 5h11l-3 10H3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
               <button type="button" class="cm-tool" data-tool="p-tri" title="Draw a triangular panel"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15h14L3 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
             </div>
-            <div class="cm-tool-group" aria-label="Balloons">
+            <div class="cm-tool-group cm-only-edit" aria-label="Paint bucket">
+              <button type="button" class="cm-tool" data-tool="fill" title="Paint bucket: fill a panel, a balloon or the page with color"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 9.5 9 4l6 6-5.5 5.5a1.4 1.4 0 0 1-2 0l-4-4a1.4 1.4 0 0 1 0-2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.6 10.4h11.2" stroke="currentColor" stroke-width="1.4"/><path d="M7 2.5 9 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M16.8 12.2s1.6 2 1.6 3a1.6 1.6 0 0 1-3.2 0c0-1 1.6-3 1.6-3z" fill="currentColor"/></svg></button>
+            </div>
+            <div class="cm-tool-group cm-only-edit" aria-label="Balloons">
               <span class="cm-tool-label">Balloons</span>
               <button type="button" class="cm-tool" data-tool="b-speech" title="Speech balloon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3c4.4 0 8 2.5 8 5.6s-3.6 5.6-8 5.6c-.8 0-1.5-.1-2.2-.2L4 17l1.3-3.9C3.2 12 2 10.4 2 8.6 2 5.5 5.6 3 10 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
               <button type="button" class="cm-tool" data-tool="b-thought" title="Thought balloon"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4.5a2.6 2.6 0 0 1 4-1 2.6 2.6 0 0 1 4.2.8 2.6 2.6 0 0 1 2.4 3.6 2.6 2.6 0 0 1-1.5 4 2.6 2.6 0 0 1-4 .9 2.6 2.6 0 0 1-4-.4 2.6 2.6 0 0 1-3.3-2.7A2.6 2.6 0 0 1 3.4 6 2.6 2.6 0 0 1 6 4.5z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="4.6" cy="15.6" r="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="2.6" cy="18" r=".9" fill="currentColor"/></svg></button>
@@ -3205,6 +3230,14 @@
               <label>Templates</label>
               <div class="cm-templates" id="cmTemplates"></div>
             </div>
+          </div>
+        </div>
+        <div class="panel collapsible-panel" id="cmLayersPanel">
+          <button type="button" class="panel-toggle" id="cmLayersToggle" aria-expanded="false" aria-controls="cmLayersBody">
+            <span class="panel-title">Layers</span><span class="panel-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="panel-body" id="cmLayersBody" hidden>
+            <div class="cm-layers" id="cmLayers"></div>
           </div>
         </div>
         <div class="panel collapsible-panel" id="cmFormattingPanel">
@@ -4946,8 +4979,11 @@
     // ox/oy move it, in fractions of the panel's width and height.
     if (p.fit && (p.fit.z > 1 || p.fit.ox || p.fit.oy)) out.fit = { z: cmNum(p.fit.z, 1, 1, 8), ox: cmNum(p.fit.ox, 0, -4, 4), oy: cmNum(p.fit.oy, 0, -4, 4) };
     if (p.bleed) out.bleed = true;
+    // Panels are outlines unless painted (the bucket sets `fill`).
+    if (cmColor(p.fill)) out.fill = cmColor(p.fill);
     return out;
   }
+  function cmColor(c) { return typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : null; }
   function cmNormalizeBalloon(b) {
     b = b || {};
     var out = { id: b.id || pbUid('bl'), kind: CM_BALLOON_KINDS.indexOf(b.kind) !== -1 ? b.kind : 'speech',
@@ -4957,11 +4993,14 @@
     // Sized by hand: the balloon keeps its size as the words change
     // (only growing if they no longer fit) instead of hugging them.
     if (b.sized) out.sized = true;
+    if (cmColor(b.fill)) out.fill = cmColor(b.fill);
     return out;
   }
   function cmNormalizePage(pg) {
     pg = pg || {};
-    return { id: pg.id || pbUid('pg'), panels: (pg.panels || []).map(cmNormalizePanel), balloons: (pg.balloons || []).map(cmNormalizeBalloon) };
+    var out = { id: pg.id || pbUid('pg'), panels: (pg.panels || []).map(cmNormalizePanel), balloons: (pg.balloons || []).map(cmNormalizeBalloon) };
+    if (cmColor(pg.bg)) out.bg = cmColor(pg.bg);
+    return out;
   }
   // The archive holds whole pages and single illustrations taken out of
   // panels; `at` is where a page was, so Restore puts it back there.
@@ -4980,6 +5019,10 @@
       border: cmNum(d.border, 2, 0, 12), radius: cmNum(d.radius, 0, 0, 48),
       letterFont: CM_FONTS.some(function (f) { return f.key === d.letterFont; }) ? d.letterFont : 'comicneue',
       letterSize: cmNum(d.letterSize, 9, 5, 24), caps: d.caps !== false, bold: d.bold !== false, numbers: !!d.numbers,
+      // Which layers show (and print): a hidden one is left off the PDF too.
+      layers: { grid: !!(d.layers && d.layers.grid), balloons: !(d.layers && d.layers.balloons === false),
+        borders: !(d.layers && d.layers.borders === false), art: !(d.layers && d.layers.art === false) },
+      gridStep: [0.125, 0.25, 0.5, 1].indexOf(+d.gridStep) !== -1 ? +d.gridStep : 0.25,
       pages: (Array.isArray(d.pages) && d.pages.length ? d.pages : [{}]).map(cmNormalizePage),
       archived: (d.archived || []).map(cmNormalizeArchived).filter(Boolean),
       deleted: freshDeleted(d.deleted, ENTRY_RECOVER_DAYS).map(function (x) { return { deletedAt: x.deletedAt, item: cmNormalizeArchived(x.item) }; }).filter(function (x) { return x.item; }),
@@ -22283,7 +22326,7 @@
   // thought balloon's trail of bubbles.
   function cmBalloonShapes(b, F) {
     var bx = cmBalloonBox(b, F), cx = bx.x + bx.w / 2, cy = bx.y + bx.h / 2, rx = bx.w / 2, ry = bx.h / 2;
-    var out = { body: '', tail: '', bolt: '', dots: [], dash: b.kind === 'whisper', fill: b.kind === 'caption' ? CM_CAPTION_FILL : '#FFFFFF' };
+    var out = { body: '', tail: '', bolt: '', dots: [], dash: b.kind === 'whisper', fill: b.fill || (b.kind === 'caption' ? CM_CAPTION_FILL : '#FFFFFF') };
     if (b.kind === 'sfx') return out;
     if (b.kind === 'caption') { out.body = cmPolyD([[bx.x, bx.y], [bx.x + bx.w, bx.y], [bx.x + bx.w, bx.y + bx.h], [bx.x, bx.y + bx.h]], 0); return out; }
     var m = Math.min(rx, ry);
@@ -22562,22 +22605,27 @@
     var F = cmFrame(d);
     ctx.save();
     ctx.scale(pxPerPt, pxPerPt);
-    ctx.fillStyle = '#FFFFFF';
+    var L = d.layers;
+    ctx.fillStyle = pg && pg.bg && L.art ? pg.bg : '#FFFFFF';
     ctx.fillRect(0, 0, F.PW, F.PH);
     ctx.beginPath(); ctx.rect(0, 0, F.PW, F.PH); ctx.clip();
     if (pg) {
       pg.panels.forEach(function (p) {
         var g = cmPanelGeom(p, F), path = new Path2D(cmPanelD(g, d.radius));
-        ctx.fillStyle = '#FFFFFF'; ctx.fill(path);
-        var el = p.img && pbImgEls[p.img];
-        if (p.img && !el) pbLoadImage(p.img);
+        if (L.art && p.fill) { ctx.fillStyle = p.fill; ctx.fill(path); }
+        var el = L.art && p.img && pbImgEls[p.img];
+        if (L.art && p.img && !el) pbLoadImage(p.img);
         if (el) {
           var ar = cmArtRect(p, g, el);
           ctx.save(); ctx.clip(path); ctx.drawImage(el, ar.x, ar.y, ar.w, ar.h); ctx.restore();
         }
-        if (d.border > 0) { ctx.lineWidth = d.border; ctx.strokeStyle = CM_INK; ctx.lineJoin = 'miter'; ctx.stroke(path); }
+        if (L.borders && d.border > 0) { ctx.lineWidth = d.border; ctx.strokeStyle = CM_INK; ctx.lineJoin = 'miter'; ctx.stroke(path); }
       });
-      pg.balloons.forEach(function (b) { cmDrawBalloonCanvas(ctx, b, F, d); });
+      if (L.balloons) pg.balloons.forEach(function (b) { cmDrawBalloonCanvas(ctx, b, F, d); });
+      if (L.grid) {
+        ctx.strokeStyle = CM_GRID; ctx.lineWidth = 0.5;
+        cmGridLines(F, d).forEach(function (l) { ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(l[2], l[3]); ctx.stroke(); });
+      }
       if (d.numbers) {
         ctx.font = '400 8px Jost, Futura, sans-serif'; ctx.fillStyle = '#57524A'; ctx.textAlign = 'center';
         ctx.fillText(String(cmState.pages.indexOf(pg) + 1), F.PW / 2, F.PH - Math.max(10, F.M * 0.45));
@@ -22586,6 +22634,16 @@
     ctx.restore();
   }
   var CM_LINE = 1;   // balloon outline, in points
+  // The grid layer: non-photo blue, the color of an artist's guide lines,
+  // across the live area at the comic's grid step, edged by the margins.
+  var CM_GRID = '#6FA3D2';
+  function cmGridLines(F, d) {
+    var step = d.gridStep * 72, l = F.M, t = F.M, r = F.PW - F.M, b = F.PH - F.M, out = [], x, y;
+    for (x = l; x <= r + 0.01; x += step) out.push([x, t, x, b]);
+    for (y = t; y <= b + 0.01; y += step) out.push([l, y, r, y]);
+    out.push([r, t, r, b], [l, b, r, b]);
+    return out;
+  }
   function cmDrawBalloonCanvas(ctx, b, F, d) {
     var sh = cmBalloonShapes(b, F);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = CM_INK;
@@ -22610,7 +22668,7 @@
       ctx.lineWidth = L.size * 0.14; ctx.strokeStyle = '#FFFFFF'; ctx.lineJoin = 'round';
       L.lines.forEach(function (l) { ctx.strokeText(l.text, l.x, l.y); });
     }
-    ctx.fillStyle = CM_INK;
+    ctx.fillStyle = b.kind === 'sfx' && b.fill ? b.fill : CM_INK;
     L.lines.forEach(function (l) { ctx.fillText(l.text, l.x, l.y); });
   }
 
@@ -22664,28 +22722,35 @@
     var defs = cmSvgEl('defs', {}, svg);
     var pageClip = cmSvgEl('clipPath', { id: 'cmPageClip' }, defs);
     cmSvgEl('rect', { x: 0, y: 0, width: F.PW, height: F.PH }, pageClip);
-    var root = cmSvgEl('g', { 'clip-path': 'url(#cmPageClip)' }, svg);
+    var root = cmSvgEl('g', { 'clip-path': 'url(#cmPageClip)' }, svg), L = d.layers;
+    cmSvgEl('rect', { x: 0, y: 0, width: F.PW, height: F.PH, fill: pg.bg && L.art ? pg.bg : '#FFFFFF', 'class': 'cm-bg' }, root);
     pg.panels.forEach(function (p, i) {
       var g = cmPanelGeom(p, F), dPath = cmPanelD(g, d.radius);
       var grp = cmSvgEl('g', { 'class': 'cm-panel', 'data-id': p.id }, root);
-      cmSvgEl('path', { d: dPath, fill: '#FFFFFF' }, grp);
-      var el = p.img && pbImgEls[p.img];
-      if (p.img && !el) pbLoadImage(p.img);
+      // Clickable inside even when it's only an outline.
+      cmSvgEl('path', { d: dPath, fill: L.art && p.fill ? p.fill : 'none', 'pointer-events': 'all' }, grp);
+      var el = L.art && p.img && pbImgEls[p.img];
+      if (L.art && p.img && !el) pbLoadImage(p.img);
       if (el) {
         var clip = cmSvgEl('clipPath', { id: 'cmClip' + i }, defs);
         cmSvgEl('path', { d: dPath }, clip);
         var ar = cmArtRect(p, g, el);
         cmSvgEl('image', { href: el.src, x: cmF(ar.x), y: cmF(ar.y), width: cmF(ar.w), height: cmF(ar.h), preserveAspectRatio: 'none', 'clip-path': 'url(#cmClip' + i + ')' }, grp);
-      } else if (p.img && pbImgMissing[p.img]) {
+      } else if (L.art && p.img && pbImgMissing[p.img]) {
         var bxm = cmGeomBox(g);
         var tm = cmSvgEl('text', { x: bxm.x + bxm.w / 2, y: bxm.y + bxm.h / 2, 'text-anchor': 'middle', 'font-size': 8, fill: '#998C79', 'font-family': 'Work Sans, sans-serif' }, grp);
         tm.textContent = 'Art not on this device yet';
       }
       // A wide invisible edge, so a thin border is still easy to grab.
-      cmSvgEl('path', { d: dPath, fill: 'none', stroke: d.border > 0 ? CM_INK : 'none', 'stroke-width': d.border, 'stroke-linejoin': 'miter' }, grp);
-      if (d.border <= 0) cmSvgEl('path', { d: dPath, fill: 'none', stroke: '#D9D2C4', 'stroke-width': 0.6, 'stroke-dasharray': '3 3', 'class': 'cm-guide' }, grp);
+      var showBorder = L.borders && d.border > 0;
+      cmSvgEl('path', { d: dPath, fill: 'none', stroke: showBorder ? CM_INK : 'none', 'stroke-width': d.border, 'stroke-linejoin': 'miter' }, grp);
+      if (!showBorder) cmSvgEl('path', { d: dPath, fill: 'none', stroke: '#D9D2C4', 'stroke-width': 0.6, 'stroke-dasharray': '3 3', 'class': 'cm-guide' }, grp);
     });
-    pg.balloons.forEach(function (b) { cmSvgBalloon(root, b, F, d); });
+    if (L.balloons) pg.balloons.forEach(function (b) { cmSvgBalloon(root, b, F, d); });
+    if (L.grid) {
+      var grid = cmSvgEl('g', { stroke: CM_GRID, 'stroke-width': 0.5, 'pointer-events': 'none' }, root);
+      cmGridLines(F, d).forEach(function (l) { cmSvgEl('line', { x1: cmF(l[0]), y1: cmF(l[1]), x2: cmF(l[2]), y2: cmF(l[3]) }, grid); });
+    }
     if (d.numbers) {
       var num = cmSvgEl('text', { x: F.PW / 2, y: F.PH - Math.max(10, F.M * 0.45), 'text-anchor': 'middle', 'font-size': 8, fill: '#57524A', 'font-family': 'Jost, Futura, sans-serif' }, root);
       num.textContent = String(cmCur + 1);
@@ -22697,6 +22762,8 @@
     if (old) cmPageWrap.replaceChild(svg, old); else cmPageWrap.insertBefore(svg, cmPageWrap.firstChild);
     cmPageWrap.classList.toggle('tool-draw', cmTool !== 'select');
     cmPageWrap.classList.toggle('is-framing', !!cmFraming);
+    cmPageWrap.classList.toggle('mode-layout', cmMode === 'layout');
+    cmPageWrap.classList.toggle('mode-edit', cmMode === 'edit');
     cmRenderHandles();
     cmSyncZoom();
     cmFmt('cmPageLabel').textContent = 'Page ' + (cmCur + 1) + ' of ' + cmState.pages.length;
@@ -22715,7 +22782,7 @@
     if (b.kind === 'sfx') cmSvgEl('rect', { x: bx.x, y: bx.y, width: bx.w, height: bx.h, fill: 'transparent' }, grp);
     var L = cmLayoutText(b, F, d);
     if (!L.lines.length && b.kind !== 'sfx') return;
-    var txt = cmSvgEl('text', { 'text-anchor': 'middle', 'font-size': cmF(L.size), fill: CM_INK,
+    var txt = cmSvgEl('text', { 'text-anchor': 'middle', 'font-size': cmF(L.size), fill: b.kind === 'sfx' && b.fill ? b.fill : CM_INK,
       'font-family': b.kind === 'sfx' ? CM_SFX_STACK : cmLetterStack(d), 'font-weight': b.kind !== 'sfx' && d.bold ? 700 : 400 }, grp);
     if (b.kind === 'sfx') { txt.setAttribute('stroke', '#FFFFFF'); txt.setAttribute('stroke-width', cmF(L.size * 0.14)); txt.setAttribute('stroke-linejoin', 'round'); txt.setAttribute('paint-order', 'stroke'); }
     if (!L.lines.length) {
@@ -22744,7 +22811,7 @@
     if (cmSel.type === 'panel') {
       var g = cmPanelGeom(it, F);
       cmSvgEl('path', { d: cmPanelD(g, cmState.radius), fill: 'none', stroke: '#B3262B', 'stroke-width': 2 / cmScale, 'pointer-events': 'none' }, ov);
-      if (cmFraming) return;
+      if (cmFraming || cmMode !== 'layout') return;
       if (it.shape === 'poly') g.poly.forEach(function (q, i) { handle(q[0], q[1], 'vertex', i); });
       else {
         var bx = cmGeomBox(g);
@@ -22777,6 +22844,7 @@
   }
   function cmRenderSelBar() {
     cmSelBar.innerHTML = '';
+    if (cmTool === 'fill') { cmRenderPalette(); return; }
     var it = cmFindSel();
     if (!it) return;
     var name = document.createElement('span');
@@ -22805,10 +22873,21 @@
         return;
       }
       name.textContent = it.shape === 'oval' ? 'Round panel' : 'Panel';
-      cmBtn(it.img ? 'Replace art…' : 'Add art…', function () { cmPick(it.id); });
-      if (it.img) {
-        cmBtn('Frame art', function () { cmFraming = it.id; cmRenderPage(); cmRenderSelBar(); }, 'Move and zoom the art inside the panel');
-        cmBtn('Clean up', function (e) { e.stopPropagation(); cmOpenCleanMenu(e.currentTarget, it); }, 'Even out paper shadows or turn a photo of a drawing into ink');
+      if (cmMode === 'edit') {
+        cmBtn(it.img ? 'Replace art…' : 'Add art…', function () { cmPick(it.id); });
+        if (it.img) {
+          cmBtn('Frame art', function () { cmFraming = it.id; cmRenderPage(); cmRenderSelBar(); }, 'Move and zoom the art inside the panel');
+          cmBtn('Clean up', function (e) { e.stopPropagation(); cmOpenCleanMenu(e.currentTarget, it); }, 'Even out paper shadows or turn a photo of a drawing into ink');
+          var gapE = document.createElement('span'); gapE.className = 'cm-sel-gap'; cmSelBar.appendChild(gapE);
+          cmBtn('Remove art', function () {
+            cmCheckpoint();
+            cmState.archived.unshift({ kind: 'art', img: it.img, archivedAt: Date.now() });
+            it.img = null; delete it.fit; delete it.orig;
+            cmPersist(true); cmRenderAll();
+            showToast('Art moved to the archive.', 'Undo', cmDoUndo);
+          }, 'Take the art out of the panel (it goes to the archive)');
+        }
+        return;
       }
       if (it.shape === 'rect') {
         cmBtn('Split ↔', function () { cmSplit(it, 'v'); }, 'Split into two panels side by side');
@@ -22951,6 +23030,7 @@
     var pg = cmPage(), first = panelId && pg.panels.filter(function (p) { return p.id === panelId; })[0];
     var targets = (first ? [first] : []).concat(cmReadingOrder(pg.panels).filter(function (p) { return !p.img && p !== first; }));
     cmCheckpoint();
+    if (!cmState.layers.art) { cmState.layers.art = true; cmSyncLayers(); }
     try {
       for (var i = 0; i < files.length; i++) {
         var id = await cmImportFile(files[i]), t = targets[i];
@@ -22990,6 +23070,7 @@
     var pg = cmPage(), sel = cmSel && cmSel.type === 'panel' && cmFindSel();
     var targets = (sel && !sel.img ? [sel] : []).concat(cmReadingOrder(pg.panels).filter(function (p) { return !p.img && p !== sel; }));
     cmCheckpoint();
+    if (!cmState.layers.art) { cmState.layers.art = true; cmSyncLayers(); }
     ids.forEach(function (id, i) {
       if (targets[i]) { targets[i].img = id; delete targets[i].fit; }
       else cmState.archived.unshift({ kind: 'art', img: id, archivedAt: Date.now() });
@@ -23044,11 +23125,14 @@
         var gg = cmGeomBox(cmPanelGeom(fp, F)), f0 = fp.fit || { z: 1, ox: 0, oy: 0 };
         cmDrag = Object.assign(base, { kind: 'frame', p: fp, box: gg, fit0: { z: f0.z, ox: f0.ox, oy: f0.oy } });
       } else { cmFraming = null; cmRenderPage(); cmRenderSelBar(); return; }
+    } else if (cmTool === 'fill') {
+      cmApplyFill(e);
+      return;
     } else if (cmTool !== 'select') {
       cmDrag = Object.assign(base, { kind: 'draw', tool: cmTool, cur: pt });
     } else {
       var h = e.target.closest && e.target.closest('[data-handle]'), it = cmFindSel();
-      var bEl = e.target.closest && e.target.closest('.cm-balloon'), pEl = e.target.closest && e.target.closest('.cm-panel');
+      var bEl = cmMode === 'edit' && e.target.closest && e.target.closest('.cm-balloon'), pEl = e.target.closest && e.target.closest('.cm-panel');
       if (h && it) {
         cmDrag = Object.assign(base, { kind: 'handle', handle: h.dataset.handle, idx: +h.dataset.idx, it: it, orig: JSON.parse(JSON.stringify(it)) });
       } else if ((bEl || pEl) && e.pointerType === 'touch' && cmPageWrap.classList.contains('can-pan')) {
@@ -23064,7 +23148,8 @@
         var wasSelP = cmSel && cmSel.id === pEl.dataset.id;
         cmSel = { type: 'panel', id: pEl.dataset.id };
         var p = cmFindSel();
-        cmDrag = Object.assign(base, { kind: 'move', it: p, orig: JSON.parse(JSON.stringify(p)), again: wasSelP });
+        // In Edit mode a panel is selected for its art, never moved.
+        cmDrag = Object.assign(base, { kind: cmMode === 'layout' ? 'move' : 'pick', it: p, orig: JSON.parse(JSON.stringify(p)), again: wasSelP });
       } else {
         cmSel = null;
       }
@@ -23079,7 +23164,7 @@
   }
   function cmPointerMove(e) {
     var D = cmDrag;
-    if (!D || e.pointerId !== D.pointerId || D.kind === 'tap') return;
+    if (!D || e.pointerId !== D.pointerId || D.kind === 'tap' || D.kind === 'pick') return;
     if (!D.moved && Math.hypot(e.clientX - D.x0, e.clientY - D.y0) < 4) return;
     if (!D.moved) { D.moved = true; if (D.kind !== 'draw') cmCheckpoint(); }
     var pt = cmToPage(e), F = D.F, dx = pt[0] - D.pt0[0], dy = pt[1] - D.pt0[1];
@@ -23158,9 +23243,9 @@
     if (D.moved) { cmPersist(true); cmRenderPage(); cmRenderSelBar(); cmScheduleThumb(); return; }
     // A click on what was already selected opens it: a balloon's words,
     // a panel's art (to add, or to frame).
-    if (D.kind === 'move' && D.again) {
-      if (cmSel.type === 'balloon') cmOpenWords(D.it);
-      else if (D.it.img) { cmFraming = D.it.id; cmRenderPage(); cmRenderSelBar(); }
+    if (D.kind === 'move' && D.again && cmSel.type === 'balloon') cmOpenWords(D.it);
+    if (D.kind === 'pick' && D.again) {
+      if (D.it.img) { cmFraming = D.it.id; cmRenderPage(); cmRenderSelBar(); }
       else cmPick(D.it.id);
     }
   }
@@ -23208,6 +23293,7 @@
     } else {
       var kind = tool.slice(2);
       cmCheckpoint();
+      cmState.layers.balloons = true;
       var sizes = { caption: [120, 34], sfx: [110, 50] }, sz = sizes[kind] || [96, 56];
       var bw = big ? R.r - R.l : sz[0], bh = big ? R.b - R.t : sz[1];
       var cx = big ? (R.l + R.r) / 2 : D.pt0[0], cy = big ? (R.t + R.b) / 2 : D.pt0[1];
@@ -23248,8 +23334,128 @@
     cmPageWrap.classList.toggle('can-pan', t === 'select' && !cmFindSel() && !cmFraming);
   }
   cmFmt('cmToolbar').querySelectorAll('[data-tool]').forEach(function (b) {
-    b.addEventListener('click', function () { cmSetTool(cmTool === b.dataset.tool ? 'select' : b.dataset.tool); });
+    b.addEventListener('click', function () {
+      var t = cmTool === b.dataset.tool ? 'select' : b.dataset.tool;
+      if (t === 'fill') { cmSel = null; cmFraming = null; cmRenderHandles(); }
+      cmSetTool(t);
+      cmRenderSelBar();
+    });
   });
+
+  // ---- Modes ----
+  // Layout: panels are drawn, moved, resized and split; balloons can't be
+  // touched. Edit: art, balloons and color; panels stay where they are.
+  var cmMode = 'layout';
+  try { if (localStorage.getItem('bookbug.cmMode.v1') === 'edit') cmMode = 'edit'; } catch (e) {}
+  function cmSetMode(m) {
+    if (m === cmMode) return;
+    cmMode = m;
+    try { localStorage.setItem('bookbug.cmMode.v1', m); } catch (e) {}
+    cmCloseWords();
+    cmFraming = null;
+    if (cmSel && cmSel.type === 'balloon' && m === 'layout') cmSel = null;
+    cmSyncMode();
+    cmSetTool('select');
+    cmRenderPage(); cmRenderSelBar();
+  }
+  function cmSyncMode() {
+    cmFmt('cmToolbar').dataset.mode = cmMode;
+    cmFmt('cmModeSeg').querySelectorAll('button').forEach(function (b) {
+      var on = b.dataset.mode === cmMode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  cmFmt('cmModeSeg').querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () { cmSetMode(b.dataset.mode); });
+  });
+  cmSyncMode();
+
+  // ---- The paint bucket ----
+  // Fills whatever's clicked: a balloon (or a sound effect's letters), the
+  // topmost panel under the pointer, or else the page round the panels.
+  var CM_PALETTE = ['#FFFFFF', '#1A1714', '#D7263D', '#F4C430', '#1E5AA8', '#2E8B57', '#F08A24', '#7B3F98', '#F2A7B8', '#8EC9E8', '#E8C39E', '#9A958C'];
+  var cmFillColor = '#F4C430';
+  try { var storedFill = localStorage.getItem('bookbug.cmFill.v1'); if (storedFill === 'none') cmFillColor = null; else if (cmColor(storedFill)) cmFillColor = storedFill; } catch (e) {}
+  function cmSetFillColor(c) {
+    cmFillColor = c;
+    try { localStorage.setItem('bookbug.cmFill.v1', c || 'none'); } catch (e) {}
+    cmRenderSelBar();
+  }
+  function cmRenderPalette() {
+    var name = document.createElement('span');
+    name.className = 'cm-sel-name'; name.textContent = 'Fill';
+    cmSelBar.appendChild(name);
+    function sw(c, label) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'cm-swatch' + (c ? '' : ' is-none') + (c === cmFillColor ? ' is-on' : '');
+      if (c) b.style.background = c;
+      b.title = label || c; b.setAttribute('aria-label', label || c);
+      b.addEventListener('click', function () { cmSetFillColor(c); });
+      cmSelBar.appendChild(b);
+    }
+    sw(null, 'No fill');
+    CM_PALETTE.forEach(function (c) { sw(c); });
+    var custom = document.createElement('input');
+    custom.type = 'color'; custom.className = 'cm-swatch-custom'; custom.title = 'Any color';
+    custom.value = cmFillColor || '#F4C430';
+    custom.addEventListener('change', function () { cmSetFillColor(custom.value.toUpperCase()); });
+    cmSelBar.appendChild(custom);
+  }
+  function cmApplyFill(e) {
+    var pg = cmPage(), c = cmFillColor;
+    var bEl = cmState.layers.balloons && e.target.closest && e.target.closest('.cm-balloon');
+    var pEl = e.target.closest && e.target.closest('.cm-panel');
+    cmCheckpoint();
+    if (bEl) {
+      var b = pg.balloons.filter(function (x) { return x.id === bEl.dataset.id; })[0];
+      if (b) { if (c) b.fill = c; else delete b.fill; }
+    } else {
+      var p = pEl && pg.panels.filter(function (x) { return x.id === pEl.dataset.id; })[0];
+      if (p) { if (c) p.fill = c; else delete p.fill; }
+      else if (c && c !== '#FFFFFF') pg.bg = c; else delete pg.bg;
+      cmState.layers.art = true;
+      cmSyncLayers();
+    }
+    cmPersist(true); cmRenderPage(); cmScheduleThumb();
+  }
+
+  // ---- Layers ----
+  // Four, top to bottom. Hiding one hides it on the page and leaves it
+  // off the PDF; nothing in it is lost.
+  var CM_LAYERS = [['grid', 'Grid'], ['balloons', 'Balloons'], ['borders', 'Panel borders'], ['art', 'Art and color']];
+  var CM_EYE = '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 10S5 4 10 4s8.5 6 8.5 6-3.5 6-8.5 6-8.5-6-8.5-6z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>';
+  var CM_EYE_OFF = '<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 10S5 4 10 4s8.5 6 8.5 6-3.5 6-8.5 6-8.5-6-8.5-6z" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".45"/><path d="M3 17 17 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  function cmSyncLayers() {
+    var box = cmFmt('cmLayers');
+    box.innerHTML = '';
+    CM_LAYERS.forEach(function (l) {
+      var on = cmState.layers[l[0]];
+      var row = document.createElement('div');
+      row.className = 'cm-layer' + (on ? '' : ' is-hidden');
+      var eye = document.createElement('button');
+      eye.type = 'button'; eye.className = 'cm-layer-eye'; eye.innerHTML = on ? CM_EYE : CM_EYE_OFF;
+      eye.setAttribute('aria-pressed', on ? 'true' : 'false');
+      eye.title = (on ? 'Hide ' : 'Show ') + l[1].toLowerCase();
+      eye.setAttribute('aria-label', eye.title);
+      eye.addEventListener('click', function () {
+        cmState.layers[l[0]] = !cmState.layers[l[0]];
+        if (l[0] === 'balloons' && !cmState.layers.balloons && cmSel && cmSel.type === 'balloon') { cmSel = null; cmCloseWords(); }
+        cmSyncLayers(); cmPersist(true); cmRenderPage(); cmRenderSelBar(); cmRenderStrip();
+      });
+      var nm = document.createElement('span'); nm.className = 'cm-layer-name'; nm.textContent = l[1];
+      row.append(eye, nm);
+      if (l[0] === 'grid') {
+        var sel = document.createElement('select');
+        sel.setAttribute('aria-label', 'Grid spacing');
+        sel.innerHTML = [[0.125, '⅛ in'], [0.25, '¼ in'], [0.5, '½ in'], [1, '1 in']].map(function (o) { return '<option value="' + o[0] + '">Every ' + o[1] + '</option>'; }).join('');
+        sel.value = String(cmState.gridStep);
+        sel.addEventListener('change', function () { cmState.gridStep = +sel.value; cmPersist(true); cmRenderPage(); cmRenderStrip(); });
+        row.appendChild(sel);
+      }
+      box.appendChild(row);
+    });
+  }
 
   // ---- The words pop-up ----
   var cmWords = null;
@@ -23312,11 +23518,16 @@
     if (mod) return;
     if (e.key === 'Escape') {
       if (cmFraming) cmFraming = null; else if (cmTool !== 'select') cmSetTool('select'); else cmSel = null;
+      cmRenderSelBar();
       cmRenderPage(); cmRenderSelBar(); return;
     }
     if (e.key === 'v' || e.key === 'V') { cmSetTool('select'); return; }
+    if (e.key === 'l' || e.key === 'L') { cmSetMode('layout'); return; }
+    if (e.key === 'e' || e.key === 'E') { cmSetMode('edit'); return; }
     var it = cmFindSel();
     if (!it) return;
+    // Panels only change in Layout mode.
+    if (cmSel.type === 'panel' && cmMode !== 'layout') return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); cmRemoveSelected(); return; }
     if (e.key === 'Enter' && cmSel.type === 'balloon') { e.preventDefault(); cmOpenWords(it); return; }
     var arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -23677,6 +23888,8 @@
     cmBookMenuBtn.hidden = !cmEntry(cmId);
     cmFmt('cmExportStatus').textContent = '';
     cmSyncFormatting();
+    cmSyncLayers();
+    cmSyncMode();
     cmSetTool('select');
     cmRenderTemplates();
     cmRenderAll();
