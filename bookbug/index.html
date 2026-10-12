@@ -1871,6 +1871,8 @@
     touch-action: pan-y; user-select: none; -webkit-user-select: none;
   }
   .pb-stage.is-drop { outline: 3px solid var(--accent); }
+  /* Where a dragged item will land on another spread. */
+  .pb-cross-ghost { opacity: .8; pointer-events: none; }
   .pb-clip { position: absolute; inset: 0; overflow: hidden; }
   .pb-nonpage {
     position: absolute; top: 0; bottom: 0; width: 50%; z-index: 3; display: flex; align-items: center; justify-content: center;
@@ -17037,12 +17039,27 @@
     b.type = 'button';
     b.className = 'pbt-pic' + (pbSel && pbSel.id === it.id ? ' is-selected' : '');
     var el = pbImgEls[it.img];
-    if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; b.appendChild(im); }
+    if (el) { var im = document.createElement('img'); im.src = el.src; im.alt = ''; im.draggable = false; b.appendChild(im); }
     var lab = document.createElement('span');
     lab.textContent = 'Illustration · ' + (it.fit === 'free' ? 'placed freely' : (it.fit === 'bleed' ? 'full bleed' : 'centered') + ', ' +
       (it.area === 'spread' ? 'whole spread' : it.area + ' page'));
     b.appendChild(lab);
+    // Dragged (past a few pixels), it moves to the page it's dropped on,
+    // like a text box's grip.
+    b.addEventListener('pointerdown', function (e) {
+      if (e.button > 0) return;
+      e.preventDefault(); // no native drag of its thumbnail, which would cancel this one
+      var sx = e.clientX, sy = e.clientY;
+      function mv(ev) {
+        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 6) return;
+        off();
+        pbStartTextDrag(ev, s, it.id, b);
+      }
+      function off() { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', off); window.removeEventListener('pointercancel', off); }
+      window.addEventListener('pointermove', mv); window.addEventListener('pointerup', off); window.addEventListener('pointercancel', off);
+    });
     b.addEventListener('click', function () {
+      if (!pbFindItem(s, it.id)) return;
       pbFollow(s);
       pbSel = { s: s, id: it.id };
       pbSheet.querySelectorAll('.pbt-field.is-selected, .pbt-pic.is-selected').forEach(function (x) { x.classList.remove('is-selected'); });
@@ -17324,9 +17341,9 @@
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     var ghost = document.createElement('div');
     ghost.className = 'pbt-ghost';
-    ghost.textContent = (stripFormatMarkers(pbItemText(it)).trim().split('\n')[0] || 'Empty text box').slice(0, 48);
+    ghost.textContent = it.type === 'image' ? 'Illustration' : (stripFormatMarkers(pbItemText(it)).trim().split('\n')[0] || 'Empty text box').slice(0, 48);
     document.body.appendChild(ghost);
-    var src = grip.closest('.pbt-box');
+    var src = grip.closest('.pbt-box') || grip;
     src.classList.add('is-dragging');
     document.body.classList.add('pbt-dragging');
     var d = pbTextDrag = { s: s, id: id, it: it, ghost: ghost, src: src, target: null, x: e.clientX, y: e.clientY, raf: 0 };
@@ -17344,7 +17361,12 @@
       if (d.target) d.target.classList.remove('is-drop-target');
       var t = ev.type === 'pointerup' && d.target;
       pbTextDrag = null;
-      if (t) pbMoveTextToPage(d.s, d.id, +t.closest('.pb-spread').dataset.spread, t.dataset.side);
+      if (t && it.type === 'image') {
+        var toS = +t.closest('.pb-spread').dataset.spread;
+        pbCheckpoint();
+        pbFitArea(it, toS, t.dataset.side);
+        pbMoveItemToSpread(d.s, it, toS);
+      } else if (t) pbMoveTextToPage(d.s, d.id, +t.closest('.pb-spread').dataset.spread, t.dataset.side);
     }
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish);
@@ -17367,7 +17389,8 @@
     // Its own page isn't somewhere to move it to.
     if (col) {
       var ts = +col.closest('.pb-spread').dataset.spread;
-      if (ts === d.s && !pbStraddles(d.it) && col.dataset.side === pbPageSide(d.it)) col = null;
+      if (d.it.type === 'image' ? ts === d.s && (d.it.area === 'spread' || d.it.area === col.dataset.side)
+          : ts === d.s && !pbStraddles(d.it) && col.dataset.side === pbPageSide(d.it)) col = null;
     }
     if (col !== d.target) {
       if (d.target) d.target.classList.remove('is-drop-target');
@@ -17660,6 +17683,97 @@
     window.addEventListener('pointercancel', up);
   }
 
+  // Dragging a text box or illustration onto another spread (Spread view):
+  // while the pointer is over another spread's page, the item hides on its
+  // own spread and a copy shows where it will land there, the page outlined;
+  // near the window's top or bottom edge the sheet scrolls so any spread can
+  // be reached. `place(stage, ghost, ev)` puts the copy; `over` is the
+  // target stage, or null while still over its own spread.
+  function pbCrossDrag(node, fromStage, place) {
+    var d = { over: null, ghost: null, ev: null, raf: 0, rerun: null };
+    function stageAt(x, y) {
+      var hit = null;
+      pbSheet.querySelectorAll('.pb-stage').forEach(function (st) {
+        var r = st.getBoundingClientRect();
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) hit = st;
+      });
+      return hit;
+    }
+    d.update = function (ev) {
+      d.ev = ev;
+      var st = stageAt(ev.clientX, ev.clientY);
+      if (st === fromStage || !st) st = null;
+      if (st !== d.over) {
+        if (d.over) d.over.classList.remove('is-drop');
+        if (d.ghost) { d.ghost.remove(); d.ghost = null; }
+        d.over = st;
+        node.style.visibility = st ? 'hidden' : '';
+        if (st) {
+          st.classList.add('is-drop');
+          d.ghost = node.cloneNode(true);
+          d.ghost.classList.add('pb-cross-ghost');
+          d.ghost.style.visibility = '';
+          d.ghost.querySelectorAll('.pb-h, .pb-sel').forEach(function (h) { h.remove(); });
+          (node.parentNode.classList.contains('pb-clip') ? st.querySelector('.pb-clip') : st).appendChild(d.ghost);
+        }
+      }
+      if (st) place(st, d.ghost, ev);
+      return st;
+    };
+    (function scroll() {
+      if (d.ev) {
+        var y = d.ev.clientY, edge = 60, v = 0;
+        if (y < edge) v = -(edge - y) / 3;
+        else if (y > window.innerHeight - edge) v = (y - (window.innerHeight - edge)) / 3;
+        if (v) { window.scrollBy(0, v); if (d.rerun) d.rerun(d.ev); }
+      }
+      d.raf = requestAnimationFrame(scroll);
+    })();
+    d.end = function () {
+      cancelAnimationFrame(d.raf);
+      if (d.over) d.over.classList.remove('is-drop');
+      if (d.ghost) d.ghost.remove();
+      node.style.visibility = '';
+      var st = d.over;
+      d.over = null;
+      return st;
+    };
+    return d;
+  }
+  function pbStageSpread(stage) { return +stage.closest('.pb-spread').dataset.spread; }
+  // An illustration's page(s) on spread s: kept if that spread has them,
+  // else the page it does have. `side` (where it was dropped) picks the
+  // page for a one-page illustration.
+  function pbFitArea(it, s, side) {
+    var pages = pbSpreadPages(s, pbState.spreads.length);
+    if (it.fit === 'free') return;
+    if (it.area !== 'spread' && side) it.area = side;
+    if (it.area === 'spread' && !(pages.left && pages.right)) it.area = pages.left ? 'left' : 'right';
+    if (!pages[it.area] && it.area !== 'spread') it.area = it.area === 'left' ? 'right' : 'left';
+  }
+  // Puts an item (already off its old spread) onto spread s: pictures under
+  // the words, text on top; then selects it there.
+  function pbPutItem(s, it) {
+    var items = pbState.spreads[s].items;
+    if (it.type === 'image') {
+      var at = 0;
+      while (at < items.length && items[at].type === 'image') at++;
+      items.splice(at, 0, it);
+    } else items.push(it);
+  }
+  function pbMoveItemToSpread(fromS, it, toS) {
+    var from = pbState.spreads[fromS].items, i = from.indexOf(it);
+    if (i !== -1) from.splice(i, 1);
+    pbPutItem(toS, it);
+    // Whatever was selected before (maybe on a third spread) lets go.
+    var prevS = pbSel ? pbSel.s : null;
+    pbSel = null;
+    pbPersist();
+    pbRefreshSpread(fromS);
+    if (prevS != null && prevS !== fromS && prevS !== toS) pbRefreshSpread(prevS);
+    pbSelect({ s: toS, id: it.id });
+  }
+
   // On a spread, a text box is shown as it prints: drag it to move it;
   // click once to select it (formatting, handles), click again -- or
   // double-click -- to write in it, in a larger pop-up (see pbOpenPopup):
@@ -17746,9 +17860,19 @@
       return best && best.c;
     }
     var last = { x: x0, y: y0 };
-    pbTrack(e, function (ev, dx, dy) {
+    // Where in the box it was grabbed, to keep that spot under the pointer
+    // on another spread.
+    var sr0 = stage.getBoundingClientRect(), grabX = (e.clientX - sr0.left) / sw - x0, grabY = (e.clientY - sr0.top) / sh - y0;
+    var cross = pbCrossDrag(box, stage, function (st, ghost, ev) {
+      var r = st.getBoundingClientRect();
+      last = { x: (ev.clientX - r.left) / r.width - grabX, y: (ev.clientY - r.top) / r.height - grabY };
+      ghost.style.left = (last.x * 100) + '%'; ghost.style.top = (last.y * 100) + '%';
+    });
+    function onMove(ev) {
+      var dx = ev.clientX - e.clientX, dy = ev.clientY - e.clientY;
       var x = x0 + dx / sw, y = y0 + dy / sh;
       clearGuides();
+      if (cross.update(ev)) { pbQuickbar.hidden = true; return; }
       if (!ev.altKey) {
         var sx = nearest(xs, x, sw), sy = nearest(ys, y, sh);
         if (sx) { x = sx.v; guide('v', sx.line, sx.label); }
@@ -17758,8 +17882,18 @@
       box.style.left = (x * 100) + '%';
       box.style.top = (y * 100) + '%';
       pbPositionQuickbar(box);
-    }, function (ev, moved) {
+    }
+    cross.rerun = onMove;
+    pbTrack(e, onMove, function (ev, moved) {
       clearGuides();
+      var to = cross.end();
+      if (to && ev.type === 'pointerup') {
+        pbCheckpoint();
+        it.x += last.x - x0; it.y = last.y;
+        pbMoveItemToSpread(s, it, pbStageSpread(to));
+        return;
+      }
+      if (to) { pbRefreshSpread(s); return; }
       if (moved && (last.x !== x0 || last.y !== y0)) {
         pbCheckpoint();
         var px = it.x, py = it.y;
@@ -18103,8 +18237,29 @@
         ghost.style.width = (r.w / rw * 100) + '%'; ghost.style.height = (r.h / rh * 100) + '%';
       }
       placeGhost();
-      pbTrack(e, function (ev, dx, dy) {
+      // Onto another spread: a free one keeps the spot it's grabbed by under
+      // the pointer; one filling its page(s) lands on the page it's dropped
+      // on (or the whole spread, if it filled one).
+      var sr0 = stage.getBoundingClientRect(), grabX = (e.clientX - sr0.left) / rw - it.x, grabY = (e.clientY - sr0.top) / rh - it.y, drop = null;
+      var cross = pbCrossDrag(node, stage, function (st, g, ev) {
+        var r = st.getBoundingClientRect(), fx = (ev.clientX - r.left) / r.width;
+        if (it.fit === 'free') {
+          drop = { x: fx - grabX, y: (ev.clientY - r.top) / r.height - grabY };
+          g.style.left = (drop.x * 100) + '%'; g.style.top = (drop.y * 100) + '%';
+        } else {
+          var probe = { area: it.area, fit: it.fit };
+          pbFitArea(probe, pbStageSpread(st), fx < 0.5 ? 'left' : 'right');
+          drop = { area: probe.area };
+          g.style.left = probe.area === 'right' ? '50%' : '0'; g.style.width = probe.area === 'spread' ? '100%' : '50%';
+        }
+      });
+      if (ghost) ghost.style.pointerEvents = 'none';
+      pbTrack(e, function onMove(ev, dx, dy) {
+        if (dx == null) { dx = ev.clientX - e.clientX; dy = ev.clientY - e.clientY; }
+        cross.rerun = onMove;
         stage.querySelectorAll('.pb-guide').forEach(function (g) { g.remove(); });
+        if (cross.update(ev)) { if (ghost) ghost.style.visibility = 'hidden'; return; }
+        if (ghost) ghost.style.visibility = '';
         if (it.fit === 'free') {
           var x = before.x + dx / rw, y = before.y + dy / rh;
           if (!ev.altKey) {
@@ -18131,6 +18286,15 @@
       }, function (ev, moved) {
         stage.querySelectorAll('.pb-guide').forEach(function (g) { g.remove(); });
         if (ghost) ghost.remove();
+        var to = cross.end();
+        if (to) {
+          Object.assign(it, before);
+          if (ev.type !== 'pointerup' || !drop) { pbRefreshSpread(s); return; }
+          pbCheckpoint();
+          Object.assign(it, drop);
+          pbMoveItemToSpread(s, it, pbStageSpread(to));
+          return;
+        }
         if (moved) {
           var now = { x: it.x, y: it.y, ox: it.ox, oy: it.oy };
           Object.assign(it, before);
@@ -18581,6 +18745,50 @@
     pbSyncFormatting();
   }
 
+  // The clipboard for whole items: a copy of the item (a title, author or
+  // byline box comes as plain text, as with Duplicate) and its picture's
+  // size, so it can be pasted into another picture book too.
+  var pbClip = null, pbClickedSpread = null;
+  // Paste goes where you last clicked, even on a blank part of a spread.
+  pbSheet.addEventListener('pointerdown', function (e) {
+    var sp = e.target.closest && e.target.closest('.pb-spread');
+    pbClickedSpread = sp ? +sp.dataset.spread : null;
+  }, true);
+  function pbCopyItem(cut) {
+    var it = pbSelected();
+    if (!it) return;
+    var s = pbSel.s, copy = JSON.parse(JSON.stringify(it));
+    if (it.bind) { copy.text = pbItemText(it); copy.bind = null; }
+    pbClip = { item: copy, meta: it.img && pbState.images[it.img] ? Object.assign({}, pbState.images[it.img]) : null };
+    if (!cut) return;
+    pbCheckpoint();
+    var items = pbState.spreads[s].items;
+    items.splice(items.indexOf(it), 1);
+    pbSel = null;
+    pbPersist(); pbRefreshSpread(s); pbSyncFormatting();
+  }
+  function pbPasteItem(s) {
+    if (!pbClip || !pbState.spreads[s]) return;
+    var c = pbNormalizeItem(JSON.parse(JSON.stringify(pbClip.item)));
+    c.id = pbUid(c.type === 'text' ? 't' : 'p');
+    if (c.img && !pbState.images[c.img] && pbClip.meta) pbState.images[c.img] = Object.assign({}, pbClip.meta);
+    var pages = pbSpreadPages(s, pbState.spreads.length);
+    if (c.type === 'image' && c.fit !== 'free') pbFitArea(c, s);
+    else {
+      // Pasted onto the copy it came from: a little down and right, like
+      // Duplicate. Onto a spread missing its page: the page it has.
+      if (pbState.spreads[s].items.some(function (o) { return o.type === c.type && o.x === c.x && o.y === c.y; })) { c.x += 0.02; c.y += 0.03; }
+      var side = pbPageSide(c);
+      if (!pages[side]) c.x += side === 'left' ? 0.5 : -0.5;
+    }
+    pbCheckpoint();
+    pbPutItem(s, c);
+    pbSel = null;
+    pbPersist();
+    pbRefreshSpread(s);
+    pbSelect({ s: s, id: c.id });
+  }
+
   // Keys: Delete removes the selected item, arrows nudge it (Shift for
   // bigger steps), Esc lets go, Cmd/Ctrl+Z undoes -- all only while you
   // aren't typing.
@@ -18590,6 +18798,14 @@
     var typing = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); pbUndo(); return; }
     if (e.key === 'Escape' && pbSel) { if (typing) a.blur(); pbSelect(null); return; }
+    // Cut, copy and paste a whole text box or illustration, onto this
+    // spread or any other (pasted on the selected item's spread, else the
+    // one last clicked, else the one you're on). Words selected on the page are copied as usual.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !typing) {
+      var key = e.key.toLowerCase(), pageSel = window.getSelection && String(window.getSelection());
+      if (key === 'v' && pbClip) { e.preventDefault(); pbPasteItem(pbSel ? pbSel.s : pbClickedSpread != null ? pbClickedSpread : pbCur); return; }
+      if ((key === 'x' || key === 'c') && pbSelected() && !pageSel) { e.preventDefault(); pbCopyItem(key === 'x'); return; }
+    }
     if (typing || !pbSel) return;
     var it = pbSelected();
     if (!it) return;
@@ -18624,6 +18840,7 @@
     pbSpreadMenu.innerHTML =
       (s < n - 1 ? '<button type="button" role="menuitem" data-action="after">Add spread after</button>' : '<button type="button" role="menuitem" data-action="before">Add spread before</button>') +
       (middle ? '<button type="button" role="menuitem" data-action="duplicate">Duplicate</button>' : '') +
+      (pbClip ? '<button type="button" role="menuitem" data-action="paste">Paste ' + (pbClip.item.type === 'image' ? 'the illustration' : 'the text box') + '</button>' : '') +
       '<button type="button" role="menuitem" data-action="clear">Clear the spread</button>' +
       (middle ? '<button type="button" role="menuitem" data-action="archive">Archive</button>' +
         '<button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>' : '');
@@ -18646,6 +18863,7 @@
     if (action === 'after') pbInsertSpread(s + 1);
     else if (action === 'before') pbInsertSpread(s);
     else if (action === 'delete') pbDeleteSpread(s);
+    else if (action === 'paste') pbPasteItem(s);
     else if (action === 'duplicate') {
       pbCheckpoint();
       var copy = pbNormalizeSpread(JSON.parse(JSON.stringify(pbState.spreads[s])));
