@@ -17464,8 +17464,8 @@
     actions.className = 'pb-head-actions';
     var addPic = document.createElement('button');
     addPic.type = 'button'; addPic.className = 'pb-add-btn'; addPic.textContent = '+ Illustration';
-    addPic.title = 'Add an illustration (or drop an image file onto the spread)';
-    addPic.addEventListener('click', function () { pbPickFile(function (file) { pbAddPicture(s, file, null); }); });
+    addPic.title = 'Add illustrations from photos, a PDF or the camera (or drop an image file onto the spread)';
+    addPic.addEventListener('click', function () { pbOpenScan(s); });
     var dots = document.createElement('button');
     dots.type = 'button'; dots.className = 'dots-btn'; dots.textContent = '⋯';
     dots.title = 'Spread options';
@@ -18313,27 +18313,66 @@
     if (f && pbFileCallback) pbFileCallback(f);
     pbFileCallback = null;
   });
+  // Puts a stored illustration on spread s, full bleed: across the spread
+  // if it's wide, else on its side's page. No checkpoint or save.
+  function pbPlacePicture(s, id, side) {
+    var pages = pbSpreadPages(s, pbState.spreads.length), meta = pbState.images[id];
+    var wide = meta.w / meta.h > 1.3 * (pbTrim(pbState.trim).pageW / pbTrim(pbState.trim).pageH);
+    var area = side || (wide && pages.left && pages.right ? 'spread' : (pages.left ? 'left' : 'right'));
+    if (!pages.left && area !== 'right') area = 'right';
+    if (!pages.right && area !== 'left') area = 'left';
+    var it = pbNormalizeItem({ id: pbUid('p'), type: 'image', img: id, area: area, fit: 'bleed' });
+    // Pictures go under the words.
+    var items = pbState.spreads[s].items, at = 0;
+    while (at < items.length && items[at].type === 'image') at++;
+    items.splice(at, 0, it);
+    return it;
+  }
   async function pbAddPicture(s, file, side) {
-    var n = pbState.spreads.length, pages = pbSpreadPages(s, n);
     try {
       var id = await pbImportFile(file);
-      var meta = pbState.images[id];
-      var wide = meta.w / meta.h > 1.3 * (pbTrim(pbState.trim).pageW / pbTrim(pbState.trim).pageH);
-      var area = side || (wide && pages.left && pages.right ? 'spread' : (pages.left ? 'left' : 'right'));
-      if (!pages.left && area !== 'right') area = 'right';
-      if (!pages.right && area !== 'left') area = 'left';
       pbCheckpoint();
-      var it = pbNormalizeItem({ id: pbUid('p'), type: 'image', img: id, area: area, fit: 'bleed' });
-      // Pictures go under the words.
-      var items = pbState.spreads[s].items, at = 0;
-      while (at < items.length && items[at].type === 'image') at++;
-      items.splice(at, 0, it);
+      var it = pbPlacePicture(s, id, side);
       pbPersist();
       pbSel = null;
       pbSelect({ s: s, id: it.id });
     } catch (err) {
       await confirmDialog('Couldn’t add that illustration: ' + (err && err.message ? err.message : 'unknown error'));
     }
+  }
+  // + Illustration: the cartoon batch's importer (photos, a PDF or the live
+  // camera; shadows lifted, the table round a photo whited out, the paper
+  // trimmed, a page of several drawings cut apart). The first goes on this
+  // spread, the rest on the next spreads that have no illustration yet;
+  // any past the book's end wait in its archive. A file dropped on a
+  // spread still goes straight in, untouched, for finished digital art.
+  function pbOpenScan(s) {
+    var ids = [];
+    openCartoonImport(undefined, null, {
+      title: 'Add illustrations', one: 'illustration', many: 'illustrations', mode: 'color', digitalArt: true,
+      hint: 'Photos or a PDF of your art, cleaned up like a scan. The first goes on this spread, the rest on the next spreads without an illustration.',
+      store: function (enc) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { ids.push(id); }); },
+      done: function () { pbPlaceScanned(s, ids); }
+    });
+  }
+  function pbPlaceScanned(s, ids) {
+    if (!ids.length) return;
+    pbCheckpoint();
+    var spreads = pbState.spreads, at = s, first = null, extra = 0, touched = [];
+    function hasArt(k) { return spreads[k].items.some(function (it) { return it.type === 'image'; }); }
+    ids.forEach(function (id, i) {
+      if (i > 0) { at++; while (at < spreads.length && hasArt(at)) at++; }
+      if (at < spreads.length) { var it = pbPlacePicture(at, id, null); touched.push(at); if (!first) first = { s: at, id: it.id }; return; }
+      extra++;
+      pbState.archived.unshift(pbNormalizeSpread({ id: pbUid('s'), itemOnly: true, fromSpreadId: spreads[s].id, archivedFrom: s,
+        items: [pbNormalizeItem({ id: pbUid('p'), type: 'image', img: id, area: 'spread', fit: 'bleed' })] }));
+    });
+    pbPersist();
+    if (extra) renderPbArchive();
+    pbSel = null;
+    touched.forEach(pbRefreshSpread);
+    if (first) pbSelect(first);
+    if (extra) showToast((extra === 1 ? 'One illustration' : extra + ' illustrations') + ' had no spread left, so ' + (extra === 1 ? 'it’s' : 'they’re') + ' in the archive.');
   }
 
   // ---- Quick bar over a selected text box or picture ----
@@ -20732,8 +20771,10 @@
     }
     ctx.putImageData(im, 0, 0);
   }
-  // `sink` (comics) takes each cleaned drawing instead of the batch:
-  // { title, one, many, store(encoded) -> Promise, done(count) }.
+  // `sink` (comics, picture books) takes each cleaned drawing instead of
+  // the batch: { title, one, many, hint, mode?, digitalArt?, store(encoded)
+  // -> Promise, done(count) }; `mode` is the Scan as default (gray if not
+  // given), and `digitalArt` brings PNG/WebP/GIF files in untouched.
   function openCartoonImport(start, files, sink) {
     var one = sink ? sink.one : 'cartoon', many = sink ? sink.many : 'cartoons';
     var d = makeDialog('scan-box', sink ? sink.title : 'Import cartoons',
@@ -20757,7 +20798,7 @@
       '<p class="scan-status" aria-live="polite"></p>' +
       '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add ' + many + '</button></div>');
     var box = d.box, sources = [], cur = 0, busy = false;
-    var o = { mode: 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true };
+    var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true };
     var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status'), note = box.querySelector('.scan-note');
     var addBtn = box.querySelector('[data-act="add"]');
     // Take photos: the camera opens live in the dialog (a phone's back
@@ -20809,7 +20850,12 @@
     // camera goes off with it.
     new MutationObserver(function (m, obs) { if (!d.ov.isConnected) { stopCamera(); obs.disconnect(); } }).observe(document.body, { childList: true });
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
+    // Art made on a computer comes in as it is: the photo fixes (shadows,
+    // contrast, brightness) are for paper, and are hidden while it's shown.
+    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; } return c; }
     function syncControls() {
+      var dig = !!(sources[cur] && sources[cur].digital);
+      ['shadow', 'contrast', 'brightness'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
       box.querySelectorAll('[data-mode] button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === o.mode); });
       box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) { r.value = o[r.dataset.k]; box.querySelector('[data-out="' + r.dataset.k + '"]').textContent = o[r.dataset.k]; });
       box.querySelector('input[type="checkbox"][data-k="trim"]').checked = o.trim;
@@ -20824,7 +20870,7 @@
         view.innerHTML = '';
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
-        var cv = scanClean(src.canvas, Object.assign({}, o, { frames: wholePage(src) }), 900), stage = document.createElement('div');
+        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 900), stage = document.createElement('div');
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
@@ -20932,13 +20978,13 @@
       var anyOn = regs.some(function (r) { return r.on; });
       note.textContent = !src.regions ? 'Looking for drawings…'
         : !regs.length ? 'The whole page comes in. Drag across it to frame just the drawing. '
-        : src.multi ? 'Each box comes in as its own cartoon. Tap × to remove a box; drag across the page to add one. '
+        : src.multi ? 'Each box comes in as its own ' + one + '. Tap × to remove a box; drag across the page to add one. '
         : anyOn ? 'Only the box comes in. Drag it or its corners to fit, tap × to remove it, or drag across the page to draw a new one. '
         : 'Tap the drawing to bring in, or drag across the page to frame it. With none chosen, the whole page comes in. ';
       if (src.regions) {
         var several = document.createElement('button');
         several.type = 'button'; several.className = 'btn-link scan-all';
-        several.textContent = src.multi ? 'Just one cartoon from this page' : 'Several cartoons on this page…';
+        several.textContent = src.multi ? 'Just one ' + one + ' from this page' : 'Several ' + many + ' on this page…';
         several.addEventListener('click', function () {
           if (src.multi) {
             var keep = null;
@@ -20948,7 +20994,7 @@
             refresh(); return;
           }
           // Asked for here, in the note, rather than in a second dialog.
-          note.textContent = 'Bring in several separate cartoons from this one page? Each box will become its own cartoon. ';
+          note.textContent = 'Bring in several separate ' + many + ' from this one page? Each box will become its own ' + one + '. ';
           var yes = document.createElement('button'), no = document.createElement('button');
           yes.type = no.type = 'button'; yes.className = no.className = 'btn-link scan-all';
           yes.textContent = 'Yes, several'; no.textContent = 'No, just one'; no.style.marginLeft = '12px';
@@ -21022,7 +21068,7 @@
           setTimeout(function () {
             if (sources.indexOf(src) === -1) return done();
             try {
-              var a = scanClean(src.canvas, { mode: 'gray', shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, trim: false }, 900);
+              var so = optsFor(src), a = scanClean(src.canvas, { mode: 'gray', shadow: so.shadow, contrast: so.contrast, brightness: so.brightness, trim: false }, 900);
               var aw = a.width, ah = a.height, d = a.getContext('2d').getImageData(0, 0, aw, ah).data, ink = new Uint8Array(aw * ah);
               // `dark` is what around the paper is followed in from the edge.
               var cut = o.mode === 'bw' ? o.threshold : 180, dark = new Uint8Array(aw * ah);
@@ -21030,7 +21076,7 @@
               src.aw = aw; src.ah = ah;
               // A photo's surroundings, to white out of the page kept for
               // reframing (a PDF page has none).
-              src.off = src.fromPdf ? null : scanOffMask(aw, ah, dark);
+              src.off = src.fromPdf || src.digital ? null : scanOffMask(aw, ah, dark);
               // A page of separate drawings shows each as a box to tap to
               // choose; with none chosen the page comes in whole.
               var list = scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
@@ -21085,12 +21131,13 @@
       renderStrip();
       if (has) renderView(); else view.innerHTML = '';
     }
-    function addSource(canvas, fromPdf) {
+    function addSource(canvas, fromPdf, digital) {
       var th = pbCanvasFrom(canvas, 120);
-      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: 0, fromPdf: !!fromPdf };
+      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital };
       sources.push(src);
-      // A PDF is already clean; a photo has shadows to lift.
-      if (sources.length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
+      // A PDF is already clean; a photo has shadows to lift. (Digital art
+      // ignores these, so the first page that isn't sets them.)
+      if (!digital && sources.filter(function (x) { return !x.digital; }).length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
       refresh();
       findRegions(src);
     }
@@ -21125,7 +21172,15 @@
       for (var i = 0; i < files.length; i++) {
         status.textContent = 'Reading photo ' + (i + 1) + ' of ' + files.length + '…';
         var img = await pbBlobToImage(files[i]);
-        addSource(pbCanvasFrom(img, 2400), false);
+        // Laid on white, so a see-through PNG's clear parts don't turn
+        // black. For picture books (`digitalArt`), a PNG, WebP or GIF is art
+        // made on a computer, not a photo of paper: nothing round it to
+        // white out and no shadows to lift.
+        var flat = pbCanvasFrom(img, 2400), onWhite = document.createElement('canvas');
+        onWhite.width = flat.width; onWhite.height = flat.height;
+        var wctx = onWhite.getContext('2d');
+        wctx.fillStyle = '#fff'; wctx.fillRect(0, 0, onWhite.width, onWhite.height); wctx.drawImage(flat, 0, 0);
+        addSource(onWhite, false, !!(sink && sink.digitalArt) && /png|webp|gif/i.test(files[i].type));
         URL.revokeObjectURL(img.src);
       }
       status.textContent = '';
@@ -21158,7 +21213,7 @@
             return { canvas: c, crop: { fx: (x0 + cb.x) / page.width, fy: (y0 + cb.y) / page.height, fw: c.width / page.width, fh: c.height / page.height } };
           }
           if (chosen(src).length) {
-            page = scanClean(src.canvas, Object.assign({}, o, { trim: false }), 2400);
+            page = scanClean(src.canvas, Object.assign(optsFor(src), { trim: false }), 2400);
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
             cuts = chosen(src).map(function (r) {
               var c = scanStripFrame(scanCutRegion(page, r, src.aw, src.ah));
@@ -21166,9 +21221,9 @@
             });
             scanWhiteRings(page, chosen(src), src.aw, src.ah);
           } else if (wholePage(src)) {
-            page = scanClean(src.canvas, Object.assign({}, o, { trim: false }), 2400);
+            page = scanClean(src.canvas, Object.assign(optsFor(src), { trim: false }), 2400);
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
-            scanStripFrame(page);
+            if (!src.digital) scanStripFrame(page);
             cuts = [placed(o.trim ? scanTrim(page) : page, 0, 0)];
           } else continue;
           var pageId = null;
