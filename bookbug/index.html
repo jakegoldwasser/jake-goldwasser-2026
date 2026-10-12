@@ -2329,6 +2329,8 @@
     padding: 10px 12px; outline: none; min-height: 80px; position: relative; white-space: pre-wrap; overflow-wrap: break-word; cursor: text;
   }
   .pb-pop-text:focus { border-color: var(--accent); }
+  /* Sized by pbStylePopup to magnify its box; centered under the bar. */
+  .pb-pop .pb-pop-text { align-self: center; max-width: 100%; }
   /* The words stay put on the page; you write them in the pop-up. */
   .pb-tb-text { cursor: text; }
 
@@ -2981,7 +2983,7 @@
             </div>
             <div class="checkline">
               <input type="checkbox" id="pbSnapOuter">
-              <label for="pbSnapOuter" style="text-transform:none;letter-spacing:0;font-weight:400;">Snap story text to the outer edges</label>
+              <label for="pbSnapOuter" style="text-transform:none;letter-spacing:0;font-weight:400;">Snap story text to the top or bottom of the page</label>
             </div>
             <p class="field-note" style="margin:-4px 0 12px;">Each story text box sits against its page's outer margin, set flush toward the edge.</p>
             <div class="field">
@@ -4707,7 +4709,7 @@
     // A centered box across `frac` of a page's text area.
     function box(onSide, frac, y, extra, text) {
       var l = pbLiveFor(book, onSide), w = (l.x1 - l.x0) * frac;
-      return pbAuto(role === 'title' ? 'title' : role, l.x0 + (l.x1 - l.x0 - w) / 2, y, w, text || '', Object.assign({ align: 'center' }, extra));
+      return pbAuto(role === 'title' ? 'title' : role, l.x0 + (l.x1 - l.x0 - w) / 2, y, w, text || '', Object.assign({ align: 'left' }, extra));
     }
     // A copyright block whose last line sits on the bottom margin.
     function copyright(onSide, autoRole) {
@@ -4783,7 +4785,7 @@
   }
   function pbText(x, y, w, text, extra) {
     return Object.assign({ id: pbUid('t'), type: 'text', x: x, y: y, w: w, rot: 0, text: text || '',
-      font: null, size: null, bold: false, italic: false, align: 'center', lh: null, color: 'ink' }, extra || {});
+      font: null, size: null, bold: false, italic: false, align: 'left', lh: null, color: 'ink' }, extra || {});
   }
 
   function pbNormalizeItem(it) {
@@ -4799,7 +4801,7 @@
     }
     return { id: it.id, type: 'text', x: num(it.x, 0.1), y: num(it.y, 0.1), w: num(it.w, 0.3), rot: num(it.rot, 0),
       text: String(it.text || ''), font: it.font || null, size: typeof it.size === 'number' ? it.size : null,
-      bold: !!it.bold, italic: !!it.italic, align: ['left', 'center', 'right'].indexOf(it.align) !== -1 ? it.align : 'center',
+      bold: !!it.bold, italic: !!it.italic, align: ['left', 'center', 'right'].indexOf(it.align) !== -1 ? it.align : 'left',
       lh: typeof it.lh === 'number' ? it.lh : null, color: it.color || 'ink',
       bg: /^#[0-9A-F]{6}$/i.test(it.bg || '') ? it.bg : null,
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
@@ -4878,7 +4880,7 @@
     return pbValidated({
       v: 2, title: d.title || '', author: d.author || '', trim: pbTrim(d.trim).key,
       font: getFontChoice(d.font || 'poppins').key, size: typeof d.size === 'number' ? d.size : 18,
-      snapOuter: !!d.snapOuter, matterV: d.matterV || 0, pageNums: ['outer', 'center', 'none'].indexOf(d.pageNums) !== -1 ? d.pageNums : 'outer',
+      snapText: d.snapText !== false, matterV: d.matterV || 0, pageNums: ['outer', 'center', 'none'].indexOf(d.pageNums) !== -1 ? d.pageNums : 'outer',
       // Story layout (see PB_STANDARD): type size (automatic for the trim
       // unless set), leading, text width and margins.
       sizeAuto: d.sizeAuto !== false,
@@ -15837,7 +15839,7 @@
   function pbCheckpoint() {
     if (!pbState) return;
     pbUndoStack.push(JSON.stringify({ spreads: pbState.spreads, archived: pbState.archived, trim: pbState.trim, font: pbState.font, size: pbState.size,
-      snapOuter: pbState.snapOuter, pageNums: pbState.pageNums, sizeAuto: pbState.sizeAuto, lh: pbState.lh,
+      snapText: pbState.snapText, pageNums: pbState.pageNums, sizeAuto: pbState.sizeAuto, lh: pbState.lh,
       textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter }));
     if (pbUndoStack.length > 40) pbUndoStack.shift();
   }
@@ -16326,11 +16328,9 @@
     if (it.bind === 'byline') return pbState.author.trim() ? 'by ' + pbState.author.trim() : '';
     return it.bind ? (pbState[it.bind] || '') : (it.text || '');
   }
-  // Where a text box actually sits: as placed, or, with "Snap story text
-  // to the outer edges" on, against its page's outer margin.
   // Where a text box actually sits, and at what size. A box always stays
-  // inside the page's text area: with "Snap story text to the outer
-  // edges" on, against its page's outer margin; and however its words
+  // inside the page's text area (see pbSnapText for "Snap story text to
+  // the top or bottom of the page"); and however its words
   // grow, it moves up so its last line never passes the bottom margin
   // (or down off the top). Words too long for the whole text area are
   // set smaller, just enough to fit -- `shrunk` says so. Never off the
@@ -16345,21 +16345,12 @@
   function pbGeom(it, s) {
     var sp = pbState.spreads[s];
     var key = [pbItemText(it), it.x, it.y, it.w, it.rot, it.align, pbFontSize(it), pbLh(it), pbFontKey(it), it.bold, it.italic,
-      pbState.trim, pbState.margin, pbState.gutter, pbState.snapOuter, sp && sp.left.role, sp && sp.right.role].join('|');
+      pbState.trim, pbState.margin, pbState.gutter, pbState.snapText, sp && sp.left.role, sp && sp.right.role].join('|');
     if (it.type === 'text' && it.path) return pbPathGeom(it);
     var hit = pbGeomCache.get(it);
     if (hit && hit.key === key) return hit.g;
     var g = { x: it.x, y: it.y, w: it.w, rot: it.rot, align: it.align, size: it.type === 'text' ? pbFontSize(it) : 0, h: 0, shrunk: false };
     if (it.type !== 'text') return g;
-    if (pbState.snapOuter && !it.auto && !pbStraddles(it)) {
-      var side = pbPageSide(it);
-      if (sp && sp[side].role === 'story' && pbSpreadPages(s, pbState.spreads.length)[side]) {
-        var l = pbLive(side);
-        g.w = Math.min(it.w, l.x1 - l.x0);
-        g.x = side === 'left' ? l.x0 : l.x1 - g.w;
-        g.align = side;
-      }
-    }
     var m = pbMargins(), room = 1 - 2 * m.top;
     g.h = pbTextHeightFrac(it, g.w, g.size);
     while (g.h > room && g.size > 6) {
@@ -16367,11 +16358,36 @@
       g.h = pbTextHeightFrac(it, g.w, g.size);
       g.shrunk = true;
     }
+    var snapped = pbSnapText(it, s, g);
     g.y = Math.max(m.top, Math.min(1 - m.top - g.h, g.y));
     var L = pbLive('left'), R = pbLive('right');
-    g.x = Math.max(L.x0, Math.min(R.x1 - g.w, g.x));
+    if (!snapped) g.x = Math.max(L.x0, Math.min(R.x1 - g.w, g.x));
     pbGeomCache.set(it, { key: key, g: g });
     return g;
+  }
+  // "Snap story text to the top or bottom of the page" (on unless turned
+  // off): a story box goes to the top margin if it's in the page's upper
+  // half, else the bottom one, and its words -- what they actually take
+  // up, not the box, which can be wider than its lines -- are centered on
+  // the page. Left alone: a box across the fold, one sitting in the
+  // page's middle (put there on purpose), matter pages and boxes with no
+  // words. In place on `g`; true if it moved it.
+  function pbSnapText(it, s, g) {
+    var sp = pbState.spreads[s];
+    if (!pbState.snapText || it.auto || it.bind || pbStraddles(it)) return false;
+    var side = pbPageSide(it), text = pbItemText(it);
+    if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side] || !text.trim()) return false;
+    var mid = g.y + g.h / 2;
+    if (Math.abs(mid - 0.5) < 0.1) return false;
+    var Wpt = 2 * pbTrim(pbState.trim).pageW * 72, bw = g.w * Wpt, tw = 0;
+    pbWrapRich(pbMeasureCtx2, it, text, g.size, bw).forEach(function (ln) { tw = Math.max(tw, ln.w); });
+    var off = g.align === 'left' ? 0 : g.align === 'right' ? bw - tw : (bw - tw) / 2;
+    var l = pbLive(side), x0 = (side === 'left' ? 0.25 : 0.75) - tw / Wpt / 2;
+    // The words kept inside the text area (the box itself may hang past it).
+    x0 = Math.max(l.x0, Math.min(l.x1 - tw / Wpt, x0));
+    g.x = x0 - off / Wpt;
+    g.y = mid < 0.5 ? pbMargins().top : PB_BOTTOM;
+    return true;
   }
   // Folios: story pages only, in the outer bottom corners or centered,
   // 0.4 in from the trim.
@@ -16416,8 +16432,8 @@
     var l = pbLive(side), c = side === 'left' ? 0.25 : 0.75;
     return w >= l.x1 - l.x0 ? l.x0 : Math.max(l.x0, Math.min(l.x1 - w, c - w / 2));
   }
-  // A new story box: the standard width, centered in the page's text area.
-  // A new story box: centered on its page and, unless told otherwise, at
+  // A new story box (its words left-aligned, as every new box's are):
+  // centered on its page and, unless told otherwise, at
   // the bottom. y = 1 means "on the bottom margin": pbGeom holds every box
   // inside the margins, so a box stored at 1 sits on the bottom margin
   // and grows upward as words are added instead of running off the page.
@@ -16425,7 +16441,7 @@
   function pbNewStoryBox(side, y, extra) {
     if (y == null) y = PB_BOTTOM;
     var w = pbStoryW(side);
-    return pbText(pbCenterX(side, w), y, w, '', Object.assign({ align: 'center' }, extra || {}));
+    return pbText(pbCenterX(side, w), y, w, '', Object.assign({ align: 'left' }, extra || {}));
   }
   // Typefaces with real bold and italic (Cutive, our American
   // Typewriter, has only a regular).
@@ -16661,10 +16677,12 @@
     var A = ctx.measureText(stripFormatMarkers(pbItemText(it)).replace(/\s*\n\s*/g, ' ') || 'Words go here').width;
     var page = P.W / 2 * 0.9, pts = [], i, N;
     if (kind === 'circle') {
-      // Starting at the bottom and going round clockwise, so centered words
-      // sit over the top, upright.
-      var r = Math.min(P.H * 0.4, Math.max(30, A * 1.25 / (2 * Math.PI)));
-      for (i = 0, N = 72; i < N; i++) { var t = Math.PI / 2 + 2 * Math.PI * i / N; pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); }
+      // Going round clockwise, so the words sit over the top, upright.
+      var r = Math.min(P.H * 0.4, Math.max(30, A * 1.25 / (2 * Math.PI))), half = Math.min(A, 2 * Math.PI * r) / (2 * r);
+      // Left-aligned words start just left of the top (right-aligned end
+      // just right of it), so either way they sit centered over the top.
+      var t0 = it.align === 'left' ? -Math.PI / 2 - half : it.align === 'right' ? -Math.PI / 2 + half : Math.PI / 2;
+      for (i = 0, N = 72; i < N; i++) { var t = t0 + 2 * Math.PI * i / N; pts.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); }
       return { pts: pts, closed: true };
     }
     var c = Math.min(page, Math.max(g.w * P.W, kind === 'arc' ? A / 1.1 : A * 1.05));
@@ -16717,7 +16735,7 @@
         if (!shaped) return;
         if (!it) {
           pbCheckpoint();
-          it = pbNormalizeItem({ id: pbUid('t'), type: 'text', text: '', align: 'center' });
+          it = pbNormalizeItem({ id: pbUid('t'), type: 'text', text: '', align: 'left' });
           pbState.spreads[s].items.push(it);
         }
         pbSetPath(s, it, shaped.pts, shaped.closed);
@@ -18039,7 +18057,9 @@
           pbSelect({ s: s, id: it.id });
           pbRefreshSpread(s);
         } else if (wasSelected || e.detail >= 2) {
-          pbOpenPopup(s, it.id);
+          // Where you clicked comes along: the caret there, or a
+          // double-clicked word selected.
+          pbOpenPopup(s, it.id, { x: e.clientX, y: e.clientY, word: e.detail >= 2 });
         } else {
           pbSelect({ s: s, id: it.id });
         }
@@ -18203,11 +18223,23 @@
     if (!it) return;
     var styled = pbHasStyles(pbFontKey(it));
     pbPopText.style.fontFamily = displayStackFor(pbFontKey(it));
-    // Big enough to read and edit, whatever size it prints.
-    pbPopText.style.fontSize = Math.max(20, Math.min(34, pbFontSize(it) * 1.2)) + 'px';
+    // A magnified copy of the box: its words at its width and size times
+    // the same zoom, so the lines break where they do on the page, made
+    // big enough to read and edit (and no wider than the window).
+    var box = pbPopBox(), g = pbGeom(it, pbPopFor.s);
+    if (box) {
+      var stage = box.closest('.pb-stage'), bw = box.offsetWidth, disp = g.size * stage.clientWidth / (2 * pbTrim(pbState.trim).pageW * 72);
+      var z = Math.max(1.4, 24 / disp);
+      z = Math.max(1, Math.min(z, (document.documentElement.clientWidth - 24 - 49) / bw));
+      pbPopText.style.fontSize = (disp * z) + 'px';
+      pbPopText.style.width = (bw * z + 26) + 'px';
+    } else {
+      pbPopText.style.fontSize = Math.max(20, Math.min(34, pbFontSize(it) * 1.2)) + 'px';
+      pbPopText.style.width = '';
+    }
     pbPopText.style.fontWeight = styled && it.bold ? '700' : '400';
     pbPopText.style.fontStyle = styled && it.italic ? 'italic' : 'normal';
-    pbPopText.style.textAlign = pbGeom(it, pbPopFor.s).align;
+    pbPopText.style.textAlign = g.align;
     pbPopText.style.lineHeight = String(pbLh(it));
     var tools = pbPop.querySelector('.pb-pop-tools');
     tools.innerHTML = '';
@@ -18225,22 +18257,59 @@
     );
     autoGrow(pbPopText);
   }
+  function pbPopBox() {
+    var stage = pbPopFor && pbStageEl(pbPopFor.s);
+    return stage && stage.querySelector('.pb-tb[data-id="' + pbPopFor.id + '"]');
+  }
+  // Over the box: the magnified words' middle on the box's own middle,
+  // kept inside the window.
   function pbPlacePopup() {
     if (pbPop.hidden || !pbPopFor) return;
-    var stage = pbStageEl(pbPopFor.s), box = stage && stage.querySelector('.pb-tb[data-id="' + pbPopFor.id + '"]');
-    var vw = document.documentElement.clientWidth, w = Math.min(600, vw - 24);
+    var box = pbPopBox();
+    var vw = document.documentElement.clientWidth, w = Math.min(vw - 24, Math.max(380, pbPopText.offsetWidth + 23));
     pbPop.style.width = w + 'px';
-    var r = box ? box.getBoundingClientRect() : { top: 120, bottom: 120, left: vw / 2, width: 0 };
+    var r = box ? box.getBoundingClientRect() : { top: 120, bottom: 120, left: vw / 2, width: 0, height: 0 };
     var h = pbPop.offsetHeight;
-    var top = r.bottom + 14;
-    if (top + h > window.innerHeight - 12) top = Math.max(12, r.top - h - 14);
+    var top = r.top + r.height / 2 - (pbPopText.offsetTop + pbPopText.offsetHeight / 2);
+    top = Math.max(12, Math.min(window.innerHeight - h - 12, top));
     var left = Math.max(12, Math.min(vw - w - 12, r.left + r.width / 2 - w / 2));
     pbPop.style.top = (top + window.scrollY) + 'px';
     pbPop.style.left = (left + window.scrollX) + 'px';
   }
-  function pbOpenPopup(s, id) {
+  // The spot clicked in a box's words, as a selection in the pop-up's
+  // words: the box shows them already broken into lines (soft breaks where
+  // spaces were) without the ** and * markers, so its offset is walked
+  // across to the plain words the pop-up holds.
+  function pbPopPick(s, it, at) {
+    var stage = pbStageEl(s), ed = stage && stage.querySelector('.pb-tb[data-id="' + it.id + '"] .pb-tb-text');
+    if (!ed || it.path) return null;
+    var node = null, off = 0;
+    if (document.caretPositionFromPoint) { var cp = document.caretPositionFromPoint(at.x, at.y); if (cp) { node = cp.offsetNode; off = cp.offset; } }
+    else if (document.caretRangeFromPoint) { var cr = document.caretRangeFromPoint(at.x, at.y); if (cr) { node = cr.startContainer; off = cr.startOffset; } }
+    if (!node || !ed.contains(node)) return null;
+    var rg = document.createRange();
+    rg.setStart(ed, 0); rg.setEnd(node, off);
+    var shown = ed.textContent, j = rg.toString().length;
+    var plain = pbItemText(it).split('\n').map(function (line) { return parseInlineRuns(line).map(function (r) { return r.text || ''; }).join(''); }).join('\n');
+    var i = 0, k = 0;
+    while (k < j && i < plain.length) {
+      if (shown[k] === plain[i]) { i++; k++; }
+      else if (shown[k] === '\n') { while (i < plain.length && /[ \t]/.test(plain[i])) i++; k++; }
+      else if (/\s/.test(plain[i])) i++;
+      else { i++; k++; }
+    }
+    var a = i, b = i;
+    if (at.word) {
+      var w = /[\p{L}\p{N}'’-]/u;
+      while (a > 0 && w.test(plain[a - 1])) a--;
+      while (b < plain.length && w.test(plain[b])) b++;
+    }
+    return { a: a, b: b };
+  }
+  function pbOpenPopup(s, id, at) {
     var it = pbFindItem(s, id);
     if (!it) return;
+    var pick = at ? pbPopPick(s, it, at) : null;
     pbPopFor = { s: s, id: id };
     var pages = pbSpreadPages(s, pbState.spreads.length);
     pbPop.querySelector('.pb-pop-where').textContent = 'p. ' + (pages[pbPageSide(it)] || pages.left || pages.right);
@@ -18252,8 +18321,43 @@
     pbPlacePopup();
     pbQuickbar.hidden = true;
     pbPopText.focus();
-    pbPopText.setSelectionRange(pbPopText.value.length, pbPopText.value.length);
+    if (pick) pbPopText.setSelectionRange(pick.a, pick.b);
+    pbPopOpened = pick ? { t: Date.now(), x: at.x, y: at.y, pick: pick } : null;
+    if (pick) {} else { var end = pbPopText.textContent.length + Math.max(0, pbPopText.children.length - 1); pbPopText.setSelectionRange(end, end); }
+    // Magnified about the spot clicked: the caret (or chosen word) lands
+    // right under the pointer, so a second click there -- a double-click
+    // -- falls on the same word in the pop-up.
+    if (pick) {
+      var sel = window.getSelection(), rg = sel.rangeCount && sel.getRangeAt(0).cloneRange();
+      if (rg) {
+        var rr = rg.getBoundingClientRect();
+        if (!rr.height) { rg.collapse(true); rr = rg.getBoundingClientRect(); }
+        if (rr.height) {
+          var dx = at.x - (rr.left + rr.width / 2), dy = at.y - (rr.top + rr.height / 2);
+          var vw = document.documentElement.clientWidth, w = pbPop.offsetWidth, h = pbPop.offsetHeight;
+          var left = Math.max(12, Math.min(vw - w - 12, parseFloat(pbPop.style.left) - window.scrollX + dx));
+          var top = Math.max(12, Math.min(window.innerHeight - h - 12, parseFloat(pbPop.style.top) - window.scrollY + dy));
+          pbPop.style.left = (left + window.scrollX) + 'px';
+          pbPop.style.top = (top + window.scrollY) + 'px';
+        }
+      }
+    }
   }
+  // The second click of the double-click that opened the pop-up lands on
+  // the pop-up, maybe on another word (it can't always sit right over the
+  // spot): it selects the word that was double-clicked on the page instead.
+  var pbPopOpened = null;
+  pbPopText.addEventListener('mousedown', function (e) {
+    var o = pbPopOpened;
+    pbPopOpened = null;
+    if (!o || Date.now() - o.t > 600 || Math.abs(e.clientX - o.x) + Math.abs(e.clientY - o.y) > 8) return;
+    e.preventDefault();
+    var plain = pbPopText.textContent ? Array.prototype.map.call(pbPopText.children, function (r) { return r.textContent; }).join('\n') : '';
+    var a = o.pick.a, b = o.pick.b, w = /[\p{L}\p{N}'’-]/u;
+    while (a > 0 && w.test(plain[a - 1])) a--;
+    while (b < plain.length && w.test(plain[b])) b++;
+    pbPopText.setSelectionRange(a, b);
+  });
   function pbClosePopup() {
     if (pbPop.hidden) return;
     pbPop.hidden = true;
@@ -18696,7 +18800,7 @@
     var x = fx != null && where !== 'bottom' ? Math.max(0, Math.min(1 - w, fx - w / 2)) : pbCenterX(side, w);
     var y = fy != null ? Math.max(0, fy - 0.03) : 0.42;
     pbCheckpoint();
-    var it = pbText(x, y, w, '', { align: 'center' });
+    var it = pbText(x, y, w, '', { align: 'left' });
     if (where === 'bottom') it.y = PB_BOTTOM;
     pbState.spreads[s].items.push(it);
     pbSel = null;
@@ -19535,7 +19639,7 @@
   }
   pbFmt('pbSnapOuter').addEventListener('change', function () {
     pbCheckpoint();
-    pbState.snapOuter = pbFmt('pbSnapOuter').checked;
+    pbState.snapText = pbFmt('pbSnapOuter').checked;
     pbPersist(); pbRefreshAll();
   });
   pbFmt('pbPageNums').querySelectorAll('button').forEach(function (b) {
@@ -20065,7 +20169,7 @@
     requestAnimationFrame(function () { fitTitleInput(pbTitleInput); });
     setFontSelect(pbFmt('pbFontSeg'), pbState.font);
     pbSyncBookLayout();
-    pbFmt('pbSnapOuter').checked = pbState.snapOuter;
+    pbFmt('pbSnapOuter').checked = pbState.snapText;
     pbFmt('pbPageNums').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === pbState.pageNums); });
     pbRenderTrimGrid();
     updatePbBookMenuBtn();
