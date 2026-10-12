@@ -116,7 +116,7 @@ function migrateLegacyState(state) {
 // tombstone counts from when it was deleted, an archive/unarchive from
 // archiveChangedAt) -- the same rule Bookbug's own mergeLibraries uses
 // when it pulls. Books only one side has are kept.
-const BOOK_LISTS = [['chapbooks', 'trash'], ['pictureBooks', 'pictureBookTrash'], ['cartoonBooks', 'cartoonBookTrash']];
+const BOOK_LISTS = [['chapbooks', 'trash'], ['pictureBooks', 'pictureBookTrash'], ['cartoonBooks', 'cartoonBookTrash'], ['comicBooks', 'comicBookTrash']];
 
 function bookStamp(e) {
   return Math.max(Number(e.deletedAt) || 0, Number(e.updatedAt) || 0, Number(e.archiveChangedAt) || 0);
@@ -173,7 +173,7 @@ export function mergeBookbugSave(stored, incoming) {
       if (!cur || Number(d.deletedAt) > Number(cur.deletedAt)) byId.set(d.id, d);
     });
     const live = new Map();
-    ['chapbooks', 'pictureBooks', 'cartoonBooks'].forEach(k => (out[k] || []).forEach(e => { if (e && e.id) live.set(e.id, bookStamp(e)); }));
+    ['chapbooks', 'pictureBooks', 'cartoonBooks', 'comicBooks'].forEach(k => (out[k] || []).forEach(e => { if (e && e.id) live.set(e.id, bookStamp(e)); }));
     out.recentlyDeleted = [...byId.values()].filter(d => !(live.get(d.id) > Number(d.deletedAt)));
   }
   out.lastOpened = newerStamped(stored.lastOpened, incoming.lastOpened);
