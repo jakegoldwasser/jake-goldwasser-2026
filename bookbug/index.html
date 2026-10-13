@@ -443,6 +443,8 @@
   /* Clear of the line / page count in the card's bottom corner. */
   .poem-comments { display: flex; flex-direction: column; gap: 6px; margin: 0 0.5in 30px; }
   .poem-comments:empty { display: none; }
+  /* Under a spread, cartoon or comic page rather than a page of text. */
+  .poem-comments.item-comments { margin: 10px 0 0; }
   .poem-comment { border: 1px solid var(--line); border-left: 3px solid var(--warning); border-radius: 0 6px 6px 0; padding: 7px 10px; background: var(--surface-2); font-size: 13.5px; }
   .poem-comment-head { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; color: var(--ink-faint); }
   .poem-comment-head button { margin-left: auto; border: none; background: none; padding: 0; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -1184,7 +1186,7 @@
   .stage-edit-body.is-verse > div:not(.ed-image) { text-indent: 1.5em hanging; }
   .stage-edit-body { hyphens: manual; -webkit-hyphens: manual; }
   /* A share link's reader: only the book, full screen. */
-  html.reader-mode .page, html.reader-mode .signin-gate, html.reader-mode #previewFullClose { display: none !important; }
+  html.reader-mode .page, html.reader-mode .signin-gate, html.reader-mode .preview-full-close { display: none !important; }
   .reader-message { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--ink-soft); background: var(--paper, var(--surface)); z-index: 5; }
   /* A note's reference numeral: small and raised, as the PDF sets it. */
   .note-ref { font-size: 0.65em; vertical-align: 0.55em; line-height: 0; }
@@ -2612,6 +2614,12 @@
   .pb-layout input { margin: 3px 0 0; accent-color: var(--accent); }
   .pb-layout strong { font-size: 13.5px; }
   .pb-layout span { grid-column: 2; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  #pbStoryBar, #pbStoryPanel { margin-top: 16px; }
+  .pb-story-bar-text { font-size: 13px; color: var(--ink-soft); }
+  /* 16px so iOS doesn't zoom in on focus. */
+  #pbStoryBox { font-size: 16px; min-height: 140px; }
+  .pb-story-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; }
+  .pb-story-foot .status-line { margin: 0; }
   .pb-new-story-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
   .pb-new-story-foot .pb-new-note { margin: 0; }
   .pb-new-story-foot .btn-link { margin-left: auto; font-size: 12.5px; }
@@ -2829,6 +2837,25 @@
             <button class="btn add-poem-btn" id="pbAddSpreadBtn" type="button">+ Add spread</button>
           </div>
           <input type="file" id="pbFileInput" accept="image/*" hidden>
+        </div>
+        <!-- Story text from a numbered list, at the foot of the spreads like a
+             poetry collection's Bring in panel (pbParseStanzas). -->
+        <div class="panel intake-collapsed-bar" id="pbStoryBar">
+          <span class="pb-story-bar-text">Numbered stanzas, one to a spread</span>
+          <button class="btn btn-sm" id="pbStoryOpenBtn" type="button">Bring in story text</button>
+        </div>
+        <div class="panel" id="pbStoryPanel" hidden>
+          <div class="intake-head">
+            <div class="panel-title">Bring in story text</div>
+            <button class="btn btn-sm" id="pbStoryCloseBtn" type="button">Close</button>
+          </div>
+          <textarea class="raw-paste" id="pbStoryBox" spellcheck="true" placeholder="1 Once upon a time there was a boy&#10;2 &#8212; the boy&#8217;s name was Jim"></textarea>
+          <input type="file" id="pbStoryFile" accept=".txt,.md,.text,.pdf,text/plain,text/markdown,application/pdf" hidden>
+          <div class="pb-story-foot">
+            <button class="btn btn-primary" id="pbStoryPutBtn" type="button" disabled>Put on spreads</button>
+            <button class="btn-link" id="pbStoryUploadBtn" type="button">Upload a file&#8230;</button>
+            <span class="status-line" id="pbStoryStatus"></span>
+          </div>
         </div>
         <div class="panel archive-panel" id="pbArchivePanel" hidden>
           <div class="archive-head">
@@ -3241,6 +3268,7 @@
             <button type="button" id="cmNextPage" aria-label="Next page">›</button>
             <button type="button" class="dots-btn" id="cmPageMenuBtn" aria-label="Page options" aria-haspopup="menu">⋯</button>
           </div>
+          <div id="cmComments"></div>
           <input type="file" id="cmFileInput" accept="image/*" multiple hidden>
         </div>
         <div class="panel archive-panel" id="cmArchivePanel" hidden>
@@ -4854,6 +4882,8 @@
       notes: sp.notes || '', items: (sp.items || []).map(pbNormalizeItem).filter(Boolean) };
     if (typeof sp.archivedFrom === 'number') out.archivedFrom = sp.archivedFrom;
     if (sp.itemOnly) { out.itemOnly = true; out.fromSpreadId = sp.fromSpreadId || null; }
+    var comments = normComments(sp.comments);
+    if (comments.length) out.comments = comments;
     return out;
   }
 
@@ -4918,7 +4948,8 @@
       spreads: spreads, archived: (d.archived || []).map(pbNormalizeSpread),
       // Recently deleted spreads: { deletedAt, spread, from: 'book' | 'archive', at }.
       deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, spread: pbNormalizeSpread(x.spread), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
-      images: d.images && typeof d.images === 'object' ? d.images : {}
+      images: d.images && typeof d.images === 'object' ? d.images : {},
+      shareToken: typeof d.shareToken === 'string' ? d.shareToken : undefined
     });
   }
   function pbValidated(book) { pbValidateRoles(book); return book; }
@@ -5050,6 +5081,8 @@
     pg = pg || {};
     var out = { id: pg.id || pbUid('pg'), panels: (pg.panels || []).map(cmNormalizePanel), balloons: (pg.balloons || []).map(cmNormalizeBalloon) };
     if (cmColor(pg.bg)) out.bg = cmColor(pg.bg);
+    var comments = normComments(pg.comments);
+    if (comments.length) out.comments = comments;
     return out;
   }
   // The archive holds whole pages and single illustrations taken out of
@@ -5076,7 +5109,8 @@
       pages: (Array.isArray(d.pages) && d.pages.length ? d.pages : [{}]).map(cmNormalizePage),
       archived: (d.archived || []).map(cmNormalizeArchived).filter(Boolean),
       deleted: freshDeleted(d.deleted, ENTRY_RECOVER_DAYS).map(function (x) { return { deletedAt: x.deletedAt, item: cmNormalizeArchived(x.item) }; }).filter(function (x) { return x.item; }),
-      images: d.images && typeof d.images === 'object' ? d.images : {}
+      images: d.images && typeof d.images === 'object' ? d.images : {},
+      shareToken: typeof d.shareToken === 'string' ? d.shareToken : undefined
     };
   }
   function cmPageHasContent(pg) {
@@ -5126,6 +5160,8 @@
     // saved as spoken before that gets them folded in, once.
     if (c.spoken !== false && out.caption.trim() && !/^[“‘"]/.test(out.caption.trim())) out.caption = '“' + out.caption.trim() + '”';
     if (typeof c.archivedFrom === 'number') out.archivedFrom = c.archivedFrom;
+    var comments = normComments(c.comments);
+    if (comments.length) out.comments = comments;
     // The page the drawing was cut from, and where (fractions of it; may
     // run past its edges, for paper round it), so it can be reframed.
     if (c.page && c.crop && ['fx', 'fy', 'fw', 'fh'].every(function (k) { return typeof c.crop[k] === 'number'; })) {
@@ -5157,7 +5193,8 @@
       // `from: 'book'` (with its old place, `at`) when deleted straight
       // from the batch with ⋯ › Delete…, so Restore puts it back there.
       deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, cartoon: cbNormalizeCartoon(x.cartoon), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
-      images: d.images && typeof d.images === 'object' ? d.images : {}
+      images: d.images && typeof d.images === 'object' ? d.images : {},
+      shareToken: typeof d.shareToken === 'string' ? d.shareToken : undefined
     };
   }
   function cbCartoonIsEmpty(c) { return !c.img && !(c.caption || '').trim(); }
@@ -5218,6 +5255,7 @@
     try { return new URLSearchParams(location.search).get('book'); } catch (e) { return null; }
   }
   function syncBookUrl() {
+    if (window.BOOKBUG_READ_TOKEN) return;
     var id = bookIdShown();
     if (id === urlBookId()) return;
     try {
@@ -12027,6 +12065,41 @@
     });
   }
 
+  // Comments on a whole spread (picture books), cartoon (cartoon batches)
+  // or page (comics): notes for yourself, kept on that thing in
+  // `comments` and listed under it the way a text book's margin comments
+  // sit under the text, with Resolve. Never printed, and left out of
+  // share links.
+  function normComments(list) {
+    return Array.isArray(list) ? list.filter(function (c) { return c && typeof c.text === 'string' && c.text.trim(); })
+      .map(function (c) { return { id: String(c.id || 'c' + Date.now().toString(36)), text: c.text, at: +c.at || Date.now() }; }) : [];
+  }
+  async function addCommentTo(owner, label, save) {
+    var text = await promptDialog('Comment on ' + label, '');
+    if (!text || !text.trim()) return;
+    owner.comments = (owner.comments || []).concat([{ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: text.trim(), at: Date.now() }]);
+    save();
+  }
+  // `save` stores the change and redraws whatever holds the list.
+  function commentListFor(owner, save) {
+    var listEl = document.createElement('div');
+    listEl.className = 'poem-comments item-comments';
+    (owner.comments || []).forEach(function (c) {
+      var el = document.createElement('div');
+      el.className = 'poem-comment';
+      el.innerHTML = '<div class="poem-comment-head"><span></span><button type="button">Resolve</button></div><div class="poem-comment-text"></div>';
+      el.querySelector('span').textContent = relTime(c.at);
+      el.querySelector('.poem-comment-text').textContent = c.text;
+      el.querySelector('button').addEventListener('click', function () {
+        owner.comments = (owner.comments || []).filter(function (x) { return x !== c; });
+        save();
+        showToast('Comment resolved.', 'Undo', function () { owner.comments = (owner.comments || []).concat([c]); save(); });
+      });
+      listEl.appendChild(el);
+    });
+    return listEl;
+  }
+
   // ---------------------------------------------------------------------
   // Snapshots: saved copies of an entry to compare with or go back to.
   // Signed in, they're kept with the account -- each entry's list as its
@@ -13911,8 +13984,10 @@
     btn.setAttribute('aria-expanded', 'true');
     bookMenu.querySelector('[data-action="archive"]').textContent = entry.archived ? 'Unarchive' : 'Archive';
     bookMenu.querySelector('[data-action="delete"]').hidden = !entry.archived;
-    // Text books, from inside the book, once signed in (links live in the account).
-    bookMenu.querySelector('[data-action="share"]').hidden = !(bookMenuFromEditor && btn.id === 'currentBookMenuBtn' && cloudAuthToken);
+    // From inside the book, once signed in (links live in the account).
+    // Picture books, cartoon batches and comics need the backend that
+    // shares every kind (cloud-sync-backend's SHARE_LIBRARIES) deployed.
+    bookMenu.querySelector('[data-action="share"]').hidden = !(bookMenuFromEditor && cloudAuthToken && (btn.id === 'currentBookMenuBtn' || SHARE_ALL_KINDS));
     bookMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = bookMenu.offsetWidth, mh = bookMenu.offsetHeight;
@@ -13928,6 +14003,7 @@
     var entry = bookMenuEntry;
     var fromEditor = bookMenuFromEditor;
     closeBookMenu();
+    if (item.dataset.action === 'share') { openShareDialog(); return; }
     if (cmEntry(entry.id) === entry) {
       if (item.dataset.action === 'duplicate') duplicateComic(entry.id, fromEditor);
       else if (item.dataset.action === 'archive') setComicArchived(entry.id, !entry.archived);
@@ -13946,7 +14022,6 @@
       else deletePictureBookForever(entry.id);
       return;
     }
-    if (item.dataset.action === 'share') { openShareDialog(); return; }
     if (item.dataset.action === 'duplicate') duplicateChapbook(entry.id, fromEditor);
     else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
     else deleteChapbookForever(entry.id);
@@ -13958,6 +14033,7 @@
 
   // Share a read-only link: anyone with it can read this book, page by
   // page as it prints (always the latest saved version), and nothing else.
+  var SHARE_ALL_KINDS = false;
   function shareUrlFor(token) { return location.origin + location.pathname + '?read=' + encodeURIComponent(token); }
   async function shareApi(body) {
     var res = await fetch(CLOUD_API_URL + '?share', { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cloudAuthToken }, body: JSON.stringify(body) });
@@ -13965,25 +14041,37 @@
     if (!res.ok) throw new Error(out.error || 'http_' + res.status);
     return out;
   }
+  // The open book, whichever editor it's in: its kind (as the backend
+  // names its library), its id, and its data, where the link's token is kept.
+  function shareTarget() {
+    if (isPictureBookShown()) return { kind: 'picture', id: function () { return pbId; }, data: pbState, flush: function () { pbFlushSave(true); }, save: pbPersist };
+    if (isCartoonShown()) return { kind: 'cartoon', id: function () { return cbId; }, data: cbState, flush: function () { cbFlushSave(true); }, save: cbPersist };
+    if (isComicShown()) return { kind: 'comic', id: function () { return cmId; }, data: cmState, flush: function () { cmFlushSave(true); }, save: function () { cmPersist(); } };
+    return { kind: 'text', id: function () { return state.chapbookId; }, data: state, flush: flushPendingSave, save: persist };
+  }
   function openShareDialog() {
+    var tg = shareTarget(), book = tg.data;
     var d = makeDialog('subs-box', 'Share a read-only link',
-      '<p style="margin-top:0;">Anyone with this link can read the book, page by page as it prints, and always the latest saved version. They can’t change it, and they don’t see your comments, submissions or archive.</p>' +
+      '<p style="margin-top:0;">Anyone with this link can read the book, page by page as it prints, and always the latest saved version. They can’t change it, and they don’t see your comments, notes or archive.</p>' +
       '<div class="share-body"></div><p class="scan-status" aria-live="polite"></p>' +
       '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
     var bodyEl = d.box.querySelector('.share-body'), status = d.box.querySelector('.scan-status');
     d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
     function render() {
       bodyEl.innerHTML = '';
-      if (!state.shareToken) {
+      if (!book.shareToken) {
         var make = document.createElement('button');
         make.type = 'button'; make.className = 'btn btn-primary'; make.textContent = 'Create link';
         make.addEventListener('click', async function () {
           make.disabled = true; status.textContent = 'Saving the book and making the link…';
           try {
-            flushPendingSave();
+            tg.flush();
             await syncLibraryToCloud();
-            var out = await shareApi({ bookId: state.chapbookId });
-            state.shareToken = out.token; persist();
+            // A picture book's, cartoon batch's or comic's art goes up too,
+            // so a reader sees every illustration.
+            if (tg.kind !== 'text') await pbFlushImageQueue();
+            var out = await shareApi({ bookId: tg.id(), kind: tg.kind });
+            book.shareToken = out.token; tg.save(); tg.flush(); scheduleCloudAutosave();
             status.textContent = '';
             render();
           } catch (e) { make.disabled = false; status.textContent = 'Couldn’t make the link (' + e.message + ').'; }
@@ -13994,7 +14082,7 @@
       var row = document.createElement('div');
       row.className = 'snap-take';
       row.innerHTML = '<input type="text" readonly aria-label="Link"><button class="btn btn-primary" type="button">Copy link</button>';
-      var inp = row.querySelector('input'); inp.value = shareUrlFor(state.shareToken);
+      var inp = row.querySelector('input'); inp.value = shareUrlFor(book.shareToken);
       inp.addEventListener('focus', function () { inp.select(); });
       row.querySelector('button').addEventListener('click', function () {
         (navigator.clipboard ? navigator.clipboard.writeText(inp.value) : Promise.reject()).then(function () { status.textContent = 'Copied.'; }, function () { inp.select(); status.textContent = 'Press ⌘C to copy.'; });
@@ -14003,7 +14091,7 @@
       stop.type = 'button'; stop.className = 'btn btn-ghost btn-danger btn-sm'; stop.textContent = 'Stop sharing';
       stop.addEventListener('click', async function () {
         stop.disabled = true;
-        try { await shareApi({ token: state.shareToken, revoke: true }); delete state.shareToken; persist(); status.textContent = 'The link no longer works.'; render(); }
+        try { await shareApi({ token: book.shareToken, revoke: true }); delete book.shareToken; tg.save(); tg.flush(); scheduleCloudAutosave(); status.textContent = 'The link no longer works.'; render(); }
         catch (e) { stop.disabled = false; status.textContent = 'Couldn’t stop sharing (' + e.message + ').'; }
       });
       bodyEl.append(row, stop);
@@ -16181,16 +16269,19 @@
     return pbImgLoading[id];
   }
   async function pbFetchCloudImage(id) {
-    if (!cloudAuthToken) return null;
+    var reading = window.BOOKBUG_READ_TOKEN;
+    if (!cloudAuthToken && !reading) return null;
     try {
-      var res = await fetch(CLOUD_API_URL + '?image=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
+      // A share link's reader gets each picture through the link itself.
+      var res = reading ? await fetch(CLOUD_API_URL + '?share=' + encodeURIComponent(reading) + '&image=' + encodeURIComponent(id))
+        : await fetch(CLOUD_API_URL + '?image=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (!res.ok) return null;
       var data = await res.json();
       if (!data || typeof data.data !== 'string' || !data.type) return null;
       var bin = atob(data.data), bytes = new Uint8Array(bin.length);
       for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       var blob = new Blob([bytes], { type: data.type });
-      pbDbDo('readwrite', function (st) { return st.put({ blob: blob, type: data.type }, id); }).catch(function () {});
+      if (!reading) pbDbDo('readwrite', function (st) { return st.put({ blob: blob, type: data.type }, id); }).catch(function () {});
       return blob;
     } catch (e) { return null; }
   }
@@ -17903,6 +17994,7 @@
     notes.hidden = !pbNotesOpen.has(sp);
     syncNotesBtn(!notes.hidden);
     card.appendChild(notes);
+    if ((sp.comments || []).length) card.appendChild(commentListFor(sp, function () { pbPersist(); pbRenderSpread(s); }));
     wrap.appendChild(card);
     return wrap;
   }
@@ -19325,6 +19417,7 @@
       (middle ? '<button type="button" role="menuitem" data-action="duplicate">Duplicate</button>' : '') +
       (pbViewMode === 'spreads' ? '<button type="button" role="menuitem" data-action="pathtext">Draw words on a line or shape…</button>' : '') +
       (pbClip ? '<button type="button" role="menuitem" data-action="paste">Paste ' + (pbClip.item.type === 'image' ? 'the illustration' : 'the text box') + '</button>' : '') +
+      '<button type="button" role="menuitem" data-action="comment">Comment\u2026</button>' +
       '<button type="button" role="menuitem" data-action="clear">Clear the spread</button>' +
       (middle ? '<button type="button" role="menuitem" data-action="archive">Archive</button>' +
         '<button type="button" role="menuitem" data-action="delete" class="is-danger">Delete…</button>' : '');
@@ -19349,11 +19442,16 @@
     else if (action === 'delete') pbDeleteSpread(s);
     else if (action === 'paste') pbPasteItem(s);
     else if (action === 'pathtext') pbStartPathDraw(s, null);
+    else if (action === 'comment') {
+      var sp = pbState.spreads[s];
+      addCommentTo(sp, s === 0 ? 'the first page' : s === pbState.spreads.length - 1 ? 'the last page' : 'spread ' + s, function () { pbPersist(); pbRenderSpread(pbState.spreads.indexOf(sp)); });
+    }
     else if (action === 'duplicate') {
       pbCheckpoint();
       var copy = pbNormalizeSpread(JSON.parse(JSON.stringify(pbState.spreads[s])));
       copy.id = pbUid('s');
       copy.items.forEach(function (it) { it.id = pbUid(it.type === 'text' ? 't' : 'p'); });
+      delete copy.comments;
       pbState.spreads.splice(s + 1, 0, copy);
       pbPersist(); pbRenderView(); pbFollow(s + 1);
     } else if (action === 'clear') {
@@ -19844,7 +19942,8 @@
     var t = pbTrim(pbState.trim), aspect = (2 * t.pageW) / t.pageH;
     var w = Math.floor(Math.min(window.innerWidth - 40, (window.innerHeight - 110) * aspect));
     var ctx = pbCanvasFor(pbFull.querySelector('canvas'), w, pbSpreadH(w));
-    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, { placeholders: true, nonPages: 'shade', guides: true });
+    // A share link's reader sees the book as printed, without the guides.
+    pbDrawSpread(ctx, pbState.spreads[pbCur], pbCur, w, window.BOOKBUG_READ_TOKEN ? { nonPages: 'shade' } : { placeholders: true, nonPages: 'shade', guides: true });
     pbFull.querySelector('.preview-full-nav span').textContent = pbCaption(pbCur);
     var last = pbState.spreads.length - 1;
     pbFull.querySelectorAll('[data-step]').forEach(function (b) {
@@ -19858,7 +19957,7 @@
     renderPbPreviewFull();
   }
   function closePbPreviewFull() {
-    if (pbFull.hidden) return;
+    if (pbFull.hidden || window.BOOKBUG_READ_TOKEN) return;
     pbFull.hidden = true;
     document.documentElement.classList.remove('preview-full-open');
   }
@@ -20244,6 +20343,71 @@
     pbInsertSpread(at);
   });
 
+  // ---- Bring in story text: each numbered stanza onto the next story
+  // spread without words, in order, with spreads added after the story
+  // (two at a time, so the page count stays a multiple of four) when
+  // there aren't enough. One step to undo.
+  var pbStoryBox = pbFmt('pbStoryBox'), pbStoryStatus = pbFmt('pbStoryStatus');
+  function pbStoryShow(open) {
+    pbFmt('pbStoryPanel').hidden = !open;
+    pbFmt('pbStoryBar').hidden = open;
+    if (open) { pbStoryBox.focus(); pbFmt('pbStoryPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+  }
+  function pbStoryCount() {
+    var n = pbParseStanzas(pbStoryBox.value).length;
+    pbFmt('pbStoryPutBtn').disabled = !n;
+    pbStoryStatus.textContent = n ? n + (n === 1 ? ' stanza' : ' stanzas') : (pbStoryBox.value.trim() ? 'No lines start with a number.' : '');
+  }
+  function pbHasStoryWords(sp) {
+    return sp.items.some(function (it) { return it.type === 'text' && !it.bind && (it.text || '').trim(); });
+  }
+  function pbEmptyStorySpreads() {
+    return pbStorySpreads(pbState).filter(function (s) { return !pbHasStoryWords(pbState.spreads[s]); });
+  }
+  function pbBringInStanzas(stanzas) {
+    pbCheckpoint();
+    var added = 0;
+    while (pbEmptyStorySpreads().length < stanzas.length && pbState.spreads.length < 200) {
+      var at = pbState.spreads.length - 1;
+      while (at > 1 && (pbState.spreads[at - 1].left.role !== 'story' || pbState.spreads[at - 1].right.role !== 'story')) at--;
+      pbState.spreads.splice(at, 0, pbBlankSpread(), pbBlankSpread());
+      added += 2;
+    }
+    pbValidateRoles(pbState);
+    var targets = pbEmptyStorySpreads();
+    stanzas.forEach(function (text, i) {
+      if (targets[i] != null) pbState.spreads[targets[i]].items.push(pbNewStoryBox('left', null, { text: text }));
+    });
+    pbSel = null;
+    pbPersist();
+    pbRenderView();
+    var first = targets[0], last = targets[Math.min(stanzas.length, targets.length) - 1];
+    pbFollow(first);
+    return { first: first, last: last, added: added };
+  }
+  pbStoryBox.addEventListener('input', pbStoryCount);
+  pbFmt('pbStoryOpenBtn').addEventListener('click', function () { pbStoryShow(true); });
+  pbFmt('pbStoryCloseBtn').addEventListener('click', function () { pbStoryShow(false); });
+  pbFmt('pbStoryUploadBtn').addEventListener('click', function () { pbFmt('pbStoryFile').click(); });
+  pbFmt('pbStoryFile').addEventListener('change', async function () {
+    var input = pbFmt('pbStoryFile'), f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    pbStoryStatus.textContent = 'Reading \u201c' + f.name + '\u201d\u2026';
+    try { pbStoryBox.value = await pbReadStoryFile(f); pbStoryCount(); }
+    catch (e) { pbStoryStatus.textContent = 'Couldn\u2019t read \u201c' + f.name + '\u201d.'; }
+  });
+  pbFmt('pbStoryPutBtn').addEventListener('click', function () {
+    var stanzas = pbParseStanzas(pbStoryBox.value);
+    if (!stanzas.length) return;
+    var r = pbBringInStanzas(stanzas);
+    pbStoryBox.value = '';
+    pbStoryCount();
+    pbStoryShow(false);
+    var where = r.first === r.last ? 'spread ' + r.first : 'spreads ' + r.first + '\u2013' + r.last;
+    showToast(stanzas.length + (stanzas.length === 1 ? ' stanza' : ' stanzas') + ' put on ' + where + (r.added ? ' (' + r.added + ' spreads added)' : '') + '.', 'Undo', pbUndo);
+  });
+
   // Phones: the Formatting button at the top opens the Formatting panel
   // (through its own toggle, so everything that listens still hears it)
   // and scrolls down to it.
@@ -20372,9 +20536,7 @@
       if (!f) return;
       storyNote.textContent = 'Reading \u201c' + f.name + '\u201d\u2026';
       try {
-        var buf = await f.arrayBuffer();
-        var isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-        storyField.value = isPdf ? await pdfToDocText(buf) : new TextDecoder().decode(buf);
+        storyField.value = await pbReadStoryFile(f);
         countStanzas();
         if (!pbParseStanzas(storyField.value).length) storyNote.textContent = 'No numbered stanzas in \u201c' + f.name + '\u201d.';
       } catch (e) {
@@ -20397,6 +20559,11 @@
       else if (cur && line) cur.push(line);
     });
     return out.map(function (lines) { return lines.join('\n').trim(); }).filter(Boolean);
+  }
+  // A story file's text: plain text or Markdown as it is, a PDF read with pdf.js.
+  async function pbReadStoryFile(f) {
+    var buf = await f.arrayBuffer();
+    return f.type === 'application/pdf' || /\.pdf$/i.test(f.name) ? pdfToDocText(buf) : new TextDecoder().decode(buf);
   }
   // Spreads with story on both pages, in order.
   function pbStorySpreads(book) {
@@ -21132,6 +21299,7 @@
     side.appendChild(row);
     body.appendChild(side);
     card.appendChild(body);
+    if ((c.comments || []).length) card.appendChild(commentListFor(c, function () { cbPersist(); cbRenderList(); }));
     wrap.appendChild(card);
     requestAnimationFrame(function () { autoGrow(ta); });
     return wrap;
@@ -22432,6 +22600,7 @@
     cbItemMenu.innerHTML =
       (c.img ? '<button type="button" data-a="frame">Frame the drawing…</button><button type="button" data-a="replace">Replace drawing…</button><button type="button" data-a="shadows">Remove paper shadows</button><button type="button" data-a="ink">Clean up line art</button>' +
         (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') : '') +
+      '<button type="button" data-a="comment">Comment\u2026</button>' +
       (i > 0 ? '<button type="button" data-a="up">Move up</button>' : '') +
       (i < cbState.cartoons.length - 1 ? '<button type="button" data-a="down">Move down</button>' : '') +
       '<button type="button" data-a="archive">' + (cbCartoonIsEmpty(c) ? 'Delete' : 'Archive') + '</button>' +
@@ -22450,6 +22619,7 @@
     cbItemMenu.hidden = true;
     if (a === 'frame') { cbOpenFrame(c); return; }
     if (a === 'replace') { cbPick(c.id); return; }
+    if (a === 'comment') { addCommentTo(c, 'cartoon ' + (i + 1), function () { cbPersist(); cbRenderList(); }); return; }
     // Delete… skips the archive; it can still be restored, to its old
     // place, from Recently deleted for RECOVER_DAYS.
     if (a === 'delete') {
@@ -22642,7 +22812,7 @@
     cbDrawPage(pbCanvasFor(cbFull.querySelector('canvas'), w, w * ps.h / ps.w), w, cbPages()[cbCur], true);
     cbFull.querySelectorAll('.preview-full-nav span')[1].textContent = cbFmt('cbPrevCaption').textContent;
   }
-  function cbCloseFull() { cbFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
+  function cbCloseFull() { if (window.BOOKBUG_READ_TOKEN) return; cbFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
   function openCbPreviewFull() { cbFull.hidden = false; document.documentElement.classList.add('preview-full-open'); cbRenderFull(); }
   cbPreviewCanvas.addEventListener('click', openCbPreviewFull);
   document.getElementById('cbPreviewOpenBtn').addEventListener('click', openCbPreviewFull);
@@ -24487,6 +24657,7 @@
     cmPageMenu.innerHTML = '<button type="button" data-a="add">Add a page after this</button><button type="button" data-a="dup">Duplicate page</button>' +
       (cmCur > 0 ? '<button type="button" data-a="earlier">Move earlier</button>' : '') +
       (cmCur < n - 1 ? '<button type="button" data-a="later">Move later</button>' : '') +
+      '<button type="button" data-a="comment">Comment\u2026</button>' +
       '<button type="button" data-a="scan">Scan drawings into panels…</button>' +
       '<button type="button" data-a="clear">Clear the panels</button>' +
       (n > 1 ? '<button type="button" data-a="remove">' + (has ? 'Archive page' : 'Remove page') + '</button>' : '');
@@ -24502,6 +24673,7 @@
     cmPageMenu.hidden = true;
     var a = b.dataset.a, pages = cmState.pages, pg = cmPage();
     if (a === 'scan') { cmOpenScan(); return; }
+    if (a === 'comment') { addCommentTo(pg, 'page ' + (cmCur + 1), function () { cmPersist(true); cmRenderComments(); }); return; }
     cmCheckpoint();
     if (a === 'add') { pages.splice(cmCur + 1, 0, cmNewPage()); cmCur++; }
     else if (a === 'dup') {
@@ -24509,6 +24681,7 @@
       copy.id = pbUid('pg');
       copy.panels.forEach(function (p) { p.id = pbUid('pn'); });
       copy.balloons.forEach(function (x) { x.id = pbUid('bl'); });
+      delete copy.comments;
       pages.splice(cmCur + 1, 0, copy); cmCur++;
     }
     else if (a === 'earlier' || a === 'later') { var j = a === 'earlier' ? cmCur - 1 : cmCur + 1; pages.splice(j, 0, pages.splice(cmCur, 1)[0]); cmCur = j; }
@@ -24702,9 +24875,16 @@
     cmRenderSelBar();
     cmRenderStrip();
     cmRenderArchive();
+    cmRenderComments();
     cmSyncGrid();
     cmSyncUndo();
     cmUpdateStats();
+  }
+  // The open page's comments, under it.
+  function cmRenderComments() {
+    var box = cmFmt('cmComments'), pg = cmPage();
+    box.innerHTML = '';
+    if (pg && (pg.comments || []).length) box.appendChild(commentListFor(pg, function () { cmPersist(true); cmRenderComments(); }));
   }
   function renderComic() {
     if (!cmState) return;
@@ -24738,7 +24918,7 @@
     cmFull.querySelectorAll('.preview-full-nav span')[1].textContent = 'Page ' + (cmReadAt + 1) + ' of ' + cmState.pages.length;
   }
   function cmOpenRead() { cmFlushPending(); cmReadAt = cmCur; cmFull.hidden = false; document.documentElement.classList.add('preview-full-open'); cmRenderRead(); }
-  function cmCloseRead() { if (cmFull.hidden) return; cmFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
+  function cmCloseRead() { if (cmFull.hidden || window.BOOKBUG_READ_TOKEN) return; cmFull.hidden = true; document.documentElement.classList.remove('preview-full-open'); }
   cmFmt('cmReadBtn').addEventListener('click', cmOpenRead);
   cmFull.querySelector('.preview-full-close').addEventListener('click', cmCloseRead);
   cmFull.addEventListener('click', function (e) { if (e.target === cmFull) cmCloseRead(); });
@@ -24962,13 +25142,25 @@
       var res = await fetch(CLOUD_API_URL + '?share=' + encodeURIComponent(token));
       if (!res.ok) throw new Error(res.status === 404 ? 'gone' : 'http');
       var data = await res.json();
-      state = migrateFontKeys(data.book || {});
-      state.chapbookId = null;
-      state.isExample = false;
-      renderAll();
-      previewIndex = 0;
-      openFullPreview();
-      document.title = (state.bookTitle || data.title || 'A book') + (state.author ? ' by ' + state.author : '') + ' · Bookbug';
+      // Storage is in memory here (see the top of the page), so the shared
+      // book can sit in its library and open in its own reader as usual.
+      var entry = { id: 'shared', title: data.title || '', updatedAt: Date.now(), data: data.book || {} };
+      if (data.kind === 'picture') {
+        pbLibrary.push(entry); openPictureBook('shared'); pbCur = 0; openPbPreviewFull();
+      } else if (data.kind === 'cartoon') {
+        cbLibrary.push(entry); openCartoonBook('shared'); cbCur = 0; renderCbPreview(); openCbPreviewFull();
+      } else if (data.kind === 'comic') {
+        cmLibrary.push(entry); openComic('shared'); cmCur = 0; cmOpenRead();
+      } else {
+        state = migrateFontKeys(data.book || {});
+        state.chapbookId = null;
+        state.isExample = false;
+        renderAll();
+        previewIndex = 0;
+        openFullPreview();
+      }
+      var b = data.book || {};
+      document.title = (b.bookTitle || b.title || data.title || 'A book') + (b.author ? ' by ' + b.author : '') + ' · Bookbug';
       msg.remove();
     } catch (e) {
       msg.textContent = e.message === 'gone' ? 'This book isn’t shared any more.' : 'Couldn’t open the book. Check the connection and try again.';
