@@ -404,24 +404,50 @@ export async function fetchPage(raw) {
 // the writer's private notes on it.
 const SHARE_TOKEN = /^[A-Za-z0-9_-]{20,40}$/;
 function shareKey(token) { return { userId: { S: 'share#' + token } }; }
+// Every kind of book can be shared; each kind lives in its own library
+// in the account's Bookbug state. A link made before kinds existed is a
+// text book's.
+const SHARE_LIBRARIES = { text: 'chapbooks', picture: 'pictureBooks', cartoon: 'cartoonBooks', comic: 'comicBooks' };
+function shareLibrary(state, kind) {
+  return ((state.chapbookbuilder && state.chapbookbuilder[SHARE_LIBRARIES[kind] || 'chapbooks']) || []);
+}
 // What a reader gets: the book as it prints, without the writer's working
-// notes (comments, submissions, contact details, the archive).
-function sharedCopy(data) {
+// notes (comments, submissions, illustration notes, contact details, the
+// archive and recently deleted).
+function sharedCopy(data, kind) {
   const book = JSON.parse(JSON.stringify(data || {}));
-  ['archivedPoems', 'deletedPoems', 'manuscriptContact', 'shareToken', 'intakeSourceLabel', 'sourceAdded'].forEach(k => { delete book[k]; });
+  ['archivedPoems', 'deletedPoems', 'manuscriptContact', 'shareToken', 'intakeSourceLabel', 'sourceAdded', 'archived', 'deleted'].forEach(k => { delete book[k]; });
   (book.poems || []).forEach(p => { delete p.comments; delete p.subs; delete p.tier; });
+  (book.spreads || []).forEach(sp => { delete sp.comments; sp.notes = ''; });
+  (book.cartoons || []).forEach(c => { delete c.comments; });
+  (book.pages || []).forEach(pg => { delete pg.comments; });
   return book;
 }
-async function getSharedBook(token) {
-  if (!SHARE_TOKEN.test(token)) return respond(404, { error: 'No such link' });
+// The link's book, or null if the link is unknown, ended or its book gone.
+async function sharedEntry(token) {
+  if (!SHARE_TOKEN.test(token)) return null;
   const link = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: shareKey(token) }));
-  if (!link.Item) return respond(404, { error: 'No such link' });
-  const { owner, bookId, revoked } = JSON.parse(link.Item.state.S);
-  if (revoked) return respond(404, { error: 'No such link' });
+  if (!link.Item) return null;
+  const { owner, bookId, kind = 'text', revoked } = JSON.parse(link.Item.state.S);
+  if (revoked) return null;
   const { state } = await getStoredState(owner);
-  const entry = ((state.chapbookbuilder && state.chapbookbuilder.chapbooks) || []).find(c => c && c.id === bookId);
-  if (!entry || !entry.data) return respond(404, { error: 'No such link' });
-  return respond(200, { title: entry.title || '', book: sharedCopy(entry.data) });
+  const entry = shareLibrary(state, kind).find(c => c && c.id === bookId);
+  return entry && entry.data ? { owner, kind, entry } : null;
+}
+async function getSharedBook(token) {
+  const found = await sharedEntry(token);
+  if (!found) return respond(404, { error: 'No such link' });
+  return respond(200, { kind: found.kind, title: found.entry.title || '', book: sharedCopy(found.entry.data, found.kind) });
+}
+// GET ?share=<token>&image=<id>: one of the shared book's pictures, and
+// only a picture the book as shared actually uses.
+async function getSharedImage(token, imageId) {
+  if (!IMAGE_ID.test(imageId || '')) return respond(404, { error: 'No such image' });
+  const found = await sharedEntry(token);
+  if (!found || !JSON.stringify(sharedCopy(found.entry.data, found.kind)).includes('"' + imageId + '"')) return respond(404, { error: 'No such image' });
+  const result = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: { userId: { S: found.owner }, imageId: { S: imageId } } }));
+  if (!result.Item) return respond(404, { error: 'No such image' });
+  return respond(200, { type: result.Item.type.S, data: Buffer.from(result.Item.data.B).toString('base64') });
 }
 // PUT ?share with { bookId } makes a link to one of the writer's own books
 // and returns { token }; { token, revoke: true } ends one of theirs.
@@ -438,14 +464,15 @@ async function putShare(userId, payload) {
     return respond(200, { ok: true });
   }
   const bookId = payload && payload.bookId;
+  const kind = (payload && payload.kind) || 'text';
   if (typeof bookId !== 'string' || !bookId) return respond(400, { error: 'Expected { bookId }' });
+  if (!SHARE_LIBRARIES[kind]) return respond(400, { error: 'Bad kind' });
   const { state } = await getStoredState(userId);
-  const books = (state.chapbookbuilder && state.chapbookbuilder.chapbooks) || [];
-  if (!books.some(c => c && c.id === bookId)) return respond(404, { error: 'Save the book first' });
+  if (!shareLibrary(state, kind).some(c => c && c.id === bookId)) return respond(404, { error: 'Save the book first' });
   const token = randomBytes(18).toString('base64url');
   await ddb.send(new PutItemCommand({
     TableName: TABLE_NAME,
-    Item: { ...shareKey(token), state: { S: JSON.stringify({ owner: userId, bookId, createdAt: Date.now() }) } },
+    Item: { ...shareKey(token), state: { S: JSON.stringify({ owner: userId, bookId, kind, createdAt: Date.now() }) } },
     ConditionExpression: 'attribute_not_exists(userId)'
   }));
   return respond(200, { token });
@@ -582,7 +609,10 @@ export const handler = async (event) => {
   const path = event.rawPath || '/';
 
   // A shared book is public: no sign-in.
-  if (method === 'GET' && event.queryStringParameters?.share) return getSharedBook(event.queryStringParameters.share);
+  if (method === 'GET' && event.queryStringParameters?.share) {
+    const q = event.queryStringParameters;
+    return q.image !== undefined ? getSharedImage(q.share, q.image) : getSharedBook(q.share);
+  }
 
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
