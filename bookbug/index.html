@@ -2593,6 +2593,11 @@
   .pb-layout input { margin: 3px 0 0; accent-color: var(--accent); }
   .pb-layout strong { font-size: 13.5px; }
   .pb-layout span { grid-column: 2; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .pb-new-story-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
+  .pb-new-story-foot .pb-new-note { margin: 0; }
+  .pb-new-story-foot .btn-link { margin-left: auto; font-size: 12.5px; }
+  /* 16px so iOS doesn't zoom in on focus. */
+  .pb-new-story { width: 100%; min-height: 96px; margin: 0; resize: vertical; font-family: inherit; font-size: 16px; line-height: 1.5; }
   .pb-new-note, .modal-box .pb-new-note { font-size: 12px; color: var(--ink-faint); margin: 6px 0 0; line-height: 1.5; }
 
   @media (max-width: 700px) {
@@ -13662,7 +13667,8 @@
     addHomeForm(form);
     if (form === 'picture') {
       pbOpts = pbOpts || { pages: 32, layout: 'classic', trim: '8.5x8.5' };
-      startPictureBook(pbNewBook(pbOpts.pages, pbOpts.layout, pbOpts.trim, googleUserName || ''));
+      var stanzas = pbOpts.stanzas || [];
+      startPictureBook(pbNewBookFor(pbOpts, googleUserName || '', stanzas.length), stanzas);
       if (name) { pbTitleInput.value = name; pbTitleInput.dispatchEvent(new Event('input')); }
     } else if (form === 'cartoon') {
       startNewCartoonBook();
@@ -15918,9 +15924,11 @@
     showPictureBookView();
     renderPictureBook();
   }
-  function startPictureBook(book) {
+  // `stanzas`: story text for the story spreads, one each (see pbParseStanzas).
+  function startPictureBook(book, stanzas) {
     pbFlushPending();
     pbState = book;
+    if (stanzas && stanzas.length) pbFillStanzas(stanzas);
     pbId = null;
     pbCur = 0;
     pbSel = null;
@@ -20222,7 +20230,11 @@
       '<p class="pb-new-note">32 is the standard. You can add or remove spreads any time.</p>' +
       '<div class="subhead">Shape and size</div><div class="pb-trim-grid pb-new-trim"></div>' +
       '<div class="subhead">Front and back matter</div><div class="pb-layouts pb-new-layouts"></div>' +
-      '<p class="pb-new-note">With separate endpapers (usual for hardcovers), the endpapers are extra paper and every page is yours. A self-ended book prints its endpapers on its own first and last pages, so 8 of its pages go to them (a 32-page book keeps 12 spreads for the story).</p>';
+      '<p class="pb-new-note">With separate endpapers (usual for hardcovers), the endpapers are extra paper and every page is yours. A self-ended book prints its endpapers on its own first and last pages, so 8 of its pages go to them (a 32-page book keeps 12 spreads for the story).</p>' +
+      '<div class="subhead">Story text</div>' +
+      '<textarea class="prompt-input pb-new-story" rows="4" spellcheck="true" placeholder="1 Once upon a time there was a boy\n2 \u2014 the boy\u2019s name was Jim"></textarea>' +
+      '<input type="file" class="pb-new-file" accept=".txt,.md,.text,.pdf,text/plain,text/markdown,application/pdf" hidden>' +
+      '<div class="pb-new-story-foot"><p class="pb-new-note pb-new-story-note"></p><button class="btn-link pb-new-upload" type="button">Upload a file\u2026</button></div>';
     var pagesSeg = container.querySelector('.pb-new-pages');
     [28, 32, 36, 40].forEach(function (p) {
       var b = document.createElement('button');
@@ -20263,7 +20275,75 @@
       });
     }
     renderLayouts();
-    return function () { return { pages: pages, trim: trim, layout: layout }; };
+    // Story text: each numbered stanza becomes one spread's words. Pasted,
+    // or read from a text file or PDF; the book grows if there are more
+    // stanzas than story spreads.
+    var storyField = container.querySelector('.pb-new-story'), storyNote = container.querySelector('.pb-new-story-note');
+    var fileInput = container.querySelector('.pb-new-file');
+    function countStanzas() {
+      var n = pbParseStanzas(storyField.value).length;
+      storyNote.textContent = n ? n + (n === 1 ? ' spread' : ' spreads') + ' of story text' : '';
+    }
+    storyField.addEventListener('input', countStanzas);
+    container.querySelector('.pb-new-upload').addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', async function () {
+      var f = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!f) return;
+      storyNote.textContent = 'Reading \u201c' + f.name + '\u201d\u2026';
+      try {
+        var buf = await f.arrayBuffer();
+        var isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+        storyField.value = isPdf ? await pdfToDocText(buf) : new TextDecoder().decode(buf);
+        countStanzas();
+        if (!pbParseStanzas(storyField.value).length) storyNote.textContent = 'No numbered stanzas in \u201c' + f.name + '\u201d.';
+      } catch (e) {
+        storyNote.textContent = 'Couldn\u2019t read \u201c' + f.name + '\u201d.';
+      }
+    });
+    return function () { return { pages: pages, trim: trim, layout: layout, stanzas: pbParseStanzas(storyField.value) }; };
+  }
+  // "1 once upon a time…", "2 -- the boy's name was Jim": each line that
+  // starts with a number begins a stanza, and the dashes, colons, periods
+  // or brackets just after the number go with it. Lines without a number
+  // continue the stanza above; anything before the first number is left out.
+  function pbParseStanzas(text) {
+    var out = [], cur = null;
+    String(text || '').replace(/\r\n?/g, '\n').split('\n').forEach(function (raw) {
+      // A PDF's lines can come back as headings or indented.
+      var line = raw.replace(/^[\s#>]+/, '').replace(/\s+$/, '');
+      var m = /^\d+[\s\-\u2010-\u2015\u2212:;.,)\]}|~\u2022*\u00b7]*/.exec(line);
+      if (m) { cur = [line.slice(m[0].length)]; out.push(cur); }
+      else if (cur && line) cur.push(line);
+    });
+    return out.map(function (lines) { return lines.join('\n').trim(); }).filter(Boolean);
+  }
+  // Spreads with story on both pages, in order.
+  function pbStorySpreads(book) {
+    var out = [];
+    for (var s = 1; s < book.spreads.length - 1; s++) {
+      var sp = book.spreads[s];
+      if (sp.left.role === 'story' && sp.right.role === 'story') out.push(s);
+    }
+    return out;
+  }
+  // A new picture book long enough for `n` stanzas: the chosen length,
+  // or four pages more at a time (books print in multiples of four)
+  // until the story fits.
+  function pbNewBookFor(opts, author, n) {
+    var pages = opts.pages, book = pbNewBook(pages, opts.layout, opts.trim, author);
+    while (n && pbStorySpreads(book).length < n && pages < 400) {
+      pages += 4;
+      book = pbNewBook(pages, opts.layout, opts.trim, author);
+    }
+    return book;
+  }
+  // Puts each stanza on its own story spread, on the left-hand page.
+  function pbFillStanzas(stanzas) {
+    var spreads = pbStorySpreads(pbState);
+    stanzas.forEach(function (text, i) {
+      if (spreads[i] != null) pbState.spreads[spreads[i]].items.push(pbNewStoryBox('left', null, { text: text }));
+    });
   }
 
   // ---------------------------------------------------------------------
