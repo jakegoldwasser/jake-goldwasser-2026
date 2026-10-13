@@ -1465,21 +1465,23 @@
     position: relative; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: left;
     background: none; border: none; padding: 0; font: inherit; color: inherit; outline: none;
   }
-  /* A mini title page, in the book's own title font. */
+  /* Every book is the same square, its title in one face; the color
+     (--book-accent, by book type) and an icon tell the types apart. */
   .home-cover {
-    aspect-ratio: 5.5 / 8.5; background: #FBF9F5; border: 1px solid var(--line-strong); border-radius: 3px;
+    aspect-ratio: 1 / 1; background: #FBF9F5; border: 1px solid var(--line-strong); border-top: 5px solid var(--book-accent, #5E7A2E); border-radius: 3px;
     box-shadow: 0 1px 3px var(--shadow); display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 14px; text-align: center; overflow: hidden; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   }
   .home-card:hover .home-cover, .home-card:focus-visible .home-cover {
-    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--accent);
+    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--book-accent, var(--accent));
   }
   /* The title fills the cover: sized to the cover's width (cqi), a step
      smaller for long titles (fitCoverTitle) so they still fit. */
   .home-cover { container-type: inline-size; }
-  .home-cover-title { font-size: clamp(17px, 15.5cqi, 30px); font-weight: 600; color: #241A1F; line-height: 1.12; overflow-wrap: break-word; hyphens: auto; }
-  .home-cover-title.is-long { font-size: clamp(15px, 12.5cqi, 24px); }
-  .home-cover-title.is-very-long { font-size: clamp(13px, 10cqi, 19px); }
+  .home-cover-icon { width: 26%; height: auto; aspect-ratio: 1; flex: none; fill: none; stroke: var(--book-accent, #5E7A2E); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .home-cover-title { font-family: "Zilla Slab", ui-serif, serif; font-size: clamp(17px, 14cqi, 30px); font-weight: 600; color: #241A1F; line-height: 1.12; overflow-wrap: break-word; hyphens: auto; }
+  .home-cover-title.is-long { font-size: clamp(15px, 11.5cqi, 24px); }
+  .home-cover-title.is-very-long { font-size: clamp(13px, 9cqi, 19px); }
   .home-card-new .home-cover { background: var(--surface); border-style: dashed; }
   .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
   /* New book: a big blank white page at the top left, Docs style. */
@@ -1493,7 +1495,7 @@
     box-shadow: 0 1px 3px var(--shadow); transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   }
   .home-new:hover .home-new-page, .home-new:focus-visible .home-new-page {
-    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--accent);
+    box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--book-accent, var(--accent));
   }
   .home-new:focus-visible { outline: none; }
   .home-new-label { font-size: 14px; font-weight: 600; }
@@ -1781,7 +1783,6 @@
   .home-empty .home-intro { font-size: 16px; line-height: 1.55; }
 
   /* Picture books are wide and squarish, not a tall trade page. */
-  .home-card-pb .home-cover { aspect-ratio: 1 / 1; }
 
   /* Each book type's shelf is color-coded in the colorway its editor
      opens in: light green for poetry, terracotta for novels, plum for
@@ -1804,14 +1805,15 @@
   .home-shelf .home-shelf-title { color: var(--shelf-ink); }
   .home-shelf .home-new-plus { color: var(--shelf-accent); }
   .home-shelf .home-card-new .home-cover { border-color: var(--shelf-accent); background: rgba(255, 255, 255, 0.35); }
-  .home-shelf .home-card:hover .home-cover, .home-shelf .home-card:focus-visible .home-cover { border-color: var(--shelf-accent); }
-  /* In the mixed archived shelf, a thin rule in each book's own color. */
-  :is(.home-archived, .home-recent) .home-card[data-form] .home-cover { border-top: 4px solid #5E7A2E; }
-  :is(.home-archived, .home-recent) .home-card[data-form="novel"] .home-cover { border-top-color: #B0532A; }
-  :is(.home-archived, .home-recent) .home-card[data-form="essays"] .home-cover { border-top-color: #6E4A7E; }
-  :is(.home-archived, .home-recent) .home-card[data-form="picture"] .home-cover { border-top-color: #4F6E88; }
-  :is(.home-archived, .home-recent) .home-card[data-form="screenplay"] .home-cover { border-top-color: #9A7410; }
-  :is(.home-archived, .home-recent) .home-card[data-form="play"] .home-cover { border-top-color: #2E6B66; }
+  /* Each book's color, by type: the rule along its top and its icon. */
+  .home-card { --book-accent: #5E7A2E; }
+  .home-card[data-form="novel"] { --book-accent: #B0532A; }
+  .home-card[data-form="essays"] { --book-accent: #6E4A7E; }
+  .home-card[data-form="picture"] { --book-accent: #4F6E88; }
+  .home-card[data-form="screenplay"] { --book-accent: #9A7410; }
+  .home-card[data-form="play"] { --book-accent: #2E6B66; }
+  .home-card[data-form="cartoon"] { --book-accent: #7A4E2B; }
+  .home-card[data-form="comic"] { --book-accent: #B3262B; }
 
   .pb-view { display: flex; flex-direction: column; gap: 26px; }
   .pb-view[hidden] { display: none; }
@@ -2365,9 +2367,7 @@
     --line: #DAD5CC; --line-strong: #B9B1A4; --accent: #7A4E2B; --accent-soft: #EADBCD; --shadow: rgba(27, 26, 24, 0.14);
   }
   .home-shelf[data-form="cartoon"] { --shelf-paper: #E7E4DE; --shelf-accent: #7A4E2B; --shelf-ink: #1B1A18; }
-  :is(.home-archived, .home-recent) .home-card[data-form="cartoon"] .home-cover { border-top-color: #7A4E2B; }
   .home-start-card[data-form="cartoon"]::before { background: #7A4E2B; }
-  .home-card-cb .home-cover { aspect-ratio: 11 / 8.5; }
   .cb-view { display: flex; flex-direction: column; gap: 26px; }
   .cb-view[hidden] { display: none; }
   body.view-cb .page > .chapbook-header, body.view-cb #intakePanel,
@@ -2450,10 +2450,7 @@
     --line: #DED2B8; --line-strong: #BFAE8C; --accent: #B3262B; --accent-deep: #8C1C20; --accent-soft: #F1D5CF; --shadow: rgba(26, 23, 20, 0.14);
   }
   .home-shelf[data-form="comic"] { --shelf-paper: #EFE6CF; --shelf-accent: #B3262B; --shelf-ink: #1A1714; }
-  :is(.home-archived, .home-recent) .home-card[data-form="comic"] .home-cover { border-top-color: #B3262B; }
   .home-start-card[data-form="comic"]::before { background: #B3262B; }
-  .home-card-cm .home-cover { aspect-ratio: 6.625 / 10.25; }
-  .home-card-cm .home-cover-title { letter-spacing: .03em; }
   .cm-view { display: flex; flex-direction: column; gap: 26px; }
   .cm-view[hidden] { display: none; }
   body.view-cm .page > .chapbook-header, body.view-cm #intakePanel,
@@ -13546,6 +13543,22 @@
     window.scrollTo(0, 0);
     syncBookUrl();
   }
+  // Every book on Home is the same square card with its title in one
+  // face; only the color and a small icon say what kind of book it is.
+  var COVER_ICONS = {
+    collection: '<path d="M20 3C12.5 4 7.6 9.4 6.4 16.6"/><path d="M20 3c-.4 7.4-5.3 12.2-13.6 13.6"/><path d="M11.5 11.5l-3 3"/><path d="M6.4 16.6L4 21"/>',
+    novel: '<circle cx="10" cy="10" r="6"/><path d="M14.4 14.4L20.5 20.5"/><path d="M7 9a3.2 3.2 0 0 1 3-3"/>',
+    essays: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H7a2 2 0 0 0-2 2z"/><path d="M5 20a2 2 0 0 0 2 1.5h12V18"/><path d="M9 7.5h6.5M9 10.5h6.5"/>',
+    screenplay: '<circle cx="7" cy="6" r="3"/><circle cx="14" cy="6" r="3"/><rect x="3" y="10" width="13.5" height="9" rx="1.2"/><path d="M16.5 13.2l4.5-2.2v7l-4.5-2.2"/>',
+    play: '<path d="M2.5 3.5h9v6a4.5 4.5 0 0 1-9 0z"/><path d="M5 6.8h1.4M8 6.8h1.4M4.8 10q2.2 2.2 4.4 0"/><path d="M12.5 9.5h9v6a4.5 4.5 0 0 1-9 0z" fill="#FBF9F5"/><path d="M15 12.8h1.4M18 12.8h1.4M14.8 17.4q2.2-2.2 4.4 0"/>',
+    picture: '<path d="M10 8.2C8.6 5.5 8.3 2.6 9.6 2.3s2.3 2.7 2.1 5.6"/><path d="M13.4 8C13.4 5 14.5 2.4 15.8 2.8s.9 3.3-.8 5.8"/><circle cx="12.2" cy="10.8" r="3.2"/><path d="M9.6 12.8C6.6 14 5.2 17 6 20.5h11.6c.9-3.3-.4-6.3-3-7.6"/><circle cx="19.4" cy="18.8" r="1.2"/>',
+    cartoon: '<rect x="5" y="4" width="14" height="17.5" rx="1.5"/><rect x="9" y="2.5" width="6" height="3.2" rx="1"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
+    comic: '<path d="M12 3.5c5 0 9 3.1 9 6.8s-4 6.8-9 6.8c-1.1 0-2.1-.1-3.1-.4L4.5 19.5l1.3-3.7C4.1 14.5 3 12.5 3 10.3 3 6.6 7 3.5 12 3.5z"/>'
+  };
+  function homeCoverHTML(form) {
+    return '<div class="home-cover"><svg class="home-cover-icon" viewBox="0 0 24 24" aria-hidden="true">' +
+      (COVER_ICONS[form] || COVER_ICONS.collection) + '</svg><div class="home-cover-title"></div></div>';
+  }
   function fitCoverTitle(el, title) {
     var longest = Math.max.apply(null, title.split(/\s+/).map(function (w) { return w.length; }));
     el.classList.toggle('is-long', title.length > 24 || longest > 9);
@@ -13557,14 +13570,13 @@
     card.className = 'home-card' + (entry.archived ? ' is-archived' : '');
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
-    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div></div>' +
+    card.innerHTML = '' + homeCoverHTML(bookFormOf(data)) + '' +
       '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     fitCoverTitle(coverTitle, title);
-    coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS[bookFormOf(data)].cover);
     card.setAttribute('aria-label', title);
     card.dataset.form = bookFormOf(data);
     var n = countEntries(data.poems || []);
@@ -16963,14 +16975,13 @@
     card.dataset.form = 'picture';
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
-    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div></div>' +
+    card.innerHTML = '' + homeCoverHTML('picture') + '' +
       '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Picture book options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled picture book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     fitCoverTitle(coverTitle, title);
-    coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS.picture.cover);
     card.setAttribute('aria-label', title);
     var pages = data.spreads ? pbTotalPagesFor(data.spreads.length) : ((data.rows || []).length * 2 + 2);
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + pages + ' pages';
@@ -20747,14 +20758,13 @@
     card.dataset.form = 'cartoon';
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
-    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div></div>' +
+    card.innerHTML = '' + homeCoverHTML('cartoon') + '' +
       '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Cartoon batch options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled cartoon batch';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     fitCoverTitle(coverTitle, title);
-    coverTitle.style.fontFamily = CASLON_STACK;
     card.setAttribute('aria-label', title);
     var n = (data.cartoons || []).filter(function (c) { return !cbCartoonIsEmpty(cbNormalizeCartoon(c)); }).length;
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' cartoon' : ' cartoons');
@@ -22826,14 +22836,13 @@
     card.dataset.form = 'comic';
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
-    card.innerHTML = '<div class="home-cover"><div class="home-cover-title"></div></div>' +
+    card.innerHTML = '' + homeCoverHTML('comic') + '' +
       '<div class="home-card-meta"></div>' +
       '<button class="home-card-more" type="button" title="More" aria-label="Comic options" aria-haspopup="menu" aria-expanded="false"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><circle cx="2" cy="2" r="1.6" fill="currentColor"/><circle cx="7" cy="2" r="1.6" fill="currentColor"/><circle cx="12" cy="2" r="1.6" fill="currentColor"/></svg></button>';
     var title = entry.title || 'Untitled comic';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
     fitCoverTitle(coverTitle, title);
-    coverTitle.style.fontFamily = CM_SFX_STACK;
     card.setAttribute('aria-label', title);
     var n = (data.pages || []).length || 1;
     card.querySelector('.home-card-meta').textContent = 'Edited ' + relTime(entry.updatedAt) + ' · ' + n + (n === 1 ? ' page' : ' pages');
