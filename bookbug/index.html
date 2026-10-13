@@ -1474,7 +1474,12 @@
   .home-card:hover .home-cover, .home-card:focus-visible .home-cover {
     box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--accent);
   }
-  .home-cover-title { font-size: 15px; font-weight: 600; color: #241A1F; line-height: 1.25; overflow-wrap: anywhere; }
+  /* The title fills the cover: sized to the cover's width (cqi), a step
+     smaller for long titles (fitCoverTitle) so they still fit. */
+  .home-cover { container-type: inline-size; }
+  .home-cover-title { font-size: clamp(17px, 15.5cqi, 30px); font-weight: 600; color: #241A1F; line-height: 1.12; overflow-wrap: break-word; hyphens: auto; }
+  .home-cover-title.is-long { font-size: clamp(15px, 12.5cqi, 24px); }
+  .home-cover-title.is-very-long { font-size: clamp(13px, 10cqi, 19px); }
   .home-card-new .home-cover { background: var(--surface); border-style: dashed; }
   .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
   /* New book: a big blank white page at the top left, Docs style. */
@@ -13541,6 +13546,11 @@
     window.scrollTo(0, 0);
     syncBookUrl();
   }
+  function fitCoverTitle(el, title) {
+    var longest = Math.max.apply(null, title.split(/\s+/).map(function (w) { return w.length; }));
+    el.classList.toggle('is-long', title.length > 24 || longest > 9);
+    el.classList.toggle('is-very-long', title.length > 48 || longest > 13);
+  }
   function makeHomeCard(entry) {
     var data = entry.data || {};
     var card = document.createElement('div');
@@ -13553,6 +13563,7 @@
     var title = entry.title || 'Untitled book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
+    fitCoverTitle(coverTitle, title);
     coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS[bookFormOf(data)].cover);
     card.setAttribute('aria-label', title);
     card.dataset.form = bookFormOf(data);
@@ -16958,6 +16969,7 @@
     var title = entry.title || 'Untitled picture book';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
+    fitCoverTitle(coverTitle, title);
     coverTitle.style.fontFamily = displayStackFor(BOOK_FORMS.picture.cover);
     card.setAttribute('aria-label', title);
     var pages = data.spreads ? pbTotalPagesFor(data.spreads.length) : ((data.rows || []).length * 2 + 2);
@@ -20741,6 +20753,7 @@
     var title = entry.title || 'Untitled cartoon batch';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
+    fitCoverTitle(coverTitle, title);
     coverTitle.style.fontFamily = CASLON_STACK;
     card.setAttribute('aria-label', title);
     var n = (data.cartoons || []).filter(function (c) { return !cbCartoonIsEmpty(cbNormalizeCartoon(c)); }).length;
@@ -22819,6 +22832,7 @@
     var title = entry.title || 'Untitled comic';
     var coverTitle = card.querySelector('.home-cover-title');
     coverTitle.textContent = title;
+    fitCoverTitle(coverTitle, title);
     coverTitle.style.fontFamily = CM_SFX_STACK;
     card.setAttribute('aria-label', title);
     var n = (data.pages || []).length || 1;
