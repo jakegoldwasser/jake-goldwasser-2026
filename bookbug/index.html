@@ -681,6 +681,12 @@
   .tier-group-count { margin-left: auto; font-weight: 500; font-size: 12px; color: var(--ink-faint); }
   .open-all-btn { flex: 0 0 auto; }
   .tier-group-empty { padding: 4px 8px; font-size: 12.5px; color: var(--ink-faint); }
+  .series-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 2px 0 10px; font-size: 12.5px; color: var(--ink-soft); }
+  .series-bar select { width: auto; flex: 0 1 auto; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 6px; max-width: 100%; }
+  .series-period { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .series-period[hidden] { display: none; }
+  .series-add { font: inherit; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  .series-add:hover { background: var(--accent-soft); }
   .series-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
   .poem-compact-row .series-tag { margin-left: auto; }
   .poem-compact-row .series-tag + .tier-pill { margin-left: 8px; }
@@ -6063,17 +6069,164 @@
   // Indexes of the lines that start parts: markers standing alone (top
   // of the poem or after a blank line) that count 1, 2, 3… in order, so a
   // stray "I" or "C" mid-poem never starts a page.
-  function partLineIndexes(lines) {
+  // With a numbering style chosen (poem.seriesStyle), any marker in that
+  // style standing alone counts, in whatever order, so a part typed in by
+  // hand starts its page at once; renumberSeries puts the numbers back in
+  // order (after Add part, a style change, or on leaving the poem).
+  function partLineIndexes(lines, style) {
     var out = [], want = 1;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
       if (typeof line !== 'string' || !line.trim() || IMAGE_LINE_RE.test(line)) continue;
       if (i > 0 && (lines[i - 1] || '').trim() !== '') continue;
-      if (markerValue(stripFormatMarkers(line)) === want) { out.push(i); want++; }
+      if (style) { if (seriesMarkerValue(line, style) !== null) out.push(i); }
+      else if (markerValue(stripFormatMarkers(line)) === want) { out.push(i); want++; }
     }
     return out;
   }
-  function seriesParts(poem) { return partLineIndexes(poem.lines || []); }
+  function seriesParts(poem) { return partLineIndexes(poem.lines || [], poem.seriesStyle || null); }
+
+  // ---- Series numbering styles ----
+  // poem.seriesStyle = { kind, period, prefix }: kind is a counting style
+  // (SERIES_COUNTERS) or a section-break symbol (SERIES_SYMBOLS, the same
+  // mark atop every part); period puts "." after a number ("II."); prefix
+  // keeps a "Part " a series was typed with.
+  var SERIES_COUNTERS = {
+    roman: { label: 'I, II, III', name: 'Roman numerals' },
+    number: { label: '1, 2, 3', name: 'Numbers' },
+    word: { label: 'One, Two, Three', name: 'Words' },
+    letter: { label: 'A, B, C', name: 'Letters' },
+    hebrew: { label: 'א, ב, ג', name: 'Hebrew letters' },
+    greek: { label: 'α, β, γ', name: 'Greek letters' }
+  };
+  var SERIES_SYMBOLS = {
+    star: { mark: '*', name: 'Asterisk' },
+    stars: { mark: '* * *', name: 'Three asterisks' },
+    asterism: { mark: '⁂', name: 'Asterism' },
+    dots: { mark: '• • •', name: 'Three dots' },
+    sect: { mark: '§', name: 'Section sign' },
+    fleuron: { mark: '❧', name: 'Fleuron' }
+  };
+  var GREEK_LETTERS = 'αβγδεζηθικλμνξοπρστυφχψω';
+  var HEB_ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+  var HEB_TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+  var HEB_HUNDREDS = ['', 'ק', 'ר', 'ש', 'ת'];
+  var HEB_VALUES = { 'ך': 20, 'ם': 40, 'ן': 50, 'ף': 80, 'ץ': 90 };
+  [HEB_ONES, HEB_TENS, HEB_HUNDREDS].forEach(function (row, r) {
+    row.forEach(function (ch, k) { if (ch) HEB_VALUES[ch] = k * Math.pow(10, r); });
+  });
+  function toRoman(n) {
+    var out = '', table = [[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+    table.forEach(function (t) { while (n >= t[0]) { out += t[1]; n -= t[0]; } });
+    return out;
+  }
+  function toHebrewNumeral(n) {
+    n = Math.max(1, Math.min(499, n));
+    var out = HEB_HUNDREDS[Math.floor(n / 100)], rest = n % 100;
+    if (rest === 15) return out + 'טו';
+    if (rest === 16) return out + 'טז';
+    return out + HEB_TENS[Math.floor(rest / 10)] + HEB_ONES[rest % 10];
+  }
+  // Past the end of an alphabet a letter doubles: Z, AA, BB…
+  function lettersFor(n, alphabet) {
+    var k = alphabet.length, ch = alphabet[(n - 1) % k];
+    return new Array(Math.floor((n - 1) / k) + 2).join(ch);
+  }
+  var NUMBER_WORDS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen', 'Twenty'];
+  function seriesNumber(n, kind) {
+    if (kind === 'number') return String(n);
+    if (kind === 'word') return NUMBER_WORDS[n - 1] || String(n);
+    if (kind === 'letter') return lettersFor(n, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    if (kind === 'greek') return lettersFor(n, GREEK_LETTERS);
+    if (kind === 'hebrew') return toHebrewNumeral(n);
+    return toRoman(n);
+  }
+  // The marker line for part n in a style ("II.", "Part 3", "⁂").
+  function seriesMarker(n, style) {
+    if (SERIES_SYMBOLS[style.kind]) return SERIES_SYMBOLS[style.kind].mark;
+    return (style.prefix || '') + seriesNumber(n, style.kind) + (style.period ? '.' : '');
+  }
+  // The number a line stands for in a style, 0 for a symbol, or null when
+  // it isn't that style's marker. Bold, italics and a trailing period or
+  // colon don't matter.
+  function seriesMarkerValue(line, style) {
+    var t = stripFormatMarkers(String(line || '')).replace(/\s+/g, ' ').trim();
+    if (!t) return null;
+    var sym = SERIES_SYMBOLS[style.kind];
+    if (sym) return t.replace(/\s+/g, '') === sym.mark.replace(/\s+/g, '') ? 0 : null;
+    t = t.replace(/[.:]$/, '').trim();
+    if (style.prefix) {
+      var pre = style.prefix.trim().toLowerCase();
+      if (t.toLowerCase().indexOf(pre) !== 0) return null;
+      t = t.slice(pre.length).trim();
+    }
+    if (!t) return null;
+    if (style.kind === 'number') return /^\d{1,3}$/.test(t) ? parseInt(t, 10) : null;
+    if (style.kind === 'word') {
+      var w = NUMBER_WORDS.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase());
+      return w === -1 ? (/^\d{1,3}$/.test(t) ? parseInt(t, 10) : null) : w + 1;
+    }
+    if (style.kind === 'roman') {
+      if (!/^(?=[ivxlc])c{0,3}(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/i.test(t)) return null;
+      return markerValue(t);
+    }
+    var alphabet = style.kind === 'letter' ? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' : style.kind === 'greek' ? GREEK_LETTERS : null;
+    if (alphabet) {
+      if (style.kind === 'letter') t = t.toUpperCase();
+      if (!/^(.)\1{0,3}$/.test(t)) return null;
+      var at = alphabet.indexOf(t[0]);
+      return at === -1 ? null : at + 1 + (t.length - 1) * alphabet.length;
+    }
+    if (style.kind === 'hebrew') {
+      t = t.replace(/[׳״'"]/g, '');
+      if (!/^[\u05d0-\u05ea]{1,4}$/.test(t)) return null;
+      var v = 0;
+      for (var i = 0; i < t.length; i++) v += HEB_VALUES[t[i]] || 0;
+      return v || null;
+    }
+    return null;
+  }
+  // A series without a chosen style keeps the numbering it was typed
+  // with: Roman or Arabic, with or without a period, "Part " kept.
+  function seriesStyleFor(poem) {
+    if (poem.seriesStyle) return poem.seriesStyle;
+    var lines = poem.lines || [], first = partLineIndexes(lines)[0];
+    var style = { kind: 'roman', period: true, prefix: '' };
+    if (first === undefined) return style;
+    var t = stripFormatMarkers(lines[first]).replace(/\s+/g, ' ').trim();
+    style.period = /[.:]$/.test(t);
+    var m = /^((?:part|section|book|movement)\s+)?(.+?)[.:]?$/i.exec(t);
+    if (m[1]) style.prefix = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+    if (/^\d/.test(m[2])) style.kind = 'number';
+    else if (/^[a-z]{3,}$/i.test(m[2]) && !/^[ivxlc]+$/i.test(m[2]) && markerValue(m[2]) !== null) style.kind = 'word';
+    return style;
+  }
+  // Rewrites every part's marker in a style, counting 1, 2, 3… in order.
+  // Bold, italics and indentation around a number stay as they were.
+  // Returns the new lines (the poem isn't changed).
+  function renumberedLines(lines, starts, style) {
+    var out = lines.slice();
+    starts.forEach(function (li, k) {
+      var line = out[li], mark = seriesMarker(k + 1, style);
+      var lead = (/^\s*/.exec(line) || [''])[0];
+      var body = line.slice(lead.length).replace(/\s+$/, '');
+      var wrap = /^([*+]*)([\s\S]*?)([*+]*)$/.exec(body), open = '', close = '';
+      if (wrap[1] && wrap[2] && wrap[3] === wrap[1].split('').reverse().join('') && stripFormatMarkers(body) !== body && !SERIES_SYMBOLS[style.kind]) {
+        open = wrap[1]; close = wrap[3];
+      }
+      out[li] = lead + open + mark + close;
+    });
+    return out;
+  }
+  // True when a series' numbers aren't 1, 2, 3… in its style.
+  function seriesOutOfOrder(poem) {
+    var style = poem.seriesStyle;
+    if (!style || SERIES_SYMBOLS[style.kind]) return false;
+    var lines = poem.lines || [];
+    return partLineIndexes(lines, style).some(function (li, k) {
+      return stripFormatMarkers(lines[li]).trim() !== seriesMarker(k + 1, style);
+    });
+  }
 
   // A heading line with nothing after its #s: a blank line someone styled
   // as a heading (or spacing above a title). It is spacing, never a title.
@@ -9779,7 +9932,7 @@
     var texts = [], partStarts = [];
     if (isSeriesOn(poem)) {
       Array.prototype.forEach.call(ed.children, function (r) { texts.push(r.nodeType !== 1 ? '' : r.dataset.token ? '[image 0]' : r.textContent); });
-      partStarts = partLineIndexes(texts);
+      partStarts = partLineIndexes(texts, poem.seriesStyle || null);
     }
     Array.prototype.forEach.call(ed.children, function (r, ri) {
       if (r.nodeType !== 1) return;
@@ -10359,6 +10512,109 @@
     tag.title = 'Each part starts on a new page. Change this in the ⋯ menu.';
     return tag;
   }
+  // The bar atop a series in Poem View: its numbering (a counting style or
+  // a section-break symbol, with or without a period) and + Add part,
+  // which puts a new part after the one the cursor is in (at the end if
+  // the cursor isn't in the poem) and renumbers every part after it.
+  function makeSeriesBar(poem, editor, changed) {
+    var bar = document.createElement('div');
+    bar.className = 'series-bar';
+    var pick = document.createElement('select');
+    pick.className = 'series-style';
+    pick.setAttribute('aria-label', 'How the parts are numbered');
+    var g1 = document.createElement('optgroup'), g2 = document.createElement('optgroup');
+    g1.label = 'Numbered'; g2.label = 'Section-break symbol';
+    Object.keys(SERIES_COUNTERS).forEach(function (k) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = SERIES_COUNTERS[k].name + ' (' + SERIES_COUNTERS[k].label + ')';
+      g1.appendChild(o);
+    });
+    Object.keys(SERIES_SYMBOLS).forEach(function (k) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = SERIES_SYMBOLS[k].name + ' (' + SERIES_SYMBOLS[k].mark + ')';
+      g2.appendChild(o);
+    });
+    pick.appendChild(g1); pick.appendChild(g2);
+    var periodLabel = document.createElement('label');
+    periodLabel.className = 'series-period';
+    var period = document.createElement('input');
+    period.type = 'checkbox';
+    var periodText = document.createElement('span');
+    periodLabel.appendChild(period); periodLabel.appendChild(periodText);
+    var add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'series-add';
+    add.textContent = '+ Add part';
+    add.title = 'Add a part after the one the cursor is in, and renumber the parts after it';
+    bar.appendChild(pick); bar.appendChild(periodLabel); bar.appendChild(add);
+    function paint() {
+      var st = seriesStyleFor(poem);
+      pick.value = st.kind;
+      period.checked = !!st.period;
+      periodLabel.hidden = !!SERIES_SYMBOLS[st.kind];
+      periodText.textContent = 'Period (' + seriesNumber(2, st.kind) + '.)';
+    }
+    function setLines(lines, caretLine) {
+      poem.lines = lines;
+      renderEditor(editor, lines);
+      changed();
+      if (caretLine >= 0 && editor.children[caretLine]) { editor.focus(); placeCaretIn(editor.children[caretLine]); }
+      paint();
+    }
+    function restyle() {
+      var lines = serializeEditor(editor);
+      poem.lines = lines;
+      var old = seriesStyleFor(poem), starts = partLineIndexes(lines, poem.seriesStyle || null);
+      var style = { kind: pick.value, period: period.checked, prefix: SERIES_SYMBOLS[pick.value] ? '' : (old.prefix || '') };
+      poem.seriesStyle = style;
+      setLines(renumberedLines(lines, starts, style), -1);
+    }
+    pick.addEventListener('change', restyle);
+    period.addEventListener('change', restyle);
+    // Keep the cursor where it was while the button is pressed.
+    add.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    add.addEventListener('click', function () {
+      var lines = serializeEditor(editor);
+      poem.lines = lines;
+      var style = seriesStyleFor(poem), starts = partLineIndexes(lines, poem.seriesStyle || null);
+      var ci = caretLineIndex(editor);
+      if (ci < 0 && editor.dataset.lastLine) ci = parseInt(editor.dataset.lastLine, 10);
+      lines = lines.slice();
+      var mark = seriesMarker(1, style), at, caret;
+      var empty = !lines.some(function (l) { return (l || '').trim(); });
+      if (empty) { lines = [mark, '']; caret = 1; }
+      else {
+        if (!starts.length) { lines = [mark, ''].concat(lines); starts = [0]; if (ci >= 0) ci += 2; }
+        var after = ci < 0 ? starts.length : starts.filter(function (li) { return li <= ci; }).length;
+        if (after > 0 && after < starts.length) at = starts[after];
+        else if (after === 0) at = starts[0];
+        if (at !== undefined) { lines.splice(at, 0, mark, '', ''); caret = at + 1; }
+        else {
+          while (lines.length && !(lines[lines.length - 1] || '').trim()) lines.pop();
+          lines.push('', mark, '');
+          caret = lines.length - 1;
+        }
+      }
+      poem.seriesStyle = style;
+      var fixed = renumberedLines(lines, partLineIndexes(lines, style), style);
+      setLines(fixed, caret);
+      showToast('Added part ' + stripFormatMarkers(fixed[caret - 1]).trim() + '. It starts a new page.');
+    });
+    // Remember the last line the cursor was in, for + Add part.
+    editor.addEventListener('keyup', function () { var i = caretLineIndex(editor); if (i >= 0) editor.dataset.lastLine = i; });
+    editor.addEventListener('mouseup', function () { var i = caretLineIndex(editor); if (i >= 0) editor.dataset.lastLine = i; });
+    // Parts typed or deleted by hand get their numbers put back in
+    // order once the cursor leaves the poem.
+    editor.addEventListener('blur', function () {
+      if (!isSeriesOn(poem) || !seriesOutOfOrder(poem)) return;
+      var style = poem.seriesStyle;
+      poem.lines = renumberedLines(poem.lines, partLineIndexes(poem.lines, style), style);
+      renderEditor(editor, poem.lines);
+      changed();
+    });
+    paint();
+    return bar;
+  }
   function makeTierPill(poem) {
     var pill = document.createElement('button');
     pill.type = 'button';
@@ -10485,7 +10741,7 @@
     renderAll();
     var n = poem.series ? seriesParts(poem).length : 0;
     if (!poem.series) showToast('“' + (poem.title || 'Untitled') + '” is no longer a series.');
-    else if (n < 2) showToast('Now a series. Start each part with its number on a line of its own (I., II., …) and it will begin a new page.');
+    else if (n < 2) showToast('Now a series. Use + Add part above the poem to add numbered parts; each begins a new page.');
     else showToast('Now a series: ' + n + ' parts, each starting a new page.');
   }
 
@@ -10798,7 +11054,8 @@
       updateStats();
     });
     titleRow.appendChild(titleInput);
-    if (isSeriesOn(poem)) titleRow.appendChild(makeSeriesTag(poem));
+    var seriesTagEl = isSeriesOn(poem) ? makeSeriesTag(poem) : null;
+    if (seriesTagEl) titleRow.appendChild(seriesTagEl);
     if (tiersShown()) titleRow.appendChild(makeTierPill(poem));
     titleRow.appendChild(makeDotsBtn(index));
 
@@ -10818,7 +11075,10 @@
       applyOpener(editor, cardLayout.opener, editorPxPerPt(), parseFloat(getComputedStyle(editor).lineHeight) || cardLayout.lineHeight * editorPxPerPt());
     }, 0);
     setTimeout(function () { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }, 0);
-    function tagProse() { tagProseLines(editor, poem, TAB_STOP_PT * editorPxPerPt()); }
+    function tagProse() {
+      tagProseLines(editor, poem, TAB_STOP_PT * editorPxPerPt());
+      if (seriesTagEl) seriesTagEl.textContent = makeSeriesTag(poem).textContent;
+    }
     tagProse();
     editor.style.textAlign = isScriptForm() ? 'left' : editorAlign(poem);
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
@@ -10989,6 +11249,7 @@
     commentsEl.className = 'poem-comments';
     body.appendChild(writerBar);
     body.appendChild(titleRow);
+    if (isSeriesOn(poem)) body.appendChild(makeSeriesBar(poem, editor, function () { editor.dispatchEvent(new Event('input', { bubbles: true })); }));
     body.appendChild(editor);
     body.appendChild(notesEl);
     body.appendChild(commentsEl);
