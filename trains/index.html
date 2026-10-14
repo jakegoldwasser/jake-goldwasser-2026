@@ -149,6 +149,28 @@ main {
 .row .dest.wx .cond { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .row .dest .lo { color: var(--muted); font-size: 0.7em; margin-right: 0.45em; }
 .row .dest .lo span { font-weight: 700; }
+/* The weather group is set off like an MTA station sign: a black plate with
+   the signs' thin white rule across its top and a Helvetica caption ("Weather"
+   on the left, which day on the right), so it never reads as more trains. */
+.group.wx-group {
+  background: #000;
+  border-top: none;
+  border-radius: 4px;
+  margin-top: 0.8vh;
+  padding: 0 0.7em 0.4vh;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.wx-sign {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 1em;
+  border-top: 2px solid var(--fg);
+  margin-top: 0.55em;
+  padding-top: 0.3em;
+  font-size: calc(var(--row) * 0.5);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.wx-sign .when { color: var(--muted); font-weight: 400; }
 footer {
   display: flex; justify-content: space-between; gap: 16px;
   font-size: clamp(11px, 1.3vw, 15px); color: var(--muted);
@@ -511,11 +533,15 @@ function render() {
 
   document.getElementById("board").innerHTML = [["N", "Uptown"], ["S", "Downtown"]].map(function (d) {
     return '<section class="panel"><h2>' + d[1] + '</h2>' + STATIONS.map(function (st) {
-      var list = arrivals[st.stop + "|" + d[0]], inner;
-      if (st.stop === "A22" && d[0] === "N") inner = weatherNowRows();
+      var list = arrivals[st.stop + "|" + d[0]], inner, when = "";
+      if (st.stop === "A22" && d[0] === "N") { inner = weatherNowRows(); when = "Today"; }
       // Only once the trains have loaded and none can be caught (nights, mostly).
-      else if (st.stop === "A22" && list && !catchable(list).length && weather) inner = weatherTomorrowRows();
-      return '<div class="group"><div class="rows">' + (inner || rowsHtml(list, st.walk)) + '</div></div>';
+      else if (st.stop === "A22" && list && !catchable(list).length && weather) { inner = weatherTomorrowRows(); when = "Tomorrow"; }
+      if (inner && when) {
+        return '<div class="group wx-group"><div class="wx-sign"><span>Weather</span><span class="when">' + when + '</span></div>' +
+          '<div class="rows">' + inner + '</div></div>';
+      }
+      return '<div class="group"><div class="rows">' + rowsHtml(list, st.walk) + '</div></div>';
     }).join("") + '</section>';
   }).join("");
 
