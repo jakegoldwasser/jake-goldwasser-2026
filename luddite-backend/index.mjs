@@ -962,6 +962,19 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { class: saved });
   }
 
+  // GET /luddite/watch?code= -- live writing: for the session's teacher,
+  // what each student let in has written so far (the backup their page sends
+  // while they write; see /luddite/event).
+  if (path === '/luddite/watch' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const subs = Object.keys(room.students || {}).filter((sub) => room.students[sub].status === 'admitted');
+    const got = await Promise.all(subs.map((sub) => readItem('luddite:draft:' + room.code + ':' + sub)));
+    const drafts = {};
+    subs.forEach((sub, i) => { const d = got[i].state; drafts[sub] = d ? { text: d.text, at: d.at } : null; });
+    return respond(200, { drafts });
+  }
+
   // ---- Marking up handed-in work ----
 
   // GET /luddite/sub?id= -- one piece with its marks, for its teacher.
