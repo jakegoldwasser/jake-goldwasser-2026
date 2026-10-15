@@ -955,6 +955,7 @@
     <p class="sub" id="lockWait" hidden></p>
     <button class="btn ghost" id="lockAskBtn" type="button" hidden>Ask your teacher to let you back in</button>
     <button class="btn" id="resumeBtn">Go back to full screen</button>
+    <p class="fine warn" id="lockErr" hidden></p>
     <p class="fine" id="lockCount"></p>
   </div>
 </section>
@@ -2439,24 +2440,68 @@
   var DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
   function P() { return mode === 'room' && roomInfo && roomInfo.prefs ? roomInfo.prefs : DEFAULT_PREFS; }
 
-  function requestFs() {
-    if (fsExempt() || !P().lockOnLeave) return Promise.resolve();
-    var el = document.documentElement;
-    var p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen && el.webkitRequestFullscreen());
-    return Promise.resolve(p).then(function () {
-      // Chromium only: in full screen, send Esc, Cmd/Ctrl+W/T/N and the
-      // like to the page instead of the browser, so they can be swallowed
-      // below. Esc then has to be held down to leave full screen.
-      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
-    });
-  }
+  function fsNeeded() { return !fsExempt() && P().lockOnLeave; }
   function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function keyboardLock() {
+    // Chromium only: in full screen, send Esc, Cmd/Ctrl+W/T/N and the
+    // like to the page instead of the browser, so they can be swallowed
+    // below. Esc then has to be held down to leave full screen.
+    try { if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {}); } catch (e) {}
+  }
+  // Resolves only once the page really is full screen (or doesn't need to
+  // be). A page that is still full screen, as after swiping to another
+  // desktop and back, isn't asked again: some browsers refuse a second
+  // request, which used to leave the Go back button doing nothing. Older
+  // Safari's request returns nothing, so success is checked, not assumed.
+  function requestFs() {
+    if (!fsNeeded()) return Promise.resolve();
+    if (isFs()) { keyboardLock(); return Promise.resolve(); }
+    var el = document.documentElement, p;
+    try { p = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : (el.webkitRequestFullscreen && el.webkitRequestFullscreen()); }
+    catch (e) { return Promise.reject(e); }
+    return Promise.resolve(p).then(function () {
+      return new Promise(function (resolve, reject) {
+        var t0 = Date.now();
+        (function check() {
+          if (isFs()) return resolve();
+          if (Date.now() - t0 > 2000) return reject(new Error('Not full screen'));
+          setTimeout(check, 50);
+        })();
+      });
+    }).then(keyboardLock);
+  }
+  function exitFs() {
+    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
+    if (!isFs()) return Promise.resolve();
+    var exit = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen && document.webkitExitFullscreen());
+    return Promise.resolve(exit).catch(function () {});
+  }
+
+  // Going full screen moves the window (on a Mac, to its own desktop), and
+  // browsers send "left the window" events while it settles. Those are
+  // ignored for a moment after going in; the watch below then checks.
+  var settleUntil = 0;
+  function settle() { settleUntil = Date.now() + 1500; }
+  function settling() { return Date.now() < settleUntil; }
+
+  // A writer is only ever writing in a full-screen, focused, visible page.
+  // The browser's events usually say when that stops, but not always
+  // (swiping between desktops can slip past them), so check twice a second
+  // too; nobody ends up typing in a window beside their other windows.
+  function checkStillHere() {
+    if (!writing || locked || leavingOnPurpose || !P().lockOnLeave || settling()) return;
+    if (fsNeeded() && !isFs()) lock('You left full screen');
+    else if (document.hidden) lock('You switched tabs');
+    else if (!document.hasFocus()) lock('You switched to another window');
+  }
+  setInterval(checkStillHere, 500);
 
   function enterWriting() {
     if (mode === 'room' && roomInfo && roomInfo.handedIn && !previewing) { showReady(); return; }
     if (mode === 'room' && roomInfo && roomInfo.lockedOut && !previewing && !isTester(me.email)) { showReady(); return; }
     if (mode === 'room' && !previewing && roomInfo && roomInfo.endAt && nowMs() >= roomInfo.endAt) { showReady(); return; }
     requestFs().then(function () {
+      settle();
       writing = true;
       locked = false;
       $('doneBtn').textContent = mode === 'room' && !previewing ? 'Hand in' : 'Done';
@@ -2500,6 +2545,7 @@
     $('lockAskBtn').hidden = !held;
     $('lockAskBtn').disabled = false;
     $('lockAskBtn').textContent = 'Ask your teacher to let you back in';
+    $('lockErr').hidden = true;
     $('lockWait').textContent = 'Ask your teacher to let you back in. This page opens again by itself when they do.';
     show('lockScreen');
     report('left').then(function (room) {
@@ -2528,15 +2574,27 @@
     if (!data.room.lockedOut) { stopPoll(); letBackIn(); }
   }
 
+  var resuming = false;
   $('resumeBtn').addEventListener('click', function () {
-    if ($('resumeBtn').hidden) return;
+    if ($('resumeBtn').hidden || resuming) return;
+    resuming = true;
+    $('lockErr').hidden = true;
     requestFs().then(function () {
+      settle();
       locked = false;
       updateLeaves();
       show('writeScreen');
       pad.focus();
       report('writing');
-    }).catch(function () {});
+    }).catch(function () {
+      // The browser wouldn't go (back) to full screen. Take it out of full
+      // screen, so the next click starts fresh, and say so: the button
+      // never just does nothing.
+      exitFs().then(function () {
+        $('lockErr').textContent = 'Your browser didn’t go back to full screen. Click the button again.';
+        $('lockErr').hidden = false;
+      });
+    }).then(function () { resuming = false; });
   });
 
   $('doneBtn').addEventListener('click', function () {
@@ -2550,9 +2608,7 @@
     stopHeartbeat();
     stopTimer();
     report('idle');
-    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
-    var exit = document.exitFullscreen ? document.exitFullscreen() : (document.webkitExitFullscreen && document.webkitExitFullscreen());
-    Promise.resolve(exit).catch(function () {}).then(function () {
+    exitFs().then(function () {
       leavingOnPurpose = false;
       then();
     });
@@ -2590,10 +2646,10 @@
     }
   });
 
-  document.addEventListener('fullscreenchange', function () { if (!isFs()) lock('You left full screen'); });
-  document.addEventListener('webkitfullscreenchange', function () { if (!isFs()) lock('You left full screen'); });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) lock('You switched tabs'); });
-  window.addEventListener('blur', function () { lock('You switched to another window'); });
+  document.addEventListener('fullscreenchange', function () { if (!isFs() && !settling()) lock('You left full screen'); });
+  document.addEventListener('webkitfullscreenchange', function () { if (!isFs() && !settling()) lock('You left full screen'); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && !settling()) lock('You switched tabs'); });
+  window.addEventListener('blur', function () { if (!settling()) lock('You switched to another window'); });
 
   // ---------------------------------------------------------------------
   // Nothing pasted, dropped or inserted from outside. Cut, copy and paste
