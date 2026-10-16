@@ -108,3 +108,29 @@ account is left out.
 - The first stats call each day appends a snapshot to the item
   `stats#history` (how many accounts had saved in the past 7 days, etc.),
   since that can't be worked out afterwards.
+
+## Bookbug HM
+
+Bookbug HM (Horace Mann's copy, https://jakegoldwasser-hm.github.io/bookbug-hm/,
+repository `jakegoldwasser-hm/bookbug-hm`) uses this same function. A request
+whose `Origin` is `https://jakegoldwasser-hm.github.io` is Bookbug HM's:
+
+- Only @horacemann.org accounts may use it (`403 horacemann_only` otherwise; a
+  fresh Google sign-in must also carry `hd: horacemann.org`).
+- Its books are stored apart, under `hm#<google sub>` in both tables (plus the
+  account's `email` and `name`, so administrators know whose books they are).
+  Someone's Bookbug books and Bookbug HM books never mix, and usage stats leave
+  Bookbug HM out.
+- Horace Mann's administrators read every Bookbug HM book through
+  `/hm-admin/*` (`routeHmAdmin`): `me`, `overview`, `book?sub=&id=`,
+  `image?sub=&id=`, `log`, `admins` (PUT `{ add }` / `{ remove }`). Read-only,
+  fenced to that Origin, to administrators, and to `hm#` items only. Every look
+  is logged in `hm#adminlog`; the list of administrators is `hm#admins`.
+  `HM_PRIMARY_ADMINS` can't be removed; `HM_ADMIN_MANAGERS` (Jake) can add and
+  remove administrators but sees no books. Listing uses `dynamodb:Scan`, which the
+  usage stats already need.
+
+Setup it needs (once): the Function URL's CORS must allow the origin
+`https://jakegoldwasser-hm.github.io`; the Google OAuth client must list it under
+Authorized JavaScript origins; and the Picker API key's HTTP referrers must
+include `https://jakegoldwasser-hm.github.io/*` for Import from Google Drive.
