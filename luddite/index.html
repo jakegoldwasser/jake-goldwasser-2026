@@ -1238,7 +1238,7 @@
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
       <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next &rsaquo;</button></span>
-      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out (Delete again takes the cross-out back), or right-click them to comment. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
+      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
@@ -1366,6 +1366,7 @@
 
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
+  <button type="button" data-tool="strike">Cross out</button>
   <button type="button" data-tool="insert">Write here</button>
 </div>
 <div class="markpop no-print" id="markPop" hidden>
@@ -4468,6 +4469,7 @@
       return;
     }
     piece.marks = piece.marks || [];
+    resetUndo();
     showPieceHead();
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
@@ -4836,6 +4838,7 @@
     each('#markTools [data-tool]', function (b) {
       b.hidden = s.start === s.end ? b.dataset.tool !== 'insert' : b.dataset.tool === 'insert';
     });
+    $('markTools').querySelector('[data-tool="strike"]').textContent = isStruck(s) ? 'Remove the cross-out' : 'Cross out';
     tools.hidden = false;
     var rect = s.rect.width || s.rect.height ? s.rect : $('paper').getBoundingClientRect();
     var x = Math.max(8, Math.min(window.innerWidth - tools.offsetWidth - 8, rect.left + rect.width / 2 - tools.offsetWidth / 2));
@@ -4852,6 +4855,9 @@
     if (sel.isCollapsed) {
       var hit = e.target.closest('.ins, .mnum');
       if (hit) { hideTools(); openExisting(hit); return; }
+      // A click on crossed-out words offers to take the cross-out back.
+      var st = e.target.closest('.strike'), sm = st && findMark((st.dataset.s || '').split(' ')[0]);
+      if (sm) { hideTools(); openPop(sm, null, st.getBoundingClientRect()); return; }
     }
     setTimeout(showTools, 0);
   });
@@ -4871,6 +4877,13 @@
     if (!b || !toolRange) return;
     var t = b.dataset.tool, r = toolRange;
     hideTools();
+    if (t === 'strike') {
+      if (isStruck(r)) unstrikeRange(r); else strikeRange(r);
+      window.getSelection().removeAllRanges();
+      drawPiece();
+      queueSave();
+      return;
+    }
     openPop(null, { type: t, start: r.start, end: t === 'insert' ? r.start : r.end }, r.rect);
   });
 
@@ -4990,7 +5003,7 @@
     if (m) { m.fmt = fmtOf(m) + new Array(txt.length + 1).join(fmtChar()); m.note += txt; }
     else m = newMark({ type: 'insert', start: p, end: p, note: txt, fmt: new Array(txt.length + 1).join(fmtChar()) });
     drawPiece();
-    queueSave();
+    typing = true; queueSave(); typing = false;
     var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
     if (node) caretAfter(node);
   }
@@ -5007,7 +5020,9 @@
       if (txt) typeText(txt, s);
       return;
     }
-    if (t.indexOf('delete') !== 0) return; // Enter, undo, formatting: nothing
+    if (t === 'historyUndo') { undoMarks(false); return; } // Edit › Undo
+    if (t === 'historyRedo') { undoMarks(true); return; }
+    if (t.indexOf('delete') !== 0) return; // Enter, formatting: nothing
     // Delete or Backspace on words crosses them out; again on crossed-out words takes it back.
     if (!s.collapsed) {
       if (isStruck(s)) unstrikeRange(s); else strikeRange(s);
@@ -5261,8 +5276,44 @@
     queueSave();
   });
 
+  // Undo (Cmd/Ctrl+Z) and redo (Shift+Cmd/Ctrl+Z, or Ctrl+Y) for the marks:
+  // each save notes what the marks were before, a burst of typing as one step.
+  var undoStack = [], redoStack = [], marksBefore = '', undoLastAt = 0, typing = false, wasTyping = false;
+  function resetUndo() { undoStack = []; redoStack = []; marksBefore = piece ? JSON.stringify(piece.marks) : ''; }
+  function noteUndo() {
+    var now = JSON.stringify(piece.marks);
+    if (now === marksBefore) return;
+    if (!(typing && wasTyping && Date.now() - undoLastAt < 1500) || !undoStack.length) undoStack.push(marksBefore);
+    wasTyping = typing;
+    if (undoStack.length > 200) undoStack.shift();
+    undoLastAt = Date.now();
+    redoStack = [];
+    marksBefore = now;
+  }
+  function undoMarks(redo) {
+    if (reading || !piece) return;
+    var from = redo ? redoStack : undoStack, to = redo ? undoStack : redoStack;
+    if (!from.length) return;
+    to.push(JSON.stringify(piece.marks));
+    piece.marks = JSON.parse(from.pop());
+    marksBefore = JSON.stringify(piece.marks);
+    wasTyping = false;
+    closePop(); hideTools();
+    drawPiece();
+    queueSave();
+  }
+  document.addEventListener('keydown', function (e) {
+    if ($('markScreen').hidden || reading || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+    var k = e.key.toLowerCase();
+    if (k !== 'z' && !(k === 'y' && e.ctrlKey)) return;
+    // The comment box, end comment and grade keep their own typing undo.
+    if (e.target.closest('textarea, input, select') || !$('markPop').hidden) return;
+    e.preventDefault();
+    undoMarks(k === 'y' || e.shiftKey);
+  });
   function queueSave() {
     if (reading) return;
+    if (piece) noteUndo();
     $('markSaved').textContent = 'Saving…';
     clearTimeout(markSaveTimer);
     markSaveTimer = setTimeout(saveMarks, 700);
