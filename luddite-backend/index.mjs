@@ -135,6 +135,8 @@ const MAX_STORED_CHARS = 250000;
 // Chat while writing: one message's length, and how many a pair keeps.
 const MAX_CHAT_CHARS = 1000;
 const MAX_CHAT_MSGS = 300;
+// How much of that chat a paper keeps (the newest messages), beside its text.
+const MAX_PAPER_CHAT_CHARS = 40000;
 // A handed-back paper's grade shows only after the student has spent this
 // long with the comments open in front of them (counted by the server).
 const GRADE_AFTER_MS = 5 * 60 * 1000;
@@ -1550,9 +1552,19 @@ async function handInFor(room, code, me, s, text, label, auto) {
     link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS),
     ...(replaces.length ? { replaces } : {}) };
   if (stored) {
+    // The chat with the teacher while they wrote goes with the paper (the most
+    // recent messages, if there were very many), so administrators see it too.
+    const { state: chatState } = await readItem('luddite:chat:' + code + ':' + me.sub);
+    const chat = [];
+    let left = MAX_PAPER_CHAT_CHARS;
+    for (const m of ((chatState && chatState.msgs) || []).slice().reverse()) {
+      if ((left -= m.text.length) < 0) break;
+      chat.unshift(m);
+    }
     await mutate('luddite:sub:' + id, () => ({
       id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
       label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '',
+      ...(chat.length ? { chat } : {}),
       ...(replaces.length ? { replaces } : {})
     }));
     const email = me.email.toLowerCase();
