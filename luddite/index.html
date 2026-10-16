@@ -3914,7 +3914,8 @@
       nb.onclick = function () { $('handBackAllBtn').click(); };
     } else {
       ns.className = 'nextstep done';
-      $('nextStepText').textContent = '✓ Every paper is graded and handed back.';
+      var ungraded = papers.filter(function (x) { return !x.grade && !x.marked; }).length;
+      $('nextStepText').textContent = ungraded ? '✓ Every paper is handed back (' + ungraded + ' ungraded).' : '✓ Every paper is graded and handed back.';
       nb.hidden = true;
     }
 
@@ -4151,15 +4152,21 @@
     else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
     else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
     else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
-    else if (stage === 'back') tag = ['back', '✓ Handed back' + (x.grade ? ': ' + x.grade : '')];
+    else if (stage === 'back') tag = null; // its own two bubbles, below
     else if (x && !x.stored) tag = ['warn', 'Not saved'];
     else tag = ['', state === 'ended' ? 'Didn’t hand in' : 'Not writing'];
     if (tag) row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
+    // Graded and handed back are separate: a paper can go back ungraded, and
+    // still be graded or marked up afterwards.
+    if (stage === 'back') {
+      if (x.grade || x.marked) row.appendChild(el('span', 'pill status ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'));
+      row.appendChild(el('span', 'pill status back', '✓ Handed back'));
+    }
 
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     var main = null;
     if (!over && s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
-    else if (stage === 'tograde') main = button('Grade', 'btn small tograde', open);
+    else if (stage === 'tograde' || (stage === 'back' && !x.grade)) main = button('Grade', 'btn small' + (stage === 'tograde' ? ' tograde' : ''), open);
     else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
     });
@@ -4174,6 +4181,9 @@
     menu.appendChild(sum);
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
+    if (stage === 'tograde') item('Hand back ungraded', async function () {
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    });
     if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn) item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
     if (s && s.email) {
