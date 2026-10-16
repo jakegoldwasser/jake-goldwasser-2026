@@ -1012,9 +1012,10 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { msgs });
   }
 
-  // PUT /luddite/chat { code, text, to? } -- send a message. The teacher sends
+  // PUT /luddite/chat { code, text, to?, hand? } -- send a message. The teacher sends
   // to one student (to: their sub) or everyone let in (to: 'all'); a student
-  // sends to their teacher.
+  // sends to their teacher, as a raised hand with hand: true (handAt on their
+  // entry, so the session page can say "Hand raised").
   if (path === '/luddite/chat' && method === 'PUT') {
     const code = cleanCode(body.code);
     const text = String(body.text || '').trim().slice(0, MAX_CHAT_CHARS);
@@ -1025,13 +1026,14 @@ async function routeLuddite(event, method, path, info) {
     const subs = !asTeacher ? [me.sub] : body.to === 'all' ? Object.keys(room.students).filter(admitted) : [String(body.to)];
     if (!subs.length || !subs.every(admitted)) throw new HttpError(404, 'not_in_room');
     const at = Date.now();
-    const msg = { from: asTeacher ? 'teacher' : 'student', text, at, ...(asTeacher && body.to === 'all' ? { all: true } : {}) };
+    const hand = !asTeacher && body.hand === true;
+    const msg = { from: asTeacher ? 'teacher' : 'student', text, at, ...(asTeacher && body.to === 'all' ? { all: true } : {}), ...(hand ? { hand: true } : {}) };
     await inBatches(subs, (sub) => mutate('luddite:chat:' + code + ':' + sub, (c) => ({ code, sub, msgs: [...((c && c.msgs) || []), msg].slice(-MAX_CHAT_MSGS) })));
     const sideKey = asTeacher ? 'chatT' : 'chatS', seenKey = asTeacher ? 'seenT' : 'seenS';
     await mutate('luddite:room:' + code, (r) => {
       if (!r) return undefined;
       const students = { ...r.students };
-      subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], [sideKey]: at, [seenKey]: at }; });
+      subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], [sideKey]: at, [seenKey]: at, ...(hand ? { handAt: at } : {}) }; });
       return { ...r, students };
     });
     return respond(200, { msg, to: subs.length });
