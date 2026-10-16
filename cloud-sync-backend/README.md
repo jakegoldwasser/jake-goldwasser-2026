@@ -28,6 +28,14 @@ Set under **Configuration → Environment variables**:
   sign-ins last only as long as Google's ~1hr ID token. Changing it signs
   everyone out.
 
+- `ANTHROPIC_API_KEY` (optional) — a Claude API key from
+  https://console.anthropic.com (API use is billed there, separately from a
+  Claude subscription; a guess costs a fraction of a cent). With it,
+  `PUT ?orient` asks Claude which way up a photographed cartoon goes, and
+  Bookbug turns each imported photo upright. Without it the route answers
+  501 and Bookbug skips the guess. `ORIENT_MODEL` picks the model
+  (default `claude-haiku-5-5`).
+
 ## Storage
 
 One DynamoDB table (`ChapbookBuilderUsers`, despite the name — it now
