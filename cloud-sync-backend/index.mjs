@@ -23,6 +23,14 @@ import { isIP } from 'node:net';
 // with no "chapbookbuilder" wrapper. migrateLegacyState() recognizes and
 // nests those in place the first time they're read or written, so
 // existing users don't lose anything.
+//
+// Bookbug HM (Horace Mann's copy, jakegoldwasser-hm.github.io/bookbug-hm)
+// uses this same function, but its books are kept apart: a request from
+// that page (Origin HM_ORIGIN) is stored under "hm#<sub>" instead of
+// "<sub>", in both tables, so an account's Bookbug and Bookbug HM books
+// never mix, and only @horacemann.org accounts may use it. Horace Mann's
+// administrators can read Bookbug HM's books (and only those) through
+// routeHmAdmin below.
 
 const TABLE_NAME = process.env.TABLE_NAME || 'ChapbookBuilderUsers';
 // Picture-book art lives apart from the JSON blob above, one item per
@@ -505,11 +513,12 @@ export function computeStats(items, selfId, now = Date.now()) {
 
   items.forEach(item => {
     const key = item.userId.S;
-    if (key.startsWith('stats#')) return;
+    // Bookbug HM's accounts and administrator lists aren't Bookbug's.
+    if (key.startsWith('stats#') || key.startsWith('hm#')) return;
     if (key.startsWith('share#')) {
       let link = {};
       try { link = JSON.parse(item.state.S); } catch (e) {}
-      if (link.revoked || link.owner === selfId) return;
+      if (link.revoked || link.owner === selfId || String(link.owner || '').startsWith('hm#')) return;
       shares.total++;
       if (link.createdAt > ago(7)) shares.new7++;
       return;
@@ -577,6 +586,225 @@ async function usageStats(selfId) {
   return { ...stats, history };
 }
 
+// ---------------------------------------------------------------------
+// Bookbug HM administrators
+// ---------------------------------------------------------------------
+// Horace Mann's administration can read every book written in Bookbug HM:
+// every book of every type, on Home, archived or recently deleted, with
+// its comments and pictures. It is read-only, and it is Bookbug HM's alone:
+//   - the request has to come from the Bookbug HM page: its Origin header
+//     (which the browser sets, and a page can't fake) must be HM_ORIGIN, so
+//     Bookbug at jake-goldwasser.com can't reach any of it;
+//   - the person has to be signed in with an @horacemann.org account that
+//     is on the administrator list;
+//   - and only books stored under "hm#<sub>" (written in Bookbug HM) are
+//     shown, never anyone's regular Bookbug books.
+// The primary administrator (HM_PRIMARY_ADMINS) can't be removed, and adds
+// or removes other administrators (any @horacemann.org address). Jake
+// (HM_ADMIN_MANAGERS) can also add and remove them, but sees nothing else:
+// no books, no access log. Every look is written to a log the
+// administrators can read.
+//   hm#admins     { emails: { [email]: { addedAt, addedBy } } }
+//   hm#adminlog   { entries: [{ at, email, what, id, label }] } newest first
+const HM_ORIGIN = 'https://jakegoldwasser-hm.github.io';
+const HM_PRIMARY_ADMINS = ['cassandra_parets@horacemann.org'];
+// Can add and remove administrators, but can't read anyone's books or the
+// access log: Jake runs the service and asked not to see Horace Mann's data.
+const HM_ADMIN_MANAGERS = ['jake_goldwasser@horacemann.org'];
+const HM_ADMINS_KEY = { userId: { S: 'hm#admins' } };
+const HM_LOG_KEY = { userId: { S: 'hm#adminlog' } };
+const HM_LOG_MAX = 1500;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const lower = (s) => String(s || '').trim().toLowerCase();
+const isHm = (email) => /@horacemann\.org$/.test(lower(email));
+const HM_SUB = /^[0-9]{1,40}$/;
+
+async function readJsonItem(key) {
+  const res = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: key }));
+  if (!res.Item) return { value: null, updatedAt: 0 };
+  return { value: JSON.parse(res.Item.state.S), updatedAt: Number(res.Item.updatedAt?.N || 0) };
+}
+// Read, change, write -- again if someone else wrote in between.
+async function mutateJsonItem(key, fn) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { value, updatedAt } = await readJsonItem(key);
+    const now = Math.max(Date.now(), updatedAt + 1);
+    try {
+      await ddb.send(new PutItemCommand({
+        TableName: TABLE_NAME,
+        Item: { ...key, state: { S: JSON.stringify(fn(value)) }, updatedAt: { N: String(now) } },
+        ...(updatedAt
+          ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
+          : { ConditionExpression: 'attribute_not_exists(userId)' })
+      }));
+      return;
+    } catch (e) {
+      if (e.name !== 'ConditionalCheckFailedException') throw e;
+    }
+  }
+  throw new Error('busy');
+}
+
+async function hmAdminOf(email) {
+  const em = lower(email);
+  if (!isHm(em)) return null;
+  if (HM_PRIMARY_ADMINS.includes(em)) return 'primary';
+  if (HM_ADMIN_MANAGERS.includes(em)) return 'manager';
+  const { value } = await readJsonItem(HM_ADMINS_KEY);
+  return value && value.emails && value.emails[em] ? 'admin' : null;
+}
+
+async function hmLog(email, what, id, label) {
+  await mutateJsonItem(HM_LOG_KEY, (l) => ({
+    entries: [{ at: Date.now(), email: lower(email), what, id: String(id || ''), label: String(label || '').slice(0, 120) },
+      ...((l && l.entries) || [])].slice(0, HM_LOG_MAX)
+  }));
+}
+
+async function hmAdminList() {
+  const { value } = await readJsonItem(HM_ADMINS_KEY);
+  const emails = (value && value.emails) || {};
+  return {
+    primary: HM_PRIMARY_ADMINS,
+    managers: HM_ADMIN_MANAGERS,
+    admins: Object.keys(emails).filter((e) => !HM_PRIMARY_ADMINS.includes(e) && !HM_ADMIN_MANAGERS.includes(e)).sort()
+      .map((email) => ({ email, addedAt: emails[email].addedAt, addedBy: emails[email].addedBy || '' }))
+  };
+}
+
+// Where each kind of book lives in the account's saved state.
+const HM_BOOK_LISTS = [['text', 'chapbooks', 'trash'], ['picture', 'pictureBooks', 'pictureBookTrash'],
+  ['cartoon', 'cartoonBooks', 'cartoonBookTrash'], ['comic', 'comicBooks', 'comicBookTrash']];
+function hmBookTitle(e) {
+  const d = e.data || {};
+  return String(e.title || d.bookTitle || d.title || '').slice(0, 200);
+}
+// Every book in an account with something in it: { kind, where, entry }.
+// `where` is 'home', 'archived' or 'deleted' (recently deleted, or a
+// deleted book whose copy is still in the trash).
+function hmBooksOf(bb) {
+  const out = [], seen = new Set();
+  HM_BOOK_LISTS.forEach(([kind, libKey, trashKey]) => {
+    (bb[libKey] || []).forEach((e) => {
+      if (!e || !e.id || !e.data || seen.has(e.id)) return;
+      seen.add(e.id);
+      out.push({ kind, where: e.archived ? 'archived' : 'home', entry: e });
+    });
+    (bb[trashKey] || []).forEach((e) => {
+      if (!e || !e.id || !e.data || seen.has(e.id)) return;
+      seen.add(e.id);
+      out.push({ kind, where: 'deleted', entry: e });
+    });
+  });
+  (bb.recentlyDeleted || []).forEach((d) => {
+    const e = d && d.entry;
+    if (!e || !e.id || !e.data || seen.has(e.id)) return;
+    seen.add(e.id);
+    out.push({ kind: d.kind || 'text', where: 'deleted', entry: { ...e, deletedAt: d.deletedAt } });
+  });
+  return out;
+}
+
+async function routeHmAdmin(event, method, path, info, hm) {
+  if (!hm) return respond(404, { error: 'Not found' });
+  const level = await hmAdminOf(info.email);
+  if (!level) return respond(403, { error: 'not_admin' });
+  const canGrant = level === 'primary' || level === 'manager';
+  const q = event.queryStringParameters || {};
+
+  // GET /hm-admin/me -- am I an administrator? (The page's banner.)
+  if (path === '/hm-admin/me' && method === 'GET') {
+    return respond(200, { admin: { email: lower(info.email), primary: level === 'primary', manager: level === 'manager', canGrant } });
+  }
+
+  // A manager only manages the list of administrators.
+  if (level === 'manager' && path !== '/hm-admin/admins') return respond(403, { error: 'manager_only_admins' });
+
+  // GET /hm-admin/overview -- every Bookbug HM account and its books
+  // (titles, types and dates only; the books themselves come one by one).
+  if (path === '/hm-admin/overview' && method === 'GET') {
+    const accounts = [];
+    let ExclusiveStartKey;
+    do {
+      const page = await ddb.send(new ScanCommand({
+        TableName: TABLE_NAME, ExclusiveStartKey,
+        FilterExpression: 'begins_with(userId, :p)', ExpressionAttributeValues: { ':p': { S: 'hm#' } }
+      }));
+      for (const it of page.Items || []) {
+        const sub = it.userId.S.slice(3);
+        if (!HM_SUB.test(sub)) continue; // hm#admins, hm#adminlog
+        let state = {};
+        try { state = JSON.parse(it.state.S); } catch (e) {}
+        const books = hmBooksOf(state.chapbookbuilder || {}).map(({ kind, where, entry }) => ({
+          id: entry.id, kind, form: kind === 'text' ? (entry.data.form || 'collection') : kind, where,
+          title: hmBookTitle(entry), updatedAt: Number(entry.updatedAt) || 0
+        }));
+        accounts.push({ sub, email: it.email ? it.email.S : '', name: it.name ? it.name.S : '', updatedAt: Number(it.updatedAt?.N || 0), books });
+      }
+      ExclusiveStartKey = page.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+    accounts.sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
+    await hmLog(info.email, 'overview', '', 'All writers');
+    return respond(200, { accounts });
+  }
+
+  // GET /hm-admin/book?sub=&id= -- one book, whole: its entries, comments,
+  // archive and settings (the pictures come from /hm-admin/image).
+  if (path === '/hm-admin/book' && method === 'GET') {
+    const sub = String(q.sub || '');
+    if (!HM_SUB.test(sub)) return respond(404, { error: 'not_found' });
+    const res = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: { userId: { S: 'hm#' + sub } } }));
+    if (!res.Item) return respond(404, { error: 'not_found' });
+    const state = JSON.parse(res.Item.state.S);
+    const found = hmBooksOf(state.chapbookbuilder || {}).find((b) => b.entry.id === String(q.id || ''));
+    if (!found) return respond(404, { error: 'not_found' });
+    const owner = { sub, email: res.Item.email ? res.Item.email.S : '', name: res.Item.name ? res.Item.name.S : '' };
+    await hmLog(info.email, 'book', sub + '/' + found.entry.id, (hmBookTitle(found.entry) || 'Untitled') + ' (' + (owner.email || sub) + ')');
+    return respond(200, { owner, kind: found.kind, where: found.where, entry: found.entry });
+  }
+
+  // GET /hm-admin/image?sub=&id= -- a picture in one of those books.
+  if (path === '/hm-admin/image' && method === 'GET') {
+    const sub = String(q.sub || ''), id = String(q.id || '');
+    if (!HM_SUB.test(sub) || !IMAGE_ID.test(id)) return respond(404, { error: 'not_found' });
+    const result = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: { userId: { S: 'hm#' + sub }, imageId: { S: id } } }));
+    if (!result.Item || !result.Item.data) return respond(404, { error: 'not_found' });
+    return respond(200, { type: result.Item.type.S, data: Buffer.from(result.Item.data.B).toString('base64') });
+  }
+
+  // GET /hm-admin/log -- who has looked at what.
+  if (path === '/hm-admin/log' && method === 'GET') {
+    const { value } = await readJsonItem(HM_LOG_KEY);
+    return respond(200, { entries: ((value && value.entries) || []).slice(0, 500) });
+  }
+
+  // GET /hm-admin/admins; PUT { add: email } or { remove: email }.
+  if (path === '/hm-admin/admins') {
+    if (method === 'PUT') {
+      if (!canGrant) return respond(403, { error: 'primary_only' });
+      let body = {};
+      try { body = JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString('utf8') : (event.body || '{}')); } catch (e) {
+        return respond(400, { error: 'Invalid JSON body' });
+      }
+      const add = lower(body.add), remove = lower(body.remove);
+      if (add && (!EMAIL_RE.test(add) || !isHm(add))) return respond(400, { error: 'horacemann_only' });
+      if (remove && (HM_PRIMARY_ADMINS.includes(remove) || HM_ADMIN_MANAGERS.includes(remove))) return respond(400, { error: 'cannot_remove_primary' });
+      if (add || remove) {
+        await mutateJsonItem(HM_ADMINS_KEY, (a) => {
+          const emails = { ...((a && a.emails) || {}) };
+          if (add && !HM_PRIMARY_ADMINS.includes(add) && !HM_ADMIN_MANAGERS.includes(add) && !emails[add]) emails[add] = { addedAt: Date.now(), addedBy: lower(info.email) };
+          if (remove) delete emails[remove];
+          return { emails };
+        });
+        await hmLog(info.email, add ? 'added admin' : 'removed admin', add || remove, add || remove);
+      }
+    }
+    return respond(200, await hmAdminList());
+  }
+
+  return respond(404, { error: 'Not found' });
+}
+
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || 'GET';
   const path = event.rawPath || '/';
@@ -593,7 +821,13 @@ export const handler = async (event) => {
   const info = token.startsWith('s1.') ? verifySession(token) : await verifyGoogleToken(token);
   if (!info) return respond(401, { error: 'Invalid or expired token' });
 
-  const userId = info.sub;
+  // Bookbug HM: Horace Mann accounts only, its books kept under "hm#<sub>".
+  const origin = event.headers?.origin || event.headers?.Origin || '';
+  const hm = origin === HM_ORIGIN;
+  // (A fresh Google sign-in must also be a Horace Mann Workspace account.)
+  if (hm && (!isHm(info.email) || (!token.startsWith('s1.') && info.hd !== 'horacemann.org'))) return respond(403, { error: 'horacemann_only' });
+  if (path.startsWith('/hm-admin/')) return routeHmAdmin(event, method, path, info, hm);
+  const userId = hm ? 'hm#' + info.sub : info.sub;
 
   if (method === 'GET' && event.queryStringParameters?.stats !== undefined) {
     if (!STATS_EMAILS.includes(String(info.email || '').toLowerCase())) return respond(403, { error: 'Not allowed' });
@@ -742,7 +976,9 @@ export const handler = async (event) => {
             userId: { S: userId },
             state: { S: JSON.stringify(state) },
             updatedAt: { N: String(now) },
-            ...(created ? { createdAt: { N: String(created) } } : {})
+            ...(created ? { createdAt: { N: String(created) } } : {}),
+            // Bookbug HM's administrators see whose books these are.
+            ...(hm ? { email: { S: lower(info.email) }, name: { S: String(info.name || '') } } : {})
           },
           ...(updatedAt
             ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }

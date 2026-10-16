@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
 <title>Luddite</title>
-<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Rokkitt:wght@600&display=swap" rel="stylesheet">
@@ -1238,7 +1238,7 @@
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
       <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next &rsaquo;</button></span>
-      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out (Delete again takes the cross-out back), or right-click them to comment. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
+      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
@@ -1366,6 +1366,7 @@
 
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
+  <button type="button" data-tool="strike">Cross out</button>
   <button type="button" data-tool="insert">Write here</button>
 </div>
 <div class="markpop no-print" id="markPop" hidden>
@@ -3914,7 +3915,8 @@
       nb.onclick = function () { $('handBackAllBtn').click(); };
     } else {
       ns.className = 'nextstep done';
-      $('nextStepText').textContent = '✓ Every paper is graded and handed back.';
+      var ungraded = papers.filter(function (x) { return !x.grade && !x.marked; }).length;
+      $('nextStepText').textContent = ungraded ? '✓ Every paper is handed back (' + ungraded + ' ungraded).' : '✓ Every paper is graded and handed back.';
       nb.hidden = true;
     }
 
@@ -4151,15 +4153,21 @@
     else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
     else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
     else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
-    else if (stage === 'back') tag = ['back', '✓ Handed back' + (x.grade ? ': ' + x.grade : '')];
+    else if (stage === 'back') tag = null; // its own two bubbles, below
     else if (x && !x.stored) tag = ['warn', 'Not saved'];
     else tag = ['', state === 'ended' ? 'Didn’t hand in' : 'Not writing'];
     if (tag) row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
+    // Graded and handed back are separate: a paper can go back ungraded, and
+    // still be graded or marked up afterwards.
+    if (stage === 'back') {
+      if (x.grade || x.marked) row.appendChild(el('span', 'pill status ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'));
+      row.appendChild(el('span', 'pill status back', '✓ Handed back'));
+    }
 
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     var main = null;
     if (!over && s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
-    else if (stage === 'tograde') main = button('Grade', 'btn small tograde', open);
+    else if (stage === 'tograde' || (stage === 'back' && !x.grade)) main = button('Grade', 'btn small' + (stage === 'tograde' ? ' tograde' : ''), open);
     else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
     });
@@ -4174,6 +4182,9 @@
     menu.appendChild(sum);
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
+    if (stage === 'tograde') item('Hand back ungraded', async function () {
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    });
     if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn) item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
     if (s && s.email) {
@@ -4458,6 +4469,7 @@
       return;
     }
     piece.marks = piece.marks || [];
+    resetUndo();
     showPieceHead();
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
@@ -4826,6 +4838,7 @@
     each('#markTools [data-tool]', function (b) {
       b.hidden = s.start === s.end ? b.dataset.tool !== 'insert' : b.dataset.tool === 'insert';
     });
+    $('markTools').querySelector('[data-tool="strike"]').textContent = isStruck(s) ? 'Remove the cross-out' : 'Cross out';
     tools.hidden = false;
     var rect = s.rect.width || s.rect.height ? s.rect : $('paper').getBoundingClientRect();
     var x = Math.max(8, Math.min(window.innerWidth - tools.offsetWidth - 8, rect.left + rect.width / 2 - tools.offsetWidth / 2));
@@ -4842,6 +4855,9 @@
     if (sel.isCollapsed) {
       var hit = e.target.closest('.ins, .mnum');
       if (hit) { hideTools(); openExisting(hit); return; }
+      // A click on crossed-out words offers to take the cross-out back.
+      var st = e.target.closest('.strike'), sm = st && findMark((st.dataset.s || '').split(' ')[0]);
+      if (sm) { hideTools(); openPop(sm, null, st.getBoundingClientRect()); return; }
     }
     setTimeout(showTools, 0);
   });
@@ -4861,6 +4877,13 @@
     if (!b || !toolRange) return;
     var t = b.dataset.tool, r = toolRange;
     hideTools();
+    if (t === 'strike') {
+      if (isStruck(r)) unstrikeRange(r); else strikeRange(r);
+      window.getSelection().removeAllRanges();
+      drawPiece();
+      queueSave();
+      return;
+    }
     openPop(null, { type: t, start: r.start, end: t === 'insert' ? r.start : r.end }, r.rect);
   });
 
@@ -4980,7 +5003,7 @@
     if (m) { m.fmt = fmtOf(m) + new Array(txt.length + 1).join(fmtChar()); m.note += txt; }
     else m = newMark({ type: 'insert', start: p, end: p, note: txt, fmt: new Array(txt.length + 1).join(fmtChar()) });
     drawPiece();
-    queueSave();
+    typing = true; queueSave(); typing = false;
     var node = $('paper').querySelector('.ins[data-mark="' + m.id + '"]');
     if (node) caretAfter(node);
   }
@@ -4997,7 +5020,9 @@
       if (txt) typeText(txt, s);
       return;
     }
-    if (t.indexOf('delete') !== 0) return; // Enter, undo, formatting: nothing
+    if (t === 'historyUndo') { undoMarks(false); return; } // Edit › Undo
+    if (t === 'historyRedo') { undoMarks(true); return; }
+    if (t.indexOf('delete') !== 0) return; // Enter, formatting: nothing
     // Delete or Backspace on words crosses them out; again on crossed-out words takes it back.
     if (!s.collapsed) {
       if (isStruck(s)) unstrikeRange(s); else strikeRange(s);
@@ -5251,8 +5276,44 @@
     queueSave();
   });
 
+  // Undo (Cmd/Ctrl+Z) and redo (Shift+Cmd/Ctrl+Z, or Ctrl+Y) for the marks:
+  // each save notes what the marks were before, a burst of typing as one step.
+  var undoStack = [], redoStack = [], marksBefore = '', undoLastAt = 0, typing = false, wasTyping = false;
+  function resetUndo() { undoStack = []; redoStack = []; marksBefore = piece ? JSON.stringify(piece.marks) : ''; }
+  function noteUndo() {
+    var now = JSON.stringify(piece.marks);
+    if (now === marksBefore) return;
+    if (!(typing && wasTyping && Date.now() - undoLastAt < 1500) || !undoStack.length) undoStack.push(marksBefore);
+    wasTyping = typing;
+    if (undoStack.length > 200) undoStack.shift();
+    undoLastAt = Date.now();
+    redoStack = [];
+    marksBefore = now;
+  }
+  function undoMarks(redo) {
+    if (reading || !piece) return;
+    var from = redo ? redoStack : undoStack, to = redo ? undoStack : redoStack;
+    if (!from.length) return;
+    to.push(JSON.stringify(piece.marks));
+    piece.marks = JSON.parse(from.pop());
+    marksBefore = JSON.stringify(piece.marks);
+    wasTyping = false;
+    closePop(); hideTools();
+    drawPiece();
+    queueSave();
+  }
+  document.addEventListener('keydown', function (e) {
+    if ($('markScreen').hidden || reading || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+    var k = e.key.toLowerCase();
+    if (k !== 'z' && !(k === 'y' && e.ctrlKey)) return;
+    // The comment box, end comment and grade keep their own typing undo.
+    if (e.target.closest('textarea, input, select') || !$('markPop').hidden) return;
+    e.preventDefault();
+    undoMarks(k === 'y' || e.shiftKey);
+  });
   function queueSave() {
     if (reading) return;
+    if (piece) noteUndo();
     $('markSaved').textContent = 'Saving…';
     clearTimeout(markSaveTimer);
     markSaveTimer = setTimeout(saveMarks, 700);
