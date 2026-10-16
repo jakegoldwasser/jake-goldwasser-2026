@@ -524,7 +524,7 @@
      opening or closing an entry leaves its title exactly where it was. */
   /* 18px with the zoom; an open entry's title is bold, a closed one's
      regular. */
-  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1)); }
+  :root { --entry-title-size: calc(18px * var(--editor-zoom, 1) * var(--title-face, 1)); }
   .poem-card {
     border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
     padding: 10px 14px 12px; margin-bottom: 6px; display: flex; gap: 10px;
@@ -959,8 +959,8 @@
     }
     /* Its title spans the column: the width fitted to the list's smaller
        title would wrap it here. */
-    .poem-card.is-writing textarea.poem-title { flex: 1 1 auto; width: auto !important; font-size: calc(30px * var(--editor-zoom, 1)) !important; }
-    .poem-card.is-writing .poem-text { font-size: calc(21px * var(--editor-zoom, 1)) !important; border: none; background: transparent; min-height: 60vh; }
+    .poem-card.is-writing textarea.poem-title { flex: 1 1 auto; width: auto !important; font-size: calc(30px * var(--editor-zoom, 1) * var(--title-face, 1)) !important; }
+    .poem-card.is-writing .poem-text { font-size: calc(21px * var(--editor-zoom, 1) * var(--body-face, 1)) !important; border: none; background: transparent; min-height: 60vh; }
   }
 
   .title-align { display: flex; align-items: center; gap: 6px; }
@@ -6469,29 +6469,34 @@
   // ---------------------------------------------------------------------
   // sizeScale evens out how big each typeface looks at the same point
   // size. Typefaces differ a lot in x-height (the height of lowercase
-  // letters, as a share of the type size): Baskerville 0.53, Poppins
-  // 0.55, Garamond only 0.41 -- so at "12pt" Baskerville reads ~30%
-  // bigger. Each factor is (0.45 / x-height) ^ 0.75: most of the way to a
-  // shared middle, not all of it, so capitals don't come out undersized.
-  // Applied wherever a size is chosen (see fontSizePt), so the editor,
-  // preview and PDF agree.
+  // letters, as a share of the type size, measured from each font file):
+  // Baskerville 0.53, Poppins 0.55, Garamond only 0.41 -- so at "12pt"
+  // Baskerville reads ~30% bigger. Each factor is (0.45 / x-height) ^
+  // 0.85: nearly all the way to a shared middle (Jake wants every face to
+  // look about the same size), short of it so capitals don't come out
+  // undersized. Titles, covers and the like use it as is (fontSizePt);
+  // body text and entry titles use it relative to Garamond, the default
+  // book face, so a Garamond book's "12pt" stays 12pt (evenSizePt).
+  // Applied wherever a size is chosen, so the editor, preview and PDF
+  // agree. Courier for scripts stays exactly 12pt: the page format
+  // depends on it.
   var FONT_CHOICES = [
-    { key: 'baskerville', label: 'Baskerville', pdfFamily: 'serif', sizeScale: 0.88, displayStack: "'Libre Baskerville', Baskerville, Georgia, serif" },
-    { key: 'caslon', label: 'Caslon', pdfFamily: 'serif', sizeScale: 0.89, displayStack: "'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif" },
-    { key: 'garamond', label: 'Garamond', pdfFamily: 'serif', sizeScale: 1.08, displayStack: "'EB Garamond', Garamond, 'Times New Roman', serif" },
-    { key: 'zillaslab', label: 'Slab Serif', pdfFamily: 'serif', sizeScale: 1.01, displayStack: "'Zilla Slab', 'Roboto Slab', serif" },
-    { key: 'didot', label: 'Didot', pdfFamily: 'serif', sizeScale: 0.98, displayStack: "'Bodoni Moda', Didot, Georgia, serif" },
-    { key: 'sourceserif', label: 'Source Serif', pdfFamily: 'serif', sizeScale: 0.93, displayStack: "'Source Serif 4', Georgia, serif" },
+    { key: 'baskerville', label: 'Baskerville', pdfFamily: 'serif', xHeight: 0.530, displayStack: "'Libre Baskerville', Baskerville, Georgia, serif" },
+    { key: 'caslon', label: 'Caslon', pdfFamily: 'serif', xHeight: 0.524, displayStack: "'Libre Caslon Text', 'Adobe Caslon Pro', Caslon, Georgia, serif" },
+    { key: 'garamond', label: 'Garamond', pdfFamily: 'serif', xHeight: 0.405, displayStack: "'EB Garamond', Garamond, 'Times New Roman', serif" },
+    { key: 'zillaslab', label: 'Slab Serif', pdfFamily: 'serif', xHeight: 0.445, displayStack: "'Zilla Slab', 'Roboto Slab', serif" },
+    { key: 'didot', label: 'Didot', pdfFamily: 'serif', xHeight: 0.460, displayStack: "'Bodoni Moda', Didot, Georgia, serif" },
+    { key: 'sourceserif', label: 'Source Serif', pdfFamily: 'serif', xHeight: 0.497, displayStack: "'Source Serif 4', Georgia, serif" },
     // American Typewriter itself is licensed (ITC/Monotype) and would have
     // to be embedded in every PDF, so this is Cutive: a free, proportional
     // typewriter face in the same spirit. It has only a regular weight;
     // bold and italic are drawn from it (see drawText). Key kept as
     // 'courier' so books that chose the earlier Courier carry over.
-    { key: 'courier', label: 'American Typewriter', pdfFamily: 'serif', sizeScale: 0.86, displayStack: "Cutive, 'American Typewriter', Georgia, serif" },
-    { key: 'futura', label: 'Futura', pdfFamily: 'sans', sizeScale: 0.98, displayStack: "'Jost', Futura, Arial, sans-serif" },
-    { key: 'ptsans', label: 'PT Sans', pdfFamily: 'sans', sizeScale: 0.92, displayStack: "'PT Sans', Arial, sans-serif" },
-    { key: 'poppins', label: 'Poppins', pdfFamily: 'sans', sizeScale: 0.86, displayStack: "'Poppins', Arial, sans-serif" },
-    { key: 'helvetica', label: 'Helvetica', pdfFamily: 'sans', sizeScale: 0.90, displayStack: "Arial, Helvetica, sans-serif" },
+    { key: 'courier', label: 'American Typewriter', pdfFamily: 'serif', xHeight: 0.553, displayStack: "Cutive, 'American Typewriter', Georgia, serif" },
+    { key: 'futura', label: 'Futura', pdfFamily: 'sans', xHeight: 0.460, displayStack: "'Jost', Futura, Arial, sans-serif" },
+    { key: 'ptsans', label: 'PT Sans', pdfFamily: 'sans', xHeight: 0.500, displayStack: "'PT Sans', Arial, sans-serif" },
+    { key: 'poppins', label: 'Poppins', pdfFamily: 'sans', xHeight: 0.548, displayStack: "'Poppins', Arial, sans-serif" },
+    { key: 'helvetica', label: 'Helvetica', pdfFamily: 'sans', xHeight: 0.519, displayStack: "Arial, Helvetica, sans-serif" },
     // Scripts are typed in Courier 12: ten characters to the inch, which
     // is what makes a page of script about a minute of screen time. The
     // PDF uses the viewer's built-in Courier (every character 0.6 em, so
@@ -6499,6 +6504,9 @@
     // same widths.
     { key: 'courierprime', label: 'Courier', pdfFamily: 'mono', sizeScale: 1, displayStack: "'Courier Prime', 'Courier New', Courier, monospace" }
   ];
+  FONT_CHOICES.forEach(function (c) {
+    if (c.xHeight) c.sizeScale = Math.round(Math.pow(0.45 / c.xHeight, 0.85) * 1000) / 1000;
+  });
   // Body leading, as a multiple of the type size. Sizes are already
   // scaled per face (sizeScale) toward an even x-height. Book leading
   // runs about 1.35-1.5 times the type size, a little more for faces with
@@ -6506,16 +6514,27 @@
   // but only a little: it tracks the point size far more than the
   // x-height (keeping x-heights-per-line constant set Baskerville nearly
   // double-spaced). So: 0.97 + the face's x-height (recovered from
-  // sizeScale, which is (0.45 / x-height) ^ 0.75) -- Garamond 1.38,
+  // FONT_CHOICES) -- Garamond 1.38,
   // Baskerville 1.50, Poppins 1.52 -- at Line spacing 1.15, the default;
   // 1.0 is ~single and 2.0 ~double, as in Word or Docs. The PDF, the
   // preview and both editors all use this, so they agree line for line.
   function bodyLeading(fontKey, spacing) {
-    var xh = 0.45 / Math.pow(getFontChoice(fontKey).sizeScale || 1, 4 / 3);
+    var xh = getFontChoice(fontKey).xHeight || 0.45;
     return Math.max(1.1, (0.97 + xh) * ((spacing || 1.15) / 1.15));
   }
   function fontSizePt(pt, fontKey) {
     return Math.round(pt * (getFontChoice(fontKey).sizeScale || 1) * 10) / 10;
+  }
+  // Body text and entry titles: the face's size correction relative to
+  // Garamond's (see FONT_CHOICES), so Garamond is untouched and the rest
+  // match it. Never for Courier, whose 12pt the script format needs.
+  function faceScale(fontKey) {
+    var c = getFontChoice(fontKey);
+    if (c.pdfFamily === 'mono') return 1;
+    return (c.sizeScale || 1) / (getFontChoice('garamond').sizeScale || 1);
+  }
+  function evenSizePt(pt, fontKey) {
+    return Math.round(pt * faceScale(fontKey) * 10) / 10;
   }
 
   // Precomputed offline (fontTools) from static Regular/Bold/Italic
@@ -6888,7 +6907,7 @@
   }
 
   function layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, state) {
-    var titleSizePt = resolveTitleSizePt(state);
+    var titleSizePt = evenSizePt(resolveTitleSizePt(state), state.titleFontChoice);
     var shownTitle = entryTitle(poem, state);
     var titleLines = shownTitle ? wrapLine(shownTitle, contentWidthPt, titleSizePt, state.titleFontChoice, 600).slice(0, 2) : [];
     var titleH = titleLines.length ? titleLines.length * (titleSizePt * 1.28) + 26 : 10;
@@ -7335,7 +7354,7 @@
   // stay consistent from poem to poem -- rather than letting each poem
   // pick its own size independently.
   function chooseGlobalSize(poems, contentWidthPt, contentHeightPt, state) {
-    return bodySizePtOf(state);
+    return evenSizePt(bodySizePtOf(state), state.bodyFontChoice);
   }
 
   // The table of contents must land on a recto (right-hand) page. Page 1
@@ -9979,6 +9998,26 @@
     }
     return f;
   }
+  // Browsers' own editing leaves type sizes behind in the text: Safari
+  // (iPhone above all) carries a line's computed size, face or spacing
+  // into the new line on Enter, or into words joined by Backspace or
+  // predictive text, as inline styles or <font> tags. They aren't saved
+  // (serializeEditor keeps only bold, italic and underline), but they
+  // show until the book is reopened -- a line suddenly smaller than the
+  // rest. Size and face come only from the book's settings, so strip
+  // them on every edit. Styles are removed in place and nothing is
+  // moved, so the caret and the undo history are untouched.
+  var STRAY_TYPE_PROPS = ['font-size', 'font-family', 'line-height', 'letter-spacing',
+    'font-variant', 'font-variant-caps', 'text-transform', '-webkit-text-size-adjust', 'zoom'];
+  function stripStrayTypeStyles(root) {
+    root.querySelectorAll('[style], font').forEach(function (el) {
+      if (el.tagName === 'FONT') { el.removeAttribute('size'); el.removeAttribute('face'); }
+      if (!el.style || !el.style.length) return;
+      if (el.dataset && el.dataset.token) return;
+      STRAY_TYPE_PROPS.forEach(function (prop) { el.style.removeProperty(prop); });
+      if (!el.style.length) el.removeAttribute('style');
+    });
+  }
   // DOM -> poem.lines. Copes with whatever structure the browser's own
   // editing produced (nested divs, <br>s, styled spans), not only the
   // one-div-per-line shape renderEditor starts from.
@@ -11087,6 +11126,7 @@
     if (initialPlan) editor.style.fontSize = (initialPlan.globalSize * editorPxPerPt()).toFixed(2) + 'px';
     editor.style.tabSize = tabSizeFor(editor.style.fontFamily, parseFloat(editor.style.fontSize) || 14.5, TAB_STOP_PT * editorPxPerPt());
     editor.addEventListener('input', function () {
+      stripStrayTypeStyles(editor);
       syncNotes(editor, notesEl);
       poem.lines = serializeEditor(editor);
       if (poem.comments && poem.comments.length) { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }
@@ -15651,6 +15691,10 @@
     TEXT_FORM_KEYS.forEach(function (x) { document.body.classList.toggle('form-' + x, form === x); });
   }
   function renderAll() {
+    // Each face's size correction, for the CSS-sized fields (entry
+    // titles, the full-screen writer).
+    document.documentElement.style.setProperty('--title-face', faceScale(state.titleFontChoice).toFixed(3));
+    document.documentElement.style.setProperty('--body-face', faceScale(state.bodyFontChoice).toFixed(3));
     seedSnapBases();
     applyFormWording();
     updateArchiveButton();
