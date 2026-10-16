@@ -132,6 +132,9 @@ const MAX_SUBMISSION_CHARS = 400000;
 // A DynamoDB item tops out at 400 KB, so a piece is kept for marking up only
 // if its text fits with room to spare for the teacher's marks.
 const MAX_STORED_CHARS = 250000;
+// Chat while writing: one message's length, and how many a pair keeps.
+const MAX_CHAT_CHARS = 1000;
+const MAX_CHAT_MSGS = 300;
 // A handed-back paper's grade shows only after the student has spent this
 // long with the comments open in front of them (counted by the server).
 const GRADE_AFTER_MS = 5 * 60 * 1000;
@@ -388,6 +391,9 @@ function studentView(room, sub, email, prefs) {
     // Asked the teacher to unlock them (after handing in, or after a lock-out).
     askedAt: me ? me.askedAt || 0 : 0,
     submittedAt: me ? me.submittedAt || 0 : 0,
+    // Chat: when the teacher last wrote to them, and when they last read it.
+    chatT: me ? me.chatT || 0 : 0,
+    seenS: me ? me.seenS || 0 : 0,
     // Handing in is final: no more writing until the teacher releases them.
     handedIn: !!(me && me.handedIn)
   };
@@ -973,6 +979,60 @@ async function routeLuddite(event, method, path, info) {
     const drafts = {};
     subs.forEach((sub, i) => { const d = got[i].state; drafts[sub] = d ? { text: d.text, at: d.at } : null; });
     return respond(200, { drafts });
+  }
+
+  // ---- Chat: a session's teacher and one student, while the student writes ----
+  // Each pair's messages are one item (luddite:chat:<code>:<sub>). The room's
+  // student entry keeps when each side last wrote and last read (chatT/chatS,
+  // seenT/seenS), so both pages learn of a new message from what they already
+  // poll (the session page, the heartbeat) and fetch the messages only then.
+
+  // GET /luddite/chat?code=&sub= -- the messages (sub: the teacher's pick;
+  // a student gets their own). Reading marks them read.
+  if (path === '/luddite/chat' && method === 'GET') {
+    const code = cleanCode(q.code);
+    const room = await getRoom(code);
+    const asTeacher = !!q.sub && ownsRoom(room, info, role);
+    const sub = asTeacher ? String(q.sub) : me.sub;
+    const s = room.students[sub];
+    if (!s || s.status !== 'admitted') throw new HttpError(404, 'not_in_room');
+    const { state } = await readItem('luddite:chat:' + code + ':' + sub);
+    const msgs = (state && state.msgs) || [];
+    const last = msgs.length ? msgs[msgs.length - 1].at : 0;
+    const seenKey = asTeacher ? 'seenT' : 'seenS';
+    if (last && (s[seenKey] || 0) < last) {
+      await mutate('luddite:room:' + code, (r) => {
+        const x = r && r.students[sub];
+        if (!x || (x[seenKey] || 0) >= last) return undefined;
+        return { ...r, students: { ...r.students, [sub]: { ...x, [seenKey]: last } } };
+      });
+    }
+    return respond(200, { msgs });
+  }
+
+  // PUT /luddite/chat { code, text, to? } -- send a message. The teacher sends
+  // to one student (to: their sub) or everyone let in (to: 'all'); a student
+  // sends to their teacher.
+  if (path === '/luddite/chat' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const text = String(body.text || '').trim().slice(0, MAX_CHAT_CHARS);
+    if (!text) throw new HttpError(400, 'empty');
+    const room = await getRoom(code);
+    const asTeacher = !!body.to && ownsRoom(room, info, role);
+    const admitted = (sub) => !!(room.students[sub] && room.students[sub].status === 'admitted');
+    const subs = !asTeacher ? [me.sub] : body.to === 'all' ? Object.keys(room.students).filter(admitted) : [String(body.to)];
+    if (!subs.length || !subs.every(admitted)) throw new HttpError(404, 'not_in_room');
+    const at = Date.now();
+    const msg = { from: asTeacher ? 'teacher' : 'student', text, at, ...(asTeacher && body.to === 'all' ? { all: true } : {}) };
+    await inBatches(subs, (sub) => mutate('luddite:chat:' + code + ':' + sub, (c) => ({ code, sub, msgs: [...((c && c.msgs) || []), msg].slice(-MAX_CHAT_MSGS) })));
+    const sideKey = asTeacher ? 'chatT' : 'chatS', seenKey = asTeacher ? 'seenT' : 'seenS';
+    await mutate('luddite:room:' + code, (r) => {
+      if (!r) return undefined;
+      const students = { ...r.students };
+      subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], [sideKey]: at, [seenKey]: at }; });
+      return { ...r, students };
+    });
+    return respond(200, { msg, to: subs.length });
   }
 
   // ---- Marking up handed-in work ----
