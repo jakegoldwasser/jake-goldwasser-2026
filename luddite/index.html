@@ -844,9 +844,33 @@
     display: flex; flex-direction: column; justify-content: flex-end; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.6em); mask-image: linear-gradient(to bottom, transparent 0, #000 1.6em); }
   .livetile .lt-text.none { color: var(--muted); font-family: var(--ui); font-size: 13px; -webkit-mask-image: none; mask-image: none; justify-content: center; }
   .livetile.away { border-color: var(--tomato); }
-  .liveread { font: 18px/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; max-height: 62vh; overflow-y: auto; text-align: left; margin-top: 10px; }
+  .liveread { font: 18px/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; max-height: 44vh; overflow-y: auto; text-align: left; margin-top: 10px; }
   .livebox { z-index: 45; }
   .livebox .card { max-width: 760px !important; width: 100%; text-align: left; }
+  .livetile.newmsg { border-color: var(--pen); box-shadow: inset 0 0 0 1px var(--pen); }
+  .livetile .lt-new { color: var(--pen); font-weight: 600; }
+
+  /* Chat between a teacher and a student while they write. The teacher's
+     messages are in the teacher's green pen; the student's in ink. */
+  .chatlog { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; text-align: left; }
+  .chatlog:empty { display: none; }
+  .chatmsg { max-width: 85%; padding: 7px 12px; border-radius: 14px; font: 400 15px/1.45 var(--ui); white-space: pre-wrap; overflow-wrap: break-word; background: var(--card); border: 1.5px solid var(--rule); align-self: flex-start; }
+  .chatmsg.teacher { color: var(--pen); border-color: var(--pen); background: var(--pen-wash); }
+  .chatmsg.mine { align-self: flex-end; }
+  .chatmsg .at { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .chatsend { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .chatsend .field { flex: 1; min-width: 0; padding: 8px 12px; font: 400 15px var(--ui); }
+  .livechat { border-top: 1.5px solid var(--rule); margin-top: 12px; padding-top: 10px; }
+  .livechat .chatlog { max-height: 22vh; }
+  .chatbtn { position: fixed; right: 18px; bottom: 42px; z-index: 6; font: 600 13px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--edge); border-radius: 999px; padding: 6px 14px; cursor: pointer; opacity: .45; transition: opacity .2s; }
+  .chatbtn:hover, .chatbtn:focus-visible { opacity: 1; }
+  .chatbtn.new { opacity: 1; color: var(--pen); border-color: var(--pen); background: var(--pen-wash); }
+  .chatpanel { position: fixed; right: 18px; bottom: 42px; z-index: 6; width: min(340px, calc(100vw - 32px)); max-height: 46vh; display: flex; flex-direction: column;
+    background: var(--card); border: 1.5px solid var(--edge); border-radius: 16px; padding: 10px 12px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.10); }
+  .chatpanel .chatlog { flex: 1; min-height: 0; }
+  .chathead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+  .chatx { flex: none; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); width: 28px; height: 28px; border-radius: 50%; font: 400 17px/1 var(--ui); cursor: pointer; }
+  .chatx:hover { background: var(--hover); }
 </style>
 </head>
 <body>
@@ -942,6 +966,13 @@
     </div>
   </div>
   <div class="handinbar"><button class="btn" id="doneBtn">Hand in</button></div>
+  <!-- Chat with the teacher: opens by itself when the teacher writes -->
+  <button type="button" class="chatbtn" id="chatBtn" hidden>Chat with your teacher</button>
+  <div class="chatpanel" id="chatPanel" hidden>
+    <div class="chathead"><b id="chatWith">Your teacher</b><button type="button" class="chatx" id="chatClose" aria-label="Close the chat" title="Close the chat">&times;</button></div>
+    <div class="chatlog" id="chatLog"></div>
+    <form class="chatsend" id="chatForm" autocomplete="off"><input class="field" id="chatInput" maxlength="1000" aria-label="Your message" placeholder="Write to your teacher"><button class="btn small" type="submit">Send</button></form>
+  </div>
   <div class="handin" id="handinBox" hidden>
     <div class="card">
       <h2>Hand this in?</h2>
@@ -1095,7 +1126,7 @@
 
       <!-- What each student has written so far, while the session runs -->
       <section class="panel tint-sky" id="secLive" style="order:2" hidden>
-        <div class="panelhead"><h3 class="sect">Live writing <span class="q" tabindex="0" data-tip="What each student has written so far, updated every few seconds while they write. Click one to read it bigger.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Live writing <span class="q" tabindex="0" data-tip="What each student has written so far, updated every few seconds while they write. Click one to read it bigger and chat with them.">?</span></h3><button class="btn small ghost" id="chatAllBtn" type="button">Message everyone</button></div>
         <div class="livegrid" id="liveGrid"></div>
       </section>
 
@@ -1222,7 +1253,21 @@
   <div class="card">
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="liveName" style="margin:0"></h2><span class="fine" id="liveMeta" style="margin:0"></span></div>
     <div class="liveread" id="liveText"></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="liveClose" type="button">Close</button></div>
+    <div class="livechat">
+      <div class="chatlog" id="tChatLog"></div>
+      <form class="chatsend" id="tChatForm" autocomplete="off"><input class="field" id="tChatInput" maxlength="1000" aria-label="Your message" placeholder="Chat with this student"><button class="btn small" type="submit">Send</button></form>
+    </div>
+    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><button class="btn ghost" id="liveClose" type="button">Close</button></div>
+  </div>
+</div>
+
+<div class="handin livebox" id="chatAllBox" hidden>
+  <div class="card">
+    <h2>Message everyone</h2>
+    <p class="sub" style="margin:0 0 10px">Every student let in gets it in their chat while they write.</p>
+    <textarea class="field promptfield" id="chatAllText" maxlength="1000" aria-label="Your message"></textarea>
+    <p class="fine warn" id="chatAllErr" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="chatAllCancel" type="button">Cancel</button><button class="btn" id="chatAllGo" type="button">Send</button></div>
   </div>
 </div>
 
@@ -1394,6 +1439,7 @@
   var POLL_DASH_MS = 10000;     // teacher looking at the room list
   var HEARTBEAT_MS = 10000;     // student writing: word count and writing so far, for the teacher
   var POLL_LIVE_MS = 4000;      // teacher watching the live writing
+  var POLL_CHAT_MS = 4000;      // student with the chat open
   // iPhones can't go full screen. These accounts may write there anyway
   // (for testing on a phone); leaving the tab or app still locks the page.
   var NO_FULLSCREEN_OK = ['nymets892@gmail.com'];
@@ -2374,6 +2420,7 @@
     return api('/luddite/event', body).then(function (d) {
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
+      chatNote(d.room);
       if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; if (writing) drawPrompt(); }
       // The teacher ended the session: hand in now, with everything written
       // (replacing the copy Luddite handed in from the last backup).
@@ -2439,8 +2486,77 @@
     finishWriting(showReady);
   }
   var heartbeat = null;
-  function startHeartbeat() { stopHeartbeat(); report('writing'); heartbeat = setInterval(function () { if (!locked) report('writing'); }, HEARTBEAT_MS); }
-  function stopHeartbeat() { clearInterval(heartbeat); heartbeat = null; }
+  function startHeartbeat() { stopHeartbeat(); chatStart(); report('writing'); heartbeat = setInterval(function () { if (!locked) report('writing'); }, HEARTBEAT_MS); }
+  function stopHeartbeat() { clearInterval(heartbeat); heartbeat = null; chatStop(); }
+
+  // ---- Chat with the teacher, while writing in a session ----
+  // The heartbeat says when the teacher last wrote (chatT) and when this
+  // student last read (seenS); a new message opens the chat by itself,
+  // without taking the cursor out of the writing.
+  var chatMsgs = [], chatTimer = null, chatLoading = false;
+  function chatOn() { return writing && mode === 'room' && !previewing && !!roomCode; }
+  function chatStart() {
+    chatMsgs = [];
+    $('chatLog').innerHTML = '';
+    $('chatPanel').hidden = true;
+    $('chatBtn').hidden = !chatOn();
+    $('chatBtn').classList.remove('new');
+    $('chatWith').textContent = roomInfo && roomInfo.teacherName ? roomInfo.teacherName : 'Your teacher';
+  }
+  function chatStop() {
+    clearInterval(chatTimer); chatTimer = null;
+    $('chatPanel').hidden = true;
+    $('chatBtn').hidden = true;
+  }
+  function chatNote(room) {
+    if (!chatOn() || !room || !room.chatT || room.chatT <= (room.seenS || 0)) return;
+    if ($('chatPanel').hidden) chatOpen(false); else chatLoad();
+  }
+  function chatOpen(focus) {
+    $('chatPanel').hidden = false;
+    $('chatBtn').hidden = true;
+    clearInterval(chatTimer);
+    chatTimer = setInterval(chatLoad, POLL_CHAT_MS);
+    chatLoad();
+    if (focus) $('chatInput').focus();
+  }
+  function chatClose() {
+    clearInterval(chatTimer); chatTimer = null;
+    $('chatPanel').hidden = true;
+    $('chatBtn').hidden = !chatOn();
+    $('chatBtn').classList.remove('new');
+    if (writing && !locked) pad.focus();
+  }
+  async function chatLoad() {
+    if (!chatOn() || chatLoading) return;
+    chatLoading = true;
+    try { var d = await api('/luddite/chat?code=' + encodeURIComponent(roomCode)); chatMsgs = d.msgs || []; drawChat($('chatLog'), chatMsgs, 'student'); }
+    catch (e) { /* tried again on the next poll */ }
+    chatLoading = false;
+  }
+  $('chatBtn').addEventListener('click', function () { chatOpen(true); });
+  $('chatClose').addEventListener('click', chatClose);
+  $('chatForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var input = $('chatInput'), text = input.value.trim();
+    if (!text || !chatOn()) return;
+    input.value = '';
+    try { var d = await api('/luddite/chat', { code: roomCode, text: text }); chatMsgs.push(d.msg); drawChat($('chatLog'), chatMsgs, 'student'); }
+    catch (err) { input.value = text; }
+  });
+  // Both sides' chats: the teacher's messages in green; `me` is whose page it is.
+  function drawChat(box, msgs, me) {
+    var sig = msgs.length + '|' + (msgs.length ? msgs[msgs.length - 1].at : 0);
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    box.innerHTML = '';
+    msgs.forEach(function (m) {
+      var b = el('div', 'chatmsg' + (m.from === 'teacher' ? ' teacher' : '') + (m.from === me ? ' mine' : ''), m.text);
+      b.appendChild(el('span', 'at', (m.all ? 'To everyone · ' : '') + clock(m.at)));
+      box.appendChild(b);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
 
   function canFs() { return !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen); }
   function fsExempt() { return !canFs() && NO_FULLSCREEN_OK.indexOf((me.email || '').toLowerCase()) !== -1; }
@@ -3773,19 +3889,22 @@
       .map(function (sub) { var st = room.students[sub]; return { sub: sub, s: st, name: who(st.name, st.email), d: drafts[sub] || null }; })
       .sort(function (a, b) { return a.name.localeCompare(b.name); });
     $('secLive').hidden = !people.length;
-    var sig = JSON.stringify(people.map(function (p) { return [p.sub, p.d && p.d.at, liveStatus(p.s), p.s.words]; }));
+    livePeople = people.map(function (p) { return p.sub; });
+    var sig = JSON.stringify(people.map(function (p) { return [p.sub, p.d && p.d.at, liveStatus(p.s), p.s.words, chatUnread(p.s)]; }));
     if (sig !== liveSig) {
       liveSig = sig;
       var grid = $('liveGrid');
       grid.innerHTML = '';
       people.forEach(function (p) {
-        var t = el('button', 'livetile' + (p.s.away || p.s.lockedOut ? ' away' : ''));
+        var t = el('button', 'livetile' + (p.s.away || p.s.lockedOut ? ' away' : '') + (chatUnread(p.s) ? ' newmsg' : ''));
         t.type = 'button';
         var h = el('div', 'lt-head');
         h.appendChild(el('b', null, p.name));
         var words = p.d ? wordCount(p.d.text) : p.s.words || 0;
         var st = liveStatus(p.s);
-        h.appendChild(el('span', 'lt-meta', plural(words, 'word', 'words') + (st ? ' · ' + st : '')));
+        var meta = el('span', 'lt-meta', plural(words, 'word', 'words') + (st ? ' · ' + st : ''));
+        if (chatUnread(p.s)) { meta.textContent = ''; meta.appendChild(el('span', 'lt-new', 'New message')); }
+        h.appendChild(meta);
         t.appendChild(h);
         var body = el('div', 'lt-text' + (p.d && p.d.text ? '' : ' none'));
         if (p.d && p.d.text) { var inner = el('div'); fmtInto(inner, p.d.text); body.appendChild(inner); }
@@ -3800,6 +3919,8 @@
   function drawLiveOpen(room) {
     var s = room.students[liveOpen];
     if (!s) return;
+    $('livePrev').disabled = $('liveNext').disabled = livePeople.length < 2;
+    liveChatSync(room, s);
     var d = liveData && liveData.drafts && liveData.drafts[liveOpen];
     $('liveName').textContent = who(s.name, s.email);
     var st = liveStatus(s);
@@ -3815,7 +3936,78 @@
     if (atEnd || fresh) box.scrollTop = box.scrollHeight;
   }
   $('liveClose').addEventListener('click', function () { $('liveBox').hidden = true; liveOpen = null; });
+  // Previous / Next (or the arrow keys): the students in the tiles' order.
+  var livePeople = [];
+  function liveStep(by) {
+    var i = livePeople.indexOf(liveOpen);
+    if (i < 0 || !teacherRoom || livePeople.length < 2) return;
+    liveOpen = livePeople[(i + by + livePeople.length) % livePeople.length];
+    drawLiveOpen(teacherRoom);
+  }
+  $('livePrev').addEventListener('click', function () { liveStep(-1); });
+  $('liveNext').addEventListener('click', function () { liveStep(1); });
+  document.addEventListener('keydown', function (e) {
+    if ($('liveBox').hidden || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA)$/.test((e.target || {}).tagName || '')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); liveStep(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); liveStep(1); }
+    else if (e.key === 'Escape') { $('liveBox').hidden = true; liveOpen = null; }
+  });
   $('liveBox').addEventListener('click', function (e) { if (e.target === $('liveBox')) { $('liveBox').hidden = true; liveOpen = null; } });
+
+  // Chat with the open student: their messages load when the session page's
+  // poll shows a new one (chatS/chatT), or when another student is opened.
+  function chatUnread(s) { return !!(s.chatS && s.chatS > (s.seenT || 0)); }
+  var liveChatKey = '', liveChatMsgs = [];
+  function liveChatSync(room, s) {
+    var key = room.code + '|' + liveOpen + '|' + (s.chatS || 0) + '|' + (s.chatT || 0);
+    if (key === liveChatKey) return;
+    var other = liveChatKey.split('|').slice(0, 2).join('|') !== room.code + '|' + liveOpen;
+    liveChatKey = key;
+    if (other) { liveChatMsgs = []; drawChat($('tChatLog'), [], 'teacher'); $('tChatInput').value = ''; }
+    var sub = liveOpen;
+    api('/luddite/chat?code=' + encodeURIComponent(room.code) + '&sub=' + encodeURIComponent(sub)).then(function (d) {
+      if (liveOpen !== sub) return;
+      liveChatMsgs = d.msgs || [];
+      drawChat($('tChatLog'), liveChatMsgs, 'teacher');
+      if (room.students[sub]) room.students[sub].seenT = s.chatS || 0;
+      liveSig = ''; // the tile drops its New message
+    }).catch(function () { liveChatKey = ''; });
+  }
+  $('tChatForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var input = $('tChatInput'), text = input.value.trim(), sub = liveOpen;
+    if (!text || !sub || !teacherRoom) return;
+    input.value = '';
+    try {
+      var d = await api('/luddite/chat', { code: teacherRoom.code, to: sub, text: text });
+      if (liveOpen !== sub) return;
+      liveChatMsgs.push(d.msg);
+      drawChat($('tChatLog'), liveChatMsgs, 'teacher');
+    } catch (err) { input.value = text; tell('Couldn’t send that', err.message === 'not_in_room' ? 'They aren’t in this writing session any more.' : 'Check your connection and try again.'); }
+  });
+  $('chatAllBtn').addEventListener('click', function () {
+    $('chatAllErr').hidden = true;
+    $('chatAllBox').hidden = false;
+    $('chatAllText').focus();
+  });
+  function closeChatAll() { $('chatAllBox').hidden = true; }
+  $('chatAllCancel').addEventListener('click', closeChatAll);
+  $('chatAllBox').addEventListener('click', function (e) { if (e.target === $('chatAllBox')) closeChatAll(); });
+  $('chatAllGo').addEventListener('click', async function () {
+    var text = $('chatAllText').value.trim(), b = $('chatAllGo');
+    if (!text || !teacherRoom) return;
+    b.disabled = true;
+    try {
+      await api('/luddite/chat', { code: teacherRoom.code, to: 'all', text: text });
+      $('chatAllText').value = '';
+      liveChatKey = ''; // the open student's chat shows it too
+      closeChatAll();
+    } catch (err) {
+      $('chatAllErr').textContent = err.message === 'not_in_room' ? 'No one has been let in yet.' : 'Couldn’t send that. Check your connection and try again.';
+      $('chatAllErr').hidden = false;
+    }
+    b.disabled = false;
+  });
 
   var roomPaperIds = [], roomReturned = {};
   function paperStage(x) {
