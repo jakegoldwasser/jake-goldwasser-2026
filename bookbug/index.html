@@ -664,6 +664,12 @@
   /* A series' parts in Poem View: each marker reads as a heading inside the
      poem, and every part after the first shows where its new page begins. */
   .poem-text > .is-part { font-weight: 600; letter-spacing: 0.04em; }
+  /* A part's title (Titles & order), shown after its marker as it prints
+     on the line beneath it. */
+  .poem-text > .is-part[data-part-title]::after {
+    content: attr(data-part-title); display: block; font-weight: 400; font-style: italic; letter-spacing: 0;
+    pointer-events: none; user-select: none;
+  }
   .poem-text > .is-later-part { position: relative; margin-top: 1.6em; padding-top: 0.9em; border-top: 1px dashed var(--line); }
   .poem-text > .is-later-part::before {
     content: 'New page'; position: absolute; top: -0.75em; right: 0; padding: 0 6px;
@@ -687,6 +693,19 @@
   .series-period[hidden] { display: none; }
   .series-add { font: inherit; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
   .series-add:hover { background: var(--accent-soft); }
+  .series-parts-btn[aria-expanded="true"] { background: var(--accent-soft); }
+  /* Titles & order: a row per part, under the series bar. */
+  .series-parts { flex: 1 1 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .series-parts[hidden] { display: none; }
+  .series-parts-empty { color: var(--ink-faint); padding: 2px 4px; }
+  .series-part-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .series-part-mark { flex: 0 0 2.6em; font-weight: 600; color: var(--ink); text-align: right; unicode-bidi: plaintext; }
+  .series-part-title { flex: 0 1 15em; min-width: 6em; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 7px; }
+  .series-part-first { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-faint); font-style: italic; }
+  .series-part-move { flex: 0 0 auto; font: inherit; line-height: 1; color: var(--ink); background: none; border: 1px solid var(--line-strong); border-radius: 6px; width: 28px; height: 26px; cursor: pointer; }
+  .series-part-move:hover:not(:disabled) { background: var(--accent-soft); }
+  .series-part-move:disabled { opacity: 0.35; cursor: default; }
+  @media (max-width: 560px) { .series-part-first { display: none; } .series-part-title { flex: 1 1 auto; } }
   .series-tag { flex: 0 0 auto; font-size: 11.5px; font-weight: 500; color: var(--ink-faint); white-space: nowrap; }
   .poem-compact-row .series-tag { margin-left: auto; }
   .poem-compact-row .series-tag + .tier-pill { margin-left: 8px; }
@@ -831,6 +850,18 @@
   .entry-menu button[hidden] { display: none; }
   .entry-menu .menu-sep { height: 1px; background: var(--line); margin: 4px 6px; }
   .entry-menu button.is-current { font-weight: 700; }
+  .entry-menu .menu-sep[hidden] { display: none; }
+  /* Move › and Copy ›: an item that opens a submenu beside the menu (or,
+     with no room on either side, over it just below the item). */
+  .entry-menu .menu-sub-wrap { position: relative; }
+  .entry-menu .menu-sub-wrap[hidden] { display: none; }
+  .entry-menu button.menu-sub-btn { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+  .entry-menu button.menu-sub-btn::after { content: '›'; color: var(--ink-faint); font-size: 17px; line-height: 1; }
+  .entry-menu button.menu-sub-btn[aria-expanded="true"] { background: var(--surface-2); }
+  .entry-menu.entry-sub { position: absolute; top: -5px; min-width: 215px; white-space: nowrap; z-index: 71; }
+  .entry-menu.entry-sub.is-left { left: auto; right: calc(100% + 6px); }
+  .entry-menu.entry-sub.is-right { left: calc(100% + 6px); right: auto; }
+  .entry-menu.entry-sub.is-below { left: 14px; right: auto; top: calc(100% - 2px); max-width: calc(100vw - 16px); }
   /* Phone writing mode: focusing an entry's title or body turns that
      card itself into a full-screen editor (Notes / Google Docs style)
      instead of typing into a narrow box nested three panels deep. The
@@ -4006,14 +4037,31 @@
   <button type="button" role="menuitem" data-action="focus">Focus mode</button>
   <button type="button" role="menuitem" data-action="snapshots">Snapshots…</button>
   <button type="button" role="menuitem" data-action="subs">Submissions…</button>
-  <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
-  <button type="button" role="menuitem" data-action="move">Move to another book…</button>
-  <div class="menu-sep" data-send-sep></div>
-  <button type="button" role="menuitem" data-send="top">Send to top</button>
-  <button type="button" role="menuitem" data-send="section-top">Send to top of section</button>
-  <button type="button" role="menuitem" data-send="section-bottom">Send to bottom of section</button>
-  <button type="button" role="menuitem" data-send="bottom">Send to bottom</button>
+  <div class="menu-sep" data-sub-sep></div>
+  <!-- Move › and Copy › open submenus beside the menu (see openEntrySub).
+       A section has no Move or Copy submenu, only the plain Duplicate. -->
+  <div class="menu-sub-wrap" data-sub="move">
+    <button type="button" role="menuitem" class="menu-sub-btn" aria-haspopup="menu" aria-expanded="false">Move</button>
+    <div class="entry-menu entry-sub" role="menu" hidden>
+      <button type="button" role="menuitem" data-send="top">Move to top</button>
+      <button type="button" role="menuitem" data-send="section-top">Move to top of section</button>
+      <button type="button" role="menuitem" data-send="section-bottom">Move to bottom of section</button>
+      <button type="button" role="menuitem" data-send="bottom">Move to bottom</button>
+      <div class="menu-sep" data-send-sep></div>
+      <button type="button" role="menuitem" data-action="move-section">Move to another section…</button>
+      <button type="button" role="menuitem" data-action="move">Move to another book…</button>
+    </div>
+  </div>
+  <div class="menu-sub-wrap" data-sub="copy">
+    <button type="button" role="menuitem" class="menu-sub-btn" aria-haspopup="menu" aria-expanded="false">Copy</button>
+    <div class="entry-menu entry-sub" role="menu" hidden>
+      <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+      <button type="button" role="menuitem" data-action="copy-section">Copy to another section…</button>
+      <button type="button" role="menuitem" data-action="copy-book">Copy to another book…</button>
+    </div>
+  </div>
+  <button type="button" role="menuitem" data-action="duplicate" data-plain-dup>Duplicate</button>
   <div class="menu-sep"></div>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="split" hidden>Open section in Poem and List View</button>
@@ -6086,6 +6134,32 @@
     return out;
   }
   function seriesParts(poem) { return partLineIndexes(poem.lines || [], poem.seriesStyle || null); }
+  // A part's own title (optional), set under Titles & order in the series
+  // bar and printed under its marker. poem.partTitles follows the parts in
+  // order; reordering parts and + Add part keep it in step.
+  function partTitle(poem, k) {
+    var t = (poem.partTitles || [])[k];
+    return typeof t === 'string' ? t.trim() : '';
+  }
+  // A poem's lines cut at its parts: what comes before the first part,
+  // and each part from its marker up to the next one.
+  function seriesChunks(lines, starts) {
+    return {
+      pre: lines.slice(0, starts.length ? starts[0] : lines.length),
+      parts: starts.map(function (st, k) { return lines.slice(st, k + 1 < starts.length ? starts[k + 1] : lines.length); })
+    };
+  }
+  // Puts chunks back together, one blank line between parts.
+  function joinSeriesChunks(pre, parts) {
+    function trim(c) { c = c.slice(); while (c.length && !(c[c.length - 1] || '').trim()) c.pop(); return c; }
+    var out = trim(pre), starts = [];
+    parts.forEach(function (c) {
+      if (out.length) out.push('');
+      starts.push(out.length);
+      out = out.concat(trim(c));
+    });
+    return { lines: out, starts: starts };
+  }
 
   // ---- Series numbering styles ----
   // poem.seriesStyle = { kind, period, prefix }: kind is a counting style
@@ -6097,7 +6171,9 @@
     number: { label: '1, 2, 3', name: 'Numbers' },
     word: { label: 'One, Two, Three', name: 'Words' },
     letter: { label: 'A, B, C', name: 'Letters' },
-    hebrew: { label: 'א, ב, ג', name: 'Hebrew letters' },
+    // Each letter is followed by a left-to-right mark, or the right-to-left
+    // letters pull the comma and the closing parenthesis round after them.
+    hebrew: { label: 'א\u200E, ב\u200E, ג\u200E', name: 'Hebrew letters' },
     greek: { label: 'α, β, γ', name: 'Greek letters' }
   };
   var SERIES_SYMBOLS = {
@@ -6941,6 +7017,7 @@
     var partStarts = isSeriesOn(poem, state) ? seriesParts(poem) : [];
     var noteSet = extractNotes(poem.lines);
     noteSet.lines.forEach(function (line, li) {
+      var partNo = partStarts.indexOf(li);
       // A series part starts a new page (blank lines before it are dropped,
       // so they can't spill a page of nothing).
       if (partStarts.indexOf(li) !== -1) {
@@ -6975,6 +7052,7 @@
         var wrapped = wrapFormatted(body, contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt);
         if (wrapped.length > 1) wasWrapped = true;
         wrapped.forEach(function (w) { renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt }); });
+        pushPartTitle();
       } else {
         // Openers are for novels and essays (a poetry book's prose poems
         // and a script's lines have none).
@@ -6996,8 +7074,20 @@
           if (drop && wi === 0) rl.drop = { letter: drop.letter, size: drop.size, w: drop.w };
           renderLines.push(rl);
         });
+        pushPartTitle();
       }
       fullOut = false;
+      // A part's title, in italics on the line under its marker, with a
+      // blank line before the part's words.
+      function pushPartTitle() {
+        var title = partNo === -1 ? '' : partTitle(poem, partNo);
+        if (!title) return;
+        var t = /[*_+\\]/.test(title) ? title : '*' + title + '*';
+        wrapFormatted(t, contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt).forEach(function (w) {
+          renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt });
+        });
+        if ((noteSet.lines[li + 1] || '').trim()) renderLines.push({ blank: true });
+      }
     });
 
     // Notes, set a fifth smaller on rows a fifth shorter: endnotes after
@@ -9958,6 +10048,8 @@
       if (r.nodeType !== 1) return;
       var pn = partStarts.indexOf(ri);
       r.classList.toggle('is-part', pn !== -1);
+      var pt = pn === -1 ? '' : partTitle(poem, pn);
+      if (pt) r.dataset.partTitle = pt; else delete r.dataset.partTitle;
       r.classList.toggle('is-later-part', pn > 0);
       var t = r.dataset.token ? '' : r.textContent.trim();
       var brk = on && /^(\*\s*){3}$|^#$/.test(t);
@@ -10372,6 +10464,7 @@
   function closeEntryMenu() {
     if (entryMenu.hidden) return;
     entryMenu.hidden = true;
+    closeEntrySubs();
     if (entryMenuBtn) entryMenuBtn.setAttribute('aria-expanded', 'false');
     entryMenuBtn = null;
     entryMenuIndex = null;
@@ -10383,12 +10476,14 @@
   function moveTargets() {
     return activeBooks().filter(function (c) { return c.id !== state.chapbookId && c.data; });
   }
-  function moveEntryTo(idx, targetId) {
+  // With `keep`, a copy goes over (under a new id) and the entry stays.
+  function moveEntryTo(idx, targetId, keep) {
     flushPendingSave();
     var poem = state.poems[idx], target = library.filter(function (c) { return c.id === targetId; })[0];
     if (!poem || !target || !target.data) return;
     var data = target.data, copy = JSON.parse(JSON.stringify(poem));
     delete copy.sample; delete copy.sampleTitle;
+    if (keep) copy.id = makeId();
     data.poems = data.poems || [];
     data.images = data.images || {};
     copy.lines = (copy.lines || []).map(function (line) {
@@ -10406,15 +10501,99 @@
     });
     data.poems.push(copy);
     target.updatedAt = Date.now();
-    state.poems.splice(idx, 1);
-    delete expandedCompactIds[poem.id];
+    if (!keep) {
+      state.poems.splice(idx, 1);
+      delete expandedCompactIds[poem.id];
+    }
     persistLibrary();
     persist();
     renderAll();
     renderChapbooksList();
-    showToast('Moved “' + entryLabel(poem) + '” to ' + (target.title || 'Untitled book') + '.');
+    showToast((keep ? 'Copied “' : 'Moved “') + entryLabel(poem) + '” to ' + (target.title || 'Untitled book') + '.');
   }
-  function openMoveDialog(idx) {
+  // ---- Moving or copying an entry to another section of this book ----
+  // The section an entry sits in (null before the first section).
+  function sectionOf(idx) {
+    for (var i = idx - 1; i >= 0; i--) if (isSection(state.poems[i])) return state.poems[i];
+    return null;
+  }
+  // Where the entry at `idx` could go: every other section, plus the
+  // stretch before the first section (id null) if it's in a section now
+  // and the book doesn't open with a section.
+  function sectionTargets(idx) {
+    var here = sectionOf(idx), out = [];
+    var secs = state.poems.filter(isSection);
+    if (!secs.length) return out;
+    if (here && !isSection(state.poems[0])) out.push({ id: null });
+    secs.forEach(function (s) { if (s !== here) out.push({ id: s.id, sec: s }); });
+    return out;
+  }
+  // Puts the entry (or, with `keep`, a copy of it) at the end of the
+  // section `secId`, or with `secId` null at the end of the stretch before
+  // the first section.
+  function moveEntryToSection(idx, secId, keep) {
+    flushPendingSave();
+    var poem = state.poems[idx];
+    if (!poem || isSection(poem)) return;
+    var item = poem;
+    if (keep) {
+      item = JSON.parse(JSON.stringify(poem));
+      item.id = makeId();
+      if (item.title) item.title += ' (copy)';
+    } else state.poems.splice(idx, 1);
+    var list = state.poems, at, secName;
+    if (secId === null) {
+      at = 0;
+      while (at < list.length && !isSection(list[at])) at++;
+      secName = 'before the first ' + formNouns().section;
+    } else {
+      var s = list.findIndex(function (p) { return p.id === secId; });
+      if (s < 0) { if (!keep) list.splice(idx, 0, poem); return; }
+      at = s + 1;
+      while (at < list.length && !isSection(list[at])) at++;
+      secName = 'to ' + sectionLabel(list[s]);
+    }
+    list.splice(at, 0, item);
+    state.isExample = false;
+    persist();
+    renderAll();
+    showToast((keep ? 'Copied “' : 'Moved “') + entryLabel(poem) + '” ' + secName + '.');
+  }
+  function openSectionDialog(idx, keep) {
+    var poem = state.poems[idx];
+    if (!poem) return;
+    var nouns = formNouns();
+    var ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    var box = document.createElement('div');
+    box.className = 'modal-box move-box';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.innerHTML = '<p style="margin-top:0;"></p><div class="move-list"></div><div class="modal-actions"><button class="btn" type="button">Cancel</button></div>';
+    box.querySelector('p').textContent = (keep ? 'Copy “' : 'Move “') + entryLabel(poem) + '” to the end of:';
+    var list = box.querySelector('.move-list');
+    sectionTargets(idx).forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chapbook-row move-row';
+      b.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>';
+      var at = t.sec ? state.poems.indexOf(t.sec) : -1, n = 0;
+      if (t.sec) n = sectionMembers(at).filter(function (p) { return !isSection(p); }).length;
+      else for (var i = 0; i < state.poems.length && !isSection(state.poems[i]); i++) n++;
+      b.querySelector('.chapbook-title').textContent = t.sec ? sectionLabel(t.sec) : 'Before the first ' + nouns.section;
+      b.querySelector('.chapbook-meta').textContent = nounFor(n, state);
+      b.addEventListener('click', function () { close(); moveEntryToSection(idx, t.id, keep); });
+      list.appendChild(b);
+    });
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+    document.addEventListener('keydown', onKey, true);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    box.querySelector('.modal-actions .btn').addEventListener('click', close);
+  }
+  function openMoveDialog(idx, keep) {
     var poem = state.poems[idx];
     if (!poem) return;
     var ov = document.createElement('div');
@@ -10424,7 +10603,7 @@
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
     box.innerHTML = '<p style="margin-top:0;"></p><div class="move-list"></div><div class="modal-actions"><button class="btn" type="button">Cancel</button></div>';
-    box.querySelector('p').textContent = 'Move “' + entryLabel(poem) + '” to:';
+    box.querySelector('p').textContent = (keep ? 'Copy “' : 'Move “') + entryLabel(poem) + '” to:';
     var list = box.querySelector('.move-list');
     TEXT_FORM_KEYS.forEach(function (form) {
       var books = moveTargets().filter(function (c) { return bookFormOf(c.data) === form; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; });
@@ -10440,7 +10619,7 @@
         b.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>';
         b.querySelector('.chapbook-title').textContent = c.title || 'Untitled book';
         b.querySelector('.chapbook-meta').textContent = nounFor(countEntries(c.data.poems || []), c.data);
-        b.addEventListener('click', function () { close(); moveEntryTo(idx, c.id); });
+        b.addEventListener('click', function () { close(); moveEntryTo(idx, c.id, keep); });
         list.appendChild(b);
       });
     });
@@ -10469,6 +10648,72 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.classList.remove('is-on'); }, action ? 6000 : 3500);
   }
+  // ---- Move › / Copy › submenus ----
+  // Open beside the menu on whichever side has room (over it, just below
+  // the item, on a narrow screen); hover opens them where there's a
+  // mouse, a click or tap toggles them everywhere.
+  var entrySubTimer = null;
+  function closeEntrySubs(except) {
+    clearTimeout(entrySubTimer);
+    entryMenu.querySelectorAll('.menu-sub-wrap').forEach(function (w) {
+      if (w === except) return;
+      w.querySelector('.entry-sub').hidden = true;
+      w.querySelector('.menu-sub-btn').setAttribute('aria-expanded', 'false');
+    });
+  }
+  function openEntrySub(wrap) {
+    closeEntrySubs(wrap);
+    var sub = wrap.querySelector('.entry-sub');
+    if (!sub.hidden) return;
+    sub.classList.remove('is-left', 'is-right', 'is-below');
+    sub.style.top = ''; sub.style.left = '';
+    sub.hidden = false;
+    wrap.querySelector('.menu-sub-btn').setAttribute('aria-expanded', 'true');
+    var m = entryMenu.getBoundingClientRect(), sw = sub.offsetWidth;
+    if (m.right + 6 + sw <= window.innerWidth - 8) sub.classList.add('is-right');
+    else if (m.left - 6 - sw >= 8) sub.classList.add('is-left');
+    else sub.classList.add('is-below');
+    var r = sub.getBoundingClientRect();
+    if (r.right > window.innerWidth - 8) {
+      sub.style.left = (sub.offsetLeft - (r.right - (window.innerWidth - 8))) + 'px';
+      r = sub.getBoundingClientRect();
+    }
+    if (r.bottom > window.innerHeight - 8) {
+      sub.style.top = (sub.offsetTop - Math.min(r.bottom - (window.innerHeight - 8), r.top - 8)) + 'px';
+    }
+  }
+  var hoverMQ = window.matchMedia('(hover: hover) and (pointer: fine)');
+  entryMenu.querySelectorAll('.menu-sub-wrap').forEach(function (wrap) {
+    var btn = wrap.querySelector('.menu-sub-btn');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (wrap.querySelector('.entry-sub').hidden) openEntrySub(wrap);
+      else if (!hoverMQ.matches) closeEntrySubs();
+    });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        openEntrySub(wrap);
+        var first = Array.prototype.filter.call(wrap.querySelectorAll('.entry-sub button'), function (b) { return !b.hidden; })[0];
+        if (first) first.focus();
+      }
+    });
+    wrap.addEventListener('mouseenter', function () {
+      if (!hoverMQ.matches) return;
+      clearTimeout(entrySubTimer);
+      entrySubTimer = setTimeout(function () { openEntrySub(wrap); }, 80);
+    });
+    wrap.addEventListener('mouseleave', function () {
+      if (!hoverMQ.matches) return;
+      clearTimeout(entrySubTimer);
+      entrySubTimer = setTimeout(function () { closeEntrySubs(); }, 250);
+    });
+  });
+  // Hovering a plain item of the main menu closes an open submenu.
+  entryMenu.addEventListener('mouseover', function (e) {
+    if (!hoverMQ.matches || e.target.closest('.menu-sub-wrap')) return;
+    if (e.target.closest('button')) { clearTimeout(entrySubTimer); entrySubTimer = setTimeout(function () { closeEntrySubs(); }, 150); }
+  });
   function openEntryMenu(btn, index) {
     var reopening = entryMenuBtn === btn;
     closeEntryMenu();
@@ -10477,9 +10722,15 @@
     entryMenuIndex = index;
     entryMenuBtn = btn;
     btn.setAttribute('aria-expanded', 'true');
-    var poem = state.poems[index], moveBtn = entryMenu.querySelector('[data-action="move"]');
-    moveBtn.hidden = !poem || isSection(poem) || !moveTargets().length;
-    moveBtn.textContent = 'Move ' + (poem ? formNouns().one : formNouns().section) + ' to another book…';
+    var poem = state.poems[index], nouns = formNouns();
+    var isEntry = !!poem && !isSection(poem);
+    var hasBooks = isEntry && moveTargets().length > 0, hasSecs = isEntry && sectionTargets(index).length > 0;
+    entryMenu.querySelector('[data-action="move"]').hidden = !hasBooks;
+    entryMenu.querySelector('[data-action="copy-book"]').hidden = !hasBooks;
+    entryMenu.querySelector('[data-action="move-section"]').hidden = !hasSecs;
+    entryMenu.querySelector('[data-action="copy-section"]').hidden = !hasSecs;
+    entryMenu.querySelector('[data-action="move-section"]').textContent = 'Move to another ' + nouns.section + '…';
+    entryMenu.querySelector('[data-action="copy-section"]').textContent = 'Copy to another ' + nouns.section + '…';
     entryMenu.querySelector('[data-action="focus"]').hidden = !poem || isSection(poem) || writerMQ.matches;
     entryMenu.querySelector('[data-action="snapshots"]').hidden = !poem || isSection(poem);
     entryMenu.querySelector('[data-action="subs"]').hidden = !poem || isSection(poem);
@@ -10494,13 +10745,17 @@
       var to = targets[b.dataset.send];
       b.hidden = typeof to !== 'number' || to === index;
       if (!b.hidden) anySend = true;
-      if (b.dataset.send.indexOf('section') === 0) b.textContent = 'Send to ' + b.dataset.send.slice(8) + ' of ' + formNouns().section;
+      if (b.dataset.send.indexOf('section') === 0) b.textContent = 'Move to ' + b.dataset.send.slice(8) + ' of ' + nouns.section;
     });
-    entryMenu.querySelector('[data-send-sep]').hidden = !anySend;
+    entryMenu.querySelector('[data-send-sep]').hidden = !anySend || !(hasBooks || hasSecs);
+    // Move › shows only with something in it; a section gets no Move or
+    // Copy submenu, just a plain Duplicate.
+    entryMenu.querySelector('[data-sub="move"]').hidden = !(anySend || hasBooks || hasSecs);
+    entryMenu.querySelector('[data-sub="copy"]').hidden = !isEntry;
+    entryMenu.querySelector('[data-plain-dup]').hidden = isEntry || !poem;
     // A section's Archive says which it does: just the heading (its
     // entries join the section above), or the section with its entries.
     var n = poem && isSection(poem) ? sectionMembers(index).length : 0;
-    var nouns = formNouns();
     entryMenu.querySelector('[data-action="archive"]').textContent = n ? 'Archive heading only' : 'Archive';
     var allBtn = entryMenu.querySelector('[data-action="archive-all"]');
     allBtn.hidden = !n;
@@ -10586,7 +10841,94 @@
     add.className = 'series-add';
     add.textContent = '+ Add part';
     add.title = 'Add a part after the one the cursor is in, and renumber the parts after it';
-    bar.appendChild(pick); bar.appendChild(periodLabel); bar.appendChild(add);
+    var partsBtn = document.createElement('button');
+    partsBtn.type = 'button';
+    partsBtn.className = 'series-add series-parts-btn';
+    partsBtn.textContent = 'Titles & order';
+    partsBtn.title = 'Give the parts titles, and change their order';
+    partsBtn.setAttribute('aria-expanded', 'false');
+    var partsList = document.createElement('div');
+    partsList.className = 'series-parts';
+    partsList.hidden = true;
+    bar.appendChild(pick); bar.appendChild(periodLabel); bar.appendChild(add); bar.appendChild(partsBtn); bar.appendChild(partsList);
+    partsBtn.addEventListener('click', function () {
+      partsList.hidden = !partsList.hidden;
+      partsBtn.setAttribute('aria-expanded', String(!partsList.hidden));
+      if (!partsList.hidden) paintParts();
+    });
+    // One row per part: its marker, a title field, its first line, and
+    // up / down to move it (the whole part, with its title); the numbers
+    // are put back in order after a move.
+    function paintParts(focusK, focusDir) {
+      var lines = serializeEditor(editor);
+      poem.lines = lines;
+      var starts = partLineIndexes(lines, poem.seriesStyle || null);
+      partsList.innerHTML = '';
+      if (!starts.length) {
+        var none = document.createElement('div');
+        none.className = 'series-parts-empty';
+        none.textContent = 'No parts yet. + Add part starts one.';
+        partsList.appendChild(none);
+        return;
+      }
+      starts.forEach(function (li, k) {
+        var row = document.createElement('div');
+        row.className = 'series-part-row';
+        var mark = document.createElement('span');
+        mark.className = 'series-part-mark';
+        mark.textContent = stripFormatMarkers(lines[li]).trim();
+        var title = document.createElement('input');
+        title.type = 'text';
+        title.className = 'series-part-title';
+        title.placeholder = 'Title (optional)';
+        title.value = partTitle(poem, k);
+        title.setAttribute('aria-label', 'Title of part ' + mark.textContent);
+        title.addEventListener('input', function () {
+          var list = (poem.partTitles || []).slice();
+          while (list.length < starts.length) list.push('');
+          list[k] = title.value;
+          poem.partTitles = list;
+          changed();
+        });
+        var first = document.createElement('span');
+        first.className = 'series-part-first';
+        var end = k + 1 < starts.length ? starts[k + 1] : lines.length;
+        for (var j = li + 1; j < end; j++) {
+          if ((lines[j] || '').trim() && !IMAGE_LINE_RE.test(lines[j])) { first.textContent = stripFormatMarkers(lines[j]).trim(); break; }
+        }
+        var up = document.createElement('button'), down = document.createElement('button');
+        up.type = down.type = 'button';
+        up.className = down.className = 'series-part-move';
+        up.textContent = '↑'; down.textContent = '↓';
+        up.title = 'Move this part up'; down.title = 'Move this part down';
+        up.setAttribute('aria-label', 'Move part ' + mark.textContent + ' up');
+        down.setAttribute('aria-label', 'Move part ' + mark.textContent + ' down');
+        up.disabled = k === 0; down.disabled = k === starts.length - 1;
+        up.addEventListener('click', function () { movePart(k, -1); });
+        down.addEventListener('click', function () { movePart(k, 1); });
+        row.appendChild(mark); row.appendChild(title); row.appendChild(first); row.appendChild(up); row.appendChild(down);
+        partsList.appendChild(row);
+        if (focusK === k) (focusDir < 0 ? (up.disabled ? down : up) : (down.disabled ? up : down)).focus();
+      });
+    }
+    function movePart(k, dir) {
+      var lines = serializeEditor(editor);
+      poem.lines = lines;
+      var style = seriesStyleFor(poem), starts = partLineIndexes(lines, poem.seriesStyle || null);
+      var j = k + dir;
+      if (j < 0 || j >= starts.length) return;
+      var ch = seriesChunks(lines, starts), parts = ch.parts.slice();
+      var tmp = parts[k]; parts[k] = parts[j]; parts[j] = tmp;
+      var titles = (poem.partTitles || []).slice();
+      while (titles.length < starts.length) titles.push('');
+      tmp = titles[k]; titles[k] = titles[j]; titles[j] = tmp;
+      if (titles.some(function (t) { return (t || '').trim(); })) poem.partTitles = titles; else delete poem.partTitles;
+      var joined = joinSeriesChunks(ch.pre, parts);
+      poem.seriesStyle = style;
+      setLines(renumberedLines(joined.lines, joined.starts, style), -1);
+      paintParts(j, dir);
+      showToast('Moved the part to ' + stripFormatMarkers(poem.lines[joined.starts[j]]).trim() + '.');
+    }
     function paint() {
       var st = seriesStyleFor(poem);
       pick.value = st.kind;
@@ -10608,6 +10950,7 @@
       var style = { kind: pick.value, period: period.checked, prefix: SERIES_SYMBOLS[pick.value] ? '' : (old.prefix || '') };
       poem.seriesStyle = style;
       setLines(renumberedLines(lines, starts, style), -1);
+      if (!partsList.hidden) paintParts();
     }
     pick.addEventListener('change', restyle);
     period.addEventListener('change', restyle);
@@ -10636,8 +10979,14 @@
         }
       }
       poem.seriesStyle = style;
-      var fixed = renumberedLines(lines, partLineIndexes(lines, style), style);
+      var newStarts = partLineIndexes(lines, style);
+      var fixed = renumberedLines(lines, newStarts, style);
+      if (poem.partTitles) {
+        var at2 = newStarts.indexOf(caret - 1);
+        if (at2 !== -1) { poem.partTitles = poem.partTitles.slice(); poem.partTitles.splice(at2, 0, ''); }
+      }
       setLines(fixed, caret);
+      if (!partsList.hidden) paintParts();
       showToast('Added part ' + stripFormatMarkers(fixed[caret - 1]).trim() + '. It starts a new page.');
     });
     // Remember the last line the cursor was in, for + Add part.
@@ -10651,6 +11000,7 @@
       poem.lines = renumberedLines(poem.lines, partLineIndexes(poem.lines, style), style);
       renderEditor(editor, poem.lines);
       changed();
+      if (!partsList.hidden) paintParts();
     });
     paint();
     return bar;
@@ -10763,7 +11113,10 @@
     else if (item.dataset.action === 'subs') openSubmissions(state.poems[idx]);
     else if (item.dataset.action === 'split') enterSplitView(sectionMembers(idx).map(function (p) { return p.id; }));
     else if (item.dataset.action === 'delete') deletePoem(idx);
-    else if (item.dataset.action === 'move') openMoveDialog(idx);
+    else if (item.dataset.action === 'move') openMoveDialog(idx, false);
+    else if (item.dataset.action === 'copy-book') openMoveDialog(idx, true);
+    else if (item.dataset.action === 'move-section') openSectionDialog(idx, false);
+    else if (item.dataset.action === 'copy-section') openSectionDialog(idx, true);
     else if (item.dataset.action === 'series') toggleSeries(idx);
     else duplicatePoem(idx);
   });
@@ -16024,7 +16377,14 @@
       if (isSection(poem)) { out.push('', '## ' + sectionLabel(poem, st)); return; }
       out.push('', (hasSections ? '### ' : '## ') + entryLabel(poem, st), '');
       var verse = isVerseEntry(poem, st), prev = null;
-      (poem.lines || []).forEach(function (line) {
+      var starts = isSeriesOn(poem, st) ? seriesParts(poem) : [];
+      (poem.lines || []).forEach(function (line, li) {
+        var pt = starts.indexOf(li) === -1 ? '' : partTitle(poem, starts.indexOf(li));
+        if (pt) {
+          out.push(md(line.replace(/^\t+/, '')) + '  ', '*' + pt + '*', '');
+          prev = '';
+          return;
+        }
         if (IMAGE_LINE_RE.test(line || '')) return;
         if (!line || !line.trim()) { if (prev !== '') out.push(''); prev = ''; return; }
         if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) { out.push('', '* * *', ''); prev = ''; return; }
