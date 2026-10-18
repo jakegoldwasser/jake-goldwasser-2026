@@ -115,7 +115,7 @@ main {
 /* Weather, drawn in the board's subway language. It always takes the Uptown
    B/C's place (now and the next few hours), and takes the Downtown B/C's place
    with tomorrow's forecast whenever no downtown B/C can be caught. Each hour is a countdown-clock row: a line bullet
-   holding the temperature, the conditions where a train's destination goes,
+   holding the temperature, a conditions icon where a train's destination goes,
    and the hour where its minutes go. Temperatures are colored cold to hot
    (violet under 45°, blue, green from 60°, yellow from 65°, orange from 80°,
    red from 85°). A chance of precipitation sits in a diamond, the subway's
@@ -147,6 +147,14 @@ main {
 .diamond.p-snow > span, .diamond.p-drizzle > span { color: #000; }
 .row .dest.wx { display: flex; align-items: center; overflow: visible; }
 .row .dest.wx .cond { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Conditions are a picture, not a word: sun, moon, cloud, raindrop, snowflake,
+   hailstone, lightning. Precipitation icons take the row's precipitation color. */
+.wxi { display: block; width: 1.35em; height: 1.35em; flex: none; overflow: visible; }
+.wxi.i-sun { color: #fccc0a; }
+.wxi.i-moon { color: #e6e3d3; }
+.wxi.i-cloud, .wxi.i-fog { color: #b9bdc6; }
+.wxi .part { color: #fccc0a; }
+.wxi .part.moon { color: #e6e3d3; }
 .row .dest .lo { color: var(--muted); font-size: 0.7em; margin-right: 0.45em; }
 .row .dest .lo span { font-weight: 700; }
 /* The weather group is set off like an MTA station sign: a black plate with
@@ -154,11 +162,10 @@ main {
    on the left, which day on the right), so it never reads as more trains. */
 .group.wx-group {
   background: #000;
-  border-top: none;
-  border-radius: 4px;
+  border: 1px solid rgba(244, 244, 241, 0.3);
+  border-radius: 6px;
   margin-top: 0.8vh;
   padding: 0 0.7em 0.4vh;
-  box-shadow: inset 0 0 0 1px var(--rule);
 }
 .wx-sign {
   display: flex; justify-content: space-between; align-items: baseline; gap: 1em;
@@ -416,6 +423,45 @@ function conditionText(code) {
   if (code >= 95) return "Storms";
   return "";
 }
+// Line icons (24-unit grid, drawn in currentColor). Clouds sit high when something falls from them.
+var CLOUD = 'M7 17h10.5a4 4 0 0 0 .4-7.98A5.6 5.6 0 0 0 7.3 8.4 4.3 4.3 0 0 0 7 17z';
+var CLOUD_HI = 'M7 12.5h10.5a3.6 3.6 0 0 0 .4-7.18A5 5 0 0 0 7.3 4.7 3.9 3.9 0 0 0 7 12.5z';
+var SUN_RAYS = 'M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6';
+function drop(x, y, r) { return '<path fill="currentColor" stroke="none" d="M' + x + ' ' + y + 'c' + (r*0.9) + ' ' + (r*1.4) + ' ' + (r*1.6) + ' ' + (r*2.3) + ' ' + (r*1.6) + ' ' + (r*3.2) + 'a' + (r*1.6) + ' ' + (r*1.6) + ' 0 0 1-' + (r*3.2) + ' 0c0-' + (r*0.9) + ' ' + (r*0.7) + '-' + (r*1.8) + ' ' + (r*1.6) + '-' + (r*3.2) + 'z"/>'; }
+function flake(x, y, r) {
+  var a = r * 0.866, b = r * 0.5;
+  return '<path d="M' + x + ' ' + (y-r) + 'v' + (2*r) + 'M' + (x-a) + ' ' + (y-b) + 'l' + (2*a) + ' ' + (2*b) + 'M' + (x-a) + ' ' + (y+b) + 'l' + (2*a) + '-' + (2*b) + '"/>';
+}
+function hail(x, y, r) { return '<circle fill="currentColor" stroke="none" cx="' + x + '" cy="' + y + '" r="' + r + '"/>'; }
+function wxIcon(code, night) {
+  var kind, art;
+  if (code === 0 || code === 1) {
+    kind = night ? "moon" : "sun";
+    art = night ? '<path d="M19.5 14.6A7.8 7.8 0 1 1 9.4 4.5a6.2 6.2 0 0 0 10.1 10.1z"/>'
+                : '<circle cx="12" cy="12" r="4.2"/><path d="' + SUN_RAYS + '"/>';
+  } else if (code === 2) {
+    kind = "cloud";
+    art = (night ? '<path class="part moon" d="M13.6 9.2A4.6 4.6 0 1 1 7.1 3a3.6 3.6 0 0 0 6.5 6.2z"/>'
+                 : '<g class="part"><circle cx="8.5" cy="8" r="3"/><path d="M8.5 2.3v1.4M2.8 8h1.4M4.5 4l1 1M12.5 4l-1 1M4.5 12l1-1"/></g>') +
+          '<path d="M9.5 20h9a3.4 3.4 0 0 0 .3-6.8 4.8 4.8 0 0 0-9.1-.6 3.7 3.7 0 0 0-.2 7.4z" fill="#000"/>';
+  } else if (code === 3) { kind = "cloud"; art = '<path d="' + CLOUD + '"/>'; }
+  else if (code === 45 || code === 48) { kind = "fog"; art = '<path d="M3.5 8h17M5.5 12h13M3.5 16h17M7 20h10"/>'; }
+  else if (code >= 51 && code <= 55) { kind = "drizzle"; art = '<path d="' + CLOUD_HI + '"/>' + drop(8, 15, 1.1) + drop(12, 17, 1.1) + drop(16, 15, 1.1); }
+  else if (code === 56 || code === 57 || code === 66 || code === 67) { kind = "freezing"; art = '<path d="' + CLOUD_HI + '"/>' + drop(8.5, 14.5, 1.6) + flake(15.5, 18.5, 2.6); }
+  else if (code === 61 || code === 80) { kind = "rain"; art = drop(12, 3, 4.5); }
+  else if (code === 63 || code === 81) { kind = "rain"; art = drop(8, 4, 3) + drop(16, 9, 3); }
+  else if (code === 65 || code === 82) { kind = "rain"; art = drop(5, 4, 2.3) + drop(12, 10, 2.3) + drop(19, 4, 2.3); }
+  else if (code === 77) { kind = "snow"; art = hail(7, 9, 1.4) + hail(12, 13, 1.4) + hail(17, 9, 1.4) + hail(9, 17, 1.4) + hail(15, 17, 1.4); }
+  else if ((code >= 71 && code <= 75) || code === 85 || code === 86) {
+    kind = "snow";
+    art = (code === 75 || code === 86) ? flake(7, 8, 4) + flake(16.5, 12, 4) + flake(8.5, 18, 3.2) : flake(12, 12, 8.5) + '<path d="M12 5.5l-2-2M12 5.5l2-2M12 18.5l-2 2M12 18.5l2 2"/>';
+  }
+  else if (code === 96 || code === 99) { kind = "hail"; art = '<path d="' + CLOUD_HI + '"/>' + hail(7.5, 16, 1.8) + hail(12.5, 19.5, 1.8) + hail(17, 15.5, 1.8); }
+  else if (code >= 95) { kind = "storm"; art = '<path d="' + CLOUD_HI + '"/><path fill="currentColor" stroke="none" d="M13 12.5l-4.5 6h3l-1.5 4.5 5-6.5h-3l1.5-4z"/>'; }
+  else return "";
+  var label = conditionText(code) || kind;
+  return '<svg class="wxi i-' + kind + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="' + label + '"><title>' + label + '</title>' + art + '</svg>';
+}
 function tempClass(t) {
   t = Math.round(t);
   if (t < 45) return "t-freeze";
@@ -432,6 +478,7 @@ function precipClass(code) {
   if (code === 56 || code === 57 || code === 66 || code === 67) return "p-freezing";
   if ((code >= 61 && code <= 65) || (code >= 80 && code <= 82)) return "p-rain";
   if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "p-snow";
+  if (code === 96 || code === 99) return "p-snow";
   if (code >= 95) return "p-storm";
   return "";
 }
@@ -449,11 +496,11 @@ function hourIndex(d) {
 function hourText(h) { return (h % 12 || 12) + '<small>' + (h < 12 ? "AM" : "PM") + '</small>'; }
 // One countdown-clock row: temperature bullet, conditions (+ chance of
 // precipitation in a diamond, shown from 20%), and a label where the minutes go.
-function wxRow(temp, code, chance, label, lead) {
+function wxRow(temp, code, chance, label, lead, hour) {
   var p = precipClass(code);
   var chanceCls = p && p !== "p-fog" ? p : "p-rain"; // a chance in dry weather reads as rain
   return '<div class="row">' + tempBullet(temp) +
-    '<span class="dest wx' + (p ? ' ' + p : '') + '">' + (lead || '') + '<span class="cond">' + conditionText(code) + '</span>' +
+    '<span class="dest wx' + (p ? ' ' + p : '') + '">' + (lead || '') + wxIcon(code, hour != null && (hour < 6 || hour >= 19)) +
     (chance >= 20 ? diamond(chance, chanceCls) : '') + '</span>' +
     '<span class="mins">' + label + '</span></div>';
 }
@@ -461,7 +508,7 @@ function hourRow(d, label) {
   var hr = weather.hourly, i = hourIndex(d);
   if (i === -1) return "";
   return wxRow(hr.temperature_2m[i], hr.weather_code[i],
-    hr.precipitation_probability ? hr.precipitation_probability[i] : 0, label || hourText(d.getHours()));
+    hr.precipitation_probability ? hr.precipitation_probability[i] : 0, label || hourText(d.getHours()), "", d.getHours());
 }
 function wxWaiting() {
   return '<div class="empty">' + (weatherError ? "Can't load the weather right now. Retrying." : "Loading the weather&hellip;") + '</div>';
@@ -473,7 +520,7 @@ function weatherNowRows() {
   var now = new Date(), cur = weather.current || {};
   var i = hourIndex(now), hr = weather.hourly;
   var rows = [wxRow(cur.temperature_2m, cur.weather_code,
-    i === -1 || !hr.precipitation_probability ? 0 : hr.precipitation_probability[i], "Now")];
+    i === -1 || !hr.precipitation_probability ? 0 : hr.precipitation_probability[i], "Now", "", now.getHours())];
   var t = new Date(now); t.setMinutes(0, 0, 0);
   for (var n = 1; n < CONFIG.perDirection; n++) {
     t.setHours(t.getHours() + (n === 1 ? 1 : CONFIG.weatherStepHours));
