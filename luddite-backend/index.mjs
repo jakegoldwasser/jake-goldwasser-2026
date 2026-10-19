@@ -323,7 +323,8 @@ function ownsRoom(room, info, role) {
 // start (or the regular one), and the length times their multiplier.
 const regularEnded = (r) => !!r.endedAt || r.open === false;
 // A session students may work on at home (`atHome`) runs, with no time
-// limit, until the teacher ends it; leaving the page never locks anyone out.
+// limit, until the teacher ends it. Writing is still full screen, but
+// leaving it never locks anyone out (it still counts as leaving the page).
 function regularWindow(r) {
   const start = r.startAt || r.createdAt;
   if (r.atHome) return { start, end: null, home: true };
@@ -412,8 +413,7 @@ function studentView(room, sub, email, prefs) {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running',
     state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier, minutes: room.minutes || null, now,
     teacherName: room.teacher.name || room.teacher.email,
-    // At home: no full screen and no locking, whatever the teacher's usual settings.
-    prompt: room.prompt || '', prefs: room.atHome ? { ...(prefs || DEFAULT_PREFS), lockOnLeave: false } : prefs || DEFAULT_PREFS,
+    prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
     atHome: !!room.atHome,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
@@ -842,8 +842,10 @@ async function routeLuddite(event, method, path, info) {
       // `away` means off the page right now. `lockedOut` keeps them off it
       // until the teacher lets them back in (the room's 'unlock' action).
       // While paused they may step away (that's what a pause is for).
-      const held = !!(r.pausedAt || s.pausedAt || r.atHome);
+      const held = !!(r.pausedAt || s.pausedAt);
       if (body.type === 'left' && held) Object.assign(next, { away: true, writing: false });
+      // At home, leaving the page still counts, but never locks them out.
+      else if (body.type === 'left' && r.atHome) Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false });
       else if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
       if ((body.type === 'writing' || body.type === 'idle') && !s.lockedOut) Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
       // 'ask': a flag for the teacher -- please unlock me.

@@ -305,6 +305,8 @@
   .bar:hover { opacity: 1; }
   /* The one big button at the foot of the writing page: impossible to miss. */
   .handinbar { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
+  .handinbar { gap: 12px; flex-wrap: wrap; }
+  .handinbar #leaveNowBtn { min-width: 0; padding: 16px 32px; }
   .handinbar .btn { pointer-events: auto; font-size: 19px; padding: 16px 56px; min-width: min(320px, calc(100vw - 32px)); }
   .bar .left { display: flex; gap: 16px; }
   #leaves.has { color: var(--lock); opacity: 1; }
@@ -677,6 +679,14 @@
   .item.person .who { min-width: 0; }
   .item.person .who span { display: block; }
   .warntext { font-style: normal; color: var(--tomato-deep); }
+  .statustext { font-style: normal; color: var(--ink); }
+  .item.person .lockmark { flex: none; display: inline-flex; width: 26px; justify-content: center; }
+  .lockmark.open { color: var(--mint-deep); }
+  .lockmark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+  .lockmark.bad { color: var(--tomato-deep); }
+  .item.person .eyemark { flex: none; display: inline-flex; width: 26px; justify-content: center; }
+  .eyemark.open { color: var(--pen); }
+  .eyemark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
   /* Fixed slots, so the status tags and ⋯ buttons line up down the list. */
   .item.person .mainslot { flex: none; min-width: 112px; display: flex; justify-content: flex-end; }
   .item.person .status { flex: none; }
@@ -998,7 +1008,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Messages">
@@ -1042,6 +1052,7 @@
     <p class="sub" id="lockWait" hidden></p>
     <button class="btn ghost" id="lockAskBtn" type="button" hidden>Ask your teacher to let you back in</button>
     <button class="btn" id="resumeBtn">Go back to full screen</button>
+    <button class="btn ghost" id="lockLeaveBtn" type="button" hidden>Leave for now</button>
     <p class="fine warn" id="lockErr" hidden></p>
     <p class="fine" id="lockCount"></p>
   </div>
@@ -1109,7 +1120,7 @@
       <form id="newRoomForm">
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
-          <label class="fine casualcheck" id="atHomeRow"><input type="checkbox" id="newRoomAtHome"> Let students work on this at home <span class="q" tabindex="0" data-tip="No full screen and no locking: students can close the page and come back to it, on any computer, until you end the session. Their writing is kept on the server as they go.">?</span></label>
+          <label class="fine casualcheck" id="atHomeRow"><input type="checkbox" id="newRoomAtHome"> Let students work on this at home <span class="q" tabindex="0" data-tip="Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click (you still see each time they left), or press Leave for now and come back later, on any computer, until you end the session.">?</span></label>
           <label class="fine casualcheck"><input type="checkbox" id="newRoomCasual"> Casual session <span class="q" tabindex="0" data-tip="No name or class needed: anyone who types the Entry Phrase comes straight in, with no waiting room.">?</span></label>
 
           <div class="formrow">
@@ -1226,7 +1237,7 @@
 
       <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
       <section class="panel tint-mint" id="secPeople" style="order:3">
-        <div class="panelhead"><h3 class="sect">Students</h3></div>
+        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Two marks on each row. The lock: open and green, they can still write; closed, they can’t (handed in, paused, or the session is over); red, they left the page and are locked out. The eye: open and green, they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3></div>
         <div id="peopleList"></div>
       </section>
 
@@ -2258,8 +2269,10 @@
     $('readyRoom').hidden = !inRoom;
     // Say only the rules this teacher has switched on.
     var rules = [];
-    if (inRoom && roomInfo && roomInfo.atHome) rules.push('You can work on this at home: close the page whenever you like and come back to it, on any computer, until your teacher ends the session');
-    if (P().lockOnLeave) rules.push('Writing opens full screen. Leaving it \u2014 another tab, another app, or Esc \u2014 locks the page' + (inRoom ? ', and your teacher sees each time' : ''));
+    if (inRoom && roomInfo && roomInfo.atHome) rules.push('You can work on this at home. Press Leave for now whenever you like, and come back to it, on any computer, until your teacher ends the session');
+    var homeRules = inRoom && roomInfo && roomInfo.atHome;
+    if (P().lockOnLeave) rules.push(homeRules ? 'Writing opens full screen. Leaving it covers your writing until you go back to full screen, and your teacher sees each time'
+      : 'Writing opens full screen. Leaving it \u2014 another tab, another app, or Esc \u2014 locks the page' + (inRoom ? ', and your teacher sees each time' : ''));
     if (P().blockPaste) rules.push('You can cut, copy and paste within your writing, but nothing can be pasted in from elsewhere');
     if (inRoom) rules.push('Your teacher can see what you’ve written so far while the session runs');
     $('readyRules').textContent = rules.length ? rules.join('. ') + '.' : '';
@@ -2823,6 +2836,7 @@
       writing = true;
       locked = false;
       $('doneBtn').textContent = mode === 'room' && !previewing ? 'Hand in' : 'Done';
+      $('leaveNowBtn').hidden = !(mode === 'room' && !previewing && roomInfo && roomInfo.atHome);
       pad.spellcheck = P().spellcheck !== 'off';
       $('count').hidden = !P().showCount;
       pad.value = previewing ? '' : load(textKey()) || '';
@@ -2857,8 +2871,9 @@
     pad.blur();
     // In a writing session, only the teacher can let them back in (the
     // server says so); on your own, or on Jake's test accounts, it's one click.
-    var held = mode === 'room' && !previewing && !isTester(me.email);
+    var held = mode === 'room' && !previewing && !isTester(me.email) && !(roomInfo && roomInfo.atHome);
     $('resumeBtn').hidden = held;
+    $('lockLeaveBtn').hidden = !(mode === 'room' && !previewing && roomInfo && roomInfo.atHome);
     $('lockWait').hidden = !held;
     $('lockAskBtn').hidden = !held;
     $('lockAskBtn').disabled = false;
@@ -2882,7 +2897,7 @@
   function letBackIn() {
     $('lockAskBtn').hidden = true;
     $('lockWait').hidden = false;
-    $('lockWait').textContent = mode === 'room' && !previewing && !isTester(me.email) ? 'Your teacher let you back in.' : '';
+    $('lockWait').textContent = mode === 'room' && !previewing && !isTester(me.email) && !(roomInfo && roomInfo.atHome) ? 'Your teacher let you back in.' : '';
     $('lockWait').hidden = !$('lockWait').textContent;
     $('resumeBtn').hidden = false;
   }
@@ -2915,6 +2930,15 @@
     }).then(function () { resuming = false; });
   });
 
+  // At home: out of the writing for now, with everything sent to the server; Keep writing brings it back.
+  function leaveForNow() {
+    save();
+    report('idle');
+    stopPoll();
+    finishWriting(showReady);
+  }
+  $('leaveNowBtn').addEventListener('click', leaveForNow);
+  $('lockLeaveBtn').addEventListener('click', leaveForNow);
   $('doneBtn').addEventListener('click', function () {
     if (mode === 'room' && !previewing) { openHandIn(); return; }
     finishWriting(showReady);
@@ -4310,8 +4334,9 @@
     var listed = {};
     admitted.forEach(function (s) { listed[s.sub] = 1; });
     subs.forEach(function (x) { if (!listed[x.sub || x.email]) people.push({ s: null, x: x }); });
-    people.forEach(function (p) { p.name = p.s ? who(p.s.name, p.s.email) : who(p.x.name, p.x.email); p.email = (p.s ? p.s.email : p.x.email) || ''; });
-    people.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    people.forEach(function (p) { p.name = p.s ? who(p.s.name, p.s.email) : who(p.x.name, p.x.email); p.email = (p.s ? p.s.email : p.x.email) || ''; p.f = personFacts(room, state, p); });
+    // Whoever needs the teacher comes first; then everyone by name.
+    people.sort(function (a, b) { return a.f.rank - b.f.rank || a.name.localeCompare(b.name); });
     var nameCount = {};
     people.forEach(function (p) { nameCount[p.name] = (nameCount[p.name] || 0) + 1; });
 
@@ -4542,60 +4567,95 @@
     return 'tograde';
   }
 
-  // One student in a writing session: who they are, one colored status, and
-  // the one button for what to do next. Everything else is under ⋯, and the
-  // row itself opens their paper.
-  function personRow(room, state, p, showEmail) {
+  // One student in a writing session, at a glance: a padlock first (open,
+  // green: they can still write; closed: they can't, red if they're locked
+  // out), one plain line of where they are, and a button only when the
+  // teacher is needed. Everything else is under ⋯; the row opens the paper.
+  function personFacts(room, state, p) {
     var s = p.s, x = p.x, stage = x && x.stored ? paperStage(x) : null;
-    var writingAgain = s && !s.handedIn && !(state === 'ended' && !isLive(s));
-    var row = el('div', 'item person' + (stage ? ' click' : ''));
+    var ownLive = !!(s && s.email && room.own && room.own[s.email.toLowerCase()]);
+    // Once the session's over (and there's no own time still running), asking
+    // to be unlocked or being locked out no longer matters. (A student can be
+    // unlocked after their paper's handed back, to revise it.)
+    var over = state === 'ended' && !ownLive;
+    var paused = !!(s && (s.pausedAt || room.pausedAt));
+    var f = { stage: stage, over: over };
+    // Anyone let in who hasn't handed in (or was unlocked since) can still write, even after the session ends.
+    f.canWrite = !!(s && !s.handedIn && !s.lockedOut && !paused && state !== 'upcoming');
+    f.locked = !over && !!(s && s.lockedOut && !s.handedIn);
+    f.asks = !over && !!(s && s.askedAt && (s.handedIn || s.lockedOut));
+    // What the teacher should do, if anything (the most pressing first).
+    if (f.asks && s.handedIn) f.act = 'release';
+    else if (f.locked) f.act = 'unlock';
+    else if (!over && s && s.pausedAt && !s.handedIn) f.act = 'resume';
+    else if (stage === 'tograde') f.act = 'grade';
+    else if (stage === 'graded') f.act = 'handback';
+    f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' ? 0 : f.act === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
+    // The one line.
+    var gradeTxt = x && x.grade ? x.grade : '';
+    var warn = false, txt;
+    if (f.asks) { txt = s.handedIn ? '⚑ Asks to be unlocked' : '⚑ Asks to be let back in'; warn = true; }
+    else if (f.locked) { txt = 'Locked out: left the page'; warn = true; }
+    else if (!over && paused && s && !s.handedIn) txt = 'Paused';
+    else if (f.canWrite && isLive(s)) txt = 'Writing now';
+    else if (f.canWrite && s.away && !room.atHome) { txt = 'Off the page'; warn = true; }
+    else if (f.canWrite) txt = state === 'ended' && !x ? 'Didn’t hand in' : 'Not writing right now';
+    else if (stage === 'back' || stage === 'graded') txt = gradeTxt ? 'Graded: ' + gradeTxt : x.marked ? 'Marked up, no grade' : 'Not graded';
+    else if (x && !x.stored) { txt = 'Handed in, but not saved'; warn = true; }
+    else if (x) txt = 'Handed in';
+    else txt = state === 'ended' ? 'Didn’t hand in' : 'Not writing';
+    // Writing again after handing in (revising): say both.
+    if (f.canWrite && x && stage) txt += ' · revising' + (gradeTxt ? ' (graded ' + gradeTxt + ')' : '');
+    f.text = txt; f.warn = warn;
+    return f;
+  }
+  var LOCK_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 7.6-1.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  var LOCK_SHUT = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
+  var EYE_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>';
+  var EYE_SHUT = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20L20 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  function personRow(room, state, p, showEmail) {
+    var s = p.s, x = p.x, f = p.f || personFacts(room, state, p), stage = f.stage;
+    var row = el('div', 'item person' + (stage ? ' click' : '') + (f.canWrite ? ' canwrite' : ''));
+    var lk = el('span', 'lockmark ' + (f.canWrite ? 'open' : f.locked || f.asks ? 'bad' : 'shut'));
+    lk.innerHTML = f.canWrite ? LOCK_OPEN : LOCK_SHUT;
+    lk.title = f.canWrite ? 'Can still write' : f.locked ? 'Can’t write: locked out' : 'Can’t write';
+    lk.setAttribute('role', 'img');
+    lk.setAttribute('aria-label', lk.title);
+    row.appendChild(lk);
+    // The eye: whether they can see the grade and comments (their paper is handed back).
+    var eye = el('span', 'eyemark ' + (stage === 'back' ? 'open' : stage ? 'shut' : 'none'));
+    eye.innerHTML = stage === 'back' ? EYE_OPEN : stage ? EYE_SHUT : '';
+    if (stage) {
+      eye.title = stage === 'back' ? 'Can see your comments and grade' : 'Can’t see your comments or grade yet';
+      eye.setAttribute('role', 'img');
+      eye.setAttribute('aria-label', eye.title);
+    }
+    row.appendChild(eye);
     var w = el('div', 'who');
     w.appendChild(el('b', null, p.name));
     var line = el('span');
+    line.appendChild(el('em', f.warn ? 'warntext' : 'statustext', f.text));
     var bits = [];
     if (showEmail && p.email) bits.push(p.email);
     // The session's date is in the header, so a same-day hand-in needs only its time.
-    if (x) bits.push('Handed in ' + (new Date(x.at).toDateString() === new Date(room.startAt || x.at).toDateString() ? clock(x.at)
-      : new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
+    if (x && stage !== 'back') bits.push(new Date(x.at).toDateString() === new Date(room.startAt || x.at).toDateString() ? clock(x.at)
+      : new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
     var words = x ? x.words : s && s.words;
     if (words) bits.push(plural(words, 'word', 'words'));
-    line.textContent = bits.join(' · ');
+    if (bits.length) line.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
     var leaves = x ? x.leaves : s && s.leaves;
-    if (leaves) line.appendChild(el('em', 'warntext', (bits.length ? ' · ' : '') + 'left the page ' + leaves + '×'));
+    if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
     w.appendChild(line);
     row.appendChild(w);
 
-    // Once the session is over (and they have no own time still to come), or
-    // their paper is handed back, asking to be unlocked or being locked out
-    // no longer matters, so neither shows.
-    var over = !!(x && x.returnedAt) || (state === 'ended' && !(s && s.email && room.own && room.own[s.email.toLowerCase()]));
-    // One status, the most pressing first.
-    var tag;
-    if (!over && s && s.askedAt && (s.handedIn || s.lockedOut)) tag = ['flag', '⚑ Asks to be unlocked'];
-    else if (!over && s && s.lockedOut) tag = ['warn', 'Locked out'];
-    else if (!over && s && s.pausedAt && !s.handedIn) tag = ['warn', 'Paused'];
-    else if (writingAgain && s.away && !room.atHome) tag = ['warn', 'Off the page'];
-    else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
-    else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
-    else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
-    else if (stage === 'back') tag = null; // its own two bubbles, below
-    else if (x && !x.stored) tag = ['warn', 'Not saved'];
-    else tag = ['', state === 'ended' ? 'Didn’t hand in' : 'Not writing'];
-    if (tag) row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
-    // Graded and handed back are separate: a paper can go back ungraded, and
-    // still be graded or marked up afterwards.
-    if (stage === 'back') {
-      if (x.grade || x.marked) row.appendChild(el('span', 'pill status ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'));
-      row.appendChild(el('span', 'pill status back', '✓ Handed back'));
-    }
-
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     var main = null;
-    if (!over && s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
-    else if (!over && s && s.pausedAt && !s.handedIn) main = button('Resume', 'btn small', function () { roomAction('resume', [s.sub]); });
-    else if (stage === 'tograde' || (stage === 'back' && !x.grade)) main = button('Grade', 'btn small' + (stage === 'tograde' ? ' tograde' : ''), open);
-    else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
+    if (f.act === 'release') main = button('Unlock', 'btn small', function () { roomAction('release', [s.sub]); });
+    else if (f.act === 'unlock') main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
+    else if (f.act === 'resume') main = button('Resume', 'btn small', function () { roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []); });
+    else if (f.act === 'grade') main = button('Grade', 'btn small tograde', open);
+    else if (f.act === 'handback') main = button('Hand back', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
     });
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
@@ -4609,12 +4669,13 @@
     menu.appendChild(sum);
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
+    if (stage === 'back') item('Open the paper', open);
     if (stage === 'tograde') item('Hand back ungraded', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
     });
     if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
-    if (s && s.handedIn) item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
-    if (!over && s && !s.handedIn && !s.pausedAt) item('Pause their time', function () { roomAction('pause', [s.sub]); });
+    if (s && s.handedIn && f.act !== 'release') item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
+    if (!f.over && s && !s.handedIn && !s.pausedAt) item('Pause their time', function () { roomAction('pause', [s.sub]); });
     if (s && s.email) {
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change own time' : 'Own time', function () { openOwnTime(em, p.name); });
@@ -4662,8 +4723,8 @@
     $('roomMenu').open = false;
     var on = !teacherRoom.atHome;
     if (!await ask(on
-      ? { title: 'Let students work on “' + teacherRoom.title + '” at home?', text: 'No full screen and no locking: they can close the page and come back to it, on any computer, until you end the session. Anyone locked out now is let back in.', ok: 'Let them work at home' }
-      : { title: 'Back to class rules?', text: 'Writing opens full screen again, and leaving the page locks it, as your Settings say.', ok: 'Back to class rules' })) return;
+      ? { title: 'Let students work on “' + teacherRoom.title + '” at home?', text: 'Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click, or press Leave for now and come back later, on any computer, until you end the session. Anyone locked out now is let back in.', ok: 'Let them work at home' }
+      : { title: 'Back to class rules?', text: 'Leaving the page locks them out again until you let them back in.', ok: 'Back to class rules' })) return;
     roomAction('atHome', [], { on: on });
   });
   $('pauseAllBtn').addEventListener('click', function () {
