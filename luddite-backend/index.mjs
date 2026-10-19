@@ -903,6 +903,63 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
   }
 
+  // ---- Chat: a session's teacher and one student, while the student writes ----
+  // (Before the teachers-only line below: students read and send here too.)
+  // Each pair's messages are one item (luddite:chat:<code>:<sub>). The room's
+  // student entry keeps when each side last wrote and last read (chatT/chatS,
+  // seenT/seenS), so both pages learn of a new message from what they already
+  // poll (the session page, the heartbeat) and fetch the messages only then.
+
+  // GET /luddite/chat?code=&sub= -- the messages (sub: the teacher's pick;
+  // a student gets their own). Reading marks them read.
+  if (path === '/luddite/chat' && method === 'GET') {
+    const code = cleanCode(q.code);
+    const room = await getRoom(code);
+    const asTeacher = !!q.sub && ownsRoom(room, info, role);
+    const sub = asTeacher ? String(q.sub) : me.sub;
+    const s = room.students[sub];
+    if (!s || s.status !== 'admitted') throw new HttpError(404, 'not_in_room');
+    const { state } = await readItem('luddite:chat:' + code + ':' + sub);
+    const msgs = (state && state.msgs) || [];
+    const last = msgs.length ? msgs[msgs.length - 1].at : 0;
+    const seenKey = asTeacher ? 'seenT' : 'seenS';
+    if (last && (s[seenKey] || 0) < last) {
+      await mutate('luddite:room:' + code, (r) => {
+        const x = r && r.students[sub];
+        if (!x || (x[seenKey] || 0) >= last) return undefined;
+        return { ...r, students: { ...r.students, [sub]: { ...x, [seenKey]: last } } };
+      });
+    }
+    return respond(200, { msgs });
+  }
+
+  // PUT /luddite/chat { code, text, to?, hand? } -- send a message. The teacher sends
+  // to one student (to: their sub) or everyone let in (to: 'all'); a student
+  // sends to their teacher, as a raised hand with hand: true (handAt on their
+  // entry, so the session page can say "Hand raised").
+  if (path === '/luddite/chat' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const text = String(body.text || '').trim().slice(0, MAX_CHAT_CHARS);
+    if (!text) throw new HttpError(400, 'empty');
+    const room = await getRoom(code);
+    const asTeacher = !!body.to && ownsRoom(room, info, role);
+    const admitted = (sub) => !!(room.students[sub] && room.students[sub].status === 'admitted');
+    const subs = !asTeacher ? [me.sub] : body.to === 'all' ? Object.keys(room.students).filter(admitted) : [String(body.to)];
+    if (!subs.length || !subs.every(admitted)) throw new HttpError(404, 'not_in_room');
+    const at = Date.now();
+    const hand = !asTeacher && body.hand === true;
+    const msg = { from: asTeacher ? 'teacher' : 'student', text, at, ...(asTeacher && body.to === 'all' ? { all: true } : {}), ...(hand ? { hand: true } : {}) };
+    await inBatches(subs, (sub) => mutate('luddite:chat:' + code + ':' + sub, (c) => ({ code, sub, msgs: [...((c && c.msgs) || []), msg].slice(-MAX_CHAT_MSGS) })));
+    const sideKey = asTeacher ? 'chatT' : 'chatS', seenKey = asTeacher ? 'seenT' : 'seenS';
+    await mutate('luddite:room:' + code, (r) => {
+      if (!r) return undefined;
+      const students = { ...r.students };
+      subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], [sideKey]: at, [seenKey]: at, ...(hand ? { handAt: at } : {}) }; });
+      return { ...r, students };
+    });
+    return respond(200, { msg, to: subs.length });
+  }
+
   if (!isTeacher) return respond(403, { error: 'teachers_only' });
 
   // ---- Teachers ----
@@ -1017,62 +1074,6 @@ async function routeLuddite(event, method, path, info) {
     const drafts = {};
     subs.forEach((sub, i) => { const d = got[i].state; drafts[sub] = d ? { text: d.text, at: d.at } : null; });
     return respond(200, { drafts });
-  }
-
-  // ---- Chat: a session's teacher and one student, while the student writes ----
-  // Each pair's messages are one item (luddite:chat:<code>:<sub>). The room's
-  // student entry keeps when each side last wrote and last read (chatT/chatS,
-  // seenT/seenS), so both pages learn of a new message from what they already
-  // poll (the session page, the heartbeat) and fetch the messages only then.
-
-  // GET /luddite/chat?code=&sub= -- the messages (sub: the teacher's pick;
-  // a student gets their own). Reading marks them read.
-  if (path === '/luddite/chat' && method === 'GET') {
-    const code = cleanCode(q.code);
-    const room = await getRoom(code);
-    const asTeacher = !!q.sub && ownsRoom(room, info, role);
-    const sub = asTeacher ? String(q.sub) : me.sub;
-    const s = room.students[sub];
-    if (!s || s.status !== 'admitted') throw new HttpError(404, 'not_in_room');
-    const { state } = await readItem('luddite:chat:' + code + ':' + sub);
-    const msgs = (state && state.msgs) || [];
-    const last = msgs.length ? msgs[msgs.length - 1].at : 0;
-    const seenKey = asTeacher ? 'seenT' : 'seenS';
-    if (last && (s[seenKey] || 0) < last) {
-      await mutate('luddite:room:' + code, (r) => {
-        const x = r && r.students[sub];
-        if (!x || (x[seenKey] || 0) >= last) return undefined;
-        return { ...r, students: { ...r.students, [sub]: { ...x, [seenKey]: last } } };
-      });
-    }
-    return respond(200, { msgs });
-  }
-
-  // PUT /luddite/chat { code, text, to?, hand? } -- send a message. The teacher sends
-  // to one student (to: their sub) or everyone let in (to: 'all'); a student
-  // sends to their teacher, as a raised hand with hand: true (handAt on their
-  // entry, so the session page can say "Hand raised").
-  if (path === '/luddite/chat' && method === 'PUT') {
-    const code = cleanCode(body.code);
-    const text = String(body.text || '').trim().slice(0, MAX_CHAT_CHARS);
-    if (!text) throw new HttpError(400, 'empty');
-    const room = await getRoom(code);
-    const asTeacher = !!body.to && ownsRoom(room, info, role);
-    const admitted = (sub) => !!(room.students[sub] && room.students[sub].status === 'admitted');
-    const subs = !asTeacher ? [me.sub] : body.to === 'all' ? Object.keys(room.students).filter(admitted) : [String(body.to)];
-    if (!subs.length || !subs.every(admitted)) throw new HttpError(404, 'not_in_room');
-    const at = Date.now();
-    const hand = !asTeacher && body.hand === true;
-    const msg = { from: asTeacher ? 'teacher' : 'student', text, at, ...(asTeacher && body.to === 'all' ? { all: true } : {}), ...(hand ? { hand: true } : {}) };
-    await inBatches(subs, (sub) => mutate('luddite:chat:' + code + ':' + sub, (c) => ({ code, sub, msgs: [...((c && c.msgs) || []), msg].slice(-MAX_CHAT_MSGS) })));
-    const sideKey = asTeacher ? 'chatT' : 'chatS', seenKey = asTeacher ? 'seenT' : 'seenS';
-    await mutate('luddite:room:' + code, (r) => {
-      if (!r) return undefined;
-      const students = { ...r.students };
-      subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], [sideKey]: at, [seenKey]: at, ...(hand ? { handAt: at } : {}) }; });
-      return { ...r, students };
-    });
-    return respond(200, { msg, to: subs.length });
   }
 
   // ---- Marking up handed-in work ----
