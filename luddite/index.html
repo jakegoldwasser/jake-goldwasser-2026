@@ -176,6 +176,10 @@
   .classcard .info { flex: 1; min-width: 200px; }
   .classcard h4 { font: 400 20px Literata, Georgia, serif; margin: 0; }
   .classcard .meta { color: var(--muted); font-size: 13px; }
+  .classcard .grip { cursor: grab; touch-action: none; user-select: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 4px 2px; border-radius: 6px; }
+  .classcard .grip:hover, .classcard .grip:focus-visible { color: var(--ink); background: var(--hover); }
+  .classcard.dragging { opacity: .7; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+  .classcard.dragging .grip { cursor: grabbing; }
   .tag { display: inline-block; font-size: 12.5px; font-weight: 600; background: var(--paper); box-shadow: inset 0 0 0 1px var(--rule); border-radius: 6px; padding: 1px 8px; }
   .overlay { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; overflow-y: auto;
     background: color-mix(in srgb, var(--paper) 90%, transparent); }
@@ -230,6 +234,24 @@
   #rubricList .ritem { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
   #rubricList .ritem b { flex: 1; font: 600 15px var(--ui); }
   #rubricBox .box { max-width: 980px; }
+  #rubricList .ritem .k { font: 400 14px var(--ui); color: var(--muted); }
+  /* A rubric brought in whole: pasted (paragraphs and tables) or a PDF's pages. */
+  .rubricdoc { font: 400 15px/1.45 var(--ui); text-align: left; }
+  .rubricdoc p { margin: 0 0 8px; white-space: pre-wrap; }
+  .rubricdoc p.rh { font-weight: 600; font-size: 18px; }
+  .rubricdoc table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 14px; }
+  .rubricdoc td { border: 1px solid var(--edge); padding: 6px 8px; vertical-align: top; white-space: pre-wrap; }
+  .rubricdoc img.rpage { display: block; width: 100%; max-width: 760px; margin: 0 auto 12px; box-shadow: inset 0 0 0 1px var(--rule); border: 1px solid var(--rule); background: #fff; }
+  .rubricpaste { min-height: 180px; max-height: 52vh; overflow-y: auto; margin-top: 12px; padding: 12px 14px; border: 1.5px solid var(--ink); border-radius: 10px; background: var(--card); }
+  .rubricpaste:empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; }
+  #reFileView { max-height: 52vh; overflow-y: auto; margin-top: 10px; }
+  #reFileView:empty { display: none; }
+  .rvbody { max-height: 66vh; overflow-y: auto; margin-top: 12px; }
+  .printrub { display: inline-flex; gap: 6px; align-items: center; margin: 0 6px 0 0; }
+  .pp.prub .rtable { font-size: 10pt; }
+  .pp.prub img.rpage { max-width: 100%; max-height: 9.3in; width: auto; margin: 0 auto; border: 0; break-after: page; }
+  .pp.prub img.rpage:last-child { break-after: auto; }
+  @media print { .rubricdoc td { border-color: #999; } .pp.prub { break-before: page; } }
   .redit { width: 100%; border-collapse: collapse; margin-top: 10px; }
   .redit th, .redit td { border: 1px solid var(--edge); padding: 4px; vertical-align: top; }
   .redit input, .redit textarea { width: 100%; box-sizing: border-box; border: 0; background: transparent; font: 400 14px/1.35 var(--ui); color: var(--ink); padding: 4px; resize: vertical; }
@@ -1022,7 +1044,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Messages">
@@ -1226,6 +1248,7 @@
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
+            <button type="button" id="rubricShowBtn" hidden>Show students the rubric while they write</button>
             <button type="button" id="reopenBtn">Open it again now</button>
             <button type="button" id="printAllRoom">Print all papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
@@ -1303,6 +1326,7 @@
       <button class="linkish" id="printBack">&larr; Back</button>
       <span class="grow"></span>
       <span class="savestate" id="printStatus"></span>
+      <label class="fine printrub" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
       <button class="btn small" id="printGo" disabled>Print</button>
     </div>
     <div class="head"><h2 id="printTitle"></h2></div>
@@ -1380,6 +1404,15 @@
       <form class="chatsend" id="tChatForm" autocomplete="off"><input class="field" id="tChatInput" maxlength="1000" aria-label="Your message" placeholder="Message this student"><button class="btn small" type="submit">Send</button></form>
     </div>
     <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><button class="btn ghost" id="liveClose" type="button">Close</button></div>
+  </div>
+</div>
+
+<!-- A rubric to read: a student's while they write (when the teacher shows it), or a teacher's from a session -->
+<div class="handin livebox" id="rubricView" hidden>
+  <div class="card">
+    <h2 id="rvTitle" style="margin:0">Rubric</h2>
+    <div class="rubricdoc rvbody" id="rvBody"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="rvClose" type="button">Back to my writing</button></div>
   </div>
 </div>
 
@@ -1493,13 +1526,32 @@
 <div class="overlay no-print" id="rubricBox" hidden>
   <div class="box">
     <h2 id="reTitle">New rubric</h2>
+    <div class="segctl" id="reKind" style="margin-top:10px">
+      <button type="button" data-k="grid">Make a grid</button>
+      <button type="button" data-k="paste">Paste it in</button>
+      <button type="button" data-k="pdf">Upload a PDF</button>
+      <button type="button" data-k="gdoc">From Google Docs</button>
+    </div>
     <input class="field wide" id="reName" maxlength="80" placeholder="Rubric name, e.g. Argument essay" aria-label="Rubric name" style="margin-top:10px">
-    <label class="fine" style="display:flex; gap:8px; align-items:center; justify-content:flex-start; margin-top:10px"><input type="checkbox" id="reWeighted"> Each skill counts for a percent of the grade</label>
-    <div style="overflow-x:auto"><table class="redit" id="reTable"></table></div>
-    <div class="reditbar">
-      <button class="btn small ghost" type="button" id="reAddRow">+ Skill</button>
-      <button class="btn small ghost" type="button" id="reAddLevel">+ Level</button>
-      <span class="fine" id="reTotal" style="margin:0"></span>
+    <div id="reGrid">
+      <label class="fine" style="display:flex; gap:8px; align-items:center; justify-content:flex-start; margin-top:10px"><input type="checkbox" id="reWeighted"> Each skill counts for a percent of the grade</label>
+      <div style="overflow-x:auto"><table class="redit" id="reTable"></table></div>
+      <div class="reditbar">
+        <button class="btn small ghost" type="button" id="reAddRow">+ Skill</button>
+        <button class="btn small ghost" type="button" id="reAddLevel">+ Level</button>
+        <span class="fine" id="reTotal" style="margin:0"></span>
+      </div>
+    </div>
+    <div class="rubricdoc rubricpaste" id="rePaste" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The rubric" data-placeholder="Paste the rubric here. Tables come in as tables." hidden></div>
+    <div id="reFile" hidden>
+      <div class="row" style="justify-content:flex-start; margin-top:12px">
+        <button class="btn small ghost" type="button" id="rePdfBtn">Choose a PDF…</button>
+        <input type="file" id="rePdfFile" accept="application/pdf,.pdf" hidden>
+        <button class="btn small ghost" type="button" id="reGdocBtn">Choose a Google Doc…</button>
+        <button class="btn small ghost" type="button" id="reGdocAgain" hidden>Get the latest from the Google Doc</button>
+        <span class="fine" id="reFileName" style="margin:0"></span>
+      </div>
+      <div class="rubricdoc" id="reFileView"></div>
     </div>
     <p class="fine warn" id="reNote" hidden></p>
     <div class="row" style="justify-content:flex-end; margin-top:16px">
@@ -2596,7 +2648,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session: hand in now, with everything written
@@ -2889,6 +2941,7 @@
     if (!writing || locked || leavingOnPurpose || !P().lockOnLeave) return;
     locked = true;
     if (!$('classWorkBox').hidden) closeClassWork();
+    if (!$('rubricView').hidden) closeRubricView();
     save();
     var n = Number(load(leavesKey()) || 0) + 1;
     if (!previewing) store(leavesKey(), String(n));
@@ -2962,7 +3015,23 @@
     var on = writing && mode === 'room' && !previewing && roomInfo && roomInfo.shareWork;
     $('classWorkBtn').hidden = !on;
     if (!on && !$('classWorkBox').hidden) closeClassWork();
+    syncRubricW();
   }
+  // The rubric: a button beside Hand in while the teacher shows it (roomInfo.rubric).
+  var rubricWShown = '';
+  function syncRubricW() {
+    var rb = writing && mode === 'room' && !previewing && roomInfo && roomInfo.rubric;
+    $('rubricWBtn').hidden = !rb;
+    var sig = rb ? JSON.stringify(rb) : '';
+    // Hidden, or changed, while it's open: close it (or draw the new one).
+    if (!$('rubricView').hidden && $('rubricView').dataset.student && sig !== rubricWShown) { if (rb) openRubricW(); else closeRubricView(); }
+  }
+  function openRubricW() {
+    if (!roomInfo || !roomInfo.rubric) return;
+    rubricWShown = JSON.stringify(roomInfo.rubric);
+    openRubricView(roomInfo.rubric, roomCode, true);
+  }
+  $('rubricWBtn').addEventListener('click', openRubricW);
   async function loadClassWork() {
     try { cwData = (await api('/luddite/classwork?code=' + encodeURIComponent(roomCode))).work || []; }
     catch (e) { if (e.message === 'not_shared') { if (roomInfo) roomInfo.shareWork = false; syncClassWork(); } return; }
@@ -3024,6 +3093,7 @@
   });
   function finishWriting(then) {
     if (!$('classWorkBox').hidden) closeClassWork();
+    if (!$('rubricView').hidden) closeRubricView();
     leavingOnPurpose = true;
     save();
     writing = false;
@@ -3376,6 +3446,7 @@
     rubrics.forEach(function (rb) {
       var row = el('div', 'ritem');
       row.appendChild(el('b', null, rb.name));
+      row.appendChild(el('span', 'k', rubricKindLabel(rb)));
       row.appendChild(button('Edit', 'linkish', function () { editRubric(rb); }));
       row.appendChild(button('Delete', 'linkish', async function () {
         if (!await ask({ title: 'Delete the rubric “' + rb.name + '”?', text: 'Papers already marked with it keep their rubric.', ok: 'Delete', danger: true })) return;
@@ -3388,18 +3459,342 @@
     try { rubrics = (await api('/luddite/rubrics', { rubrics: next })).rubrics; drawRubricList(); return true; }
     catch (e) { tell('Couldn’t save the rubrics', 'Try again.'); return false; }
   }
-  var editing = null;
-  function editRubric(rb) {
-    editing = rb ? JSON.parse(JSON.stringify(rb)) : { name: '', weighted: false, levels: ['Beginning', 'Developing', 'Proficient', 'Exemplary'],
+  function rubricKindLabel(rb) {
+    return rb.kind !== 'doc' ? 'Grid' : rb.docId ? 'Google Doc' : rb.fileId ? 'PDF' : 'Pasted';
+  }
+  // A rubric is a grid made here (`levels`, `rows`), or one brought in whole
+  // (kind 'doc'): pasted (`blocks`), or a PDF (`fileId`), which is also what a
+  // Google Doc is saved as (`docId`, so the latest can be fetched again).
+  // `editKind` is how this one is being made: grid, paste, pdf or gdoc.
+  var editing = null, editKind = 'grid', afterRubricSave = null;
+  function freshGrid() {
+    return { name: '', weighted: false, levels: ['Beginning', 'Developing', 'Proficient', 'Exemplary'],
       rows: [{ skill: '', cells: [] }, { skill: '', cells: [] }, { skill: '', cells: [] }] };
+  }
+  function editRubric(rb, then) {
+    afterRubricSave = then || null;
+    editing = rb ? JSON.parse(JSON.stringify(rb)) : freshGrid();
+    editKind = !rb || rb.kind !== 'doc' ? 'grid' : rb.docId ? 'gdoc' : rb.fileId ? 'pdf' : 'paste';
     $('reTitle').textContent = rb ? 'Edit rubric' : 'New rubric';
+    $('reKind').hidden = !!rb;
     $('reName').value = editing.name;
     $('reWeighted').checked = !!editing.weighted;
-    $('reNote').hidden = true;
-    drawRubricEditor();
+    $('rePaste').innerHTML = '';
+    if (editKind === 'paste') $('rePaste').appendChild(blocksNode(editing.blocks || []));
+    $('reFileView').innerHTML = '';
+    $('reFileName').textContent = '';
+    if (editing.fileId) drawRubricInto($('reFileView'), editing, '');
+    showEditKind();
     $('rubricBox').hidden = false;
     $('reName').focus();
   }
+  function showEditKind() {
+    each('#reKind button', function (b) { b.classList.toggle('on', b.getAttribute('data-k') === editKind); });
+    $('reGrid').hidden = editKind !== 'grid';
+    $('rePaste').hidden = editKind !== 'paste';
+    $('reFile').hidden = editKind !== 'pdf' && editKind !== 'gdoc';
+    $('rePdfBtn').hidden = editKind !== 'pdf';
+    $('reGdocBtn').hidden = editKind !== 'gdoc';
+    $('reGdocBtn').textContent = editing.docId ? 'Choose a different Google Doc…' : 'Choose a Google Doc…';
+    $('reGdocAgain').hidden = editKind !== 'gdoc' || !editing.docId;
+    $('reNote').hidden = true;
+    if (editKind === 'grid') {
+      if (!editing.levels) { var g = freshGrid(); editing.levels = g.levels; editing.rows = g.rows; }
+      drawRubricEditor();
+    }
+  }
+  each('#reKind button', function (b) {
+    b.addEventListener('click', function () {
+      editKind = b.getAttribute('data-k');
+      showEditKind();
+      if (editKind === 'paste') $('rePaste').focus();
+    });
+  });
+
+  // ---- Rubrics brought in whole: pasted, a PDF, or a Google Doc ----
+  // Pasted rubrics keep only paragraphs and tables of plain text, so nothing
+  // from the clipboard but words ever reaches a student's page.
+  var BLOCK_TAGS = /^(P|DIV|H[1-6]|LI|UL|OL|BLOCKQUOTE|PRE|SECTION|ARTICLE|HEADER|FOOTER|TR|DL|DT|DD|CENTER)$/;
+  function textOf(n) {
+    if (n.nodeType === 3) return n.nodeValue.replace(/\s+/g, ' ');
+    if (n.nodeType !== 1 || /^(STYLE|SCRIPT|META|TITLE)$/.test(n.tagName)) return '';
+    if (n.tagName === 'BR') return '\n';
+    var t = '';
+    Array.prototype.forEach.call(n.childNodes, function (c) {
+      var x = textOf(c);
+      if (c.nodeType === 1 && BLOCK_TAGS.test(c.tagName) && t && !/\n$/.test(t)) t += '\n';
+      t += x;
+    });
+    return t;
+  }
+  function blocksFrom(root) {
+    var out = [], line = '';
+    function flush() { line.split('\n').forEach(function (l) { l = l.trim(); if (l) out.push({ p: l }); }); line = ''; }
+    function hasBlock(n) { return !!(n.querySelector && n.querySelector('table, p, div, h1, h2, h3, h4, h5, h6, li, tr')); }
+    function walk(n) {
+      Array.prototype.forEach.call(n.childNodes, function (c) {
+        if (c.nodeType === 3) { line += c.nodeValue.replace(/\s+/g, ' '); return; }
+        if (c.nodeType !== 1 || /^(STYLE|SCRIPT|META|TITLE|COLGROUP)$/.test(c.tagName)) return;
+        if (c.tagName === 'BR') { line += '\n'; return; }
+        if (c.tagName === 'TABLE') {
+          flush();
+          var rows = Array.prototype.map.call(c.rows, function (tr) {
+            return Array.prototype.map.call(tr.cells, function (td) { return textOf(td).replace(/[ \t]*\n[ \t]*/g, '\n').trim(); });
+          }).filter(function (r) { return r.some(Boolean); });
+          if (rows.length) out.push({ table: rows });
+          return;
+        }
+        if (BLOCK_TAGS.test(c.tagName) || hasBlock(c)) {
+          flush();
+          if (hasBlock(c)) { walk(c); flush(); return; }
+          var t = textOf(c).trim();
+          if (t) t.split('\n').forEach(function (l) { l = l.trim(); if (l) out.push(/^H[1-6]$/.test(c.tagName) || c.className === 'rh' ? { p: l, h: true } : { p: l }); });
+          return;
+        }
+        line += textOf(c);
+      });
+    }
+    walk(root);
+    flush();
+    return out;
+  }
+  // Line breaks inside a paragraph or cell are <br>s, so the editor reads them back.
+  function linesInto(n, text) {
+    String(text).split('\n').forEach(function (l, i) { if (i) n.appendChild(el('br')); n.appendChild(document.createTextNode(l)); });
+    return n;
+  }
+  function blocksNode(blocks) {
+    var f = document.createDocumentFragment();
+    blocks.forEach(function (b) {
+      if (b.table) {
+        var t = el('table');
+        b.table.forEach(function (row) { var tr = el('tr'); row.forEach(function (c) { tr.appendChild(linesInto(el('td'), c)); }); t.appendChild(tr); });
+        f.appendChild(t);
+      } else f.appendChild(linesInto(el('p', b.h ? 'rh' : null), b.p));
+    });
+    return f;
+  }
+  $('rePaste').addEventListener('paste', function (e) {
+    var cd = e.clipboardData;
+    if (!cd) return;
+    e.preventDefault();
+    var html = cd.getData('text/html'), blocks;
+    if (html) blocks = blocksFrom(new DOMParser().parseFromString(html, 'text/html').body);
+    else blocks = String(cd.getData('text/plain') || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).map(function (l) { return { p: l }; });
+    if (!blocks.length) return;
+    var wrap = el('div');
+    wrap.appendChild(blocksNode(blocks));
+    // insertHTML keeps the browser's own Undo working.
+    if (!document.execCommand('insertHTML', false, wrap.innerHTML)) $('rePaste').appendChild(blocksNode(blocks));
+  });
+
+  // PDFs are drawn with pdf.js (from cdnjs, loaded the first time one is needed).
+  var PDFJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var pdfjsReady = null;
+  function loadPdfjs() {
+    if (!pdfjsReady) pdfjsReady = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = PDFJS_SRC;
+      sc.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_SRC.replace('pdf.min.js', 'pdf.worker.min.js'); resolve(window.pdfjsLib); };
+      sc.onerror = function () { pdfjsReady = null; reject(new Error('pdfjs')); };
+      document.head.appendChild(sc);
+    });
+    return pdfjsReady;
+  }
+  function b64ToBytes(b64) { var bin = atob(b64), out = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+  function bytesToB64(bytes) {
+    var bin = '', u = new Uint8Array(bytes);
+    for (var i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  // A PDF's pages as images, sharp enough to print.
+  async function pdfPageImages(b64) {
+    var lib = await loadPdfjs();
+    var doc = await lib.getDocument({ data: b64ToBytes(b64) }).promise;
+    var out = [];
+    for (var i = 1; i <= Math.min(doc.numPages, 40); i++) {
+      var page = await doc.getPage(i), vp = page.getViewport({ scale: 2 });
+      var c = document.createElement('canvas');
+      c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      out.push(c.toDataURL('image/png'));
+    }
+    return out;
+  }
+  // Pages by fileId, so a session's rubric is fetched and drawn once.
+  var rubricPages = {};
+  function rubricFilePages(rb, code) {
+    if (rb._b64) return pdfPageImages(rb._b64);
+    if (!rubricPages[rb.fileId]) {
+      rubricPages[rb.fileId] = api('/luddite/rubricfile?id=' + encodeURIComponent(rb.fileId) + (code ? '&code=' + encodeURIComponent(code) : ''))
+        .then(function (d) { return pdfPageImages(d.data); });
+      rubricPages[rb.fileId].catch(function () { delete rubricPages[rb.fileId]; });
+    }
+    return rubricPages[rb.fileId];
+  }
+  function pageImg(src, i) { var im = el('img', 'rpage'); im.src = src; im.alt = 'Rubric, page ' + (i + 1); return im; }
+  // Draws any rubric to read (not to score): a grid, pasted text, or a PDF's
+  // pages. `code` is the writing session it's shown in, which lets a student fetch its PDF.
+  function drawRubricInto(host, rb, code, scores) {
+    host.innerHTML = '';
+    if (rb.kind !== 'doc') { host.appendChild(rubricGrid(rb, scores)); return Promise.resolve(); }
+    if (!rb.fileId) { host.appendChild(blocksNode(rb.blocks || [])); return Promise.resolve(); }
+    var wait = el('p', 'fine', 'Loading the rubric…');
+    host.appendChild(wait);
+    return rubricFilePages(rb, code).then(function (pages) {
+      host.innerHTML = '';
+      pages.forEach(function (src, i) { host.appendChild(pageImg(src, i)); });
+    }, function () { wait.textContent = 'Couldn’t load the rubric. Try again in a moment.'; });
+  }
+  // A grid rubric as a table to read, with the levels picked (if any) marked.
+  function rubricGrid(rb, scores) {
+    var t = el('table', 'rtable'), thead = el('thead'), hr = el('tr');
+    hr.appendChild(el('th', null, 'Skill'));
+    rb.levels.forEach(function (l) { hr.appendChild(el('th', null, l)); });
+    if (rb.weighted) hr.appendChild(el('th', 'w', '% of grade'));
+    thead.appendChild(hr); t.appendChild(thead);
+    var tb = el('tbody');
+    rb.rows.forEach(function (row, i) {
+      var tr = el('tr');
+      tr.appendChild(el('td', 'skill', row.skill));
+      rb.levels.forEach(function (l, j) { var td = el('td', 'cell' + (scores && scores[i] === j ? ' on' : ''), row.cells[j] || ''); td.title = l; tr.appendChild(td); });
+      if (rb.weighted) tr.appendChild(el('td', 'w', (row.weight || 0) + '%'));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    return t;
+  }
+  function openRubricView(rb, code, forStudent) {
+    $('rubricView').dataset.student = forStudent ? '1' : '';
+    $('rvTitle').textContent = rb.name || 'Rubric';
+    $('rvClose').textContent = forStudent ? 'Back to my writing' : 'Close';
+    $('rubricView').hidden = false;
+    drawRubricInto($('rvBody'), rb, code);
+  }
+  function closeRubricView() {
+    $('rubricView').hidden = true;
+    if (writing && !locked) pad.focus();
+  }
+  $('rvClose').addEventListener('click', closeRubricView);
+  $('rubricView').addEventListener('click', function (e) { if (e.target === $('rubricView')) closeRubricView(); });
+
+  // A picked or fetched PDF, held until the rubric is saved.
+  async function takePdf(bytes, name) {
+    if (bytes.byteLength > 2.5 * 1024 * 1024) { tell('That PDF is too big', 'A rubric’s PDF can be up to 2.5 MB.'); return false; }
+    var b64 = bytesToB64(bytes);
+    var view = $('reFileView');
+    view.innerHTML = '';
+    view.appendChild(el('p', 'fine', 'Reading the PDF…'));
+    try { var pages = await pdfPageImages(b64); }
+    catch (e) { view.innerHTML = ''; tell('Couldn’t read that PDF', 'Try saving it again as a PDF, or paste the rubric in instead.'); return false; }
+    editing._b64 = b64;
+    editing.pages = pages.length;
+    view.innerHTML = '';
+    pages.forEach(function (src, i) { view.appendChild(pageImg(src, i)); });
+    if (!$('reName').value.trim() && name) $('reName').value = name.replace(/\.pdf$/i, '').slice(0, 80);
+    return true;
+  }
+  $('rePdfBtn').addEventListener('click', function () { $('rePdfFile').click(); });
+  $('rePdfFile').addEventListener('change', function () {
+    var f = $('rePdfFile').files && $('rePdfFile').files[0];
+    $('rePdfFile').value = '';
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = async function () {
+      if (await takePdf(r.result, f.name)) { delete editing.docId; $('reFileName').textContent = f.name; }
+    };
+    r.readAsArrayBuffer(f);
+  });
+
+  // Google Docs: Google's own file picker, signed in as the same account as
+  // Luddite (drive.file, so Luddite reaches only the doc picked); the doc
+  // comes in as a PDF, so it looks the way it does in Docs.
+  var GOOGLE_PROJECT_NUMBER = GOOGLE_CLIENT_ID.split('-')[0];
+  var PICKER_KEY = ''; // a browser API key from the Luddite Google Cloud project, for the Picker
+  var gapiReady = null;
+  function loadPicker() {
+    if (!gapiReady) gapiReady = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = 'https://apis.google.com/js/api.js';
+      sc.onload = function () { window.gapi.load('picker', { callback: resolve, onerror: reject }); };
+      sc.onerror = function () { gapiReady = null; reject(new Error('gapi')); };
+      document.head.appendChild(sc);
+    });
+    return gapiReady;
+  }
+  var docsToken = null; // { token, exp }
+  function docsAccess() {
+    if (docsToken && docsToken.exp > Date.now()) return Promise.resolve(docsToken.token);
+    return new Promise(function (resolve, reject) {
+      if (!(window.google && google.accounts && google.accounts.oauth2)) { reject(new Error('no_google')); return; }
+      google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'email https://www.googleapis.com/auth/drive.file',
+        hint: me.email,
+        callback: async function (resp) {
+          if (!resp.access_token) { reject(new Error('declined')); return; }
+          try {
+            var who = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + resp.access_token } })).json();
+            if (String(who.email || '').toLowerCase() !== me.email.toLowerCase()) { reject(new Error('other_account')); return; }
+          } catch (e) { reject(new Error('failed')); return; }
+          docsToken = { token: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) - 60) * 1000 };
+          resolve(resp.access_token);
+        },
+        error_callback: function () { reject(new Error('declined')); }
+      }).requestAccessToken();
+    });
+  }
+  function docsTrouble(e) {
+    if (e.message === 'declined') return;
+    if (e.message === 'other_account') { tell('That’s a different Google account', 'Choose the Google Doc from ' + me.email + ', the account you’re signed in to Luddite with.'); return; }
+    if (e.message === 'no_google' || e.message === 'gapi') { tell('Google didn’t load', 'Reload the page and try again.'); return; }
+    tell('Couldn’t get the Google Doc', 'Try again, or download it as a PDF and upload that.');
+  }
+  function pickDoc(token) {
+    return new Promise(function (resolve) {
+      var view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/vnd.google-apps.document,application/pdf').setMode(google.picker.DocsViewMode.LIST);
+      var b = new google.picker.PickerBuilder().addView(view).setOAuthToken(token).setAppId(GOOGLE_PROJECT_NUMBER)
+        .setOrigin(location.protocol + '//' + location.host).setTitle('Choose the rubric')
+        .setCallback(function (d) {
+          if (d.action === google.picker.Action.PICKED) resolve(d.docs[0]);
+          else if (d.action === google.picker.Action.CANCEL) resolve(null);
+        });
+      if (PICKER_KEY) b.setDeveloperKey(PICKER_KEY);
+      b.build().setVisible(true);
+    });
+  }
+  // A Google Doc (exported) or a PDF in Drive, as bytes.
+  async function fetchDriveDoc(token, id, mime) {
+    var url = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + (mime === 'application/pdf' ? '?alt=media' : '/export?mimeType=application%2Fpdf');
+    var res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error(res.status === 404 ? 'not_found' : 'failed');
+    return res.arrayBuffer();
+  }
+  async function bringInDoc(id, name, mime) {
+    $('reFileName').textContent = 'Getting “' + name + '”…';
+    var token = await docsAccess();
+    var bytes = await fetchDriveDoc(token, id, mime);
+    if (await takePdf(bytes, name)) { editing.docId = id; editing.docName = name; $('reFileName').textContent = name; showEditKind(); }
+    else $('reFileName').textContent = '';
+  }
+  $('reGdocBtn').addEventListener('click', async function () {
+    try {
+      var token = await docsAccess();
+      await loadPicker();
+      var doc = await pickDoc(token);
+      if (doc) await bringInDoc(doc.id, doc.name, doc.mimeType);
+    } catch (e) { $('reFileName').textContent = ''; docsTrouble(e); }
+  });
+  $('reGdocAgain').addEventListener('click', async function () {
+    try { await bringInDoc(editing.docId, editing.name, ''); }
+    catch (e) {
+      $('reFileName').textContent = '';
+      if (e.message === 'not_found') tell('Couldn’t find that Google Doc', 'It may have been deleted, or it’s in another account. Choose it again.');
+      else docsTrouble(e);
+    }
+  });
   function drawRubricEditor() {
     var e = editing, t = $('reTable');
     t.innerHTML = '';
@@ -3455,6 +3850,7 @@
     $('reTotal').className = 'fine' + (total === 100 ? '' : ' warn');
   }
   $('newRubricBtn').addEventListener('click', function () { editRubric(null); });
+  $('reCancel').addEventListener('click', function () { afterRubricSave = null; });
   $('reAddRow').addEventListener('click', function () { editing.rows.push({ skill: '', cells: [] }); drawRubricEditor(); });
   $('reAddLevel').addEventListener('click', function () { if (editing.levels.length < 6) { editing.levels.push('Level ' + (editing.levels.length + 1)); drawRubricEditor(); } });
   $('reWeighted').addEventListener('change', function () { editing.weighted = $('reWeighted').checked; drawRubricEditor(); });
@@ -3463,15 +3859,41 @@
   $('rubricBox').addEventListener('click', function (e) { if (e.target === $('rubricBox')) $('rubricBox').hidden = true; });
   $('reSave').addEventListener('click', async function () {
     var e = editing, note = $('reNote');
-    e.name = $('reName').value.trim();
-    e.rows = e.rows.filter(function (row) { return row.skill.trim(); });
-    if (!e.name) { note.textContent = 'Give the rubric a name.'; note.hidden = false; return; }
-    if (!e.rows.length) { note.textContent = 'Add at least one skill.'; note.hidden = false; e.rows.push({ skill: '', cells: [] }); drawRubricEditor(); return; }
+    function say(t) { note.textContent = t; note.hidden = false; }
+    var name = $('reName').value.trim();
+    if (!name) { say('Give the rubric a name.'); return; }
+    var save;
+    if (editKind === 'grid') {
+      e.name = name;
+      e.rows = e.rows.filter(function (row) { return row.skill.trim(); });
+      if (!e.rows.length) { say('Add at least one skill.'); e.rows.push({ skill: '', cells: [] }); drawRubricEditor(); return; }
+      save = { id: e.id, name: name, weighted: e.weighted, levels: e.levels, rows: e.rows };
+    } else if (editKind === 'paste') {
+      var blocks = blocksFrom($('rePaste'));
+      if (!blocks.length) { say('Paste the rubric in first.'); return; }
+      save = { id: e.id, kind: 'doc', name: name, blocks: blocks, at: Date.now() };
+    } else {
+      if (!e._b64 && !e.fileId) { say(editKind === 'pdf' ? 'Choose a PDF first.' : 'Choose a Google Doc first.'); return; }
+      var fileId = e.fileId;
+      if (e._b64) {
+        $('reSave').disabled = true;
+        try { fileId = (await api('/luddite/rubricfile', { data: e._b64 })).fileId; }
+        catch (err) { $('reSave').disabled = false; say(err.message === 'too_big' ? 'That PDF is too big (up to 2.5 MB).' : 'Couldn’t save the PDF. Try again.'); return; }
+        $('reSave').disabled = false;
+      }
+      save = { id: e.id, kind: 'doc', name: name, fileId: fileId, pages: e.pages || 1, at: Date.now() };
+      if (editKind === 'gdoc' && e.docId) save.docId = e.docId;
+    }
+    var before = rubrics.map(function (x) { return x.id; });
     var next = rubrics.slice(), i = next.findIndex(function (x) { return e.id && x.id === e.id; });
-    if (i === -1) next.push(e); else next[i] = e;
+    if (i === -1) next.push(save); else next[i] = save;
     if (await saveRubrics(next)) {
       $('rubricBox').hidden = true;
       if (!$('markScreen').hidden && piece && !reading) renderRubric();
+      var made = i === -1 ? rubrics.filter(function (x) { return before.indexOf(x.id) === -1; })[0] : rubrics[i];
+      var then = afterRubricSave;
+      afterRubricSave = null;
+      if (then && made) then(made);
     }
   });
   document.addEventListener('keydown', function (e) {
@@ -3929,6 +4351,8 @@
       var card = el('div', 'classcard click');
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
+      card.dataset.id = c.id;
+      if (classes.length > 1) card.appendChild(classGrip(card));
       var info = el('div', 'info');
       info.appendChild(el('h4', null, c.name));
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students') + (c.period ? ' \u00b7 ' + c.period + ' period' : '')));
@@ -3937,6 +4361,62 @@
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openClass(c.id); } });
       box.appendChild(card);
     });
+  }
+
+  // Classes are in the teacher's own order: drag one by its grip (pointer
+  // events, so fingers too), or arrow keys on the focused grip.
+  function classGrip(card) {
+    var g = el('span', 'grip', '\u283f');
+    g.tabIndex = 0;
+    g.title = 'Drag to move this class';
+    g.setAttribute('aria-label', 'Move this class (arrow keys)');
+    g.addEventListener('click', function (e) { e.stopPropagation(); });
+    g.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault(); e.stopPropagation();
+      var other = e.key === 'ArrowUp' ? card.previousElementSibling : card.nextElementSibling;
+      if (!other || !other.dataset.id) return;
+      card.parentNode.insertBefore(card, e.key === 'ArrowUp' ? other : other.nextSibling);
+      g.focus();
+      saveClassOrder();
+    });
+    g.addEventListener('pointerdown', function (e) {
+      if (e.button) return;
+      e.preventDefault(); e.stopPropagation();
+      // On the window, not the grip: moving the card in the page drops a pointer capture.
+      var box = card.parentNode, moved = false, id = e.pointerId;
+      card.classList.add('dragging');
+      function move(ev) {
+        if (ev.pointerId !== id) return;
+        var cards = Array.prototype.filter.call(box.children, function (x) { return x !== card && x.dataset.id; });
+        var before = cards.filter(function (x) { var r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; })[0] || null;
+        if (before ? card.nextElementSibling !== before : box.lastElementChild !== card) {
+          if (before) box.insertBefore(card, before); else box.appendChild(card);
+          moved = true;
+        }
+      }
+      function up(ev) {
+        if (ev.pointerId !== id) return;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        card.classList.remove('dragging');
+        if (moved) saveClassOrder();
+      }
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    });
+    return g;
+  }
+  async function saveClassOrder() {
+    var ids = Array.prototype.map.call(document.querySelectorAll('#classList .classcard'), function (x) { return x.dataset.id; });
+    var byId = {};
+    classes.forEach(function (c) { byId[c.id] = c; });
+    classes = ids.map(function (id) { return byId[id]; }).filter(Boolean);
+    fillClassSelects();
+    try { classes = (await api('/luddite/classes/order', { ids: ids })).classes; }
+    catch (e) { if (e.message !== 'signed_out') tell('Couldn’t save the order of your classes', 'Try again.'); }
   }
 
   // Reads a picked .csv/.txt file, adds its addresses to the box, and says how many are in it.
@@ -4436,8 +4916,15 @@
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
-    $('roomRubricLine').textContent = room.rubric ? 'Rubric: ' + room.rubric.name : '';
-    $('roomRubricLine').hidden = !room.rubric;
+    var rl = $('roomRubricLine');
+    rl.innerHTML = '';
+    if (room.rubric) {
+      rl.appendChild(document.createTextNode('Rubric: ' + room.rubric.name + (room.rubricShown ? ' · Students can see it while they write ' : ' · Hidden from students ')));
+      rl.appendChild(button('Open', 'btn small ghost', function () { openRubricView(room.rubric, room.code); }));
+    }
+    rl.hidden = !room.rubric;
+    $('rubricShowBtn').hidden = !room.rubric;
+    $('rubricShowBtn').textContent = room.rubricShown ? 'Hide the rubric from students' : 'Show students the rubric while they write';
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
@@ -4878,6 +5365,10 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  $('rubricShowBtn').addEventListener('click', function () {
+    $('roomMenu').open = false;
+    roomAction('rubricShown', [], { on: !teacherRoom.rubricShown });
+  });
   $('shareWorkBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction('shareWork', [], { on: !teacherRoom.shareWork });
@@ -5878,6 +6369,15 @@
       box.appendChild(pick);
       return;
     }
+    // A rubric brought in whole is there to read beside the paper, not to score.
+    if (rb.kind === 'doc') {
+      var dh = el('div', 'rubrichead');
+      dh.appendChild(el('span', 't', 'Rubric: ' + rb.name));
+      dh.appendChild(button('Open the rubric', 'btn small ghost', function () { openRubricView(rb, piece.code); }));
+      if (!reading) dh.appendChild(button('Change', 'linkish', function () { pickRubricFor(piece.code); }));
+      box.appendChild(dh);
+      return;
+    }
     var scores = piece.rubricScores && piece.rubricScores.length === rb.rows.length ? piece.rubricScores : rb.rows.map(function () { return -1; });
     var head = el('div', 'rubrichead');
     head.appendChild(el('span', 't', 'Rubric: ' + rb.name));
@@ -5913,12 +6413,13 @@
     box.appendChild(t);
   }
   // Pick one of the saved rubrics (or none) for a writing session.
+  // "+ New rubric…" opens the editor and resolves with what's saved there.
   async function chooseRubric(current) {
-    if (!rubrics.length) { tell('No rubrics yet', 'Make one under Settings, then come back to use it.'); return undefined; }
-    var v = await ask({ title: 'Rubric for this session', text: 'Every paper in the session is marked against it.', input: 'select',
-      options: [{ value: '', label: 'No rubric' }].concat(rubrics.map(function (x) { return { value: x.id, label: x.name }; })),
-      value: current ? current.id : '', ok: 'Use it' });
+    var v = rubrics.length ? await ask({ title: 'Rubric for this session', text: 'Every paper in the session is marked against it.', input: 'select',
+      options: [{ value: '', label: 'No rubric' }].concat(rubrics.map(function (x) { return { value: x.id, label: x.name + ' (' + rubricKindLabel(x) + ')' }; }), [{ value: '+new', label: '+ New rubric…' }]),
+      value: current ? current.id : '', ok: 'Use it' }) : '+new';
     if (v === null) return undefined;
+    if (v === '+new') return new Promise(function (resolve) { editRubric(null, resolve); });
     return rubrics.filter(function (x) { return x.id === v; })[0] || null;
   }
   async function applyRubric(code, rb) {
@@ -5933,7 +6434,8 @@
       if (!await ask({ title: 'Change the rubric?', text: 'The levels you picked on this paper are cleared.', ok: 'Change it' })) return;
     }
     try { roomRubric = await applyRubric(code, rb); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); return; }
-    if (piece) { piece.rubric = roomRubric; piece.rubricScores = []; queueSave(); renderRubric(); }
+    // Only a grid is kept on the paper, with its scores.
+    if (piece) { piece.rubric = roomRubric && roomRubric.kind !== 'doc' ? roomRubric : null; piece.rubricScores = []; queueSave(); renderRubric(); }
   }
 
   function showGradePrint() {
@@ -6200,19 +6702,70 @@
     return box;
   }
 
+  // A paper's rubric on a page of its own, to print right after the paper:
+  // a grid with the levels picked, pasted text, or the PDF's pages.
+  function paperRubric(p) { return p.rubric || p.roomRubric || null; }
+  function rubricPage(p) {
+    var rb = paperRubric(p), box = el('div', 'pp prub');
+    if (rb.kind === 'doc' && rb.fileId) {
+      var wait = el('p', 'fine', 'Loading the rubric…');
+      box.appendChild(wait);
+      return { box: box, ready: rubricFilePages(rb, p.code).then(function (pages) {
+        box.innerHTML = '';
+        pages.forEach(function (src, i) { box.appendChild(pageImg(src, i)); });
+      }, function () { wait.textContent = 'Couldn’t load this rubric.'; throw new Error('rubric'); }) };
+    }
+    var head = el('div', 'pphead');
+    head.appendChild(el('b', null, who(p.name, p.email)));
+    var pct = rb.kind !== 'doc' ? rubricPercent(rb, p.rubricScores) : null;
+    head.appendChild(el('span', null, 'Rubric: ' + rb.name + (pct ? ' · ' + pct.pct + '%' : '')));
+    box.appendChild(head);
+    if (rb.kind === 'doc') { var d = el('div', 'rubricdoc'); d.appendChild(blocksNode(rb.blocks || [])); box.appendChild(d); }
+    else box.appendChild(rubricGrid(rb, p.rubric && p.rubricScores && p.rubricScores.length === rb.rows.length ? p.rubricScores : null));
+    return { box: box, ready: Promise.resolve() };
+  }
+  var PRINT_RUBRICS_KEY = 'luddite.printRubrics';
+  var printDrawn = [], printMissing = 0, printDrawSeq = 0;
+  async function drawPrintBody() {
+    var seq = ++printDrawSeq, body = $('printBody');
+    var withRubrics = $('printRubrics').checked && !$('printRubricsRow').hidden;
+    body.innerHTML = '';
+    var waits = [];
+    printDrawn.forEach(function (p) {
+      body.appendChild(staticPaper(p));
+      if (withRubrics && paperRubric(p)) { var r = rubricPage(p); body.appendChild(r.box); waits.push(r.ready); }
+    });
+    var status = plural(printDrawn.length, 'paper', 'papers') + (printMissing ? ' (' + printMissing + ' couldn’t be loaded)' : '');
+    if (waits.length) {
+      $('printGo').disabled = true;
+      $('printStatus').textContent = 'Getting the rubrics ready…';
+      var failed = (await Promise.all(waits.map(function (w) { return w.then(function () { return 0; }, function () { return 1; }); }))).reduce(function (a, b) { return a + b; }, 0);
+      if (seq !== printDrawSeq) return;
+      if (failed) status += ' · ' + plural(failed, 'rubric', 'rubrics') + ' couldn’t be loaded';
+    }
+    $('printStatus').textContent = status;
+    $('printGo').disabled = !printDrawn.length;
+  }
+  $('printRubrics').addEventListener('change', function () {
+    store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
+    drawPrintBody();
+  });
+
   var printBackTo = null;
   async function openPrintAll(ids, title, back, oneStudent) {
     printBackTo = back;
     show('printScreen');
     $('printTitle').textContent = title;
     $('printBody').innerHTML = '';
+    $('printRubricsRow').hidden = true;
     $('printGo').disabled = true;
+    printDrawn = []; printDrawSeq++;
     $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
     if (!ids.length) { $('printBody').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
     var done = 0, drawn = [];
     for (var i = 0; i < ids.length; i += 6) {
       var batch = await Promise.all(ids.slice(i, i + 6).map(function (id) {
-        return api('/luddite/sub?id=' + encodeURIComponent(id)).then(function (d) { return d.sub; }).catch(function () { return null; });
+        return api('/luddite/sub?id=' + encodeURIComponent(id)).then(function (d) { d.sub.roomRubric = d.roomRubric || null; return d.sub; }).catch(function () { return null; });
       }));
       batch.forEach(function (p) { done++; if (p) drawn.push(p); });
       $('printStatus').textContent = 'Loading ' + done + ' of ' + ids.length + '…';
@@ -6220,10 +6773,11 @@
     // By student's name for a whole session; oldest first for one student's year.
     if (!oneStudent) drawn.sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
     else drawn.sort(function (a, b) { return a.at - b.at; });
-    drawn.forEach(function (p) { $('printBody').appendChild(staticPaper(p)); });
-    var missing = ids.length - drawn.length;
-    $('printStatus').textContent = plural(drawn.length, 'paper', 'papers') + (missing ? ' (' + missing + ' couldn’t be loaded)' : '');
-    $('printGo').disabled = !drawn.length;
+    printDrawn = drawn;
+    printMissing = ids.length - drawn.length;
+    $('printRubricsRow').hidden = !drawn.some(paperRubric);
+    $('printRubrics').checked = load(PRINT_RUBRICS_KEY) === '1';
+    await drawPrintBody();
     window.scrollTo(0, 0);
   }
   $('printBack').addEventListener('click', function () { (printBackTo || showDash)(); });
