@@ -833,7 +833,10 @@
   .livebox { z-index: 45; }
   .livebox .card { max-width: 760px !important; width: 100%; text-align: left; }
   .livetile.newmsg { border-color: var(--pen); box-shadow: inset 0 0 0 1px var(--pen); }
-  .livetile .lt-new { color: var(--pen); font-weight: 600; }
+  .livetile .lt-new, .item.person .lt-new { color: var(--pen); font-weight: 600; font-style: normal; }
+  .item.person .who .livepeek { font: 14px/1.45 Literata, Georgia, serif; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .item.person .who .livepeek[hidden] { display: none; }
+  .item.person.newmsg { box-shadow: inset 3px 0 0 var(--pen); }
 
   /* Messages between a teacher and a student while they write. The teacher's
      messages are in the teacher's green pen; the student's in ink. */
@@ -1229,15 +1232,9 @@
         <div id="waitingList"></div>
       </section>
 
-      <!-- What each student has written so far, while the session runs -->
-      <section class="panel tint-sky" id="secLive" style="order:2" hidden>
-        <div class="panelhead"><h3 class="sect">Live writing <span class="q" tabindex="0" data-tip="What each student has written so far, updated every few seconds while they write. Click one to read it bigger and send them a message.">?</span></h3><button class="btn small ghost" id="chatAllBtn" type="button">Message everyone</button></div>
-        <div class="livegrid" id="liveGrid"></div>
-      </section>
-
       <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
       <section class="panel tint-mint" id="secPeople" style="order:3">
-        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Two marks on each row. The lock: open and green, they can still write; closed, they can’t (handed in, paused, or the session is over); red, they left the page and are locked out. The eye: open and green, you’ve shared your grading, so they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Each student who can still write shows the end of their writing so far; click them to read it all and send a message. Two marks on each row. The lock: open and green, they can still write; closed, they can’t (handed in, paused, or the session is over); red, they left the page and are locked out. The eye: open and green, you’ve shared your grading, so they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3><button class="btn small ghost" id="chatAllBtn" type="button" hidden>Message everyone</button></div>
         <div id="peopleList"></div>
       </section>
 
@@ -4187,8 +4184,8 @@
     $('roomTitle').textContent = '';
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
-    ['waitingList', 'peopleList', 'notHereList', 'liveGrid'].forEach(function (id) { $(id).innerHTML = ''; });
-    $('secLive').hidden = true;
+    ['waitingList', 'peopleList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
+    $('chatAllBtn').hidden = true;
     liveData = null; liveAt = 0; liveSig = ''; liveOpen = null;
     show('roomScreen');
     poll(loadRoom, POLL_ROOM_MS);
@@ -4374,6 +4371,8 @@
     pl.innerHTML = '';
     if (!people.length) pl.appendChild(el('div', 'empty', state === 'upcoming' ? 'Nobody yet. Students show up here once it starts.' : 'Nobody’s in yet.'));
     people.forEach(function (p) { pl.appendChild(personRow(room, state, p, nameCount[p.name] > 1)); });
+    livePeople = people.filter(function (p) { return p.s && (p.f.canWrite || isLive(p.s)); }).map(function (p) { return p.s.sub; });
+    if (liveData) drawLive(room);
 
     // The class list: who hasn't come in yet, and who has their own time.
     var inEmails = {};
@@ -4415,13 +4414,14 @@
     return roomState(room) === 'running' || Object.keys(room.students).some(function (sub) { return isLive(room.students[sub]); });
   }
   async function loadLive(room) {
-    if (liveOff || !wantLive(room)) { $('secLive').hidden = true; return; }
+    $('chatAllBtn').hidden = liveOff || !wantLive(room);
+    if (liveOff || !wantLive(room)) return;
     if (Date.now() - liveAt >= POLL_LIVE_MS) {
       liveAt = Date.now();
       try { liveData = await api('/luddite/watch?code=' + encodeURIComponent(room.code)); }
       catch (e) {
         // A server without live writing yet: leave it out until the page is reloaded.
-        if (e.status === 404 && e.message !== 'no_room') { liveOff = true; $('secLive').hidden = true; }
+        if (e.status === 404 && e.message !== 'no_room') { liveOff = true; $('chatAllBtn').hidden = true; }
         return;
       }
       if (!teacherRoom || teacherRoom.code !== room.code) return;
@@ -4431,37 +4431,16 @@
   function liveStatus(s) {
     return s.handedIn ? 'handed in' : s.lockedOut ? 'locked out' : s.away ? 'off the page' : isLive(s) ? '' : 'not writing';
   }
+  // The end of each writer's text so far, in their Students row.
   function drawLive(room) {
     var drafts = (liveData && liveData.drafts) || {};
-    var people = Object.keys(room.students).filter(function (sub) { return room.students[sub].status === 'admitted'; })
-      .map(function (sub) { var st = room.students[sub]; return { sub: sub, s: st, name: who(st.name, st.email), d: drafts[sub] || null }; })
-      .sort(function (a, b) { return a.name.localeCompare(b.name); });
-    $('secLive').hidden = !people.length;
-    livePeople = people.map(function (p) { return p.sub; });
-    var sig = JSON.stringify(people.map(function (p) { return [p.sub, p.d && p.d.at, liveStatus(p.s), p.s.words, chatUnread(p.s), handUp(p.s)]; }));
-    if (sig !== liveSig) {
-      liveSig = sig;
-      var grid = $('liveGrid');
-      grid.innerHTML = '';
-      people.forEach(function (p) {
-        var t = el('button', 'livetile' + (p.s.away || p.s.lockedOut ? ' away' : '') + (chatUnread(p.s) ? ' newmsg' : ''));
-        t.type = 'button';
-        var h = el('div', 'lt-head');
-        h.appendChild(el('b', null, p.name));
-        var words = p.d ? wordCount(p.d.text) : p.s.words || 0;
-        var st = liveStatus(p.s);
-        var meta = el('span', 'lt-meta', plural(words, 'word', 'words') + (st ? ' · ' + st : ''));
-        if (chatUnread(p.s)) { meta.textContent = ''; meta.appendChild(el('span', 'lt-new', handUp(p.s) ? 'Hand raised' : 'New message')); }
-        h.appendChild(meta);
-        t.appendChild(h);
-        var body = el('div', 'lt-text' + (p.d && p.d.text ? '' : ' none'));
-        if (p.d && p.d.text) { var inner = el('div'); fmtInto(inner, p.d.text); body.appendChild(inner); }
-        else body.textContent = 'Nothing written yet.';
-        t.appendChild(body);
-        t.addEventListener('click', function () { liveOpen = p.sub; drawLiveOpen(room); $('liveBox').hidden = false; $('liveClose').focus(); });
-        grid.appendChild(t);
-      });
-    }
+    each('#peopleList .livepeek', function (n) {
+      var d = drafts[n.getAttribute('data-sub')];
+      var t = d && d.text ? plainOf(d.text).replace(/\s+/g, ' ').trim() : '';
+      var txt = t ? (t.length > 140 ? '\u2026' + t.slice(-140) : t) : '';
+      if (n.textContent !== txt) n.textContent = txt;
+      n.hidden = !t;
+    });
     if (liveOpen) drawLiveOpen(room);
   }
   function drawLiveOpen(room) {
@@ -4484,7 +4463,7 @@
     if (atEnd || fresh) box.scrollTop = box.scrollHeight;
   }
   $('liveClose').addEventListener('click', function () { $('liveBox').hidden = true; liveOpen = null; });
-  // Previous / Next (or the arrow keys): the students in the tiles' order.
+  // Previous / Next (or the arrow keys): the students still writing, in the Students list's order.
   var livePeople = [];
   function liveStep(by) {
     var i = livePeople.indexOf(liveOpen);
@@ -4590,7 +4569,7 @@
     else if (!over && s && s.pausedAt && !s.handedIn) f.act = 'resume';
     else if (stage === 'tograde') f.act = 'grade';
     else if (stage === 'graded') f.act = 'handback';
-    f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' ? 0 : f.act === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
+    f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' || (s && chatUnread(s) && !liveOff) ? 0 : f.act === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
     // The one line.
     var gradeTxt = x && x.grade ? x.grade : '';
     var warn = false, txt;
@@ -4649,7 +4628,18 @@
     w.appendChild(line);
     row.appendChild(w);
 
+    // Still writing: the end of their text so far (filled by drawLive), and their messages.
+    var writer = !!(s && (f.canWrite || isLive(s)));
+    if (writer && s.sub && !liveOff) {
+      if (chatUnread(s)) line.insertBefore(el('em', 'lt-new', (handUp(s) ? 'Hand raised' : 'New message') + ' · '), line.firstChild);
+      var peek = el('span', 'livepeek');
+      peek.hidden = true;
+      peek.setAttribute('data-sub', s.sub);
+      w.appendChild(peek);
+      if (chatUnread(s)) row.classList.add('newmsg');
+    }
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
+    var watch = function () { liveOpen = s.sub; drawLiveOpen(teacherRoom); $('liveBox').hidden = false; $('liveClose').focus(); };
     var main = null;
     if (f.act === 'release') main = button('Unlock', 'btn small', function () { roomAction('release', [s.sub]); });
     else if (f.act === 'unlock') main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
@@ -4685,10 +4675,14 @@
     });
     if (pop.children.length) { menu.appendChild(pop); row.appendChild(menu); }
 
-    if (stage) {
+    // The row opens their writing so far while they can still write, else their paper.
+    var go = writer && !liveOff ? watch : stage ? open : null;
+    if (writer && stage) item('Open the paper they handed in', open);
+    if (go) {
+      row.classList.add('click');
       row.tabIndex = 0;
-      row.addEventListener('click', function (e) { if (!e.target.closest('button, a, details')) open(); });
-      row.addEventListener('keydown', function (e) { if (e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } });
+      row.addEventListener('click', function (e) { if (!e.target.closest('button, a, details')) go(); });
+      row.addEventListener('keydown', function (e) { if (e.target === row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(); } });
     }
     return row;
   }
