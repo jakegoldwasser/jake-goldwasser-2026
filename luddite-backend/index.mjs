@@ -417,6 +417,8 @@ function studentView(room, sub, email, prefs) {
     atHome: !!room.atHome,
     // The teacher lets everyone in it read each other's writing so far (see /luddite/classwork).
     shareWork: !!room.shareWork,
+    // The rubric, while the teacher lets students see it as they write.
+    rubric: room.rubricShown && room.rubric && me && me.status === 'admitted' ? room.rubric : null,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
     // Left the page while writing: locked out until the teacher lets them back in.
@@ -987,6 +989,25 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { msg, to: subs.length });
   }
 
+  // GET /luddite/rubricfile?id=&code= -- a rubric's PDF (base64), for the
+  // teacher who brought it in, for the session's teacher, and, while the
+  // teacher shows the rubric (room.rubricShown), for students let in.
+  if (path === '/luddite/rubricfile' && method === 'GET') {
+    const id = String(q.id || '');
+    if (!/^[a-f0-9]{24}$/.test(id)) throw new HttpError(400, 'bad_file');
+    const { state: meta } = await readItem('luddite:rubricfile:' + id);
+    if (!meta) throw new HttpError(404, 'no_file');
+    if (meta.owner !== me.sub) {
+      const room = q.code ? await getRoom(cleanCode(q.code)) : null;
+      const st = room && room.students && room.students[me.sub];
+      const ok = room && room.rubric && room.rubric.fileId === id
+        && ((isTeacher && ownsRoom(room, info, role)) || (room.rubricShown && st && st.status === 'admitted'));
+      if (!ok) throw new HttpError(403, 'not_yours');
+    }
+    const parts = await Promise.all(Array.from({ length: meta.n }, (_, i) => readItem('luddite:rubricfile:' + id + ':' + i)));
+    return respond(200, { data: parts.map((x) => (x.state && x.state.data) || '').join('') });
+  }
+
   if (!isTeacher) return respond(403, { error: 'teachers_only' });
 
   // ---- Teachers ----
@@ -996,6 +1017,33 @@ async function routeLuddite(event, method, path, info) {
     const rubrics = (Array.isArray(body.rubrics) ? body.rubrics : []).slice(0, 30).map(cleanRubric).filter(Boolean);
     await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), rubrics }));
     return respond(200, { rubrics });
+  }
+
+  // PUT /luddite/rubricfile { data } -- a rubric's PDF (base64), kept in
+  // pieces under luddite:rubricfile:<id>:<n>; answers { fileId }. A rubric
+  // that uses it names it as its fileId.
+  if (path === '/luddite/rubricfile' && method === 'PUT') {
+    const data = String(body.data || '').replace(/\s+/g, '');
+    if (!/^[A-Za-z0-9+/]+=*$/.test(data)) throw new HttpError(400, 'bad_file');
+    const bytes = Buffer.from(data, 'base64');
+    if (bytes.length > MAX_RUBRIC_PDF_BYTES) throw new HttpError(413, 'too_big');
+    if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') throw new HttpError(400, 'not_pdf');
+    const fileId = randomBytes(12).toString('hex');
+    const n = Math.ceil(data.length / RUBRIC_CHUNK_CHARS);
+    for (let i = 0; i < n; i++) await mutate('luddite:rubricfile:' + fileId + ':' + i, () => ({ data: data.slice(i * RUBRIC_CHUNK_CHARS, (i + 1) * RUBRIC_CHUNK_CHARS) }));
+    await mutate('luddite:rubricfile:' + fileId, () => ({ owner: me.sub, ownerEmail: lower(me.email), n, size: bytes.length, at: Date.now() }));
+    return respond(200, { fileId });
+  }
+
+  // PUT /luddite/classes/order { ids } -- the teacher's classes in the order they dragged them into.
+  if (path === '/luddite/classes/order' && method === 'PUT') {
+    const want = (Array.isArray(body.ids) ? body.ids : []).map(String);
+    const saved = await mutate('luddite:teacher:' + me.sub, (t) => {
+      const have = classIdsOf(t);
+      const ids = [...want.filter((id) => have.includes(id)), ...have.filter((id) => !want.includes(id))];
+      return { ...(t || { rooms: [] }), classes: ids, classesOrdered: true };
+    });
+    return respond(200, { classes: await classesOf(saved) });
   }
 
   // GET /luddite/assignments -- this teacher's assignments (newest first) and classes.
@@ -1048,7 +1096,8 @@ async function routeLuddite(event, method, path, info) {
     const id = randomBytes(6).toString('hex');
     const teacher = { ...me, name: await displayNameOf(info, role) };
     const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period) }));
-    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [id, ...((t && t.classes) || [])] }));
+    // A new class goes at the end of the list (see classIdsOf).
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [...classIdsOf(t), id], classesOrdered: true }));
     await indexClass(id, emails, []);
     return respond(200, { class: made });
   }
@@ -1293,6 +1342,8 @@ async function routeLuddite(event, method, path, info) {
         return { ...r, open: true, endedAt: null, startAt };
       }
       else if (body.action === 'rubric') return { ...r, rubric: body.rubric ? cleanRubric(body.rubric) : null };
+      // Students let in can read the rubric while they write (studentView, /luddite/rubricfile).
+      else if (body.action === 'rubricShown') return { ...r, rubricShown: !!body.on };
       // Switching it on lets back in anyone locked out.
       else if (body.action === 'shareWork') return { ...r, shareWork: !!body.on };
       else if (body.action === 'atHome') {
@@ -1738,6 +1789,16 @@ async function routeHmAdmin(event, method, path, q, body, me) {
     return respond(200, { paper, markedHtml: markedHtml(paper), roomRubric: room.rubric || null, teacher: room.teacher });
   }
 
+  // GET /luddite/admin/rubricfile?id= -- a rubric's PDF (base64), if a Horace Mann teacher brought it in.
+  if (path === '/luddite/admin/rubricfile' && method === 'GET') {
+    const id = String(q.id || '');
+    const { state: meta } = /^[a-f0-9]{24}$/.test(id) ? await readItem('luddite:rubricfile:' + id) : { state: null };
+    if (!meta || !isHm(meta.ownerEmail)) throw new HttpError(404, 'not_found');
+    await hmLog(me.email, 'rubric', id, 'Rubric PDF from ' + meta.ownerEmail);
+    const parts = await Promise.all(Array.from({ length: meta.n }, (_, i) => readItem('luddite:rubricfile:' + id + ':' + i)));
+    return respond(200, { data: parts.map((x) => (x.state && x.state.data) || '').join('') });
+  }
+
   // GET /luddite/admin/draft?code=&sub= -- a student's backed-up writing.
   if (path === '/luddite/admin/draft' && method === 'GET') {
     const room = await hmRoom(q.code);
@@ -1785,9 +1846,14 @@ async function routeHmAdmin(event, method, path, q, body, me) {
   return respond(404, { error: 'Not found' });
 }
 
-// A teacher's classes, newest first.
+// A teacher's class ids in their order: oldest first, as dragged since. They
+// used to be kept newest first; `classesOrdered` marks a list put the right way round.
+function classIdsOf(t) {
+  const ids = (t && t.classes) || [];
+  return t && t.classesOrdered ? ids.slice() : ids.slice().reverse();
+}
 async function classesOf(teacherState) {
-  const ids = (teacherState && teacherState.classes) || [];
+  const ids = classIdsOf(teacherState);
   const list = await Promise.all(ids.map((id) => readItem('luddite:class:' + id)));
   return list.map((x) => x.state).filter((c) => c && !c.deletedAt).map(classSummary);
 }
@@ -1867,6 +1933,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
 function cleanRubric(x) {
   if (!x || typeof x !== 'object') return null;
   const str = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  if (x.kind === 'doc') return cleanDocRubric(x, str);
   const levels = (Array.isArray(x.levels) ? x.levels : []).slice(0, 6).map((l) => str(l, 40) || 'Level');
   if (levels.length < 2) return null;
   const weighted = !!x.weighted;
@@ -1879,8 +1946,42 @@ function cleanRubric(x) {
   const id = /^[a-z0-9]{6,16}$/.test(String(x.id || '')) ? String(x.id) : randomUUID().replace(/-/g, '').slice(0, 12);
   return { id, name: str(x.name, 80) || 'Rubric', levels, weighted, rows };
 }
+// A rubric the teacher brings in whole instead of building as a grid:
+// pasted (`blocks`: paragraphs and tables, kept as plain text), or a PDF
+// (`fileId`, stored apart in luddite:rubricfile:<id>; see /luddite/rubricfile),
+// which is also what a Google Doc becomes (`docId`, so it can be fetched again).
+const MAX_RUBRIC_CHARS = 40000;
+function cleanDocRubric(x, str) {
+  const cell = (v, n) => String(v == null ? '' : v).replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, n);
+  let budget = MAX_RUBRIC_CHARS;
+  const spend = (t) => { const out = t.slice(0, Math.max(0, budget)); budget -= out.length; return out; };
+  const blocks = [];
+  for (const b of (Array.isArray(x.blocks) ? x.blocks : []).slice(0, 400)) {
+    if (budget <= 0 || !b || typeof b !== 'object') continue;
+    if (Array.isArray(b.table)) {
+      const table = b.table.slice(0, 40).map((row) => (Array.isArray(row) ? row : []).slice(0, 10).map((c) => spend(cell(c, 1500))));
+      if (table.some((row) => row.some(Boolean))) blocks.push({ table });
+    } else {
+      const p = spend(cell(b.p, 3000));
+      if (p) blocks.push(b.h ? { p, h: true } : { p });
+    }
+  }
+  const fileId = /^[a-f0-9]{24}$/.test(String(x.fileId || '')) ? String(x.fileId) : '';
+  if (!blocks.length && !fileId) return null;
+  const id = /^[a-z0-9]{6,16}$/.test(String(x.id || '')) ? String(x.id) : randomUUID().replace(/-/g, '').slice(0, 12);
+  const out = { id, kind: 'doc', name: str(x.name, 80) || 'Rubric', at: Math.floor(Number(x.at)) || Date.now() };
+  if (fileId) {
+    out.fileId = fileId;
+    out.pages = Math.max(1, Math.min(40, Math.floor(Number(x.pages)) || 1));
+    if (/^[A-Za-z0-9_-]{10,100}$/.test(String(x.docId || ''))) out.docId = String(x.docId);
+  } else out.blocks = blocks;
+  return out;
+}
+const MAX_RUBRIC_PDF_BYTES = 2.5 * 1024 * 1024;
+const RUBRIC_CHUNK_CHARS = 300000; // base64 characters per item, well under DynamoDB's 400 KB
+
 function cleanScores(scores, rubric) {
-  if (!rubric) return [];
+  if (!rubric || !rubric.rows) return [];
   return rubric.rows.map((_, i) => {
     const v = Math.floor(Number(Array.isArray(scores) ? scores[i] : -1));
     return v >= 0 && v < rubric.levels.length ? v : -1;
