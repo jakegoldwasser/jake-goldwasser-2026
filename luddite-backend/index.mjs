@@ -93,6 +93,8 @@ function verifySession(token) {
 //
 // Items in Luddite's own table (partition key `pk`):
 //   luddite:teachers        { emails: { [email]: { addedAt } } }
+//   luddite:proctors        { emails: { [email]: { addedAt } } }  permanent proctors
+//   luddite:proctoring      { codes: [code, ...] } newest first: sessions with own time, for permanent proctors
 //   luddite:teacher:<sub>   { rooms: [code, ...], classes: [id, ...] }  newest first
 //   luddite:class:<id>      { id, name, teacher: { sub, email, name }, emails: [...],
 //                             assignments: [code, ...] newest first, createdAt }
@@ -124,6 +126,16 @@ const OWNER_EMAILS = ['jake_goldwasser@horacemann.org', 'jake.goldwasser@gmail.c
 // Jake's test accounts: leaving the page doesn't lock them out until a
 // teacher lets them back in, so he can try things without getting stuck.
 const TEST_EMAILS = [...OWNER_EMAILS, 'nymets892@gmail.com'];
+// Proctors run a writing session for its teacher without reading anything
+// written in it: they let students in, unlock anyone locked out, begin a
+// student's own time and pause or resume it. A **permanent proctor** proctors
+// every student with own time in every session (the Upper Division testing
+// center always is one; owners add others in Settings, kept in
+// luddite:proctors). A teacher can also add a proctor to one session
+// (`room.proctors`), who proctors everyone in it.
+const TESTING_CENTER_EMAILS = ['testingcenterud@horacemann.org'];
+const MAX_PROCTORS = 20;
+const PROCTORING_INDEX_MAX = 400;
 // The Luddite Google app's client secret, for turning a teacher's one-time
 // Drive consent into a lasting refresh token (Configuration -> Environment
 // variables in the Lambda console). Without it, Drive can't be connected.
@@ -314,13 +326,25 @@ function regularWindow(r) {
   const start = r.startAt || r.createdAt;
   return { start, end: r.minutes ? start + r.minutes * 60000 : null };
 }
-function windowOf(room, email) {
+// Paused time (the whole session's, and this student's own) doesn't count:
+// it moves the end of their time later.
+function pausedFor(x, now) { return x ? (x.pausedMs || 0) + (x.pausedAt ? Math.max(0, now - x.pausedAt) : 0) : 0; }
+function windowOf(room, email, entry) {
+  const now = Date.now();
   const reg = regularWindow(room);
+  const paused = !!(room.pausedAt || (entry && entry.pausedAt));
+  const held = pausedFor(room, now) + pausedFor(entry, now);
   const o = room.own && room.own[email];
-  if (!o) return { ...reg, own: false, multiplier: 1, ended: regularEnded(room) };
+  if (!o) return { ...reg, end: reg.end ? reg.end + held : null, own: false, multiplier: 1, ended: regularEnded(room), paused };
   const start = o.startAt || reg.start;
   const multiplier = o.multiplier || 1;
-  return { start, end: start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000), own: true, multiplier, ended: false };
+  return { start, end: start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000) + held, own: true, multiplier, ended: false, paused };
+}
+// Pause or resume a session (x = the room) or one student (x = their entry).
+function paused(x, on, now) {
+  if (on) return x.pausedAt ? x : { ...x, pausedAt: now };
+  if (!x.pausedAt) return x;
+  return { ...x, pausedAt: 0, pausedMs: (x.pausedMs || 0) + Math.max(0, now - x.pausedAt) };
 }
 function stateAt(win, now) {
   if (win.ended) return 'ended';
@@ -376,7 +400,7 @@ function roomSummary(room) {
 // their own window (which may differ from everyone else's).
 function studentView(room, sub, email, prefs) {
   const me = room.students[sub] || null;
-  const win = windowOf(room, lower(email));
+  const win = windowOf(room, lower(email), me);
   const now = Date.now();
   const state = stateAt(win, now);
   return {
@@ -397,7 +421,9 @@ function studentView(room, sub, email, prefs) {
     chatT: me ? me.chatT || 0 : 0,
     seenS: me ? me.seenS || 0 : 0,
     // Handing in is final: no more writing until the teacher releases them.
-    handedIn: !!(me && me.handedIn)
+    handedIn: !!(me && me.handedIn),
+    // Paused by the teacher or a proctor: no writing, and the clock is stopped.
+    paused: win.paused
   };
 }
 
@@ -441,7 +467,9 @@ async function getClass(id, me, role) {
   return state;
 }
 
-const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt });
+const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt, period: c.period || '' });
+// The class's period letter (A-H), which its writing sessions start at by default.
+const cleanPeriod = (p) => (/^[A-H]$/.test(String(p || '').toUpperCase()) ? String(p).toUpperCase() : '');
 
 // ---- Drive ----
 // A teacher connects Drive once from the dashboard: the page gets a
@@ -711,8 +739,12 @@ async function routeLuddite(event, method, path, info) {
   // GET /luddite/status -- who is this, and what can they do?
   if (path === '/luddite/status' && method === 'GET') {
     const session = issueSession(info);
-    return respond(200, { luddite: { role, email: me.email, name: me.name }, session });
+    const proctor = await isPermanentProctor(me.email) || !!((await readItem('luddite:mine:' + lower(me.email))).state || {}).proctor?.length;
+    return respond(200, { luddite: { role, email: me.email, name: me.name, proctor }, session });
   }
+
+  // ---- Proctors (see TESTING_CENTER_EMAILS) ----
+  if (path === '/luddite/proctor' || path.startsWith('/luddite/proctor/')) return routeProctor(method, path, q, body, me);
 
   // ---- Students (anyone signed in) ----
 
@@ -740,7 +772,7 @@ async function routeLuddite(event, method, path, info) {
       if (!r.classId && r.emails && !r.emails.includes(em) && !(r.own && r.own[em])) return;
       const s = r.students[me.sub];
       if (s && s.status === 'removed') return;
-      const win = windowOf(r, em);
+      const win = windowOf(r, em, s);
       const state = stateAt(win, now);
       if (state === 'ended' || (state === 'upcoming' && win.start - now > UPCOMING_HORIZON_MS)) return;
       list.push({
@@ -764,9 +796,9 @@ async function routeLuddite(event, method, path, info) {
     const room = await mutate('luddite:room:' + code, (r) => {
       if (!r || r.deletedAt) throw new HttpError(404, 'no_room');
       const expected = !!(rostered || r.casual || (r.own && r.own[em]));
-      const win = windowOf(r, em);
-      const state = stateAt(win, Date.now());
       const s = r.students[me.sub];
+      const win = windowOf(r, em, s);
+      const state = stateAt(win, Date.now());
       if (s) {
         let next = s;
         if (s.email !== me.email || s.name !== me.name) next = { ...next, email: me.email, name: me.name };
@@ -802,7 +834,10 @@ async function routeLuddite(event, method, path, info) {
       const next = { ...s, lastSeen: Date.now() };
       // `away` means off the page right now. `lockedOut` keeps them off it
       // until the teacher lets them back in (the room's 'unlock' action).
-      if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
+      // While paused they may step away (that's what a pause is for).
+      const held = !!(r.pausedAt || s.pausedAt);
+      if (body.type === 'left' && held) Object.assign(next, { away: true, writing: false });
+      else if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
       if ((body.type === 'writing' || body.type === 'idle') && !s.lockedOut) Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
       // 'ask': a flag for the teacher -- please unlock me.
       if (body.type === 'ask' && (s.handedIn || s.lockedOut)) next.askedAt = Date.now();
@@ -928,7 +963,7 @@ async function routeLuddite(event, method, path, info) {
     if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
     const id = randomBytes(6).toString('hex');
     const teacher = { ...me, name: await displayNameOf(info, role) };
-    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now() }));
+    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period) }));
     await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [id, ...((t && t.classes) || [])] }));
     await indexClass(id, emails, []);
     return respond(200, { class: made });
@@ -939,7 +974,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { class: await getClass(q.id, me, role) });
   }
 
-  // PUT /luddite/class { id, action: rename | add | remove | delete, name, emails }
+  // PUT /luddite/class { id, action: rename | period | add | remove | delete, name, period, emails }
   if (path === '/luddite/class' && method === 'PUT') {
     const cls = await getClass(body.id, me, role);
     const emails = cleanEmails(body.emails);
@@ -951,6 +986,7 @@ async function routeLuddite(event, method, path, info) {
         if (!name) throw new HttpError(400, 'need_name');
         return { ...c, name };
       }
+      if (body.action === 'period') return { ...c, period: cleanPeriod(body.period) };
       if (body.action === 'add') {
         added = emails.filter((e) => !c.emails.includes(e));
         if (c.emails.length + added.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
@@ -1212,7 +1248,17 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: Date.now() }; });
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, askedAt: 0, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
-      else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now() };
+      else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now(), pausedAt: 0, pausedMs: 0 };
+      else if (body.action === 'pause' || body.action === 'resume') subs.forEach((sub) => { if (students[sub]) students[sub] = paused(students[sub], body.action === 'pause', Date.now()); });
+      else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', Date.now());
+      else if (body.action === 'addProctor') {
+        if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
+        const list = r.proctors || [];
+        if (list.includes(ownEmail)) return undefined;
+        if (list.length >= MAX_PROCTORS) throw new HttpError(413, 'too_many_proctors');
+        return { ...r, proctors: [...list, ownEmail] };
+      }
+      else if (body.action === 'removeProctor') return { ...r, proctors: (r.proctors || []).filter((e) => e !== ownEmail) };
       else if (body.action === 'schedule') {
         const startAt = Math.floor(Number(body.startAt));
         if (!(startAt > 0)) throw new HttpError(400, 'bad_time');
@@ -1244,6 +1290,15 @@ async function routeLuddite(event, method, path, info) {
       await mutate('luddite:mine:' + ownEmail, (m) => {
         const own = (m && m.own) || [];
         return own.includes(code) ? undefined : { ...(m || {}), own: [code, ...own].slice(0, 60) };
+      });
+      await noteProctoring(code);
+    }
+    // A session's proctor finds it from their own login.
+    if (body.action === 'addProctor' || body.action === 'removeProctor') {
+      const add = body.action === 'addProctor';
+      await mutate('luddite:mine:' + ownEmail, (m) => {
+        const list = ((m && m.proctor) || []).filter((c) => c !== code);
+        return { ...(m || {}), proctor: add ? [code, ...list].slice(0, 60) : list };
       });
     }
     if (body.action === 'delete') {
@@ -1300,6 +1355,187 @@ async function routeLuddite(event, method, path, info) {
     }
     const emails = (state && state.emails) || {};
     return respond(200, { owners: OWNER_EMAILS, teachers: Object.keys(emails).sort().map((email) => ({ email, addedAt: emails[email].addedAt })) });
+  }
+
+  // GET /luddite/proctors -- permanent proctors; PUT { add: email } or { remove: email }.
+  // An owner can't make themselves one: proctors see Horace Mann teachers'
+  // sessions, which the owners don't (see ownerMayOpen).
+  if (path === '/luddite/proctors') {
+    let state;
+    if (method === 'PUT') {
+      const add = lower(body.add);
+      const remove = lower(body.remove);
+      if (add && !EMAIL_RE.test(add)) throw new HttpError(400, 'bad_email');
+      if (add && OWNER_EMAILS.includes(add)) throw new HttpError(400, 'owner_not_proctor');
+      state = await mutate('luddite:proctors', (t) => {
+        const emails = { ...((t && t.emails) || {}) };
+        if (add) emails[add] = { addedAt: Date.now() };
+        if (remove) delete emails[remove];
+        return { emails };
+      });
+    } else {
+      state = (await readItem('luddite:proctors')).state;
+    }
+    const emails = (state && state.emails) || {};
+    return respond(200, { always: TESTING_CENTER_EMAILS, proctors: Object.keys(emails).sort().map((email) => ({ email, addedAt: emails[email].addedAt })) });
+  }
+
+  return respond(404, { error: 'Not found' });
+}
+
+// ---------------------------------------------------------------------
+// Proctors
+// ---------------------------------------------------------------------
+async function isPermanentProctor(email) {
+  const e = lower(email);
+  if (!e || OWNER_EMAILS.includes(e)) return false;
+  if (TESTING_CENTER_EMAILS.includes(e)) return true;
+  const { state } = await readItem('luddite:proctors');
+  return !!(state && state.emails && state.emails[e]);
+}
+
+async function noteProctoring(code) {
+  await mutate('luddite:proctoring', (p) => {
+    const codes = (p && p.codes) || [];
+    return codes[0] === code ? undefined : { codes: [code, ...codes.filter((c) => c !== code)].slice(0, PROCTORING_INDEX_MAX) };
+  });
+}
+
+// What this person may proctor in a session: 'session' (added to it: everyone
+// in it), 'own' (a permanent proctor: the students with own time, and the
+// waiting room) or null.
+function proctorReach(room, email, permanent) {
+  const e = lower(email);
+  if (!room || room.deletedAt) return null;
+  if ((room.proctors || []).includes(e)) return 'session';
+  if (permanent && Object.keys(room.own || {}).length) return 'own';
+  return null;
+}
+
+// Whether a session still needs proctoring: it hasn't ended for somebody.
+function proctorLive(room, now) {
+  const regular = stateAt({ ...regularWindow(room), ended: regularEnded(room) }, now);
+  if (regular !== 'ended') return true;
+  return Object.keys(room.own || {}).some((em) => stateAt(windowOf(room, em, null), now) !== 'ended');
+}
+
+// A session as a proctor sees it: who's in it and where they are, never
+// what anyone has written.
+function proctorView(room, reach) {
+  const now = Date.now();
+  const own = room.own || {};
+  const people = [];
+  const seen = new Set();
+  Object.entries(room.students || {}).forEach(([sub, s]) => {
+    const em = lower(s.email);
+    const mine = reach === 'session' || !!own[em] || s.status === 'waiting';
+    if (!mine || s.status === 'removed') return;
+    seen.add(em);
+    const win = windowOf(room, em, s);
+    people.push({
+      sub, email: s.email, name: s.name || '', status: s.status, requestedAt: s.requestedAt || 0,
+      lockedOut: !!s.lockedOut, askedAt: s.askedAt || 0, handedIn: !!s.handedIn, away: !!s.away,
+      live: !!(s.writing && s.lastSeen && now - s.lastSeen < 25000), paused: !!s.pausedAt,
+      own: own[em] || null, state: stateAt(win, now), startAt: win.start, endAt: win.end
+    });
+  });
+  // Students with own time who haven't come in yet.
+  Object.keys(own).forEach((em) => {
+    if (seen.has(em)) return;
+    const win = windowOf(room, em, null);
+    people.push({ sub: null, email: em, name: '', status: 'notHere', own: own[em], state: stateAt(win, now), startAt: win.start, endAt: win.end });
+  });
+  const reg = regularWindow(room);
+  return {
+    code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), teacherName: room.teacher.name || room.teacher.email,
+    reach, prompt: room.prompt || '', state: stateAt({ ...reg, ended: regularEnded(room) }, now), startAt: reg.start, paused: !!room.pausedAt,
+    people, now
+  };
+}
+
+async function routeProctor(method, path, q, body, me) {
+  const permanent = await isPermanentProctor(me.email);
+  const now = Date.now();
+
+  // GET /luddite/proctor -- the sessions this person proctors that haven't ended.
+  if (path === '/luddite/proctor' && method === 'GET') {
+    const { state: mine } = await readItem('luddite:mine:' + lower(me.email));
+    const codes = new Set((mine && mine.proctor) || []);
+    if (permanent) ((await readItem('luddite:proctoring')).state?.codes || []).forEach((c) => codes.add(c));
+    const rooms = [];
+    const list = [...codes];
+    for (let i = 0; i < list.length; i += 25) {
+      const got = await Promise.all(list.slice(i, i + 25).map((c) => readItem('luddite:room:' + c)));
+      got.forEach(({ state: r }) => { if (r) rooms.push(r); });
+    }
+    const sessions = rooms.map((r) => ({ r, reach: proctorReach(r, me.email, permanent) }))
+      .filter(({ r, reach }) => reach && proctorLive(r, now))
+      .map(({ r, reach }) => {
+        const v = proctorView(r, reach);
+        return {
+          code: v.code, title: v.title, teacherName: v.teacherName, reach, state: v.state, startAt: v.startAt, paused: v.paused,
+          count: v.people.filter((p) => p.status !== 'waiting').length,
+          waiting: v.people.filter((p) => p.status === 'waiting').length,
+          locked: v.people.filter((p) => p.lockedOut && !p.handedIn).length,
+          writing: v.people.filter((p) => p.live).length,
+          next: Math.min(...v.people.map((p) => (p.state === 'upcoming' ? p.startAt : Infinity)))
+        };
+      });
+    return respond(200, { sessions, permanent, now });
+  }
+
+  // GET /luddite/proctor/session?code= -- one session, as its proctor sees it.
+  if (path === '/luddite/proctor/session' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    const reach = proctorReach(room, me.email, permanent);
+    if (!reach) throw new HttpError(403, 'not_proctor');
+    return respond(200, { session: proctorView(room, reach) });
+  }
+
+  // PUT /luddite/proctor/session { code, action, subs, email } -- admit (from
+  // the waiting room) | unlock (let back in after leaving the page) | begin
+  // (start a student's own time now) | pause | resume (one student) |
+  // startNow | pauseAll | resumeAll (the whole session; added proctors only).
+  if (path === '/luddite/proctor/session' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const subs = Array.isArray(body.subs) ? body.subs.map(String) : [];
+    const email = lower(body.email);
+    let reach = null;
+    const room = await mutate('luddite:room:' + code, (r) => {
+      reach = proctorReach(r, me.email, permanent);
+      if (!reach) throw new HttpError(403, 'not_proctor');
+      const t = Date.now();
+      const own = r.own || {};
+      const students = { ...r.students };
+      // A permanent proctor reaches students with own time, and the waiting room.
+      const mayTouch = (sub) => {
+        const s = students[sub];
+        return !!s && s.status !== 'removed' && (reach === 'session' || !!own[lower(s.email)] || s.status === 'waiting');
+      };
+      if (subs.some((sub) => !mayTouch(sub))) throw new HttpError(403, 'not_proctor');
+      const whole = ['startNow', 'pauseAll', 'resumeAll'].includes(body.action);
+      if (whole && reach !== 'session') throw new HttpError(403, 'not_proctor');
+      if (body.action === 'admit') subs.forEach((sub) => { if (students[sub].status === 'waiting') students[sub] = { ...students[sub], status: 'admitted', decidedAt: t, via: 'proctor' }; });
+      else if (body.action === 'unlock') subs.forEach((sub) => { students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: t }; });
+      else if (body.action === 'pause' || body.action === 'resume') subs.forEach((sub) => { students[sub] = paused(students[sub], body.action === 'pause', t); });
+      else if (body.action === 'begin') {
+        if (!EMAIL_RE.test(email)) throw new HttpError(400, 'bad_email');
+        if (!own[email] && reach !== 'session') throw new HttpError(403, 'not_proctor');
+        return { ...r, own: { ...own, [email]: { ...(own[email] || { multiplier: 1 }), startAt: t, setAt: t, begunBy: lower(me.email) } } };
+      }
+      else if (body.action === 'startNow') return { ...r, open: true, endedAt: null, startAt: t, pausedAt: 0, pausedMs: 0 };
+      else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', t);
+      else throw new HttpError(400, 'bad_action');
+      return { ...r, students };
+    });
+    if (body.action === 'begin') {
+      await mutate('luddite:mine:' + email, (m) => {
+        const list = (m && m.own) || [];
+        return list.includes(code) ? undefined : { ...(m || {}), own: [code, ...list].slice(0, 60) };
+      });
+      await noteProctoring(code);
+    }
+    return respond(200, { session: proctorView(room, reach) });
   }
 
   return respond(404, { error: 'Not found' });

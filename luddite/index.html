@@ -155,6 +155,9 @@
   /* A row of choice buttons (Right now / At a set time, On / Off). Not .seg,
      which is a piece of the student's text on the marking page. */
   .segctl { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .segctl.periodseg button { padding: 7px 12px; min-width: 38px; }
+  .classpick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .classpick button .per { font-weight: 400; opacity: .8; margin-left: 6px; }
   .segctl button { border: 0; border-radius: 999px; padding: 7px 16px; font: 600 14px var(--ui); cursor: pointer; color: var(--ink);
     background: var(--card); box-shadow: inset 0 0 0 1px var(--rule); }
   .segctl button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
@@ -934,6 +937,7 @@
       <button class="btn" type="submit">Join</button>
     </form>
     <p class="fine warn" id="joinNote"></p>
+    <p class="row" id="proctorHomeWrap" hidden style="justify-content:center"><button class="btn small ghost" id="proctorHomeBtn" type="button">Sessions to proctor</button></p>
     <p class="fine acctline"><span class="who-email"></span> <button class="linkish" data-signout>Sign out</button></p>
   </div>
 </section>
@@ -1043,6 +1047,39 @@
   </div>
 </section>
 
+<!-- Proctor: the writing sessions they proctor -->
+<section class="screen page" id="proctorScreen" hidden>
+  <div class="card dash">
+    <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
+    <section class="panel tint-mint">
+      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student with own time; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3></div>
+      <div id="proctorList"></div>
+    </section>
+    <div class="row" style="justify-content:center; margin-top:18px"><button class="btn small ghost" id="proctorWriteBtn" type="button">Type an Entry Phrase to write</button></div>
+    <p class="fine acctline"><span class="who-email"></span> <button class="linkish" data-signout>Sign out</button></p>
+  </div>
+</section>
+
+<!-- Proctor: one writing session -->
+<section class="screen page" id="proctorRoomScreen" hidden>
+  <div class="card">
+    <p style="margin:0 0 10px"><button class="btn small ghost" id="proctorBack">&larr; Sessions to proctor</button></p>
+    <div class="head">
+      <div><h2 id="pxTitle"></h2><p class="stamp chip" id="pxStamp"></p><p class="stamp" id="pxWhen"></p><p class="stamp">Entry Phrase: <b class="codeword" id="pxPhrase"></b></p></div>
+      <div class="row"><button class="btn small" id="pxStartBtn" type="button" hidden>Start it now</button><button class="btn small ghost" id="pxPauseAllBtn" type="button" hidden>Pause everyone</button></div>
+    </div>
+    <section class="panel tint-sun" id="pxWaitSec" hidden>
+      <div class="panelhead"><h3 class="sect">Waiting room</h3></div>
+      <div id="pxWaiting"></div>
+    </section>
+    <section class="panel tint-mint">
+      <div class="panelhead"><h3 class="sect">Students</h3></div>
+      <div id="pxPeople"></div>
+    </section>
+    <p class="fine warn" id="pxNote"></p>
+  </div>
+</section>
+
 <!-- Teacher: dashboard -->
 <section class="screen page" id="dashScreen" hidden>
   <div class="card dash">
@@ -1054,6 +1091,12 @@
     <section class="panel tint-sky" id="forYouBox" hidden>
       <div class="panelhead"><h3 class="sect">For you to write <span class="q" tabindex="0" data-tip="Writing sessions another teacher has given to a class you are on. Enter one to write in it like a student.">?</span></h3></div>
       <div id="forYouList"></div>
+    </section>
+
+    <!-- Writing sessions this teacher proctors (another teacher added them) -->
+    <section class="panel tint-mint" id="proctorBox" hidden>
+      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions another teacher added you to as a proctor. You let students in, unlock them, and begin or pause their time, without seeing what they write.">?</span></h3></div>
+      <div id="proctorDashList"></div>
     </section>
 
     <!-- The two things a teacher starts from Home -->
@@ -1074,8 +1117,8 @@
           </div>
 
           <div class="formrow" id="classRow">
-            <label class="lbl" for="newRoomClass">Class <span class="q" tabindex="0" data-tip="Everyone on the class list is let in on their own once the session starts. Anyone else can use the Entry Phrase and wait in the waiting room.">?</span></label>
-            <select class="field wide" id="newRoomClass"></select>
+            <label class="lbl">Classes <span class="q" tabindex="0" data-tip="Everyone on a class list is let in on their own once the session starts; anyone else can use the Entry Phrase and wait in the waiting room. Pick several classes to make the same writing session for each, each starting at its own class's period. None picked: students use the Entry Phrase.">?</span></label>
+            <div class="segctl classpick" id="newRoomClasses"></div>
             <div id="newRoomEmailsBox" style="margin-top:10px" hidden>
               <textarea class="field promptfield" id="newRoomEmails" placeholder="One per line, or separated by commas" aria-label="Email addresses for this session"></textarea>
               <p class="fine" id="newRoomEmailsFound" style="text-align:left; margin:4px 0 0"></p>
@@ -1089,6 +1132,7 @@
               <button type="button" data-when="later">At a set time</button>
             </div>
             <div id="newRoomPicker" hidden></div>
+            <p class="fine" id="newRoomPeriodNote" style="text-align:left" hidden></p>
           </div>
 
           <p class="fine warn" id="newRoomWhenNote" hidden></p>
@@ -1117,7 +1161,9 @@
         <div id="newClassBox" hidden>
           <form id="newClassForm">
             <label class="lbl" for="newClassName">Class name</label>
-            <input class="field wide" id="newClassName" maxlength="80" placeholder="Period 3 English" autocomplete="off">
+            <input class="field wide" id="newClassName" maxlength="80" placeholder="D period English" autocomplete="off">
+            <label class="lbl" style="margin-top:14px">Period <span class="q" tabindex="0" data-tip="Its writing sessions start at this period by default.">?</span></label>
+            <div class="segctl periodseg" id="newClassPeriod"></div>
             <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
             <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
             <div class="row" style="justify-content:flex-start; margin-top:8px">
@@ -1148,6 +1194,8 @@
             <button type="button" id="renameBtn">Rename</button>
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="timeBtn">Change the start time</button>
+            <button type="button" id="pauseAllBtn">Pause everyone</button>
+            <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
             <button type="button" id="reopenBtn">Open it again now</button>
@@ -1185,7 +1233,12 @@
         <div id="notHereList"></div>
       </section>
 
-      <section class="panel" id="removedSection" style="order:5" hidden>
+      <section class="panel" id="proctorsSection" style="order:5" hidden>
+        <div class="panelhead"><h3 class="sect">Proctors <span class="q" tabindex="0" data-tip="Proctors can let students in, unlock anyone locked out, and begin or pause the session or one student's time. They never see what anyone writes. The testing center proctors every student with own time on its own.">?</span></h3></div>
+        <div id="proctorsList"></div>
+      </section>
+
+      <section class="panel" id="removedSection" style="order:6" hidden>
         <div class="panelhead"><h3 class="sect">Removed</h3></div>
         <div id="removedList"></div>
       </section>
@@ -1202,6 +1255,9 @@
     <div class="head">
       <div><h2 id="className"></h2><p class="stamp" id="classCountLine"></p></div>
       <div class="row"><button class="btn small ghost" id="classRenameBtn">Rename</button></div>
+    </div>
+    <div class="switchrow"><span class="nm">Period <span class="q" tabindex="0" data-tip="This class's writing sessions start at this period by default.">?</span></span>
+      <div class="segctl periodseg" id="classPeriodSeg"></div>
     </div>
     <h3>Add students</h3>
     <form id="classAddForm">
@@ -1351,6 +1407,12 @@
         <button class="btn small" id="teacherClassBtn" type="button" style="margin-top:14px">Make the &ldquo;UD English Teachers&rdquo; class</button> <span class="q" tabindex="0" data-tip="Makes a class of everyone listed here, plus you. It goes in the account you are signed in with, so do it once in each account.">?</span>
         <p class="fine" id="teacherClassNote" hidden></p>
       </div>
+    </div>
+    <div id="permProctorsSection" hidden style="margin-top:22px">
+      <h3 style="margin-top:0">Permanent proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student with own time (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
+      <div id="permProctorList"></div>
+      <button class="btn small" id="addPermProctorBtn" type="button" style="margin-top:10px">Add permanent proctor</button>
+      <p class="fine" id="permProctorNote" hidden></p>
     </div>
     <div style="margin-top:22px">
       <h3 style="margin-top:0">Account</h3>
@@ -1719,6 +1781,12 @@
         var p = date.value.split('-');
         return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), Math.floor(m / 60), m % 60, 0, 0).getTime();
       },
+      // The day picked, at midnight.
+      day: function () {
+        if (!date.value) return null;
+        var p = date.value.split('-');
+        return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getTime();
+      },
       // Select the period (or other time) a moment falls on.
       set: function (ms) {
         var d = new Date(ms);
@@ -1739,7 +1807,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'proctorScreen', 'proctorRoomScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -1763,7 +1831,7 @@
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') $('liveBox').hidden = true;
   }
-  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student work', classScreen: 'Class', printScreen: 'Printing' };
+  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student work', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
   $('workHome').addEventListener('click', function () {
     if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
     showDash();
@@ -1876,6 +1944,9 @@
       return;
     }
     mode = 'room';
+    $('proctorHomeWrap').hidden = !me.proctor;
+    // A proctor starts on the sessions they proctor.
+    if (me.proctor && !linked) { showProctor(); return; }
     // A link goes straight to its writing session. Otherwise the student's own
     // writing sessions (their classes', and ones with their own time) are looked
     // up: one that's running opens by itself.
@@ -2240,6 +2311,14 @@
       $('submitNote').className = 'fine warn';
       $('submitNote').textContent = 'You left the page while writing, so you’re locked out. Ask your teacher to let you back in; this page opens again by itself when they do.';
     }
+    // Paused: no writing, and the clock is stopped, until it's resumed.
+    var paused = inRoom && !handedIn && !lockedOut && roomInfo && roomInfo.paused && !previewing;
+    if (paused) {
+      $('startBtn').disabled = true;
+      $('submitNote').hidden = false;
+      $('submitNote').className = 'fine warn';
+      $('submitNote').textContent = 'Paused. Your time is stopped, and you can leave the page. This page opens again by itself when your teacher or proctor resumes it.';
+    }
     // Asking flags this student on the teacher's page.
     var canAsk = handedIn || lockedOut;
     $('askUnlockBtn').hidden = !canAsk;
@@ -2249,6 +2328,14 @@
     show('readyScreen');
     if (handedIn) poll(pollRelease, POLL_WAITING_MS);
     else if (lockedOut) poll(pollReadyUnlock, POLL_WAITING_MS);
+    else if (paused) poll(pollResume, POLL_WAITING_MS);
+  }
+  async function pollResume() {
+    var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
+    noteNow(data.room.now);
+    roomInfo = data.room;
+    if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
+    if (!data.room.paused) showReady();
   }
   async function pollReadyUnlock() {
     var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
@@ -2466,7 +2553,9 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; if (writing) drawPrompt(); }
+      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; if (writing) drawPrompt(); }
+      // Paused by the teacher or a proctor: out of the writing until they resume it.
+      if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session: hand in now, with everything written
       // (replacing the copy Luddite handed in from the last backup).
       if (roomInfo && writing && !locked && (d.room.autoHandedIn || (d.room.state === 'ended' && !d.room.own && P().autoHandIn))) {
@@ -2721,6 +2810,7 @@
   function enterWriting() {
     if (mode === 'room' && roomInfo && roomInfo.handedIn && !previewing) { showReady(); return; }
     if (mode === 'room' && roomInfo && roomInfo.lockedOut && !previewing && !isTester(me.email)) { showReady(); return; }
+    if (mode === 'room' && roomInfo && roomInfo.paused && !previewing) { showReady(); return; }
     if (mode === 'room' && !previewing && roomInfo && roomInfo.endAt && nowMs() >= roomInfo.endAt) { showReady(); return; }
     requestFs().then(function () {
       settle();
@@ -3040,8 +3130,12 @@
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
+    if (me.role === 'owner') loadPermProctors();
+    $('permProctorsSection').hidden = me.role !== 'owner';
     loadStudents();
     loadForYou();
+    $('proctorBox').hidden = true;
+    if (me.proctor) loadProctorList($('proctorDashList'), $('proctorBox'));
     poll(loadRooms, POLL_DASH_MS);
   }
   // Sessions on Home that this teacher writes in (not their own).
@@ -3437,18 +3531,41 @@
     if (open && !classes.length) setClassFormOpen(true);
   }
   $('classesToggle').addEventListener('click', function () { setClassesOpen($('classesBox').hidden); });
+  // The classes picked for a new writing session (one session each), or a list typed in.
+  var pickedClasses = [], pickedList = false;
+  function classById(id) { for (var i = 0; i < classes.length; i++) if (classes[i].id === id) return classes[i]; return null; }
   function fillClassSelects() {
-    var sel = $('newRoomClass'), keep = sel.value;
-    sel.innerHTML = '';
-    var none = el('option', null, classes.length ? 'No class (students use the Entry Phrase)' : 'No classes yet (add one under Student work)');
-    none.value = '';
-    sel.appendChild(none);
-    classes.forEach(function (c) { var o = el('option', null, c.name + ' (' + c.count + ')'); o.value = c.id; sel.appendChild(o); });
-    var typed = el('option', null, 'Type in email addresses…'); typed.value = '__list';
-    sel.appendChild(typed);
-    sel.value = keep;
-    if (sel.selectedIndex < 0) sel.value = '';
-    $('newRoomEmailsBox').hidden = sel.value !== '__list';
+    var box = $('newRoomClasses');
+    pickedClasses = pickedClasses.filter(classById);
+    var sig = JSON.stringify([classes, pickedClasses, pickedList]);
+    if (box.getAttribute('data-sig') !== sig) {
+      box.setAttribute('data-sig', sig);
+      box.innerHTML = '';
+      classes.forEach(function (c) {
+        var b = el('button', pickedClasses.indexOf(c.id) !== -1 ? 'on' : null, c.name);
+        b.type = 'button';
+        if (c.period) b.appendChild(el('span', 'per', c.period + ' period'));
+        b.addEventListener('click', function () {
+          var i = pickedClasses.indexOf(c.id);
+          if (i === -1) pickedClasses.push(c.id); else pickedClasses.splice(i, 1);
+          pickedList = false;
+          fillClassSelects();
+          syncClassTime();
+        });
+        box.appendChild(b);
+      });
+      var typed = el('button', pickedList ? 'on' : null, 'Type in email addresses');
+      typed.type = 'button';
+      typed.addEventListener('click', function () {
+        pickedList = !pickedList;
+        pickedClasses = [];
+        fillClassSelects();
+        syncClassTime();
+        if (pickedList) $('newRoomEmails').focus();
+      });
+      box.appendChild(typed);
+    }
+    $('newRoomEmailsBox').hidden = !pickedList;
     var f = $('studentClass'), fk = f.value;
     f.innerHTML = '';
     var all = el('option', null, 'All my students'); all.value = '';
@@ -3465,11 +3582,51 @@
       });
     });
   }
-  segPick('whenSeg', 'data-when', function (v) {
+  function setWhen(v) {
     newWhen = v;
+    each('#whenSeg button', function (x) { x.classList.toggle('on', x.getAttribute('data-when') === v); });
     $('newRoomPicker').hidden = v !== 'later';
     if (v === 'later' && !newPicker) newPicker = makePicker($('newRoomPicker'));
-  });
+    syncPeriodNote();
+  }
+  segPick('whenSeg', 'data-when', setWhen);
+
+  // ---- Class periods: a class's writing sessions start at its period ----
+  function periodOf(letter) { for (var i = 0; i < PERIODS.length; i++) if (PERIODS[i].letter === letter) return PERIODS[i]; return null; }
+  function atMinutes(dayMs, m) { var d = new Date(dayMs); d.setHours(Math.floor(m / 60), m % 60, 0, 0); return d.getTime(); }
+  // The next school day (Monday to Friday) on which all these periods are still ahead.
+  function nextDayFor(letters) {
+    var d = new Date(); d.setHours(0, 0, 0, 0);
+    for (var n = 0; n < 14; n++, d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+      var day = d.getTime();
+      if (letters.every(function (l) { return atMinutes(day, periodOf(l).start) > Date.now(); })) return day;
+    }
+    return d.getTime();
+  }
+  function pickedWithPeriods() { return pickedClasses.map(classById).filter(function (c) { return c && c.period && periodOf(c.period); }); }
+  // Picking classes with periods: the start defaults to the period (several
+  // classes: each its own period, on the day picked).
+  function syncClassTime() {
+    var withP = pickedWithPeriods();
+    if (withP.length) {
+      setWhen('later');
+      var day = nextDayFor(withP.map(function (c) { return c.period; }));
+      newPicker.set(atMinutes(day, periodOf(withP[0].period).start));
+    }
+    syncPeriodNote();
+  }
+  function syncPeriodNote() {
+    var withP = pickedWithPeriods(), note = $('newRoomPeriodNote');
+    var many = pickedClasses.length > 1;
+    note.hidden = !(many && newWhen === 'later');
+    if (note.hidden) return;
+    var bits = pickedClasses.map(classById).map(function (c) {
+      var p = c.period && periodOf(c.period);
+      return c.name + ': ' + (p ? c.period + ' period, ' + hm(p.start, true) : 'the time picked above');
+    });
+    note.textContent = 'One writing session for each class, on the day picked above. ' + bits.join('; ') + '.';
+  }
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     var title = $('newRoomTitle').value.trim();
@@ -3478,30 +3635,55 @@
     var casual = $('newRoomCasual').checked;
     $('newRoomNote').hidden = !!title || casual;
     if (!title && !casual) { $('newRoomTitle').focus(); return; }
-    var startAt = null;
-    if (newWhen === 'later') {
-      startAt = newPicker && newPicker.get();
-      if (!startAt) { note.textContent = 'Pick a day and a period (or another time).'; note.hidden = false; return; }
-      if (startAt < Date.now() - 60000) { note.textContent = 'That time has already passed. Pick a later one.'; note.hidden = false; return; }
-    }
     // A list typed in for this session alone, in place of a class.
-    var listOnly = !casual && $('newRoomClass').value === '__list';
+    var listOnly = !casual && pickedList;
     var listed = listOnly ? extractEmails($('newRoomEmails').value) : [];
     if (listOnly && !listed.length) { note.textContent = 'Type in at least one email address, or pick a class.'; note.hidden = false; $('newRoomEmails').focus(); return; }
+    // One writing session per class picked (or one with no class).
+    var targets = casual || listOnly || !pickedClasses.length ? [null] : pickedClasses.map(classById).filter(Boolean);
+    var many = targets.length > 1;
+    var picked = newWhen === 'later' ? newPicker && newPicker.get() : null;
+    var starts = [];
+    for (var i = 0; i < targets.length; i++) {
+      var c = targets[i], p = c && c.period && periodOf(c.period);
+      var startAt = null;
+      if (newWhen === 'later') {
+        // Several classes: each at its own period on the day picked.
+        startAt = many && p ? atMinutes(newPicker.day(), p.start) : picked;
+        if (!startAt) { note.textContent = 'Pick a day and a period (or another time).'; note.hidden = false; return; }
+        if (startAt < Date.now() - 60000) { note.textContent = (many ? c.name + '’s time' : 'That time') + ' has already passed. Pick a later day.'; note.hidden = false; return; }
+      }
+      starts.push(startAt);
+    }
+    var made = [];
     try {
-      var data = await api('/luddite/assignments', casual
-        ? { casual: true, title: title, prompt: $('newRoomPrompt').value.trim(), startAt: startAt }
-        : { title: title, prompt: $('newRoomPrompt').value.trim(), classId: listOnly ? null : $('newRoomClass').value || null, emails: listOnly ? listed : undefined, startAt: startAt });
-      $('newRoomTitle').value = '';
-      $('newRoomPrompt').value = '';
-      $('newRoomEmails').value = '';
-      $('newRoomEmailsFound').textContent = '';
-      if (casual) { phraseNext = true; $('newRoomCasual').checked = false; $('newRoomCasual').dispatchEvent(new Event('change')); }
-      openRoom(data.room.code);
+      for (var j = 0; j < targets.length; j++) {
+        var prompt = $('newRoomPrompt').value.trim();
+        var data = await api('/luddite/assignments', casual
+          ? { casual: true, title: title, prompt: prompt, startAt: starts[j] }
+          : { title: title, prompt: prompt, classId: targets[j] ? targets[j].id : null, emails: listOnly ? listed : undefined, startAt: starts[j] });
+        made.push(data.room);
+      }
     } catch (err) {
       if (err.message === 'signed_out') return;
-      note.textContent = 'Couldn’t make it. Try again.'; note.hidden = false;
+      note.textContent = made.length ? 'Made ' + made.length + ' of ' + targets.length + '; the rest couldn’t be made. Try those again.' : 'Couldn’t make it. Try again.';
+      note.hidden = false;
+      if (made.length) { pickedClasses = pickedClasses.slice(made.length); fillClassSelects(); lastDrawn = ''; loadRooms(); }
+      return;
     }
+    $('newRoomTitle').value = '';
+    $('newRoomPrompt').value = '';
+    $('newRoomEmails').value = '';
+    $('newRoomEmailsFound').textContent = '';
+    if (casual) { phraseNext = true; $('newRoomCasual').checked = false; $('newRoomCasual').dispatchEvent(new Event('change')); }
+    if (!many) { openRoom(made[0].code); return; }
+    pickedClasses = [];
+    fillClassSelects();
+    syncPeriodNote();
+    setNewOpen(false);
+    lastDrawn = '';
+    loadRooms();
+    tell('Made ' + made.length + ' writing sessions', made.map(function (r, k) { return targets[k].name + ': ' + whenLabel(r.startAt); }).join('; ') + '.');
   });
   // A casual session: the name is optional and there's no class; it opens
   // on its Entry Phrase to hand out.
@@ -3515,6 +3697,32 @@
   $('newRoomTitle').addEventListener('input', function () { if ($('newRoomTitle').value.trim()) $('newRoomNote').hidden = true; });
 
   // ---- Classes: a list of email addresses ----
+  // A row of period buttons (None, A-H); onPick(letter or '').
+  function periodSeg(host, value, onPick) {
+    host.innerHTML = '';
+    [''].concat(PERIODS.map(function (p) { return p.letter; })).forEach(function (l) {
+      var b = el('button', l === (value || '') ? 'on' : null, l || 'None');
+      b.type = 'button';
+      if (l) b.title = l + ' period, ' + hm(periodOf(l).start, true);
+      b.addEventListener('click', function () {
+        each('#' + host.id + ' button', function (x) { x.classList.toggle('on', x === b); });
+        onPick(l);
+      });
+      host.appendChild(b);
+    });
+  }
+  // "D period English", "English (Period D)" -> D.
+  function periodInName(name) {
+    var m = String(name).match(/\b([A-H])\s*[- ]?\s*period\b|\bperiod\s*([A-H])\b|\(([A-H])\)/i);
+    return m ? (m[1] || m[2] || m[3]).toUpperCase() : '';
+  }
+  var newClassPeriod = '', newClassPeriodSet = false;
+  periodSeg($('newClassPeriod'), '', function (l) { newClassPeriod = l; newClassPeriodSet = true; });
+  $('newClassName').addEventListener('input', function () {
+    if (newClassPeriodSet) return;
+    var g = periodInName($('newClassName').value);
+    if (g !== newClassPeriod) { newClassPeriod = g; periodSeg($('newClassPeriod'), g, function (l) { newClassPeriod = l; newClassPeriodSet = true; }); }
+  });
   function drawClasses() {
     var box = $('classList');
     box.innerHTML = '';
@@ -3525,7 +3733,7 @@
       card.setAttribute('role', 'button');
       var info = el('div', 'info');
       info.appendChild(el('h4', null, c.name));
-      info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students')));
+      info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students') + (c.period ? ' \u00b7 ' + c.period + ' period' : '')));
       card.appendChild(info);
       card.addEventListener('click', function () { openClass(c.id); });
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openClass(c.id); } });
@@ -3553,10 +3761,6 @@
     });
   }
   wireEmailFile($('newClassFile'), $('newClassEmails'), $('newClassFound'));
-  $('newRoomClass').addEventListener('change', function () {
-    $('newRoomEmailsBox').hidden = $('newRoomClass').value !== '__list';
-    if (!$('newRoomEmailsBox').hidden) $('newRoomEmails').focus();
-  });
   $('newRoomEmails').addEventListener('input', function () {
     var n = extractEmails($('newRoomEmails').value).length;
     $('newRoomEmailsFound').textContent = n ? 'Found ' + plural(n, 'email address', 'email addresses') + '. They’re let in on their own.' : '';
@@ -3568,8 +3772,10 @@
     var found = $('newClassFound');
     if (!name) { found.className = 'fine warn'; found.textContent = 'Give the class a name first.'; $('newClassName').focus(); return; }
     try {
-      var data = await api('/luddite/classes', { name: name, emails: emails });
+      var data = await api('/luddite/classes', { name: name, emails: emails, period: newClassPeriod });
       $('newClassName').value = ''; $('newClassEmails').value = ''; found.textContent = '';
+      newClassPeriod = ''; newClassPeriodSet = false;
+      periodSeg($('newClassPeriod'), '', function (l) { newClassPeriod = l; newClassPeriodSet = true; });
       setClassFormOpen(false);
       openClass(data['class'].id);
     } catch (err) {
@@ -3592,6 +3798,9 @@
     if (!openedClass) return;
     $('className').textContent = openedClass.name;
     $('classCountLine').textContent = plural(openedClass.emails.length, 'student', 'students') + ' on the list';
+    periodSeg($('classPeriodSeg'), openedClass.period || '', function (l) {
+      classAction('period', { period: l }).then(function () { var c = classById(openedClass.id); if (c) c.period = l; });
+    });
     var box = $('classRoster');
     box.innerHTML = '';
     if (!openedClass.emails.length) box.appendChild(el('div', 'empty', 'No one on this list yet. Add addresses above.'));
@@ -3701,6 +3910,188 @@
       list.appendChild(row);
     });
   }
+  // Owners: permanent proctors (the testing center always is one).
+  async function loadPermProctors(data) {
+    try { data = data || await api('/luddite/proctors'); } catch (e) { return; }
+    var list = $('permProctorList');
+    list.innerHTML = '';
+    data.always.concat(data.proctors.map(function (x) { return x.email; })).forEach(function (email) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, email));
+      row.appendChild(w);
+      if (data.always.indexOf(email) !== -1) { row.appendChild(el('span', 'pill', 'Testing center')); list.appendChild(row); return; }
+      row.appendChild(button('Remove', 'btn small ghost', async function () {
+        if (!await ask({ title: 'Stop ' + email + ' proctoring?', text: 'Sessions a teacher added them to themselves keep them.', ok: 'Remove', danger: true })) return;
+        loadPermProctors(await api('/luddite/proctors', { remove: email }));
+      }));
+      list.appendChild(row);
+    });
+  }
+  $('addPermProctorBtn').addEventListener('click', async function () {
+    var e = await ask({ title: 'Add a permanent proctor', text: 'In every writing session, they can let in, unlock, and begin or pause the time of each student with own time. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
+    if (!e) return;
+    var found = extractEmails(e)[0];
+    var note = $('permProctorNote');
+    note.hidden = false;
+    if (!found) { note.className = 'fine warn'; note.textContent = 'That isn’t an email address.'; return; }
+    try {
+      loadPermProctors(await api('/luddite/proctors', { add: found }));
+      note.className = 'fine good'; note.textContent = 'Added ' + found + '.';
+    } catch (err) {
+      note.className = 'fine warn';
+      note.textContent = err.message === 'owner_not_proctor' ? 'Your own addresses can’t be proctors.' : 'Couldn’t add them. Try again.';
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Proctors: let students in, unlock them, begin or pause their time.
+  // Never what anyone writes (the server doesn't send it).
+  // ---------------------------------------------------------------------
+  var pxCode = '', pxSession = null;
+  function showProctor() {
+    show('proctorScreen');
+    poll(function () { return loadProctorList($('proctorList'), null); }, POLL_DASH_MS);
+  }
+  async function loadProctorList(box, panel) {
+    var data;
+    try { data = await api('/luddite/proctor'); } catch (e) { return; }
+    noteNow(data.now);
+    var list = data.sessions.slice().sort(function (a, b) {
+      var ra = a.state === 'running' ? 0 : 1, rb = b.state === 'running' ? 0 : 1;
+      return ra - rb || (a.next || a.startAt) - (b.next || b.startAt);
+    });
+    if (panel) panel.hidden = !list.length;
+    var sig = JSON.stringify(list);
+    if (box.getAttribute('data-sig') === sig) return;
+    box.setAttribute('data-sig', sig);
+    box.innerHTML = '';
+    if (!list.length) box.appendChild(el('div', 'empty', 'Nothing to proctor right now. Sessions show up here once a student has own time in one, or a teacher adds you.'));
+    list.forEach(function (x) {
+      var row = el('div', 'item click');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, x.title));
+      var bits = [x.teacherName];
+      bits.push(x.state === 'running' ? 'happening now' : x.state === 'upcoming' ? 'starts ' + whenLabel(x.startAt) : 'past');
+      if (x.next && x.next < 9e15) bits.push('next own time ' + whenLabel(x.next));
+      if (x.writing) bits.push(x.writing + ' writing');
+      w.appendChild(el('span', null, bits.join(' · ')));
+      row.appendChild(w);
+      if (x.locked) row.appendChild(el('span', 'pill status flag', plural(x.locked, 'locked out', 'locked out')));
+      if (x.waiting) row.appendChild(el('span', 'pill status ready', x.waiting + ' waiting'));
+      if (x.paused) row.appendChild(el('span', 'pill status warn', 'Paused'));
+      row.tabIndex = 0;
+      row.addEventListener('click', function (e) { if (!e.target.closest('button')) openProctorRoom(x.code); });
+      box.appendChild(row);
+    });
+  }
+  function openProctorRoom(code) {
+    pxCode = code;
+    pxSession = null;
+    $('pxTitle').textContent = '';
+    $('pxWaiting').innerHTML = '';
+    $('pxPeople').innerHTML = '';
+    $('pxNote').textContent = '';
+    $('proctorBack').innerHTML = isTeacher ? '&larr; Home' : '&larr; Sessions to proctor';
+    show('proctorRoomScreen');
+    poll(loadProctorRoom, POLL_ROOM_MS);
+  }
+  async function loadProctorRoom() {
+    try {
+      var data = await api('/luddite/proctor/session?code=' + encodeURIComponent(pxCode));
+      noteNow(data.session.now);
+      pxSession = data.session;
+      if (changed(['pxr', pxSession.people, pxSession.state, pxSession.paused, pxSession.title])) drawProctorRoom(pxSession);
+      each('#pxWaiting [data-asked]', function (n) { n.textContent = 'asked ' + ago(Number(n.getAttribute('data-asked'))); });
+    } catch (e) {
+      if (e.message === 'not_proctor' || e.message === 'no_room') proctorHome();
+    }
+  }
+  async function pxAction(action, subs, extra) {
+    try {
+      var body = { code: pxCode, action: action, subs: subs || [] };
+      Object.keys(extra || {}).forEach(function (k) { body[k] = extra[k]; });
+      pxSession = (await api('/luddite/proctor/session', body)).session;
+      $('pxNote').textContent = '';
+      lastDrawn = '';
+      drawProctorRoom(pxSession);
+    } catch (e) { $('pxNote').textContent = 'Couldn’t do that. Try again.'; }
+  }
+  function proctorHome() { if (isTeacher) showDash(); else showProctor(); }
+  $('proctorBack').addEventListener('click', proctorHome);
+  $('proctorHomeBtn').addEventListener('click', showProctor);
+  $('proctorWriteBtn').addEventListener('click', function () { mode = 'room'; showJoin(); });
+  $('pxStartBtn').addEventListener('click', function () { pxAction('startNow'); });
+  $('pxPauseAllBtn').addEventListener('click', function () { pxAction(pxSession && pxSession.paused ? 'resumeAll' : 'pauseAll'); });
+
+  function drawProctorRoom(x) {
+    $('pxTitle').textContent = x.title;
+    var chip = $('pxStamp');
+    chip.textContent = x.paused && x.state === 'running' ? '❚❚ Paused' : stateLabel(x.state, { startAt: x.startAt });
+    chip.className = 'stamp chip ' + x.state;
+    $('pxWhen').textContent = x.teacherName + ' · ' + (x.reach === 'session' ? 'you proctor everyone in it' : 'you proctor the students with own time');
+    $('pxPhrase').textContent = x.codeLabel;
+    var whole = x.reach === 'session';
+    $('pxStartBtn').hidden = !whole || x.state === 'running';
+    $('pxPauseAllBtn').hidden = !whole || x.state !== 'running';
+    $('pxPauseAllBtn').textContent = x.paused ? 'Resume everyone' : 'Pause everyone';
+    $('pxPauseAllBtn').className = 'btn small' + (x.paused ? '' : ' ghost');
+
+    var waiting = x.people.filter(function (p) { return p.status === 'waiting'; }).sort(function (a, b) { return a.requestedAt - b.requestedAt; });
+    $('pxWaitSec').hidden = !waiting.length;
+    fill('pxWaiting', waiting, '', function (p, row) {
+      var asked = el('span', 'pill', 'asked ' + ago(p.requestedAt));
+      asked.setAttribute('data-asked', p.requestedAt);
+      row.appendChild(asked);
+      row.appendChild(button('Let in', 'btn small', function () { pxAction('admit', [p.sub]); }));
+    });
+
+    var people = x.people.filter(function (p) { return p.status !== 'waiting'; });
+    people.forEach(function (p) { p.label = p.name || p.email; });
+    people.sort(function (a, b) { return a.label.localeCompare(b.label); });
+    var box = $('pxPeople');
+    box.innerHTML = '';
+    if (!people.length) box.appendChild(el('div', 'empty', 'Nobody yet.'));
+    people.forEach(function (p) {
+      var row = el('div', 'item person');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, p.label));
+      var bits = [];
+      if (p.name) bits.push(p.email);
+      if (p.own) {
+        var o = [];
+        if (p.own.startAt) o.push(p.state === 'upcoming' ? 'starts ' + whenLabel(p.own.startAt) : 'started ' + whenLabel(p.own.startAt));
+        if (p.own.multiplier > 1) o.push(p.own.multiplier + '× time');
+        bits.push('Own time' + (o.length ? ': ' + o.join(', ') : ''));
+      }
+      if (p.endAt && p.state === 'running') bits.push('until ' + clock(p.endAt));
+      w.appendChild(el('span', null, bits.join(' · ')));
+      row.appendChild(w);
+      var tag;
+      if (p.status === 'notHere') tag = p.state === 'upcoming' ? ['', 'Not started'] : p.state === 'ended' ? ['', 'Time is up'] : ['', 'Not here yet'];
+      else if (p.handedIn) tag = ['back', '✓ Handed in'];
+      else if (p.lockedOut) tag = p.askedAt ? ['flag', '⚑ Asks to be let back in'] : ['warn', 'Locked out'];
+      else if (p.paused || x.paused) tag = ['warn', 'Paused'];
+      else if (p.state === 'ended') tag = ['', 'Time is up'];
+      else if (p.away) tag = ['warn', 'Off the page'];
+      else if (p.live) tag = ['writing', 'Writing'];
+      else tag = ['', 'Not writing'];
+      row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
+      var slot = el('div', 'row');
+      slot.style.gap = '6px';
+      if (p.own && p.state === 'upcoming') slot.appendChild(button('Begin now', 'btn small', async function () {
+        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: 'Their own time starts now' + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
+      }));
+      if (p.sub && p.lockedOut && !p.handedIn) slot.appendChild(button('Let them back in', 'btn small', function () { pxAction('unlock', [p.sub]); }));
+      if (p.sub && !p.handedIn && p.state === 'running') {
+        slot.appendChild(p.paused ? button('Resume', 'btn small', function () { pxAction('resume', [p.sub]); })
+          : button('Pause', 'btn small ghost', function () { pxAction('pause', [p.sub]); }));
+      }
+      row.appendChild(slot);
+      box.appendChild(row);
+    });
+  }
+
   // Pulls every email address out of whatever's pasted: "Name <a@b.org>",
   // commas, semicolons, spaces, line breaks, mailto: and so on.
   function extractEmails(text) {
@@ -3855,6 +4246,21 @@
     // Once it's over, grading is the main thing: reopening goes in the More menu.
     $('openCloseBtn').hidden = state === 'ended';
     $('reopenBtn').hidden = state !== 'ended';
+    $('pauseAllBtn').hidden = state !== 'running';
+    $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
+    if (room.pausedAt && state === 'running') chip.textContent = '❚❚ Paused';
+    var proctors = room.proctors || [];
+    $('proctorsSection').hidden = !proctors.length;
+    var prl = $('proctorsList');
+    prl.innerHTML = '';
+    proctors.forEach(function (email) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, email));
+      row.appendChild(w);
+      row.appendChild(button('Remove', 'btn small ghost', function () { roomAction('removeProctor', [], { email: email }); }));
+      prl.appendChild(row);
+    });
     renderDrive($('driveBox'), drive);
     $('roomNote').textContent = '';
     chip.setAttribute('data-tip', state === 'ended' ? 'Over: nobody new can get in. Students already in can finish and hand in; what they handed in is below.'
@@ -4149,6 +4555,7 @@
     var tag;
     if (!over && s && s.askedAt && (s.handedIn || s.lockedOut)) tag = ['flag', '⚑ Asks to be unlocked'];
     else if (!over && s && s.lockedOut) tag = ['warn', 'Locked out'];
+    else if (!over && s && s.pausedAt && !s.handedIn) tag = ['warn', 'Paused'];
     else if (writingAgain && s.away) tag = ['warn', 'Off the page'];
     else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
     else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
@@ -4167,6 +4574,7 @@
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     var main = null;
     if (!over && s && s.lockedOut && !s.handedIn) main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
+    else if (!over && s && s.pausedAt && !s.handedIn) main = button('Resume', 'btn small', function () { roomAction('resume', [s.sub]); });
     else if (stage === 'tograde' || (stage === 'back' && !x.grade)) main = button('Grade', 'btn small' + (stage === 'tograde' ? ' tograde' : ''), open);
     else if (stage === 'graded') main = button('Hand back', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
@@ -4187,6 +4595,7 @@
     });
     if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn) item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
+    if (!over && s && !s.handedIn && !s.pausedAt) item('Pause their time', function () { roomAction('pause', [s.sub]); });
     if (s && s.email) {
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change own time' : 'Own time', function () { openOwnTime(em, p.name); });
@@ -4230,6 +4639,17 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  $('pauseAllBtn').addEventListener('click', function () {
+    $('roomMenu').open = false;
+    roomAction(teacherRoom.pausedAt ? 'resumeAll' : 'pauseAll');
+  });
+  $('addProctorRoomBtn').addEventListener('click', async function () {
+    $('roomMenu').open = false;
+    var e = await ask({ title: 'Add a proctor to “' + teacherRoom.title + '”', text: 'They can let students in, unlock anyone locked out, and begin or pause the session or one student’s time. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
+    var found = e ? extractEmails(e)[0] : '';
+    if (e && !found) { tell('That isn’t an email address', 'Try again with the proctor’s full address.'); return; }
+    if (found) roomAction('addProctor', [], { email: found });
+  });
   $('reopenBtn').addEventListener('click', function () { $('roomMenu').open = false; roomAction('startNow'); });
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
