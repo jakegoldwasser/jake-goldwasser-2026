@@ -306,7 +306,12 @@
   /* The one big button at the foot of the writing page: impossible to miss. */
   .handinbar { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
   .handinbar { gap: 12px; flex-wrap: wrap; }
-  .handinbar #leaveNowBtn { min-width: 0; padding: 16px 32px; }
+  .handinbar #leaveNowBtn, .handinbar #classWorkBtn { min-width: 0; padding: 16px 32px; }
+  .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
+  .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
+  .cwitem:hover { background: var(--hover); }
+  .cwitem b { display: block; font-weight: 600; }
+  .cwitem span { display: block; font: 14px/1.45 Literata, Georgia, serif; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .handinbar .btn { pointer-events: auto; font-size: 19px; padding: 16px 56px; min-width: min(320px, calc(100vw - 32px)); }
   .bar .left { display: flex; gap: 16px; }
   #leaves.has { color: var(--lock); opacity: 1; }
@@ -1011,7 +1016,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Messages">
@@ -1211,6 +1216,7 @@
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="pauseAllBtn">Pause everyone</button>
             <button type="button" id="atHomeBtn">Let students work on this at home</button>
+            <button type="button" id="shareWorkBtn">Allow students to see each other’s work</button>
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
@@ -1368,6 +1374,16 @@
       <form class="chatsend" id="tChatForm" autocomplete="off"><input class="field" id="tChatInput" maxlength="1000" aria-label="Your message" placeholder="Message this student"><button class="btn small" type="submit">Send</button></form>
     </div>
     <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><button class="btn ghost" id="liveClose" type="button">Close</button></div>
+  </div>
+</div>
+
+<!-- Classmates' work: while the teacher allows it, a student reads the others' writing so far -->
+<div class="handin livebox" id="classWorkBox" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="cwTitle" style="margin:0">Classmates’ work</h2><span class="fine" id="cwMeta" style="margin:0"></span></div>
+    <div class="cwlist" id="cwList"></div>
+    <div class="liveread" id="cwText" hidden></div>
+    <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
   </div>
 </div>
 
@@ -2569,7 +2585,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; if (writing) drawPrompt(); }
+      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session: hand in now, with everything written
@@ -2834,6 +2850,7 @@
       locked = false;
       $('doneBtn').textContent = mode === 'room' && !previewing ? 'Hand in' : 'Done';
       $('leaveNowBtn').hidden = !(mode === 'room' && !previewing && roomInfo && roomInfo.atHome);
+      syncClassWork();
       pad.spellcheck = P().spellcheck !== 'off';
       $('count').hidden = !P().showCount;
       pad.value = previewing ? '' : load(textKey()) || '';
@@ -2860,6 +2877,7 @@
   function lock(reason) {
     if (!writing || locked || leavingOnPurpose || !P().lockOnLeave) return;
     locked = true;
+    if (!$('classWorkBox').hidden) closeClassWork();
     save();
     var n = Number(load(leavesKey()) || 0) + 1;
     if (!previewing) store(leavesKey(), String(n));
@@ -2927,6 +2945,59 @@
     }).then(function () { resuming = false; });
   });
 
+  // Classmates' work: shown while the teacher allows it (roomInfo.shareWork), read-only.
+  var cwTimer = null, cwOpen = null, cwData = [];
+  function syncClassWork() {
+    var on = writing && mode === 'room' && !previewing && roomInfo && roomInfo.shareWork;
+    $('classWorkBtn').hidden = !on;
+    if (!on && !$('classWorkBox').hidden) closeClassWork();
+  }
+  async function loadClassWork() {
+    try { cwData = (await api('/luddite/classwork?code=' + encodeURIComponent(roomCode))).work || []; }
+    catch (e) { if (e.message === 'not_shared') { if (roomInfo) roomInfo.shareWork = false; syncClassWork(); } return; }
+    drawClassWork();
+  }
+  function drawClassWork() {
+    var list = $('cwList'), txt = $('cwText');
+    var one = cwOpen && cwData.filter(function (x) { return x.sub === cwOpen; })[0];
+    list.hidden = !!one; txt.hidden = !one; $('cwBack').hidden = !one;
+    if (one) {
+      $('cwTitle').textContent = one.name;
+      $('cwMeta').textContent = plural(wordCount(one.text), 'word', 'words') + (one.handedIn ? ' · handed in' : '');
+      if (txt.dataset.sig !== one.sub + '|' + one.at) { txt.dataset.sig = one.sub + '|' + one.at; txt.innerHTML = ''; fmtInto(txt, one.text); }
+      return;
+    }
+    $('cwTitle').textContent = 'Classmates’ work';
+    $('cwMeta').textContent = '';
+    list.innerHTML = '';
+    if (!cwData.length) list.appendChild(el('p', 'fine', 'Nobody else has written anything yet.'));
+    cwData.forEach(function (x) {
+      var b = el('button', 'cwitem');
+      b.type = 'button';
+      b.appendChild(el('b', null, x.name));
+      var t = plainOf(x.text).replace(/\s+/g, ' ').trim();
+      b.appendChild(el('span', null, t.length > 120 ? t.slice(0, 120) + '\u2026' : t));
+      b.addEventListener('click', function () { cwOpen = x.sub; drawClassWork(); });
+      list.appendChild(b);
+    });
+  }
+  function openClassWork() {
+    cwOpen = null;
+    $('cwList').innerHTML = '';
+    $('classWorkBox').hidden = false;
+    loadClassWork();
+    clearInterval(cwTimer);
+    cwTimer = setInterval(loadClassWork, 15000);
+  }
+  function closeClassWork() {
+    clearInterval(cwTimer); cwTimer = null;
+    $('classWorkBox').hidden = true;
+    if (writing && !locked) pad.focus();
+  }
+  $('classWorkBtn').addEventListener('click', openClassWork);
+  $('cwClose').addEventListener('click', closeClassWork);
+  $('cwBack').addEventListener('click', function () { cwOpen = null; drawClassWork(); });
+
   // At home: out of the writing for now, with everything sent to the server; Keep writing brings it back.
   function leaveForNow() {
     save();
@@ -2941,6 +3012,7 @@
     finishWriting(showReady);
   });
   function finishWriting(then) {
+    if (!$('classWorkBox').hidden) closeClassWork();
     leavingOnPurpose = true;
     save();
     writing = false;
@@ -4272,7 +4344,7 @@
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
+    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + (room.shareWork ? 'Students see each other’s work · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
@@ -4286,6 +4358,7 @@
     $('openCloseBtn').hidden = state === 'ended';
     $('reopenBtn').hidden = state !== 'ended';
     $('pauseAllBtn').hidden = state !== 'running' || !!room.atHome;
+    $('shareWorkBtn').textContent = room.shareWork ? 'Stop students seeing each other’s work' : 'Allow students to see each other’s work';
     $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
     $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
     if (room.pausedAt && state === 'running') chip.textContent = '❚❚ Paused';
@@ -4717,6 +4790,10 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  $('shareWorkBtn').addEventListener('click', function () {
+    $('roomMenu').open = false;
+    roomAction('shareWork', [], { on: !teacherRoom.shareWork });
+  });
   $('atHomeBtn').addEventListener('click', async function () {
     $('roomMenu').open = false;
     var on = !teacherRoom.atHome;

@@ -415,6 +415,8 @@ function studentView(room, sub, email, prefs) {
     teacherName: room.teacher.name || room.teacher.email,
     prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
     atHome: !!room.atHome,
+    // The teacher lets everyone in it read each other's writing so far (see /luddite/classwork).
+    shareWork: !!room.shareWork,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
     // Left the page while writing: locked out until the teacher lets them back in.
@@ -860,6 +862,22 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
+  // GET /luddite/classwork?code= -- while the teacher allows it (room.shareWork),
+  // a student let in reads everyone else's writing so far: name and text only.
+  if (path === '/luddite/classwork' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    const s = room.students[me.sub];
+    if (!s || s.status !== 'admitted') throw new HttpError(403, 'not_admitted');
+    if (!room.shareWork) throw new HttpError(403, 'not_shared');
+    const subs = Object.keys(room.students).filter((sub) => sub !== me.sub && room.students[sub].status === 'admitted');
+    const got = await Promise.all(subs.map((sub) => readItem('luddite:draft:' + room.code + ':' + sub)));
+    const work = subs.map((sub, i) => {
+      const st = room.students[sub], d = got[i].state;
+      return { sub, name: st.name || String(st.email || '').split('@')[0], text: d ? String(d.text || '') : '', at: d ? d.at : 0, handedIn: !!st.handedIn };
+    }).filter((x) => x.text.trim()).sort((a, b) => a.name.localeCompare(b.name));
+    return respond(200, { work });
+  }
+
   // GET /luddite/draft?code= -- this student's backed-up writing in a session.
   if (path === '/luddite/draft' && method === 'GET') {
     const { state } = await readItem('luddite:draft:' + cleanCode(q.code) + ':' + me.sub);
@@ -1276,6 +1294,7 @@ async function routeLuddite(event, method, path, info) {
       }
       else if (body.action === 'rubric') return { ...r, rubric: body.rubric ? cleanRubric(body.rubric) : null };
       // Switching it on lets back in anyone locked out.
+      else if (body.action === 'shareWork') return { ...r, shareWork: !!body.on };
       else if (body.action === 'atHome') {
         const on = !!body.on;
         const students = { ...r.students };
