@@ -163,6 +163,8 @@ const MAX_MINUTES = 300;
 // A session has no set length: its teacher ends it. Extra time is a multiple
 // of one period, and a session nobody ended is treated as over after 12 hours.
 const REF_MINUTES = 45;
+// Most days a session can be spread over.
+const MAX_SITTINGS = 10;
 const MAX_OPEN_MS = 12 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS = 4000;
 // What a teacher can switch in Preferences; these are the defaults.
@@ -328,13 +330,56 @@ const regularEnded = (r) => !!r.endedAt || r.open === false;
 function regularWindow(r) {
   const start = r.startAt || r.createdAt;
   if (r.atHome) return { start, end: null, home: true };
+  if (r.sittings) return { start: r.sittings[0].start, end: r.sittings[r.sittings.length - 1].end };
   return { start, end: r.minutes ? start + r.minutes * 60000 : null };
 }
 // Paused time (the whole session's, and this student's own) doesn't count:
 // it moves the end of their time later.
 function pausedFor(x, now) { return x ? (x.pausedMs || 0) + (x.pausedAt ? Math.max(0, now - x.pausedAt) : 0) : 0; }
+// A session over several days (`sittings`: [{ start, end }], in order, at
+// least two) runs only during its sittings: between them everyone is paused
+// (no writing, may leave the page) and keeps their writing for the next one,
+// and it ends with the last sitting. Extra time stretches every sitting; a
+// pause doesn't move the sittings.
+function sittingsWindow(room, email, entry, now) {
+  const o = room.own && room.own[email];
+  const multiplier = (o && o.multiplier) || 1;
+  const list = room.sittings.map((x) => ({ start: x.start, end: x.start + Math.round((x.end - x.start) * multiplier) }));
+  const at = list.findIndex((x) => now >= x.start && now < x.end);
+  const next = list.findIndex((x) => x.start > now);
+  const between = at === -1 && next > 0;
+  return {
+    start: list[0].start, end: list[list.length - 1].end, own: !!o, multiplier, ended: o ? false : regularEnded(room),
+    paused: !!(room.pausedAt || (entry && entry.pausedAt) || between),
+    sitting: at !== -1 ? at + 1 : between ? next : 0, sittings: list.length,
+    sittingEnd: at !== -1 ? list[at].end : null, nextAt: between ? list[next].start : null
+  };
+}
+// Sittings a teacher sends: 2 to MAX_SITTINGS, each up to 6 hours, in order, not overlapping.
+function cleanSittings(x) {
+  if (!Array.isArray(x) || x.length < 2) return null;
+  if (x.length > MAX_SITTINGS) throw new HttpError(400, 'too_many_sittings');
+  const list = x.map((s) => ({ start: Math.floor(Number(s && s.start)), end: Math.floor(Number(s && s.end)) }));
+  list.forEach((s, i) => {
+    if (!(s.start > 0 && s.end > s.start && s.end - s.start <= 6 * 3600000)) throw new HttpError(400, 'bad_time');
+    if (i && s.start < list[i - 1].end) throw new HttpError(400, 'bad_time');
+  });
+  return list;
+}
+// Starting a session over several days now: the first sitting starts now
+// (if it hasn't ended yet); otherwise it becomes an ordinary session.
+function startedNow(r, now) {
+  const base = { ...r, open: true, endedAt: null, startAt: now, pausedAt: 0, pausedMs: 0 };
+  if (!r.sittings) return base;
+  if (now < r.sittings[0].start || now < r.sittings[0].end - 5 * 60000) {
+    const sittings = [{ ...r.sittings[0], start: Math.min(now, r.sittings[0].start) }, ...r.sittings.slice(1)];
+    return { ...base, sittings };
+  }
+  return { ...base, sittings: undefined };
+}
 function windowOf(room, email, entry) {
   const now = Date.now();
+  if (room.sittings && !room.atHome) return sittingsWindow(room, email, entry, now);
   const reg = regularWindow(room);
   const paused = !!(room.pausedAt || (entry && entry.pausedAt));
   const held = pausedFor(room, now) + pausedFor(entry, now);
@@ -392,6 +437,7 @@ function roomSummary(room) {
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running', state, createdAt: room.createdAt,
     classId: room.classId || null, casual: !!room.casual, atHome: !!room.atHome, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
+    sittings: room.sittings || null,
     invited: (room.emails || []).length,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
@@ -434,7 +480,10 @@ function studentView(room, sub, email, prefs) {
     // Handing in is final: no more writing until the teacher releases them.
     handedIn: !!(me && me.handedIn),
     // Paused by the teacher or a proctor: no writing, and the clock is stopped.
-    paused: win.paused
+    paused: win.paused,
+    // Over several days: which day (sitting) it is, of how many, when today's
+    // ends, and when the next one starts (between days).
+    sitting: win.sitting || 0, sittings: win.sittings || 0, sittingEnd: win.sittingEnd || null, nextAt: win.nextAt || null
   };
 }
 
@@ -478,7 +527,9 @@ async function getClass(id, me, role) {
   return state;
 }
 
-const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt, period: c.period || '' });
+const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt, period: c.period || '', color: c.color == null ? null : c.color });
+// A class's color: which of the page's class colors (0-7) marks it; null = picked for it by the page.
+const cleanColor = (x) => (Number.isInteger(x) && x >= 0 && x < 8 ? x : null);
 // The class's period letter (A-H), which its writing sessions start at by default.
 const cleanPeriod = (p) => (/^[A-H]$/.test(String(p || '').toUpperCase()) ? String(p).toUpperCase() : '');
 
@@ -846,7 +897,7 @@ async function routeLuddite(event, method, path, info) {
       // `away` means off the page right now. `lockedOut` keeps them off it
       // until the teacher lets them back in (the room's 'unlock' action).
       // While paused they may step away (that's what a pause is for).
-      const held = !!(r.pausedAt || s.pausedAt);
+      const held = windowOf(r, lower(s.email), s).paused;
       if (body.type === 'left' && held) Object.assign(next, { away: true, writing: false });
       // At home, leaving the page still counts, but never locks them out.
       else if (body.type === 'left' && r.atHome) Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false });
@@ -1095,7 +1146,7 @@ async function routeLuddite(event, method, path, info) {
     if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
     const id = randomBytes(6).toString('hex');
     const teacher = { ...me, name: await displayNameOf(info, role) };
-    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period) }));
+    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period), color: cleanColor(body.color) }));
     // A new class goes at the end of the list (see classIdsOf).
     await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [...classIdsOf(t), id], classesOrdered: true }));
     await indexClass(id, emails, []);
@@ -1107,7 +1158,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { class: await getClass(q.id, me, role) });
   }
 
-  // PUT /luddite/class { id, action: rename | period | add | remove | delete, name, period, emails }
+  // PUT /luddite/class { id, action: rename | period | color | add | remove | delete, name, period, color, emails }
   if (path === '/luddite/class' && method === 'PUT') {
     const cls = await getClass(body.id, me, role);
     const emails = cleanEmails(body.emails);
@@ -1120,6 +1171,7 @@ async function routeLuddite(event, method, path, info) {
         return { ...c, name };
       }
       if (body.action === 'period') return { ...c, period: cleanPeriod(body.period) };
+      if (body.action === 'color') return { ...c, color: cleanColor(body.color) };
       if (body.action === 'add') {
         added = emails.filter((e) => !c.emails.includes(e));
         if (c.emails.length + added.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
@@ -1259,7 +1311,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/assignments { title, prompt, classId | emails, startAt, atHome } -- make a
+  // PUT /luddite/assignments { title, prompt, classId | emails, startAt | sittings, atHome } -- make a
   // writing session with a fresh two-word Entry Phrase. It needs a name that
   // says what it is. startAt (ms; omitted = now) is when it starts and the
   // teacher ends it; prompt (optional) is shown to students at the top of
@@ -1272,7 +1324,9 @@ async function routeLuddite(event, method, path, info) {
     const title = String(body.title || '').trim().slice(0, 80);
     if (!title && !casual) throw new HttpError(400, 'need_title');
     const prompt = String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS);
-    const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
+    // Over several days (not casual or at home): the sittings, in order; it starts with the first.
+    const sittings = casual || body.atHome ? null : cleanSittings(body.sittings);
+    const startAt = sittings ? sittings[0].start : Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : Date.now();
     // Who's let in on their own: a class, or a list of addresses typed in for this session alone.
     const emails = casual ? [] : cleanEmails(body.emails);
     if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
@@ -1283,7 +1337,7 @@ async function routeLuddite(event, method, path, info) {
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title: title || codeLabel, titled: !!title, atHome: !casual && !!body.atHome, teacher, classId: cls ? cls.id : null, emails: emails.length ? emails : undefined, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title: title || codeLabel, titled: !!title, atHome: !casual && !!body.atHome, teacher, classId: cls ? cls.id : null, emails: emails.length ? emails : undefined, startAt, sittings: sittings || undefined, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -1325,7 +1379,8 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: Date.now() }; });
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, askedAt: 0, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
-      else if (body.action === 'startNow' || body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now(), pausedAt: 0, pausedMs: 0 };
+      else if (body.action === 'startNow') return startedNow(r, Date.now());
+      else if (body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now(), pausedAt: 0, pausedMs: 0, sittings: undefined };
       else if (body.action === 'pause' || body.action === 'resume') subs.forEach((sub) => { if (students[sub]) students[sub] = paused(students[sub], body.action === 'pause', Date.now()); });
       else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', Date.now());
       else if (body.action === 'addProctor') {
@@ -1339,6 +1394,11 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'schedule') {
         const startAt = Math.floor(Number(body.startAt));
         if (!(startAt > 0)) throw new HttpError(400, 'bad_time');
+        // Over several days: every day moves by the same amount.
+        if (r.sittings) {
+          const by = startAt - r.sittings[0].start;
+          return { ...r, open: true, endedAt: null, startAt, sittings: r.sittings.map((x) => ({ start: x.start + by, end: x.end + by })) };
+        }
         return { ...r, open: true, endedAt: null, startAt };
       }
       else if (body.action === 'rubric') return { ...r, rubric: body.rubric ? cleanRubric(body.rubric) : null };
@@ -1535,7 +1595,7 @@ function proctorView(room, reach) {
   const reg = regularWindow(room);
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), teacherName: room.teacher.name || room.teacher.email,
-    reach, prompt: room.prompt || '', state: stateAt({ ...reg, ended: regularEnded(room) }, now), startAt: reg.start, paused: !!room.pausedAt,
+    reach, prompt: room.prompt || '', state: stateAt({ ...reg, ended: regularEnded(room) }, now), startAt: reg.start, paused: !!room.pausedAt || !!(room.sittings && !room.atHome && sittingsWindow(room, '', null, now).paused),
     people, now
   };
 }
@@ -1610,7 +1670,7 @@ async function routeProctor(method, path, q, body, me) {
         if (!own[email] && reach !== 'session') throw new HttpError(403, 'not_proctor');
         return { ...r, own: { ...own, [email]: { ...(own[email] || { multiplier: 1 }), startAt: t, setAt: t, begunBy: lower(me.email) } } };
       }
-      else if (body.action === 'startNow') return { ...r, open: true, endedAt: null, startAt: t, pausedAt: 0, pausedMs: 0 };
+      else if (body.action === 'startNow') return startedNow(r, t);
       else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', t);
       else throw new HttpError(400, 'bad_action');
       return { ...r, students };
