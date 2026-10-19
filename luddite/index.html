@@ -1109,6 +1109,7 @@
       <form id="newRoomForm">
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
+          <label class="fine casualcheck" id="atHomeRow"><input type="checkbox" id="newRoomAtHome"> Let students work on this at home <span class="q" tabindex="0" data-tip="No full screen and no locking: students can close the page and come back to it, on any computer, until you end the session. Their writing is kept on the server as they go.">?</span></label>
           <label class="fine casualcheck"><input type="checkbox" id="newRoomCasual"> Casual session <span class="q" tabindex="0" data-tip="No name or class needed: anyone who types the Entry Phrase comes straight in, with no waiting room.">?</span></label>
 
           <div class="formrow">
@@ -1195,6 +1196,7 @@
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="pauseAllBtn">Pause everyone</button>
+            <button type="button" id="atHomeBtn">Let students work on this at home</button>
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
@@ -2238,7 +2240,10 @@
     if (draftTried[key] || mode !== 'room' || previewing || !roomCode) return;
     draftTried[key] = true;
     api('/luddite/draft?code=' + encodeURIComponent(roomCode)).then(function (d) {
-      if (!d.draft || !d.draft.text || (load(key) || '').trim() || writing) return;
+      if (!d.draft || !d.draft.text || writing) return;
+      // The server's copy wins when it's newer than this device's (written on another computer).
+      var local = (load(key) || '');
+      if (local.trim() && (local === d.draft.text || !(d.draft.at > Number(load(key + '.at') || 0) + 5000))) return;
       store(key, d.draft.text);
       lastBackedUp = d.draft.text;
       if (!$('readyScreen').hidden) showReady();
@@ -2253,6 +2258,7 @@
     $('readyRoom').hidden = !inRoom;
     // Say only the rules this teacher has switched on.
     var rules = [];
+    if (inRoom && roomInfo && roomInfo.atHome) rules.push('You can work on this at home: close the page whenever you like and come back to it, on any computer, until your teacher ends the session');
     if (P().lockOnLeave) rules.push('Writing opens full screen. Leaving it \u2014 another tab, another app, or Esc \u2014 locks the page' + (inRoom ? ', and your teacher sees each time' : ''));
     if (P().blockPaste) rules.push('You can cut, copy and paste within your writing, but nothing can be pasted in from elsewhere');
     if (inRoom) rules.push('Your teacher can see what you’ve written so far while the session runs');
@@ -3114,11 +3120,20 @@
   var saveTimer = null;
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 400); }
   // A teacher's preview never overwrites their own saved writing.
-  function save() { clearTimeout(saveTimer); if (writing && !previewing) store(textKey(), shadow); }
-  window.addEventListener('pagehide', save);
+  function save() { clearTimeout(saveTimer); if (writing && !previewing) { store(textKey(), shadow); store(textKey() + '.at', String(nowMs())); } }
+  // Closing the page: keep it here, and (in a session) send the server the last of the writing.
+  window.addEventListener('pagehide', function () {
+    save();
+    if (!writing || mode !== 'room' || previewing || !roomCode || shadow === lastBackedUp) return;
+    try {
+      fetch(API + '/luddite/event', { method: 'PUT', keepalive: true, headers: { Authorization: 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: roomCode, type: 'idle', words: wordCount(shadow), text: shadow }) });
+    } catch (e) {}
+  });
   window.addEventListener('beforeunload', function (e) {
     save();
-    if (writing) { e.preventDefault(); e.returnValue = ''; }
+    // At home, closing the page is fine (the writing was just sent); in class it asks first.
+    if (writing && !(mode === 'room' && roomInfo && roomInfo.atHome)) { e.preventDefault(); e.returnValue = ''; }
   });
 
   // ---------------------------------------------------------------------
@@ -3472,7 +3487,7 @@
     var forWhom = r.classId ? classNameOf(r.classId) : !r.casual && r.invited ? plural(r.invited, 'invited student', 'invited students') : '';
     var sl = el('div', 'stampline');
     if (forWhom) { sl.appendChild(el('span', 'forclass', forWhom)); sl.appendChild(document.createTextNode(' \u00b7 ')); }
-    sl.appendChild(document.createTextNode(whenRange(r)));
+    sl.appendChild(document.createTextNode(whenRange(r) + (r.atHome ? ' \u00b7 At home' : '')));
     ttl.appendChild(sl);
     top.appendChild(ttl);
     card.appendChild(top);
@@ -3661,7 +3676,7 @@
         var prompt = $('newRoomPrompt').value.trim();
         var data = await api('/luddite/assignments', casual
           ? { casual: true, title: title, prompt: prompt, startAt: starts[j] }
-          : { title: title, prompt: prompt, classId: targets[j] ? targets[j].id : null, emails: listOnly ? listed : undefined, startAt: starts[j] });
+          : { title: title, prompt: prompt, classId: targets[j] ? targets[j].id : null, emails: listOnly ? listed : undefined, startAt: starts[j], atHome: $('newRoomAtHome').checked });
         made.push(data.room);
       }
     } catch (err) {
@@ -3675,6 +3690,7 @@
     $('newRoomPrompt').value = '';
     $('newRoomEmails').value = '';
     $('newRoomEmailsFound').textContent = '';
+    $('newRoomAtHome').checked = false;
     if (casual) { phraseNext = true; $('newRoomCasual').checked = false; $('newRoomCasual').dispatchEvent(new Event('change')); }
     if (!many) { openRoom(made[0].code); return; }
     pickedClasses = [];
@@ -3691,6 +3707,7 @@
   $('newRoomCasual').addEventListener('change', function () {
     var casual = $('newRoomCasual').checked;
     $('classRow').hidden = casual;
+    $('atHomeRow').hidden = casual;
     $('newRoomTitle').placeholder = casual ? 'Name (optional)' : 'Type the writing session name here';
     if (casual) $('newRoomNote').hidden = true;
   });
@@ -4197,6 +4214,7 @@
     var w = sessionWindow(room), now = Date.now();
     if (room.endedAt || room.open === false) return 'ended';
     if (now < w.start) return 'upcoming';
+    if (room.atHome && !w.end) return 'running';
     if (now >= (w.end || w.start + 12 * 3600000)) return 'ended';
     return 'running';
   }
@@ -4233,7 +4251,7 @@
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
+    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
@@ -4246,7 +4264,8 @@
     // Once it's over, grading is the main thing: reopening goes in the More menu.
     $('openCloseBtn').hidden = state === 'ended';
     $('reopenBtn').hidden = state !== 'ended';
-    $('pauseAllBtn').hidden = state !== 'running';
+    $('pauseAllBtn').hidden = state !== 'running' || !!room.atHome;
+    $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
     $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
     if (room.pausedAt && state === 'running') chip.textContent = '❚❚ Paused';
     var proctors = room.proctors || [];
@@ -4556,7 +4575,7 @@
     if (!over && s && s.askedAt && (s.handedIn || s.lockedOut)) tag = ['flag', '⚑ Asks to be unlocked'];
     else if (!over && s && s.lockedOut) tag = ['warn', 'Locked out'];
     else if (!over && s && s.pausedAt && !s.handedIn) tag = ['warn', 'Paused'];
-    else if (writingAgain && s.away) tag = ['warn', 'Off the page'];
+    else if (writingAgain && s.away && !room.atHome) tag = ['warn', 'Off the page'];
     else if (writingAgain && isLive(s)) tag = ['writing', 'Writing'];
     else if (stage === 'tograde') tag = null; // the yellow Grade button already says it
     else if (stage === 'graded') tag = ['ready', x.grade ? 'Graded: ' + x.grade : 'Marked up'];
@@ -4639,6 +4658,14 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  $('atHomeBtn').addEventListener('click', async function () {
+    $('roomMenu').open = false;
+    var on = !teacherRoom.atHome;
+    if (!await ask(on
+      ? { title: 'Let students work on “' + teacherRoom.title + '” at home?', text: 'No full screen and no locking: they can close the page and come back to it, on any computer, until you end the session. Anyone locked out now is let back in.', ok: 'Let them work at home' }
+      : { title: 'Back to class rules?', text: 'Writing opens full screen again, and leaving the page locks it, as your Settings say.', ok: 'Back to class rules' })) return;
+    roomAction('atHome', [], { on: on });
+  });
   $('pauseAllBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction(teacherRoom.pausedAt ? 'resumeAll' : 'pauseAll');

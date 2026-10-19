@@ -322,8 +322,11 @@ function ownsRoom(room, info, role) {
 // Ending it early sets endedAt, which only stops new people getting in. A student with their own time has their own window: their own
 // start (or the regular one), and the length times their multiplier.
 const regularEnded = (r) => !!r.endedAt || r.open === false;
+// A session students may work on at home (`atHome`) runs, with no time
+// limit, until the teacher ends it; leaving the page never locks anyone out.
 function regularWindow(r) {
   const start = r.startAt || r.createdAt;
+  if (r.atHome) return { start, end: null, home: true };
   return { start, end: r.minutes ? start + r.minutes * 60000 : null };
 }
 // Paused time (the whole session's, and this student's own) doesn't count:
@@ -335,7 +338,8 @@ function windowOf(room, email, entry) {
   const paused = !!(room.pausedAt || (entry && entry.pausedAt));
   const held = pausedFor(room, now) + pausedFor(entry, now);
   const o = room.own && room.own[email];
-  if (!o) return { ...reg, end: reg.end ? reg.end + held : null, own: false, multiplier: 1, ended: regularEnded(room), paused };
+  if (room.atHome && o && o.startAt) return { ...reg, start: o.startAt, own: true, multiplier: 1, ended: regularEnded(room), paused };
+  if (!o || room.atHome) return { ...reg, end: reg.end ? reg.end + held : null, own: false, multiplier: 1, ended: regularEnded(room), paused };
   const start = o.startAt || reg.start;
   const multiplier = o.multiplier || 1;
   return { start, end: start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000) + held, own: true, multiplier, ended: false, paused };
@@ -349,6 +353,7 @@ function paused(x, on, now) {
 function stateAt(win, now) {
   if (win.ended) return 'ended';
   if (now < win.start) return 'upcoming';
+  if (!win.end && win.home) return 'running';
   if (now >= (win.end || win.start + MAX_OPEN_MS)) return 'ended';
   return 'running';
 }
@@ -385,7 +390,7 @@ function roomSummary(room) {
   const state = stateAt({ ...reg, ended: regularEnded(room) }, Date.now());
   return {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running', state, createdAt: room.createdAt,
-    classId: room.classId || null, casual: !!room.casual, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
+    classId: room.classId || null, casual: !!room.casual, atHome: !!room.atHome, startAt: reg.start, endAt: reg.end, endedAt: room.endedAt || null, minutes: room.minutes || null,
     invited: (room.emails || []).length,
     ownCount: Object.keys(room.own || {}).length,
     waiting: students.filter((s) => s.status === 'waiting').length,
@@ -407,7 +412,9 @@ function studentView(room, sub, email, prefs) {
     code: room.code, codeLabel: room.codeLabel || room.code, title: titleOf(room), open: state === 'running',
     state, startAt: win.start, endAt: win.end, own: win.own, multiplier: win.multiplier, minutes: room.minutes || null, now,
     teacherName: room.teacher.name || room.teacher.email,
-    prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
+    // At home: no full screen and no locking, whatever the teacher's usual settings.
+    prompt: room.prompt || '', prefs: room.atHome ? { ...(prefs || DEFAULT_PREFS), lockOnLeave: false } : prefs || DEFAULT_PREFS,
+    atHome: !!room.atHome,
     status: me ? me.status : 'none',
     leaves: me ? me.leaves || 0 : 0,
     // Left the page while writing: locked out until the teacher lets them back in.
@@ -835,7 +842,7 @@ async function routeLuddite(event, method, path, info) {
       // `away` means off the page right now. `lockedOut` keeps them off it
       // until the teacher lets them back in (the room's 'unlock' action).
       // While paused they may step away (that's what a pause is for).
-      const held = !!(r.pausedAt || s.pausedAt);
+      const held = !!(r.pausedAt || s.pausedAt || r.atHome);
       if (body.type === 'left' && held) Object.assign(next, { away: true, writing: false });
       else if (body.type === 'left') Object.assign(next, { leaves: (s.leaves || 0) + 1, away: true, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
       if ((body.type === 'writing' || body.type === 'idle') && !s.lockedOut) Object.assign(next, { away: false, writing: body.type === 'writing' && !s.handedIn });
@@ -1183,7 +1190,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { displayName });
   }
 
-  // PUT /luddite/assignments { title, prompt, classId | emails, startAt } -- make a
+  // PUT /luddite/assignments { title, prompt, classId | emails, startAt, atHome } -- make a
   // writing session with a fresh two-word Entry Phrase. It needs a name that
   // says what it is. startAt (ms; omitted = now) is when it starts and the
   // teacher ends it; prompt (optional) is shown to students at the top of
@@ -1207,7 +1214,7 @@ async function routeLuddite(event, method, path, info) {
       try {
         room = await mutate('luddite:room:' + code, (r) => {
           if (r) throw new HttpError(409, 'code_taken');
-          return { code, codeLabel, title: title || codeLabel, titled: !!title, teacher, classId: cls ? cls.id : null, emails: emails.length ? emails : undefined, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
+          return { code, codeLabel, title: title || codeLabel, titled: !!title, atHome: !casual && !!body.atHome, teacher, classId: cls ? cls.id : null, emails: emails.length ? emails : undefined, startAt, prompt, casual, open: true, createdAt: Date.now(), students: {}, submissions: [] };
         });
       } catch (e) {
         if (e.message !== 'code_taken') throw e;
@@ -1266,6 +1273,13 @@ async function routeLuddite(event, method, path, info) {
         return { ...r, open: true, endedAt: null, startAt };
       }
       else if (body.action === 'rubric') return { ...r, rubric: body.rubric ? cleanRubric(body.rubric) : null };
+      // Switching it on lets back in anyone locked out.
+      else if (body.action === 'atHome') {
+        const on = !!body.on;
+        const students = { ...r.students };
+        if (on) Object.keys(students).forEach((sub) => { if (students[sub].lockedOut) students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: Date.now() }; });
+        return { ...r, atHome: on, students };
+      }
       else if (body.action === 'prompt') return { ...r, prompt: String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS) };
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
