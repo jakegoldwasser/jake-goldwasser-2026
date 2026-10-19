@@ -163,6 +163,12 @@
   .segctl button.on { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
   .formrow { margin-top: 18px; }
   .formrow > .lbl { margin-bottom: 8px; }
+  .dayblock + .dayblock { margin-top: 18px; padding-top: 4px; }
+  .dayhead { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .dayhead .lbl { margin: 0; }
+  .dayclass { margin-top: 12px; }
+  .dayclass + .dayclass { margin-top: 14px; }
+  .dayclass .lbl { margin: 0; }
   select.field { border-radius: 12px; appearance: auto; }
   .tbox-preview { margin: 14px 0 0; font-size: 15px; }
   .classcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 4px 12px 12px 4px;
@@ -1151,8 +1157,8 @@
               <button type="button" class="on" data-when="now">Right now</button>
               <button type="button" data-when="later">At a set time</button>
             </div>
-            <div id="newRoomPicker" hidden></div>
-            <p class="fine" id="newRoomPeriodNote" style="text-align:left" hidden></p>
+            <div id="newRoomDays" hidden></div>
+            <button class="btn small ghost" id="newRoomAddDay" type="button" title="The same writing session again on another day (one session for each class, each handed in on its own)" style="margin-top:12px" hidden>+ Another day</button>
           </div>
 
           <p class="fine warn" id="newRoomWhenNote" hidden></p>
@@ -1780,7 +1786,8 @@
       b.type = 'button';
       b.appendChild(el('b', null, p.letter));
       b.appendChild(el('span', null, hm(p.start) + '\u2013' + hm(p.end)));
-      b.addEventListener('click', function () { pick(i); });
+      // Clicking the period that's picked unpicks it.
+      b.addEventListener('click', function () { pick(picked === i ? -2 : i); });
       buttons.push(b);
       row.appendChild(b);
     });
@@ -1797,7 +1804,7 @@
       if (i >= 0) time.value = '';
       if (onChange) onChange();
     }
-    date.addEventListener('input', function () { if (onChange) onChange(); });
+    date.addEventListener('input', function () { if (onChange) onChange('date'); });
     time.addEventListener('input', function () { picked = -1; buttons.forEach(function (b) { b.classList.remove('on'); }); if (onChange) onChange(); });
     function minutes() { return picked >= 0 ? PERIODS[picked].start : (time.value ? Number(time.value.slice(0, 2)) * 60 + Number(time.value.slice(3, 5)) : null); }
     return {
@@ -1813,6 +1820,10 @@
         var p = date.value.split('-');
         return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getTime();
       },
+      // Move to another day, keeping the period (or other time).
+      setDay: function (ms) { date.value = dateValue(new Date(ms)); },
+      // The time of day picked, in minutes (null if none).
+      minutes: minutes,
       // Select the period (or other time) a moment falls on.
       set: function (ms) {
         var d = new Date(ms);
@@ -3618,7 +3629,7 @@
   }
 
   // ---- Starting a writing session ----
-  var newPicker = null, newWhen = 'now';
+  var newWhen = 'now';
   function setNewOpen(open) {
     $('newRoomBox').hidden = !open;
     $('newBtn').classList.toggle('on', open);
@@ -3693,9 +3704,8 @@
   function setWhen(v) {
     newWhen = v;
     each('#whenSeg button', function (x) { x.classList.toggle('on', x.getAttribute('data-when') === v); });
-    $('newRoomPicker').hidden = v !== 'later';
-    if (v === 'later' && !newPicker) newPicker = makePicker($('newRoomPicker'));
-    syncPeriodNote();
+    $('newRoomDays').hidden = $('newRoomAddDay').hidden = v !== 'later';
+    if (v === 'later' && !newDays.length) buildDays(1);
   }
   segPick('whenSeg', 'data-when', setWhen);
 
@@ -3712,28 +3722,89 @@
     }
     return d.getTime();
   }
-  function pickedWithPeriods() { return pickedClasses.map(classById).filter(function (c) { return c && c.period && periodOf(c.period); }); }
-  // Picking classes with periods: the start defaults to the period (several
-  // classes: each its own period, on the day picked).
-  function syncClassTime() {
-    var withP = pickedWithPeriods();
-    if (withP.length) {
-      setWhen('later');
-      var day = nextDayFor(withP.map(function (c) { return c.period; }));
-      newPicker.set(atMinutes(day, periodOf(withP[0].period).start));
-    }
-    syncPeriodNote();
+  function nextSchoolDay(dayMs) {
+    var d = new Date(dayMs); d.setHours(0, 0, 0, 0);
+    do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+    return d.getTime();
   }
-  function syncPeriodNote() {
-    var withP = pickedWithPeriods(), note = $('newRoomPeriodNote');
-    var many = pickedClasses.length > 1;
-    note.hidden = !(many && newWhen === 'later');
-    if (note.hidden) return;
-    var bits = pickedClasses.map(classById).map(function (c) {
-      var p = c.period && periodOf(c.period);
-      return c.name + ': ' + (p ? c.period + ' period, ' + hm(p.start, true) : 'the time picked above');
+  function pickedTargets() { var t = pickedClasses.map(classById).filter(Boolean); return t.length && !pickedList && !$('newRoomCasual').checked ? t : [null]; }
+  // When it starts, at a set time: one block per day, and in it one time per
+  // class picked (each class at its own period by default). Each class on
+  // each day is a writing session of its own.
+  var newDays = [];
+  function addDayBlock(times) {
+    var block = { el: el('div', 'dayblock'), rows: [] };
+    var head = el('div', 'dayhead');
+    block.label = el('span', 'lbl');
+    head.appendChild(block.label);
+    block.del = el('button', 'iconbtn', '\u00d7');
+    block.del.type = 'button';
+    block.del.addEventListener('click', function () {
+      newDays.splice(newDays.indexOf(block), 1);
+      block.el.remove();
+      labelDays();
     });
-    note.textContent = 'One writing session for each class, on the day picked above. ' + bits.join('; ') + '.';
+    head.appendChild(block.del);
+    block.el.appendChild(head);
+    pickedTargets().forEach(function (c, k) {
+      var row = { cls: c, el: el('div', 'dayclass') };
+      row.name = el('span', 'lbl', c ? c.name : '');
+      row.el.appendChild(row.name);
+      var host = el('div');
+      row.el.appendChild(host);
+      // Moving one class to another day moves the day's other classes with it.
+      row.picker = makePicker(host, function (kind) {
+        if (kind !== 'date' || !row.picker.day()) return;
+        block.rows.forEach(function (o) { if (o !== row) o.picker.setDay(row.picker.day()); });
+      });
+      if (times[k] && times[k].at != null) row.picker.set(times[k].at);
+      else if (times[k]) row.picker.setDay(times[k].day);
+      block.rows.push(row);
+      block.el.appendChild(row.el);
+    });
+    newDays.push(block);
+    $('newRoomDays').appendChild(block.el);
+    labelDays();
+  }
+  // Labels only once there's more than one of something.
+  function labelDays() {
+    var manyDays = newDays.length > 1;
+    newDays.forEach(function (b, i) {
+      b.label.textContent = 'Day ' + (i + 1);
+      b.del.setAttribute('aria-label', 'Remove day ' + (i + 1));
+      b.label.parentNode.hidden = !manyDays;
+      b.rows.forEach(function (r) { r.name.hidden = b.rows.length < 2; });
+    });
+  }
+  // Fresh blocks for the classes picked: the next school day all their periods are still ahead.
+  function buildDays(n) {
+    newDays = [];
+    $('newRoomDays').innerHTML = '';
+    var targets = pickedTargets();
+    var letters = targets.filter(function (c) { return c && c.period && periodOf(c.period); }).map(function (c) { return c.period; });
+    var day = letters.length ? nextDayFor(letters) : new Date().setHours(0, 0, 0, 0);
+    for (var d = 0; d < n; d++, day = nextSchoolDay(day)) {
+      addDayBlock(targets.map(function (c) {
+        var p = c && c.period && periodOf(c.period);
+        return p ? { at: atMinutes(day, p.start) } : { day: day };
+      }));
+    }
+  }
+  // Another day: the last day's classes and times again, on the next school day.
+  $('newRoomAddDay').addEventListener('click', function () {
+    var last = newDays[newDays.length - 1];
+    var day = nextSchoolDay(last && last.rows[0].picker.day() || Date.now());
+    addDayBlock(last ? last.rows.map(function (r) {
+      var m = r.picker.minutes();
+      return m != null ? { at: atMinutes(day, m) } : { day: day };
+    }) : []);
+    if (!last) buildDays(1);
+  });
+  // Picking classes: a fresh schedule for them, at their periods.
+  function syncClassTime() {
+    var withP = pickedTargets().some(function (c) { return c && c.period && periodOf(c.period); });
+    if (withP) setWhen('later');
+    buildDays(Math.max(1, newDays.length));
   }
   $('newRoomForm').addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -3747,21 +3818,26 @@
     var listOnly = !casual && pickedList;
     var listed = listOnly ? extractEmails($('newRoomEmails').value) : [];
     if (listOnly && !listed.length) { note.textContent = 'Type in at least one email address, or pick a class.'; note.hidden = false; $('newRoomEmails').focus(); return; }
-    // One writing session per class picked (or one with no class).
-    var targets = casual || listOnly || !pickedClasses.length ? [null] : pickedClasses.map(classById).filter(Boolean);
+    // One writing session per class picked (or one with no class), on each day picked.
+    var byClass = !casual && !listOnly;
+    var targets = [], starts = [], rowsMade = [];
+    if (newWhen === 'later') {
+      if (!newDays.length) { note.textContent = 'Add a day, then pick a period (or another time).'; note.hidden = false; return; }
+      // A casual session or a typed-in list has no class: one session a day.
+      newDays.forEach(function (b, d) {
+        (byClass ? b.rows : b.rows.slice(0, 1)).forEach(function (r) {
+          targets.push(byClass ? r.cls : null); starts.push(r.picker.get()); rowsMade.push({ block: b, row: r, day: d });
+        });
+      });
+    } else {
+      targets = byClass && pickedClasses.length ? pickedClasses.map(classById).filter(Boolean) : [null];
+      targets.forEach(function () { starts.push(null); });
+    }
     var many = targets.length > 1;
-    var picked = newWhen === 'later' ? newPicker && newPicker.get() : null;
-    var starts = [];
-    for (var i = 0; i < targets.length; i++) {
-      var c = targets[i], p = c && c.period && periodOf(c.period);
-      var startAt = null;
-      if (newWhen === 'later') {
-        // Several classes: each at its own period on the day picked.
-        startAt = many && p ? atMinutes(newPicker.day(), p.start) : picked;
-        if (!startAt) { note.textContent = 'Pick a day and a period (or another time).'; note.hidden = false; return; }
-        if (startAt < Date.now() - 60000) { note.textContent = (many ? c.name + '’s time' : 'That time') + ' has already passed. Pick a later day.'; note.hidden = false; return; }
-      }
-      starts.push(startAt);
+    for (var i = 0; newWhen === 'later' && i < targets.length; i++) {
+      var who = [targets[i] && targets.length > newDays.length ? targets[i].name : '', newDays.length > 1 ? 'day ' + (rowsMade[i].day + 1) : ''].filter(Boolean).join(', ');
+      if (!starts[i]) { note.textContent = 'Pick a day and a period (or another time)' + (who ? ' for ' + who : '') + '.'; note.hidden = false; return; }
+      if (starts[i] < Date.now() - 60000) { note.textContent = (who ? 'The time for ' + who : 'That time') + ' has already passed. Pick a later day.'; note.hidden = false; return; }
     }
     var made = [];
     try {
@@ -3776,7 +3852,18 @@
       if (err.message === 'signed_out') return;
       note.textContent = made.length ? 'Made ' + made.length + ' of ' + targets.length + '; the rest couldn’t be made. Try those again.' : 'Couldn’t make it. Try again.';
       note.hidden = false;
-      if (made.length) { pickedClasses = pickedClasses.slice(made.length); fillClassSelects(); lastDrawn = ''; loadRooms(); }
+      if (made.length) {
+        // Leave only what wasn't made, to try again.
+        if (newWhen === 'later') {
+          rowsMade.slice(0, made.length).forEach(function (m) {
+            m.block.rows.splice(m.block.rows.indexOf(m.row), 1);
+            m.row.el.remove();
+            if (!m.block.rows.length) { newDays.splice(newDays.indexOf(m.block), 1); m.block.el.remove(); }
+          });
+          labelDays();
+        } else { pickedClasses = pickedClasses.slice(made.length); fillClassSelects(); }
+        lastDrawn = ''; loadRooms();
+      }
       return;
     }
     $('newRoomTitle').value = '';
@@ -3788,11 +3875,11 @@
     if (!many) { openRoom(made[0].code); return; }
     pickedClasses = [];
     fillClassSelects();
-    syncPeriodNote();
+    buildDays(1);
     setNewOpen(false);
     lastDrawn = '';
     loadRooms();
-    tell('Made ' + made.length + ' writing sessions', made.map(function (r, k) { return targets[k].name + ': ' + whenLabel(r.startAt); }).join('; ') + '.');
+    tell('Made ' + made.length + ' writing sessions', made.map(function (r, k) { return (targets[k] ? targets[k].name + ': ' : '') + whenLabel(r.startAt); }).join('; ') + '.');
   });
   // A casual session: the name is optional and there's no class; it opens
   // on its Entry Phrase to hand out.
@@ -3801,6 +3888,7 @@
     var casual = $('newRoomCasual').checked;
     $('classRow').hidden = casual;
     $('atHomeRow').hidden = casual;
+    if (newDays.length) buildDays(newDays.length);
     $('newRoomTitle').placeholder = casual ? 'Name (optional)' : 'Type the writing session name here';
     if (casual) $('newRoomNote').hidden = true;
   });
