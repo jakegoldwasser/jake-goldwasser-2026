@@ -937,7 +937,7 @@
       <div id="mineList"></div>
     </div>
     <div id="backBox" hidden style="margin-bottom:26px">
-      <label class="joinlbl">Handed back to you</label>
+      <label class="joinlbl">Grading shared with you</label>
       <div id="backList"></div>
     </div>
     <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
@@ -1213,7 +1213,7 @@
             <button type="button" id="rubricBtn">Rubric…</button>
             <button type="button" id="reopenBtn">Open it again now</button>
             <button type="button" id="printAllRoom">Print all papers</button>
-            <button type="button" id="handBackAllBtn">Hand back all papers</button>
+            <button type="button" id="handBackAllBtn">Share all grading</button>
             <button type="button" id="deleteRoomBtn" class="danger">Delete this writing session</button>
           </div>
         </details>
@@ -1237,7 +1237,7 @@
 
       <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
       <section class="panel tint-mint" id="secPeople" style="order:3">
-        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Two marks on each row. The lock: open and green, they can still write; closed, they can’t (handed in, paused, or the session is over); red, they left the page and are locked out. The eye: open and green, they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Two marks on each row. The lock: open and green, they can still write; closed, they can’t (handed in, paused, or the session is over); red, they left the page and are locked out. The eye: open and green, you’ve shared your grading, so they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3></div>
         <div id="peopleList"></div>
       </section>
 
@@ -1313,7 +1313,7 @@
       <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
       <span class="savestate" id="markSaved"></span>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
-      <button class="btn small" id="markHandBack" type="button">Hand back</button>
+      <button class="btn small" id="markHandBack" type="button">Share Grading</button>
       <button class="btn small ghost" id="markPrint">Print</button>
     </div>
     <p class="gradewait" id="readBanner" hidden></p>
@@ -2071,7 +2071,7 @@
       row.tabIndex = 0;
       var w = el('div', 'who');
       w.appendChild(el('b', null, p.roomTitle || 'Writing'));
-      w.appendChild(el('span', null, 'Handed back ' + new Date(p.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
+      w.appendChild(el('span', null, 'Shared ' + new Date(p.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
       row.appendChild(w);
       row.appendChild(button('Read the comments', 'btn small', function () { openBack(p.id); }));
       row.addEventListener('click', function (e) { if (!e.target.closest('button')) openBack(p.id); });
@@ -4360,13 +4360,13 @@
     } else if (toHand.length) {
       ns.className = 'nextstep ready';
       nb.className = 'btn';
-      $('nextStepText').textContent = 'All graded. Hand ' + (toHand.length === 1 ? 'it' : 'them') + ' back so students can read your comments.';
-      nb.textContent = toHand.length === 1 ? 'Hand it back' : 'Hand back all ' + toHand.length;
+      $('nextStepText').textContent = 'All graded. Share the grading so ' + (toHand.length === 1 ? 'the student' : 'students') + ' can read your comments.';
+      nb.textContent = toHand.length === 1 ? 'Share Grading' : 'Share all ' + toHand.length;
       nb.onclick = function () { $('handBackAllBtn').click(); };
     } else {
       ns.className = 'nextstep done';
       var ungraded = papers.filter(function (x) { return !x.grade && !x.marked; }).length;
-      $('nextStepText').textContent = ungraded ? '✓ Every paper is handed back (' + ungraded + ' ungraded).' : '✓ Every paper is graded and handed back.';
+      $('nextStepText').textContent = ungraded ? '✓ All grading is shared (' + ungraded + ' ungraded).' : '✓ Every paper is graded and its grading shared.';
       nb.hidden = true;
     }
 
@@ -4655,8 +4655,8 @@
     else if (f.act === 'unlock') main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
     else if (f.act === 'resume') main = button('Resume', 'btn small', function () { roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []); });
     else if (f.act === 'grade') main = button('Grade', 'btn small tograde', open);
-    else if (f.act === 'handback') main = button('Hand back', 'btn small', async function () {
-      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
     });
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
     var slot = el('div', 'mainslot');
@@ -4670,8 +4670,8 @@
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
     if (stage === 'back') item('Open the paper', open);
-    if (stage === 'tograde') item('Hand back ungraded', async function () {
-      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    if (stage === 'tograde') item('Share without a grade', async function () {
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
     });
     if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn && f.act !== 'release') item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
@@ -4697,8 +4697,8 @@
   function gradeButton(paper) {
     var open = function () { openMark(paper.id, function () { openRoom(teacherRoom.code); }); };
     if (!paper.returnedAt) return button('Grade', 'btn small', open);
-    var b = button('Handed back', 'btn small done', open);
-    b.title = 'Handed back to the student. Click to open it.';
+    var b = button('Shared', 'btn small done', open);
+    b.title = 'The student can see your grading. Click to open it.';
     return b;
   }
 
@@ -4870,13 +4870,13 @@
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
     var due = latestPerStudent(teacherRoom.submissions).filter(function (x) { return x.stored && !x.returnedAt; });
-    if (!due.length) { tell('Nothing to hand back', 'Every paper in this session has been handed back already.'); return; }
+    if (!due.length) { tell('Nothing to share', 'The grading of every paper in this session is shared already.'); return; }
     var unmarked = due.filter(function (x) { return !x.marked && !x.grade; }).length;
-    if (!await ask({ title: 'Hand back ' + plural(due.length, 'paper', 'papers') + '?',
+    if (!await ask({ title: 'Share the grading of ' + plural(due.length, 'paper', 'papers') + '?',
       text: 'Students can then read your comments, and see their grade after five minutes with them.' + (unmarked ? ' ' + plural(unmarked, 'paper has', 'papers have') + ' no comments or grade yet.' : ''),
-      ok: 'Hand back' })) return;
+      ok: 'Share Grading' })) return;
     try { await handBack(due.map(function (x) { return x.id; }), true); lastDrawn = ''; loadRoom(); }
-    catch (e) { tell('Couldn’t hand them back', 'Try again.'); }
+    catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
   });
   // A menu opens leftward from its button; one near the left of its panel (or
   // the screen) is slid right instead, so it never hangs off either edge.
@@ -5000,10 +5000,10 @@
   }
   function drawHandBack() {
     var b = $('markHandBack'), back = !!piece.returnedAt;
-    b.textContent = back ? 'Handed back ✓' : 'Hand back';
+    b.textContent = back ? 'Grading shared ✓' : 'Share Grading';
     b.classList.toggle('on', back);
     var mins = Math.floor(((piece.view && piece.view.ms) || 0) / 60000);
-    b.title = back ? 'Handed back ' + clock(piece.returnedAt) + (piece.view ? '. They’ve read it for ' + plural(mins, 'minute', 'minutes') + '.' : '. They haven’t opened it yet.') + ' Click to take it back.' : 'Let the student read your comments (and, after five minutes with them, the grade)';
+    b.title = back ? 'Shared ' + clock(piece.returnedAt) + (piece.view ? '. They’ve read it for ' + plural(mins, 'minute', 'minutes') + '.' : '. They haven’t opened it yet.') + ' Click to stop sharing.' : 'Let the student read your comments (and, after five minutes with them, the grade)';
   }
   async function handBack(ids, back) {
     var data = await api('/luddite/handback', { ids: ids, back: back });
@@ -5012,7 +5012,7 @@
   $('markHandBack').addEventListener('click', async function () {
     if (!piece) return;
     var back = !piece.returnedAt;
-    if (!back && !await ask({ title: 'Take this paper back?', text: 'The student won’t see your comments until you hand it back again.', ok: 'Take it back' })) return;
+    if (!back && !await ask({ title: 'Stop sharing this grading?', text: 'The student won’t see your comments until you share them again.', ok: 'Stop sharing' })) return;
     flushMarks();
     try {
       var done = await handBack([piece.id], back);
@@ -5022,7 +5022,7 @@
       // Handed back: on to the next student's paper.
       var nx = back && nextToHandBack(piece.id);
       if (nx) goPaper(nx).then(function () { $('markSaved').textContent = 'Handed that one back ✓'; });
-    } catch (e) { tell('Couldn’t hand it back', 'Try again.'); }
+    } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
   });
   $('markBack').addEventListener('click', function () { flushMarks(); hideTools(); closePop(); (markBackTo || showDash)(); });
   function drawPaperNav(id) {
