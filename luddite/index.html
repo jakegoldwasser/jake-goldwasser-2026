@@ -169,6 +169,13 @@
   .dayclass { margin-top: 12px; }
   .dayclass + .dayclass { margin-top: 14px; }
   .dayclass .lbl { margin: 0; }
+  /* A class's color: a small dot wherever the class is named. */
+  .cdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; flex: none; }
+  h2 .cdot { width: 14px; height: 14px; margin-right: 10px; vertical-align: 3px; }
+  .classpick button .cdot { margin-right: 6px; box-shadow: 0 0 0 1.5px var(--card); }
+  .swatches { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+  .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; padding: 0; }
+  .swatches button.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
   select.field { border-radius: 12px; appearance: auto; }
   .tbox-preview { margin: 14px 0 0; font-size: 15px; }
   .classcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 4px 12px 12px 4px;
@@ -1158,7 +1165,10 @@
               <button type="button" data-when="later">At a set time</button>
             </div>
             <div id="newRoomDays" hidden></div>
-            <button class="btn small ghost" id="newRoomAddDay" type="button" title="The same writing session again on another day (one session for each class, each handed in on its own)" style="margin-top:12px" hidden>+ Another day</button>
+            <button class="btn small ghost" id="newRoomAddDay" type="button" style="margin-top:12px" hidden>+ Another day</button>
+            <div class="switchrow" id="daysModeRow" style="margin-top:14px" hidden><span class="nm">The days <span class="q" tabindex="0" data-tip="A new paper each day: a writing session of its own each day, handed in each day. One paper over all the days: one writing session that runs only at these times. Between them students can’t write and their writing waits for them; they hand it in on the last day.">?</span></span>
+              <div class="segctl" id="daysMode"><button type="button" data-v="each">A new paper each day</button><button type="button" class="on" data-v="one">One paper over all the days</button></div>
+            </div>
           </div>
 
           <p class="fine warn" id="newRoomWhenNote" hidden></p>
@@ -1280,6 +1290,9 @@
     </div>
     <div class="switchrow"><span class="nm">Period <span class="q" tabindex="0" data-tip="This class's writing sessions start at this period by default.">?</span></span>
       <div class="segctl periodseg" id="classPeriodSeg"></div>
+    </div>
+    <div class="switchrow"><span class="nm">Color <span class="q" tabindex="0" data-tip="A small dot in this color marks the class wherever it’s named: on Home’s writing sessions, when you pick classes, and on a session’s page.">?</span></span>
+      <div class="swatches" id="classColorSeg"></div>
     </div>
     <h3>Add students</h3>
     <form id="classAddForm">
@@ -2309,6 +2322,8 @@
     $('readyWindow').hidden = !timed;
     if (timed) {
       $('readyWindow').textContent = over ? 'Time is up for this writing session.'
+        : roomInfo.sittings > 1 && roomInfo.sittingEnd ? 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ': until ' + clock(roomInfo.sittingEnd) + (roomInfo.own && roomInfo.multiplier > 1 ? ' (with your extra time)' : '') + '. You hand it in on the last day.'
+        : roomInfo.sittings > 1 ? 'This runs over ' + roomInfo.sittings + ' days. You hand it in on the last day.'
         : (roomInfo.own && roomInfo.multiplier > 1 ? 'You have extra time: until ' : 'Until ') + clock(roomInfo.endAt) + '.';
     }
     $('startBtn').textContent = has ? 'Keep writing' : 'Start writing';
@@ -2360,7 +2375,7 @@
       $('startBtn').disabled = true;
       $('submitNote').hidden = false;
       $('submitNote').className = 'fine warn';
-      $('submitNote').textContent = 'Paused. Your time is stopped, and you can leave the page. This page opens again by itself when your teacher or proctor resumes it.';
+      $('submitNote').textContent = pausedText();
     }
     // Asking flags this student on the teacher's page.
     var canAsk = handedIn || lockedOut;
@@ -2373,12 +2388,18 @@
     else if (lockedOut) poll(pollReadyUnlock, POLL_WAITING_MS);
     else if (paused) poll(pollResume, POLL_WAITING_MS);
   }
+  function pausedText() {
+    if (roomInfo.nextAt) return 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page. You pick up where you left off ' + whenLabel(roomInfo.nextAt) + '; this page opens again by itself then.';
+    if (roomInfo.dayDone) return 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page.';
+    return 'Paused. Your time is stopped, and you can leave the page. This page opens again by itself when your teacher or proctor resumes it.';
+  }
   async function pollResume() {
     var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
     noteNow(data.room.now);
     roomInfo = data.room;
     if (data.room.status !== 'admitted') { onRoomUpdate(data.room); return; }
     if (!data.room.paused) showReady();
+    else $('submitNote').textContent = pausedText();
   }
   async function pollReadyUnlock() {
     var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
@@ -2596,7 +2617,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session: hand in now, with everything written
@@ -2647,10 +2668,21 @@
       tl.classList.remove('low');
       return;
     }
-    var left = roomInfo.endAt - now;
-    tl.textContent = left > 0 ? minLeft(left) + ' left' : 'Time is up';
+    // Over several days: the clock counts down today's part, and at its end
+    // the writing stops and waits for the next day.
+    var today = roomInfo.sittingEnd && roomInfo.sittingEnd < roomInfo.endAt ? roomInfo.sittingEnd : 0;
+    var left = (today || roomInfo.endAt) - now;
+    tl.textContent = left > 0 ? minLeft(left) + (today ? ' left today' : ' left') : 'Time is up';
     tl.classList.toggle('low', left <= 5 * 60000);
+    if (left <= 0 && today) { dayOver(); return; }
     if (left <= 0 && P().autoHandIn) timeUp();
+  }
+  function dayOver() {
+    if (timeUpBusy) return;
+    roomInfo.paused = true;
+    roomInfo.dayDone = true;
+    roomInfo.sittingEnd = null;
+    finishWriting(showReady);
   }
   async function timeUp() {
     if (timeUpBusy) return;
@@ -3342,11 +3374,24 @@
 
   // When a session runs, from its server-side summary or the whole item.
   function sessionWindow(r) {
+    if (r.sittings && !r.atHome) return { start: r.sittings[0].start, end: r.sittings[r.sittings.length - 1].end };
     var start = r.startAt || r.createdAt;
     var end = r.minutes ? start + r.minutes * 60000 : (r.endAt || null);
     return { start: start, end: end };
   }
+  // Over several days: "3 days: Tue, Oct 20, 1:40 PM; Wed, Oct 21, 1:40 PM; ...".
+  function daysLabel(r) {
+    return r.sittings.length + ' days: ' + r.sittings.map(function (x) { return dayClock(x.start); }).join('; ');
+  }
+  // Between two days of a session over several days: when the next one starts.
+  function nextSitting(r) {
+    if (!r.sittings || r.atHome) return null;
+    var now = Date.now(), at = r.sittings.filter(function (x) { return now >= x.start && now < x.end; })[0];
+    var next = r.sittings.filter(function (x) { return x.start > now; })[0];
+    return !at && next && now >= r.sittings[0].start ? next.start : null;
+  }
   function whenRange(r) {
+    if (r.sittings && !r.atHome && !r.endedAt) return daysLabel(r);
     var w = sessionWindow(r);
     var day = sameDay(w.start, Date.now()) ? 'Today' : new Date(w.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
     var endedAt = r.endedAt || (r.state === 'ended' ? w.end : null);
@@ -3361,6 +3406,30 @@
   function classNameOf(id) {
     var c = classes.filter(function (x) { return x.id === id; })[0];
     return c ? c.name : '';
+  }
+  // Each class has a color, shown as a small dot wherever it's named. One the
+  // teacher picked (`color`, Class page) wins; the rest take the next color
+  // no other class has, oldest class first.
+  var CLASS_COLORS = ['#3F6FA8', '#C2643A', '#8A4D8E', '#C79A22', '#2E8A80', '#C2527A', '#5A5BB0', '#8A6A44'];
+  function classColor(id) {
+    var used = {}, auto = {};
+    classes.forEach(function (c) { if (c.color != null) used[c.color] = 1; });
+    classes.slice().sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); }).forEach(function (c) {
+      if (c.color != null) return;
+      for (var i = 0; i < CLASS_COLORS.length; i++) if (!used[i]) { used[i] = 1; auto[c.id] = i; return; }
+      auto[c.id] = Object.keys(auto).length % CLASS_COLORS.length;
+    });
+    var c = classById(id);
+    if (!c) return null;
+    return CLASS_COLORS[c.color != null ? c.color : auto[id]];
+  }
+  function classDot(id) {
+    var col = classColor(id);
+    if (!col) return document.createTextNode('');
+    var d = el('span', 'cdot');
+    d.style.background = col;
+    d.setAttribute('aria-hidden', 'true');
+    return d;
   }
 
   // Esc, or a click on the dimmed page around it, closes a teacher's pop-up window.
@@ -3590,7 +3659,13 @@
     // Which class is taking (or took) it.
     var forWhom = r.classId ? classNameOf(r.classId) : !r.casual && r.invited ? plural(r.invited, 'invited student', 'invited students') : '';
     var sl = el('div', 'stampline');
-    if (forWhom) { sl.appendChild(el('span', 'forclass', forWhom)); sl.appendChild(document.createTextNode(' \u00b7 ')); }
+    if (forWhom) {
+      var fc = el('span', 'forclass');
+      if (r.classId) fc.appendChild(classDot(r.classId));
+      fc.appendChild(document.createTextNode(forWhom));
+      sl.appendChild(fc);
+      sl.appendChild(document.createTextNode(' \u00b7 '));
+    }
     sl.appendChild(document.createTextNode(whenRange(r) + (r.atHome ? ' \u00b7 At home' : '')));
     ttl.appendChild(sl);
     top.appendChild(ttl);
@@ -3598,6 +3673,7 @@
     var facts = el('div', 'facts');
     // Home keeps it short: the details are on the session's own page. Only
     // students waiting to be let in, which needs doing, show here.
+    if (r.state === 'running' && nextSitting(r)) facts.appendChild(el('span', 'pill', 'Between days · next ' + whenLabel(nextSitting(r))));
     if (r.waiting) facts.appendChild(el('span', 'badge', r.waiting + (r.waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
     // A past session says whether its papers are graded yet: a paper counts
     // once it has a grade or has been handed back.
@@ -3661,8 +3737,10 @@
       box.setAttribute('data-sig', sig);
       box.innerHTML = '';
       classes.forEach(function (c) {
-        var b = el('button', pickedClasses.indexOf(c.id) !== -1 ? 'on' : null, c.name);
+        var b = el('button', pickedClasses.indexOf(c.id) !== -1 ? 'on' : null);
         b.type = 'button';
+        b.appendChild(classDot(c.id));
+        b.appendChild(document.createTextNode(c.name));
         if (c.period) b.appendChild(el('span', 'per', c.period + ' period'));
         b.addEventListener('click', function () {
           var i = pickedClasses.indexOf(c.id);
@@ -3706,6 +3784,7 @@
     each('#whenSeg button', function (x) { x.classList.toggle('on', x.getAttribute('data-when') === v); });
     $('newRoomDays').hidden = $('newRoomAddDay').hidden = v !== 'later';
     if (v === 'later' && !newDays.length) buildDays(1);
+    labelDays();
   }
   segPick('whenSeg', 'data-when', setWhen);
 
@@ -3721,6 +3800,12 @@
       if (letters.every(function (l) { return atMinutes(day, periodOf(l).start) > Date.now(); })) return day;
     }
     return d.getTime();
+  }
+  // A sitting at a period ends with the period; at another time, after one period's length.
+  function sittingEnd(at) {
+    var d = new Date(at), m = d.getHours() * 60 + d.getMinutes();
+    var p = PERIODS.filter(function (x) { return x.start === m; })[0];
+    return p ? atMinutes(at, p.end) : at + DAY.classMin * 60000;
   }
   function nextSchoolDay(dayMs) {
     var d = new Date(dayMs); d.setHours(0, 0, 0, 0);
@@ -3748,7 +3833,8 @@
     block.el.appendChild(head);
     pickedTargets().forEach(function (c, k) {
       var row = { cls: c, el: el('div', 'dayclass') };
-      row.name = el('span', 'lbl', c ? c.name : '');
+      row.name = el('span', 'lbl');
+      if (c) { row.name.appendChild(classDot(c.id)); row.name.appendChild(document.createTextNode(c.name)); }
       row.el.appendChild(row.name);
       var host = el('div');
       row.el.appendChild(host);
@@ -3766,9 +3852,13 @@
     $('newRoomDays').appendChild(block.el);
     labelDays();
   }
+  // With several days: a new paper each day, or one paper over all of them.
+  var daysMode = 'one';
+  segPick('daysMode', 'data-v', function (v) { daysMode = v; });
   // Labels only once there's more than one of something.
   function labelDays() {
     var manyDays = newDays.length > 1;
+    $('daysModeRow').hidden = !manyDays || newWhen !== 'later';
     newDays.forEach(function (b, i) {
       b.label.textContent = 'Day ' + (i + 1);
       b.del.setAttribute('aria-label', 'Remove day ' + (i + 1));
@@ -3820,8 +3910,24 @@
     if (listOnly && !listed.length) { note.textContent = 'Type in at least one email address, or pick a class.'; note.hidden = false; $('newRoomEmails').focus(); return; }
     // One writing session per class picked (or one with no class), on each day picked.
     var byClass = !casual && !listOnly;
-    var targets = [], starts = [], rowsMade = [];
-    if (newWhen === 'later') {
+    var targets = [], starts = [], rowsMade = [], sittingsFor = [];
+    // One paper over several days: one session per class, running at each day's time.
+    if (newWhen === 'later' && newDays.length > 1 && daysMode === 'one' && !casual && !$('newRoomAtHome').checked) {
+      var cols = byClass ? newDays[0].rows.length : 1;
+      for (var k = 0; k < cols; k++) {
+        var cls = byClass ? newDays[0].rows[k].cls : null, list = [];
+        for (var d = 0; d < newDays.length; d++) {
+          var pk = newDays[d].rows[k].picker, at = pk.get();
+          var who2 = [cls && cols > 1 ? cls.name : '', 'day ' + (d + 1)].filter(Boolean).join(', ');
+          if (!at) { note.textContent = 'Pick a day and a period (or another time) for ' + who2 + '.'; note.hidden = false; return; }
+          if (at < Date.now() - 60000) { note.textContent = 'The time for ' + who2 + ' has already passed. Pick a later day.'; note.hidden = false; return; }
+          list.push({ start: at, end: sittingEnd(at) });
+        }
+        list.sort(function (a, b) { return a.start - b.start; });
+        for (var q = 1; q < list.length; q++) if (list[q].start < list[q - 1].end) { note.textContent = 'Two of the days' + (cls && cols > 1 ? ' for ' + cls.name : '') + ' overlap. Pick a different day or time.'; note.hidden = false; return; }
+        targets.push(cls); starts.push(list[0].start); sittingsFor.push(list);
+      }
+    } else if (newWhen === 'later') {
       if (!newDays.length) { note.textContent = 'Add a day, then pick a period (or another time).'; note.hidden = false; return; }
       // A casual session or a typed-in list has no class: one session a day.
       newDays.forEach(function (b, d) {
@@ -3845,7 +3951,7 @@
         var prompt = $('newRoomPrompt').value.trim();
         var data = await api('/luddite/assignments', casual
           ? { casual: true, title: title, prompt: prompt, startAt: starts[j] }
-          : { title: title, prompt: prompt, classId: targets[j] ? targets[j].id : null, emails: listOnly ? listed : undefined, startAt: starts[j], atHome: $('newRoomAtHome').checked });
+          : { title: title, prompt: prompt, classId: targets[j] ? targets[j].id : null, emails: listOnly ? listed : undefined, startAt: starts[j], sittings: sittingsFor[j], atHome: $('newRoomAtHome').checked });
         made.push(data.room);
       }
     } catch (err) {
@@ -3854,7 +3960,8 @@
       note.hidden = false;
       if (made.length) {
         // Leave only what wasn't made, to try again.
-        if (newWhen === 'later') {
+        if (sittingsFor.length) { pickedClasses = pickedClasses.filter(function (id) { return !made.some(function (r) { return r.classId === id; }); }); fillClassSelects(); buildDays(newDays.length); }
+        else if (newWhen === 'later') {
           rowsMade.slice(0, made.length).forEach(function (m) {
             m.block.rows.splice(m.block.rows.indexOf(m.row), 1);
             m.row.el.remove();
@@ -3879,7 +3986,7 @@
     setNewOpen(false);
     lastDrawn = '';
     loadRooms();
-    tell('Made ' + made.length + ' writing sessions', made.map(function (r, k) { return (targets[k] ? targets[k].name + ': ' : '') + whenLabel(r.startAt); }).join('; ') + '.');
+    tell('Made ' + made.length + ' writing sessions', made.map(function (r, k) { return (targets[k] ? targets[k].name + ': ' : '') + (r.sittings ? daysLabel(r) : whenLabel(r.startAt)); }).join('; ') + '.');
   });
   // A casual session: the name is optional and there's no class; it opens
   // on its Entry Phrase to hand out.
@@ -3930,7 +4037,10 @@
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
       var info = el('div', 'info');
-      info.appendChild(el('h4', null, c.name));
+      var h = el('h4');
+      h.appendChild(classDot(c.id));
+      h.appendChild(document.createTextNode(c.name));
+      info.appendChild(h);
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students') + (c.period ? ' \u00b7 ' + c.period + ' period' : '')));
       card.appendChild(info);
       card.addEventListener('click', function () { openClass(c.id); });
@@ -3998,6 +4108,18 @@
     $('classCountLine').textContent = plural(openedClass.emails.length, 'student', 'students') + ' on the list';
     periodSeg($('classPeriodSeg'), openedClass.period || '', function (l) {
       classAction('period', { period: l }).then(function () { var c = classById(openedClass.id); if (c) c.period = l; });
+    });
+    var sw = $('classColorSeg'), cur = classColor(openedClass.id);
+    sw.innerHTML = '';
+    CLASS_COLORS.forEach(function (col, i) {
+      var b = el('button', col === cur ? 'on' : null);
+      b.type = 'button';
+      b.style.background = col;
+      b.setAttribute('aria-label', 'Color ' + (i + 1));
+      b.addEventListener('click', function () {
+        classAction('color', { color: i }).then(function (ok) { var c = classById(openedClass.id); if (ok && c) { c.color = i; fillClassSelects(); drawClasses(); drawClassScreen(); } });
+      });
+      sw.appendChild(b);
     });
     var box = $('classRoster');
     box.innerHTML = '';
@@ -4429,10 +4551,11 @@
     var state = roomState(room);
     var cn = room.classId && teacherRoster ? teacherRoster.name : '';
     $('roomTitle').textContent = room.title;
+    if (room.classId) $('roomTitle').insertBefore(classDot(room.classId), $('roomTitle').firstChild);
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + (room.shareWork ? 'Students see each other’s work · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
+    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + (room.shareWork ? 'Students see each other’s work · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state, sittings: room.sittings, atHome: room.atHome }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
     $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
     $('roomPromptLine').hidden = !room.prompt;
@@ -4450,6 +4573,7 @@
     $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
     $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
     if (room.pausedAt && state === 'running') chip.textContent = '❚❚ Paused';
+    else if (state === 'running' && nextSitting(room)) chip.textContent = '❚❚ Between days · next ' + whenLabel(nextSitting(room));
     var proctors = room.proctors || [];
     $('proctorsSection').hidden = !proctors.length;
     var prl = $('proctorsList');
