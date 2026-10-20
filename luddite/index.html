@@ -1673,6 +1673,7 @@
       <label class="lbl" id="tbLenLbl"></label>
       <div class="segctl" id="tbMultSeg"></div>
     </div>
+    <label class="fine casualcheck" id="tbTcRow" hidden><input type="checkbox" id="tbTc"> In the testing center <span class="q" tabindex="0" data-tip="They take it in the Upper Division testing center. It’s marked on their row, and the testing center sees it on To proctor.">?</span></label>
     <p class="tbox-preview" id="tbPreview"></p>
     <p class="fine warn" id="tbNote" hidden></p>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
@@ -5001,6 +5002,7 @@
         else if (p.own.startAt) o.push(p.state === 'upcoming' ? 'starts ' + whenLabel(p.own.startAt) : 'started ' + whenLabel(p.own.startAt));
         if (p.own.multiplier > 1) o.push(p.own.multiplier + '× time');
         bits.push('Alternative schedule' + (o.length ? ': ' + o.join(', ') : ''));
+        if (p.own.testingCenter) bits.push('In the testing center');
       }
       if (p.endAt && p.state === 'running') bits.push('until ' + clock(p.endAt));
       w.appendChild(el('span', null, bits.join(' · ')));
@@ -5163,11 +5165,12 @@
   function ownLabel(room, email) {
     var o = room.own && room.own[email];
     if (!o) return '';
-    if (o.blocks) return 'Alternative schedule: in ' + o.blocks.length + (o.blocks.length === 1 ? ' part: ' : ' parts: ') + o.blocks.map(function (b) { var t = periodsTouched(b.start, b.end); return whenLabel(b.start) + '\u2013' + clock(b.end) + (t.length ? ' (' + t.join(', ') + ')' : ''); }).join(', ');
+    var tc = o.testingCenter ? ' · in the testing center' : '';
+    if (o.blocks) return 'Alternative schedule: in ' + o.blocks.length + (o.blocks.length === 1 ? ' part: ' : ' parts: ') + o.blocks.map(function (b) { var t = periodsTouched(b.start, b.end); return whenLabel(b.start) + '\u2013' + clock(b.end) + (t.length ? ' (' + t.join(', ') + ')' : ''); }).join(', ') + tc;
     var parts = [];
     if (o.startAt) parts.push(whenLabel(o.startAt));
     if (o.multiplier > 1) parts.push(o.multiplier + '× time');
-    return 'Alternative schedule: ' + (parts.join(' · ') || 'same');
+    return 'Alternative schedule: ' + (parts.join(' · ') || 'same') + tc;
   }
   function ownButton(room, email, name) {
     return button(room.own && room.own[email] ? 'Change alternative schedule' : 'Set Alternative Schedule', 'btn small ghost', function () { openOwnTime(email, name); });
@@ -5940,6 +5943,8 @@
     $('tbTitle').textContent = 'Alternative schedule for ' + name + ' ';
     $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both, or have them take it in parts (say the first half of D, then all of H), writing on where they left off. It ends by itself five minutes after their time runs out.'));
     $('tbStartRow').hidden = false;
+    $('tbTcRow').hidden = false;
+    $('tbTc').checked = !!(o && o.testingCenter);
     $('tbRemove').hidden = !o;
     tb.picker = makePicker($('tbPicker'), tbPreview);
     if (o && o.startAt && !o.blocks) tb.picker.set(o.startAt);
@@ -5955,6 +5960,7 @@
     $('tbTitle').textContent = 'When does this writing session start? ';
     $('tbTitle').appendChild(tipEl('Changing it reopens the session if it had ended. People with their own start keep it.'));
     $('tbStartRow').hidden = true;
+    $('tbTcRow').hidden = true;
     $('tbParts').hidden = true;
     $('tbRemove').hidden = true;
     tb.picker = makePicker($('tbPicker'), tbPreview);
@@ -6040,12 +6046,12 @@
       var bl = tbBlocks();
       if (bl.length < tb.parts.length) { note.textContent = 'Pick a period or another time for every part (and its minutes).'; note.hidden = false; return; }
       for (var i = 1; i < bl.length; i++) if (bl[i].start < bl[i - 1].end) { note.textContent = 'Two parts overlap. Move one of them.'; note.hidden = false; return; }
-      ok = await roomAction('own', [], { email: tb.email, blocks: joinAdjacent(bl) });
+      ok = await roomAction('own', [], { email: tb.email, blocks: joinAdjacent(bl), testingCenter: $('tbTc').checked });
     } else if (tb.mode === 'own') {
       var start = tb.useOwn ? tb.picker.get() : null;
       if (tb.useOwn && !start) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }
       if (tb.mult < 1 || tb.mult > 4) { note.textContent = 'Extra time should be between 1× and 4×.'; note.hidden = false; return; }
-      ok = await roomAction('own', [], { email: tb.email, startAt: start, multiplier: tb.mult });
+      ok = await roomAction('own', [], { email: tb.email, startAt: start, multiplier: tb.mult, testingCenter: $('tbTc').checked });
     } else {
       var at = tb.picker.get();
       if (!at) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }

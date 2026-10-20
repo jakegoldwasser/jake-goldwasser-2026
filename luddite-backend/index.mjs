@@ -377,6 +377,19 @@ function cleanBlocks(x) {
   });
   return list;
 }
+// Parts with only a passing period (5 minutes or less) between them run on
+// as one: the student writes straight through, never paused between them.
+// (The page joins them when it saves; this covers schedules saved before.)
+const PASSING_MS = 5 * 60000;
+function joinBlocks(list) {
+  const out = [];
+  list.forEach((b) => {
+    const last = out[out.length - 1];
+    if (last && b.start >= last.end && b.start - last.end <= PASSING_MS) last.end = Math.max(last.end, b.end);
+    else out.push({ start: b.start, end: b.end });
+  });
+  return out;
+}
 // Unlocked (or let write again after handing in) once their time was over --
 // the session ended, or their own time ran out: they can write again, with no
 // time limit, until they hand in, someone hands in for them, or the teacher
@@ -416,7 +429,7 @@ function windowOf(room, email, entry) {
 function baseWindowOf(room, email, entry) {
   const now = Date.now();
   const ob = room.own && room.own[email];
-  if (ob && ob.blocks && !room.atHome) return { ...partsWindow(ob.blocks, room, entry, now), own: true, multiplier: 1, ended: false, parts: true };
+  if (ob && ob.blocks && !room.atHome) return { ...partsWindow(joinBlocks(ob.blocks), room, entry, now), own: true, multiplier: 1, ended: false, parts: true };
   if (room.sittings && !room.atHome) return sittingsWindow(room, email, entry, now);
   const reg = regularWindow(room);
   const paused = !!(room.pausedAt || (entry && entry.pausedAt));
@@ -1463,9 +1476,11 @@ async function routeLuddite(event, method, path, info) {
         if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
         const multiplier = Math.min(4, Math.max(1, Math.round((Number(body.multiplier) || 1) * 4) / 4));
         const blocks = cleanBlocks(body.blocks);
-        if (blocks) return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt: blocks[0].start, multiplier: 1, blocks, setAt: Date.now() } } };
+        // Taken in the Upper Division testing center (a mark the teacher and proctors see).
+        const testingCenter = !!body.testingCenter;
+        if (blocks) return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt: blocks[0].start, multiplier: 1, blocks, testingCenter, setAt: Date.now() } } };
         const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : null;
-        return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, setAt: Date.now() } } };
+        return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, testingCenter, setAt: Date.now() } } };
       }
       else if (body.action === 'unown') {
         const own = { ...(r.own || {}) };
