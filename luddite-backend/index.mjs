@@ -183,9 +183,9 @@ async function prefsOf(teacherSub) {
 const UPCOMING_HORIZON_MS = 48 * 60 * 60 * 1000;
 // A paper handed in this long after a student's time ran out is marked late.
 const LATE_GRACE_MS = 2 * 60 * 1000;
-// A student on an alternative schedule (own time) has five minutes after
+// A student on an alternative schedule (own time) has ten minutes after
 // their time ends to finish; then their page hands in by itself.
-const OWN_GRACE_MS = 5 * 60 * 1000;
+const OWN_GRACE_MS = 10 * 60 * 1000;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // What students see the owners as until they pick something else.
 const OWNER_DISPLAY_NAME = 'Mr. Goldwasser';
@@ -426,7 +426,9 @@ function baseWindowOf(room, email, entry) {
   if (!o || room.atHome) return { ...reg, end: reg.end ? reg.end + held : null, own: false, multiplier: 1, ended: regularEnded(room), paused };
   const start = o.startAt || reg.start;
   const multiplier = o.multiplier || 1;
-  return { start, end: start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000) + held, own: true, multiplier, ended: false, paused };
+  // Begun early by a proctor: their time still ends when it was scheduled to (`endAt`).
+  const end = o.endAt && o.endAt > start ? o.endAt : start + Math.round((room.minutes || REF_MINUTES) * multiplier * 60000);
+  return { start, end: end + held, own: true, multiplier, ended: false, paused };
 }
 // Pause or resume a session (x = the room) or one student (x = their entry).
 function paused(x, on, now) {
@@ -1714,16 +1716,20 @@ async function routeProctor(method, path, q, body, me) {
         if (!own[email] && reach !== 'session') throw new HttpError(403, 'not_proctor');
         const cur = own[email];
         if (cur && cur.blocks) {
-          // In parts: the next part not yet started begins now, as long as it was.
+          // In parts: the next part not yet started begins now, and still ends when it was scheduled to.
           if (cur.blocks.some((b) => t >= b.start && t < b.end)) return undefined;
           const i = cur.blocks.findIndex((b) => b.start > t);
           if (i === -1) throw new HttpError(409, 'no_part_left');
           const blocks = cur.blocks.slice();
-          blocks[i] = { start: t, end: t + (blocks[i].end - blocks[i].start) };
-          if (blocks[i + 1] && blocks[i].end > blocks[i + 1].start) blocks[i].end = blocks[i + 1].start;
+          blocks[i] = { start: t, end: blocks[i].end };
           return { ...r, own: { ...own, [email]: { ...cur, blocks, startAt: blocks[0].start, setAt: t, begunBy: lower(me.email) } } };
         }
-        return { ...r, own: { ...own, [email]: { ...(own[email] || { multiplier: 1 }), startAt: t, setAt: t, begunBy: lower(me.email) } } };
+        // Begun early: they start now, and their time still ends when it was scheduled to.
+        // Begun after that end (or with no set end): their full time runs from now.
+        const was = baseWindowOf(r, email, null);
+        const endAt = cur && was.own && was.end && was.end > t ? was.end - pausedFor(r, t) : 0;
+        const { endAt: _old, ...rest } = cur || { multiplier: 1 };
+        return { ...r, own: { ...own, [email]: { ...rest, startAt: t, ...(endAt ? { endAt } : {}), setAt: t, begunBy: lower(me.email) } } };
       }
       else if (body.action === 'startNow') return startedNow(r, t);
       else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', t);
