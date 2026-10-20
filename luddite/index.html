@@ -178,6 +178,10 @@
   .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; padding: 0; }
   .swatches button.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
   select.field { border-radius: 12px; appearance: auto; }
+  .tbparts .tbpart { border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+  .tbparts .tbpart .phead { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 6px; }
+  .tbparts .tbpart .segctl { margin-top: 8px; }
+  .tbparts .addpart { margin-top: 10px; }
   .tbox-preview { margin: 14px 0 0; font-size: 15px; }
   .classcard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--card); border-radius: 4px 12px 12px 4px;
     box-shadow: inset 0 0 0 1px var(--rule); border-left: 8px solid var(--rule); padding: 14px 18px; margin-top: 10px; }
@@ -1650,9 +1654,11 @@
       <div class="segctl" id="tbStartSeg">
         <button type="button" data-start="same" class="on">Same start as everyone</button>
         <button type="button" data-start="own">A different time</button>
+        <button type="button" data-start="parts">In parts</button>
       </div>
     </div>
     <div id="tbPicker"></div>
+    <div id="tbParts" class="tbparts" hidden></div>
     <div id="tbLenRow" class="formrow">
       <label class="lbl" id="tbLenLbl"></label>
       <div class="segctl" id="tbMultSeg"></div>
@@ -2437,6 +2443,8 @@
     $('readyWindow').hidden = !timed;
     if (timed) {
       $('readyWindow').textContent = over ? 'Time is up for this writing session.'
+        : roomInfo.parts && roomInfo.sittings > 1 && roomInfo.sittingEnd ? 'Part ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ': until ' + clock(roomInfo.sittingEnd) + '. You hand it in in the last part.'
+        : roomInfo.parts && roomInfo.sittings > 1 ? 'You take this in ' + roomInfo.sittings + ' parts. You hand it in in the last part.'
         : roomInfo.sittings > 1 && roomInfo.sittingEnd ? 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ': until ' + clock(roomInfo.sittingEnd) + (roomInfo.own && roomInfo.multiplier > 1 ? ' (with your extra time)' : '') + '. You hand it in on the last day.'
         : roomInfo.sittings > 1 ? 'This runs over ' + roomInfo.sittings + ' days. You hand it in on the last day.'
         : (roomInfo.own && roomInfo.multiplier > 1 ? 'You have extra time: until ' : 'Until ') + clock(roomInfo.endAt) + '.';
@@ -2504,8 +2512,8 @@
     else if (paused) poll(pollResume, POLL_WAITING_MS);
   }
   function pausedText() {
-    if (roomInfo.nextAt) return 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page. You pick up where you left off ' + whenLabel(roomInfo.nextAt) + '; this page opens again by itself then.';
-    if (roomInfo.dayDone) return 'Day ' + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page.';
+    if (roomInfo.nextAt) return (roomInfo.parts ? 'Part ' : 'Day ') + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page. You pick up where you left off ' + whenLabel(roomInfo.nextAt) + '; this page opens again by itself then.';
+    if (roomInfo.dayDone) return (roomInfo.parts ? 'Part ' : 'Day ') + roomInfo.sitting + ' of ' + roomInfo.sittings + ' is over. Your writing is saved, and you can leave the page.';
     return 'Paused. Your time is stopped, and you can leave the page. This page opens again by itself when your teacher or proctor resumes it.';
   }
   async function pollResume() {
@@ -2732,7 +2740,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -2790,7 +2798,7 @@
     var left = (today || roomInfo.endAt) - now;
     // An alternative schedule: five more minutes to finish, then it hands in by itself.
     var grace = roomInfo.own && !today ? OWN_GRACE_MS + left : 0;
-    tl.textContent = left > 0 ? minLeft(left) + (today ? ' left today' : ' left') : grace > 0 ? 'Time is up · hands in by itself in ' + minLeft(grace) : 'Time is up';
+    tl.textContent = left > 0 ? minLeft(left) + (today ? (roomInfo.parts ? ' left in this part' : ' left today') : ' left') : grace > 0 ? 'Time is up · hands in by itself in ' + minLeft(grace) : 'Time is up';
     tl.classList.toggle('low', left <= 5 * 60000);
     if (left <= 0 && today) { dayOver(); return; }
     if (left <= 0 && roomInfo.own && !today) { if (grace <= 0) timeUp(); return; }
@@ -4959,7 +4967,8 @@
       if (p.name) bits.push(p.email);
       if (p.own) {
         var o = [];
-        if (p.own.startAt) o.push(p.state === 'upcoming' ? 'starts ' + whenLabel(p.own.startAt) : 'started ' + whenLabel(p.own.startAt));
+        if (p.own.blocks) o.push('in parts: ' + p.own.blocks.map(function (b) { return whenLabel(b.start) + '\u2013' + clock(b.end); }).join(', '));
+        else if (p.own.startAt) o.push(p.state === 'upcoming' ? 'starts ' + whenLabel(p.own.startAt) : 'started ' + whenLabel(p.own.startAt));
         if (p.own.multiplier > 1) o.push(p.own.multiplier + '× time');
         bits.push('Alternative schedule' + (o.length ? ': ' + o.join(', ') : ''));
       }
@@ -4978,10 +4987,13 @@
       row.appendChild(el('span', 'pill status ' + tag[0], tag[1]));
       var slot = el('div', 'row');
       slot.style.gap = '6px';
-      if (p.own && p.state === 'upcoming') slot.appendChild(button('Begin now', 'btn small', async function () {
-        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: 'Their alternative schedule starts now' + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
+      if (p.own && (p.state === 'upcoming' || (p.own.blocks && p.nextAt))) slot.appendChild(button(p.state === 'upcoming' ? 'Begin now' : 'Begin the next part now', 'btn small', async function () {
+        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: (p.own.blocks ? 'Their next part starts now' : 'Their alternative schedule starts now') + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
       }));
       if (p.sub && p.lockedOut && !p.handedIn) slot.appendChild(button('Let them back in', 'btn small', function () { pxAction('unlock', [p.sub]); }));
+      else if (p.sub && p.handedIn) slot.appendChild(button('Unlock', 'btn small ghost', async function () {
+        if (await ask({ title: 'Unlock ' + p.label + '?', text: 'They can write again, picking up where they left off, until they hand in again.', ok: 'Unlock' })) pxAction('unlock', [p.sub]);
+      }));
       if (p.sub && !p.handedIn && p.state === 'running') {
         slot.appendChild(p.paused ? button('Resume', 'btn small', function () { pxAction('resume', [p.sub]); })
           : button('Pause', 'btn small ghost', function () { pxAction('pause', [p.sub]); }));
@@ -5121,6 +5133,7 @@
   function ownLabel(room, email) {
     var o = room.own && room.own[email];
     if (!o) return '';
+    if (o.blocks) return 'Alternative schedule: in ' + o.blocks.length + (o.blocks.length === 1 ? ' part: ' : ' parts: ') + o.blocks.map(function (b) { var t = periodsTouched(b.start, b.end); return whenLabel(b.start) + '\u2013' + clock(b.end) + (t.length ? ' (' + t.join(', ') + ')' : ''); }).join(', ');
     var parts = [];
     if (o.startAt) parts.push(whenLabel(o.startAt));
     if (o.multiplier > 1) parts.push(o.multiplier + '× time');
@@ -5487,7 +5500,9 @@
     // Once the session's over (and there's no own time still running), asking
     // to be unlocked or being locked out no longer matters. (A student can be
     // unlocked after their paper's handed back, to revise it.)
-    var over = state === 'ended' && !ownLive;
+    // Unlocked after the session ended: they can write again.
+    var reopened = !!(s && room.endedAt && Math.max(s.unlockedAt || 0, s.releasedAt || 0) > room.endedAt);
+    var over = state === 'ended' && !ownLive && !reopened;
     var paused = !!(s && (s.pausedAt || room.pausedAt));
     var f = { stage: stage, over: over };
     // Ending the session locks out everyone not on an alternative schedule.
@@ -5705,6 +5720,18 @@
     var room = teacherRoom, out = $('tbPreview');
     out.innerHTML = '';
     if (tb.mode !== 'own') return;
+    if (tb.inParts) {
+      var bl = tbBlocks(), total = 0;
+      bl.forEach(function (b, i) {
+        total += (b.end - b.start) / 60000;
+        if (i) out.appendChild(el('br'));
+        var t = periodsTouched(b.start, b.end);
+        out.appendChild(el('b', null, 'Part ' + (i + 1) + ': ' + dayClock(b.start) + ' \u2013 ' + clock(b.end)));
+        out.appendChild(document.createTextNode(t.length ? ' (period ' + t.join(', ') + ')' : ''));
+      });
+      if (bl.length) { out.appendChild(el('br')); out.appendChild(document.createTextNode(Math.round(total) + ' minutes in all. Their writing is kept between parts, and it hands in by itself five minutes after the last one.')); }
+      return;
+    }
     // Extra time is a multiple of one period (45 minutes); a session has no set length.
     var minutes = (room.minutes || 45) * tb.mult;
     var start = !tb.useOwn ? sessionWindow(room).start : tb.picker.get();
@@ -5732,19 +5759,90 @@
     seg.appendChild(ob); seg.appendChild(inp);
   }
   function showTimeBox() { $('tbNote').hidden = true; $('timeBox').hidden = false; }
+  // An alternative schedule in parts: each part a period (or other time) and
+  // how much of it -- the whole period, its first or second half, or so many
+  // minutes. Say the first half of D, then all of H.
+  var HALF_MIN = 22;
+  function tbBlocks() {
+    var out = [];
+    tb.parts.forEach(function (p) {
+      var st = p.picker.get();
+      if (!st) return;
+      var mins = p.len === 'whole' ? DAY.classMin : p.len === 'min' ? Number(p.mins) || 0 : HALF_MIN;
+      if (p.len === 'second') st += (DAY.classMin - HALF_MIN) * 60000;
+      if (mins > 0) out.push({ start: st, end: st + Math.round(mins * 60000) });
+    });
+    return out.sort(function (a, b) { return a.start - b.start; });
+  }
+  function tbAddPart(block) {
+    var part = { len: 'whole', mins: '' };
+    tb.parts.push(part);
+    var box = el('div', 'tbpart');
+    var head = el('div', 'phead');
+    head.appendChild(el('span', 'pnum'));
+    var rm = button('Remove', 'btn small ghost', function () { tb.parts.splice(tb.parts.indexOf(part), 1); box.remove(); tbNumberParts(); tbPreview(); });
+    head.appendChild(rm);
+    box.appendChild(head);
+    var host = el('div');
+    box.appendChild(host);
+    part.picker = makePicker(host, tbPreview);
+    var seg = el('div', 'segctl');
+    var inp = el('input', 'field'); inp.type = 'number'; inp.min = '1'; inp.step = '1'; inp.placeholder = 'minutes';
+    inp.style.cssText = 'width:7em;border-radius:10px;padding:7px 10px'; inp.hidden = true;
+    [['whole', 'Whole period'], ['first', 'First half'], ['second', 'Second half'], ['min', 'Minutes']].forEach(function (v) {
+      var b = el('button', v[0] === part.len ? 'on' : '', v[1]);
+      b.type = 'button';
+      b.setAttribute('data-len', v[0]);
+      b.addEventListener('click', function () {
+        part.len = v[0];
+        seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+        inp.hidden = v[0] !== 'min';
+        if (!inp.hidden) inp.focus();
+        tbPreview();
+      });
+      seg.appendChild(b);
+    });
+    inp.addEventListener('input', function () { part.mins = inp.value; tbPreview(); });
+    seg.appendChild(inp);
+    box.appendChild(seg);
+    $('tbParts').insertBefore(box, $('tbParts').querySelector('.addpart'));
+    if (block) {
+      // An existing part: a whole period or a half, if it is one; otherwise its minutes.
+      var d = new Date(block.start), m = d.getHours() * 60 + d.getMinutes(), len = Math.round((block.end - block.start) / 60000);
+      var per = PERIODS.find(function (p) { return p.start === m; }), per2 = PERIODS.find(function (p) { return p.start + DAY.classMin - HALF_MIN === m; });
+      var kind = per && len === DAY.classMin ? 'whole' : per && len === HALF_MIN ? 'first' : per2 && len === HALF_MIN ? 'second' : 'min';
+      part.picker.set(kind === 'second' ? block.start - (DAY.classMin - HALF_MIN) * 60000 : block.start);
+      if (kind === 'min') { part.mins = String(len); inp.value = len; }
+      seg.querySelector('[data-len="' + kind + '"]').click();
+    }
+    tbNumberParts();
+  }
+  function tbNumberParts() {
+    var boxes = $('tbParts').querySelectorAll('.tbpart');
+    boxes.forEach(function (b, i) { b.querySelector('.pnum').textContent = 'Part ' + (i + 1); b.querySelector('.phead button').hidden = boxes.length < 2; });
+  }
+  function tbShowStart() {
+    each('#tbStartSeg button', function (b) { var k = b.getAttribute('data-start'); b.classList.toggle('on', tb.inParts ? k === 'parts' : (k === 'own') === tb.useOwn); });
+    $('tbPicker').hidden = !tb.useOwn || tb.inParts;
+    $('tbParts').hidden = !tb.inParts;
+    $('tbLenRow').hidden = tb.inParts;
+    if (tb.inParts && !tb.parts.length) tbAddPart();
+  }
   function openOwnTime(email, name) {
     var room = teacherRoom, o = (room.own || {})[email];
-    tb = { mode: 'own', email: email, mult: o ? o.multiplier : 1, useOwn: !!(o && o.startAt), picker: null };
+    tb = { mode: 'own', email: email, mult: o ? o.multiplier : 1, useOwn: !!(o && o.startAt && !o.blocks), inParts: !!(o && o.blocks), parts: [], picker: null };
+    $('tbParts').innerHTML = '';
+    var add = button('+ Another part', 'btn small ghost addpart', function () { tbAddPart(); tbPreview(); });
+    $('tbParts').appendChild(add);
+    if (o && o.blocks) o.blocks.forEach(function (b) { tbAddPart(b); });
     $('tbTitle').textContent = 'Alternative schedule for ' + name + ' ';
-    $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both. Their time ends by itself when it runs out.'));
+    $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both, or have them take it in parts (say the first half of D, then all of H), writing on where they left off. It ends by itself five minutes after their time runs out.'));
     $('tbStartRow').hidden = false;
     $('tbRemove').hidden = !o;
-    each('#tbStartSeg button', function (b) { b.classList.toggle('on', (b.getAttribute('data-start') === 'own') === tb.useOwn); });
     tb.picker = makePicker($('tbPicker'), tbPreview);
-    if (o && o.startAt) tb.picker.set(o.startAt);
-    $('tbPicker').hidden = !tb.useOwn;
+    if (o && o.startAt && !o.blocks) tb.picker.set(o.startAt);
     $('tbLenLbl').textContent = 'Extra time';
-    $('tbLenRow').hidden = false;
+    tbShowStart();
     tbSegs([[1, 'Same'], [1.5, '1.5×'], [2, '2×']], tb.mult, function (v) { tb.mult = v; }, 'Other');
     tbPreview();
     showTimeBox();
@@ -5755,6 +5853,7 @@
     $('tbTitle').textContent = 'When does this writing session start? ';
     $('tbTitle').appendChild(tipEl('Changing it reopens the session if it had ended. People with their own start keep it.'));
     $('tbStartRow').hidden = true;
+    $('tbParts').hidden = true;
     $('tbRemove').hidden = true;
     tb.picker = makePicker($('tbPicker'), tbPreview);
     tb.picker.set(w.start);
@@ -5765,9 +5864,10 @@
   }
   each('#tbStartSeg button', function (b) {
     b.addEventListener('click', function () {
-      tb.useOwn = b.getAttribute('data-start') === 'own';
-      each('#tbStartSeg button', function (x) { x.classList.toggle('on', x === b); });
-      $('tbPicker').hidden = !tb.useOwn;
+      var k = b.getAttribute('data-start');
+      tb.inParts = k === 'parts';
+      tb.useOwn = k === 'own';
+      tbShowStart();
       tbPreview();
     });
   });
@@ -5834,7 +5934,12 @@
     var note = $('tbNote');
     note.hidden = true;
     var ok;
-    if (tb.mode === 'own') {
+    if (tb.mode === 'own' && tb.inParts) {
+      var bl = tbBlocks();
+      if (bl.length < tb.parts.length) { note.textContent = 'Pick a period or another time for every part (and its minutes).'; note.hidden = false; return; }
+      for (var i = 1; i < bl.length; i++) if (bl[i].start < bl[i - 1].end) { note.textContent = 'Two parts overlap. Move one of them.'; note.hidden = false; return; }
+      ok = await roomAction('own', [], { email: tb.email, blocks: bl });
+    } else if (tb.mode === 'own') {
       var start = tb.useOwn ? tb.picker.get() : null;
       if (tb.useOwn && !start) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }
       if (tb.mult < 1 || tb.mult > 4) { note.textContent = 'Extra time should be between 1× and 4×.'; note.hidden = false; return; }
