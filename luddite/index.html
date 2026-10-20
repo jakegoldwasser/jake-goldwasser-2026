@@ -646,6 +646,10 @@
   /* Hiding names (marking page only): a button in the marking bar, and a band across the top while it's on. */
   .topright #anonBtn.on, body.work .topright #anonBtn.on { background: var(--sun-tint); color: var(--ink); border-color: var(--sun-deep); }
   .anonkey { max-height: 60vh; overflow-y: auto; }
+  .comingup { max-height: 64vh; overflow-y: auto; }
+  .comingup h3 { margin: 16px 0 6px; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .comingup h3:first-child { margin-top: 0; }
+  .comingup .item .t { flex: none; width: 8.5em; font-weight: 600; }
   .anonkey .item { gap: 16px; }
   .anonkey .alias { flex: none; width: 8.5em; }
   body.is-anon::before { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 4px; background: var(--sun); z-index: 39; }
@@ -1148,7 +1152,7 @@
   <div class="card dash">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student on an alternative schedule; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student on an alternative schedule; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3><button class="btn small" type="button" data-comingup>Coming up</button></div>
       <div id="proctorList"></div>
     </section>
     <div class="row" style="justify-content:center; margin-top:18px"><button class="btn small ghost" id="proctorWriteBtn" type="button">Type an Entry Phrase to write</button></div>
@@ -1191,7 +1195,7 @@
 
     <!-- Writing sessions this teacher proctors (another teacher added them) -->
     <section class="panel tint-mint" id="proctorBox" hidden>
-      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions another teacher added you to as a proctor. You let students in, unlock them, and begin or pause their time, without seeing what they write.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions another teacher added you to as a proctor. You let students in, unlock them, and begin or pause their time, without seeing what they write.">?</span></h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
       <div id="proctorDashList"></div>
     </section>
 
@@ -1504,6 +1508,16 @@
   <div class="ldhead"><button type="button" class="ldtoggle" id="liveDockToggle" aria-expanded="true">Live comments <span class="ldcount" id="liveDockCount" hidden></span></button><span class="ldbtns"><button class="btn small ghost" id="chatAllBtn" type="button">Announcement</button><button type="button" class="iconbtn ldclose" id="liveDockMin" aria-label="Shrink live comments to an icon" title="Shrink to an icon">×</button></span></div>
   <button type="button" class="ldicon" id="liveDockIcon" aria-label="Live comments" title="Live comments"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg><span class="ldcount" id="liveDockIconCount" hidden></span></button>
   <div class="ldlist" id="liveDockList"></div>
+</div>
+
+<!-- Proctors: everything coming up, by day -->
+<div class="handin livebox" id="comingBox" hidden>
+  <div class="card">
+    <h2 style="margin:0">Coming up</h2>
+    <p class="sub" style="margin:4px 0 10px" id="comingMeta"></p>
+    <div class="comingup" id="comingList"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" id="comingPrint" type="button">Print</button><button class="btn ghost" id="comingClose" type="button">Close</button></div>
+  </div>
 </div>
 
 <div class="handin livebox" id="chatAllBox" hidden>
@@ -2011,6 +2025,7 @@
     document.body.classList.toggle('work', !!where);
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
+    $('comingBox').hidden = true;
   }
   var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student work', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
   $('workHome').addEventListener('click', function () {
@@ -4922,6 +4937,72 @@
       box.appendChild(row);
     });
   }
+  // Coming up: every future time this proctor is needed, by day -- each
+  // student on an alternative schedule (each part of one in parts), and the
+  // whole of any session a teacher added them to. Built from the sessions'
+  // proctor views, so it shows names and times, never writing.
+  var comingRows = [];
+  async function openComingUp() {
+    $('comingBox').hidden = false;
+    $('comingClose').focus();
+    $('comingMeta').textContent = 'Loading…';
+    $('comingList').innerHTML = '';
+    var data;
+    try { data = await api('/luddite/proctor'); } catch (e) { $('comingMeta').textContent = 'Couldn’t load. Check your connection and try again.'; return; }
+    var now = nowMs(), rows = [];
+    var views = await Promise.all(data.sessions.map(function (x) {
+      return api('/luddite/proctor/session?code=' + encodeURIComponent(x.code)).then(function (d) { return d.session; }).catch(function () { return null; });
+    }));
+    views.forEach(function (v) {
+      if (!v) return;
+      if (v.reach === 'session' && v.state === 'upcoming') rows.push({ start: v.startAt, end: 0, who: 'Whole session', v: v });
+      v.people.forEach(function (p) {
+        if (!p.own) return;
+        var name = p.name || p.email;
+        var blocks = p.own.blocks || (p.startAt ? [{ start: p.startAt, end: p.endAt }] : []);
+        blocks.forEach(function (b, i) {
+          if ((b.end || b.start) <= now || (p.handedIn && b.start <= now)) return;
+          rows.push({ start: b.start, end: b.end, who: name + (blocks.length > 1 ? ' · part ' + (i + 1) + ' of ' + blocks.length : '') + (p.own.multiplier > 1 ? ' · ' + p.own.multiplier + '× time' : ''), v: v });
+        });
+      });
+    });
+    rows.sort(function (a, b) { return a.start - b.start; });
+    comingRows = rows;
+    $('comingMeta').textContent = rows.length ? plural(rows.length, 'time', 'times') + ' from now on. Click one to open its session.' : 'Nothing coming up.';
+    var box = $('comingList'), day = '';
+    rows.forEach(function (r) {
+      var d = new Date(r.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      if (d !== day) { day = d; box.appendChild(el('h3', null, d)); }
+      var row = el('div', 'item click');
+      row.appendChild(el('span', 't', clock(r.start) + (r.end ? '\u2013' + clock(r.end) : '')));
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, r.who));
+      w.appendChild(el('span', null, r.v.title + ' · ' + r.v.teacherName));
+      row.appendChild(w);
+      row.tabIndex = 0;
+      row.addEventListener('click', function () { $('comingBox').hidden = true; openProctorRoom(r.v.code); });
+      box.appendChild(row);
+    });
+  }
+  each('[data-comingup]', function (b) { b.addEventListener('click', openComingUp); });
+  $('comingClose').addEventListener('click', function () { $('comingBox').hidden = true; });
+  $('comingBox').addEventListener('click', function (e) { if (e.target === $('comingBox')) $('comingBox').hidden = true; });
+  // Print: a plain list in a window of its own.
+  $('comingPrint').addEventListener('click', function () {
+    var esc = function (t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+    var html = '<!doctype html><meta charset="utf-8"><title>Coming up</title><style>body{font:14px/1.45 system-ui,sans-serif;margin:32px}h2{font-size:15px;margin:20px 0 6px}td{padding:3px 14px 3px 0;vertical-align:top}</style><h1>Coming up</h1>';
+    var day = '';
+    comingRows.forEach(function (r) {
+      var d = new Date(r.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      if (d !== day) { html += (day ? '</table>' : '') + '<h2>' + esc(d) + '</h2><table>'; day = d; }
+      html += '<tr><td>' + esc(clock(r.start) + (r.end ? '\u2013' + clock(r.end) : '')) + '</td><td><b>' + esc(r.who) + '</b></td><td>' + esc(r.v.title + ' · ' + r.v.teacherName) + '</td></tr>';
+    });
+    var w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html + (day ? '</table>' : ''));
+    w.document.close();
+    w.print();
+  });
   function openProctorRoom(code) {
     pxCode = code;
     pxSession = null;
