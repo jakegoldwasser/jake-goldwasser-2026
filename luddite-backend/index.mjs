@@ -183,6 +183,9 @@ async function prefsOf(teacherSub) {
 const UPCOMING_HORIZON_MS = 48 * 60 * 60 * 1000;
 // A paper handed in this long after a student's time ran out is marked late.
 const LATE_GRACE_MS = 2 * 60 * 1000;
+// A student on an alternative schedule (own time) has five minutes after
+// their time ends to finish; then their page hands in by itself.
+const OWN_GRACE_MS = 5 * 60 * 1000;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // What students see the owners as until they pick something else.
 const OWNER_DISPLAY_NAME = 'Mr. Goldwasser';
@@ -1379,6 +1382,7 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'unlock') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], lockedOut: false, askedAt: 0, unlockedAt: Date.now() }; });
       else if (body.action === 'release') subs.forEach((sub) => { if (students[sub]) students[sub] = { ...students[sub], handedIn: false, askedAt: 0, releasedAt: Date.now() }; });
       else if (body.action === 'close') return { ...r, open: false, endedAt: Date.now() };
+      else if (body.action === 'handIn') return undefined; // handed in below
       else if (body.action === 'startNow') return startedNow(r, Date.now());
       else if (body.action === 'open') return { ...r, open: true, endedAt: null, startAt: Date.now(), pausedAt: 0, pausedMs: 0, sittings: undefined };
       else if (body.action === 'pause' || body.action === 'resume') subs.forEach((sub) => { if (students[sub]) students[sub] = paused(students[sub], body.action === 'pause', Date.now()); });
@@ -1457,14 +1461,14 @@ async function routeLuddite(event, method, path, info) {
     // keystroke, replacing this copy.
     if (body.action === 'close') {
       const open = Object.entries(room.students).filter(([, st]) => st.status === 'admitted' && !st.handedIn && !(room.own && room.own[lower(st.email)]));
-      await inBatches(open, async ([sub, st]) => {
-        const { state: draft } = await readItem('luddite:draft:' + code + ':' + sub);
-        if (!draft || !String(draft.text || '').trim()) return;
-        const fresh = await getRoom(code);
-        await handInFor(fresh, code, { sub, email: st.email, name: st.name }, fresh.students[sub], String(draft.text).slice(0, MAX_SUBMISSION_CHARS), 'Handed in at the end', true)
-          .catch((e) => console.warn('auto hand-in failed', sub, e.message));
-      });
+      await handInFromBackups(code, open, 'Handed in at the end');
       if (open.length) return respond(200, { room: await getRoom(code) });
+    }
+    // Closing one student's paper (an alternative schedule's, say): hand in now.
+    if (body.action === 'handIn') {
+      const list = subs.map((sub) => [sub, room.students[sub]]).filter(([, st]) => st && st.status === 'admitted' && !st.handedIn);
+      await handInFromBackups(code, list, 'Handed in by the teacher');
+      return respond(200, { room: await getRoom(code) });
     }
     return respond(200, { room });
   }
@@ -1672,9 +1676,16 @@ async function routeProctor(method, path, q, body, me) {
       }
       else if (body.action === 'startNow') return startedNow(r, t);
       else if (body.action === 'pauseAll' || body.action === 'resumeAll') return paused(r, body.action === 'pauseAll', t);
+      else if (body.action === 'handIn') return undefined; // handed in below
       else throw new HttpError(400, 'bad_action');
       return { ...r, students };
     });
+    // Closing a student's paper: hand in now, with what they've written.
+    if (body.action === 'handIn') {
+      const list = subs.map((sub) => [sub, room.students[sub]]).filter(([, st]) => st && st.status === 'admitted' && !st.handedIn);
+      await handInFromBackups(code, list, 'Handed in by the proctor');
+      return respond(200, { session: proctorView(await getRoom(code), reach) });
+    }
     if (body.action === 'begin') {
       await mutate('luddite:mine:' + email, (m) => {
         const list = (m && m.own) || [];
@@ -1918,6 +1929,25 @@ async function classesOf(teacherState) {
   return list.map((x) => x.state).filter((c) => c && !c.deletedAt).map(classSummary);
 }
 
+// Hands in for these students now, from the backup of their writing (the
+// session ending, or a teacher or proctor closing one student's paper). With
+// nothing written they're just marked handed in, so they can't write on. Their
+// own page then hands in again with everything up to the last keystroke.
+async function handInFromBackups(code, list, label) {
+  await inBatches(list, async ([sub, st]) => {
+    const { state: draft } = await readItem('luddite:draft:' + code + ':' + sub);
+    const fresh = await getRoom(code);
+    if (!fresh.students[sub] || fresh.students[sub].handedIn) return;
+    if (!draft || !String(draft.text || '').trim()) {
+      if (label === 'Handed in at the end') return;
+      await mutate('luddite:room:' + code, (r) => (r.students[sub] ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], handedIn: true, autoHandedIn: true, askedAt: 0, writing: false } } } : undefined));
+      return;
+    }
+    await handInFor(fresh, code, { sub, email: st.email, name: st.name }, fresh.students[sub], String(draft.text).slice(0, MAX_SUBMISSION_CHARS), label, true)
+      .catch((e) => console.warn('auto hand-in failed', sub, e.message));
+  });
+}
+
 // The addresses on an assignment's class, so its teacher can see who hasn't come in.
 // Hands one student's writing in: Drive (when connected), Luddite's own copy
 // to mark up, the teacher's student list, and the room. `auto` when Luddite
@@ -1949,7 +1979,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
   const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
   const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]);
   const submission = { id, sub: me.sub, ...(auto ? { auto: true } : {}), email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-    link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + LATE_GRACE_MS),
+    link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS),
     ...(replaces.length ? { replaces } : {}) };
   if (stored) {
     // The chat with the teacher while they wrote goes with the paper (the most
