@@ -5795,7 +5795,7 @@
     out.innerHTML = '';
     if (tb.mode !== 'own') return;
     if (tb.inParts) {
-      var bl = tbBlocks(), total = 0;
+      var raw = tbBlocks(), bl = joinAdjacent(raw), total = 0;
       bl.forEach(function (b, i) {
         total += (b.end - b.start) / 60000;
         if (i) out.appendChild(el('br'));
@@ -5803,7 +5803,7 @@
         out.appendChild(el('b', null, 'Part ' + (i + 1) + ': ' + dayClock(b.start) + ' \u2013 ' + clock(b.end)));
         out.appendChild(document.createTextNode(t.length ? ' (period ' + t.join(', ') + ')' : ''));
       });
-      if (bl.length) { out.appendChild(el('br')); out.appendChild(document.createTextNode(Math.round(total) + ' minutes in all. Their writing is kept between parts, and it hands in by itself five minutes after the last one.')); }
+      if (bl.length) { out.appendChild(el('br')); out.appendChild(document.createTextNode(Math.round(total) + ' minutes in all.' + (bl.length < raw.length ? ' Back-to-back periods run on as one part, straight through the passing period.' : '') + ' Their writing is kept between parts, and it hands in by itself five minutes after the last one.')); }
       return;
     }
     // Extra time is a multiple of one period (45 minutes); a session has no set length.
@@ -5847,6 +5847,34 @@
       if (mins > 0) out.push({ start: st, end: st + Math.round(mins * 60000) });
     });
     return out.sort(function (a, b) { return a.start - b.start; });
+  }
+  // Parts in back-to-back periods (only a passing period between them) are
+  // one continuous part: the student writes on through the passing period,
+  // never paused or locked between them.
+  function joinAdjacent(list) {
+    var out = [];
+    list.forEach(function (b) {
+      var last = out[out.length - 1];
+      if (last && b.start >= last.end && b.start - last.end <= DAY.passMin * 60000) last.end = Math.max(last.end, b.end);
+      else out.push({ start: b.start, end: b.end });
+    });
+    return out;
+  }
+  // And back apart for editing: a part running on through passing periods
+  // shows as its periods again (say the second half of D, then all of E).
+  function splitAdjacent(b) {
+    var out = [], st = b.start;
+    for (;;) {
+      var d = new Date(st), m = d.getHours() * 60 + d.getMinutes();
+      var i = PERIODS.findIndex(function (p) { return m >= p.start && m < p.end; }), nx = PERIODS[i + 1];
+      if (i < 0 || !nx || nx.start - PERIODS[i].end > DAY.passMin) break;
+      var nextSt = st + (nx.start - m) * 60000;
+      if (b.end <= nextSt) break;
+      out.push({ start: st, end: st + (PERIODS[i].end - m) * 60000 });
+      st = nextSt;
+    }
+    out.push({ start: st, end: b.end });
+    return out;
   }
   function tbAddPart(block) {
     var part = { len: 'whole', mins: '' };
@@ -5908,7 +5936,7 @@
     $('tbParts').innerHTML = '';
     var add = button('+ Another part', 'btn small ghost addpart', function () { tbAddPart(); tbPreview(); });
     $('tbParts').appendChild(add);
-    if (o && o.blocks) o.blocks.forEach(function (b) { tbAddPart(b); });
+    if (o && o.blocks) o.blocks.forEach(function (b) { splitAdjacent(b).forEach(function (x) { tbAddPart(x); }); });
     $('tbTitle').textContent = 'Alternative schedule for ' + name + ' ';
     $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both, or have them take it in parts (say the first half of D, then all of H), writing on where they left off. It ends by itself five minutes after their time runs out.'));
     $('tbStartRow').hidden = false;
@@ -6012,7 +6040,7 @@
       var bl = tbBlocks();
       if (bl.length < tb.parts.length) { note.textContent = 'Pick a period or another time for every part (and its minutes).'; note.hidden = false; return; }
       for (var i = 1; i < bl.length; i++) if (bl[i].start < bl[i - 1].end) { note.textContent = 'Two parts overlap. Move one of them.'; note.hidden = false; return; }
-      ok = await roomAction('own', [], { email: tb.email, blocks: bl });
+      ok = await roomAction('own', [], { email: tb.email, blocks: joinAdjacent(bl) });
     } else if (tb.mode === 'own') {
       var start = tb.useOwn ? tb.picker.get() : null;
       if (tb.useOwn && !start) { note.textContent = 'Pick a period or another time.'; note.hidden = false; return; }
