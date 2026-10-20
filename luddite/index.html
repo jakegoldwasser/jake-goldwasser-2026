@@ -730,6 +730,8 @@
   .lockmark.open { color: var(--pen); }
   .lockmark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
   .lockmark.bad { color: var(--tomato-deep); }
+  button.lockmark.lockbtn { background: none; border: 0; padding: 4px 0; border-radius: 8px; cursor: pointer; }
+  button.lockmark.lockbtn:hover { background: var(--hover); }
   /* Fixed slots, so the status tags and ⋯ buttons line up down the list. */
   .item.person .mainslot { flex: none; min-width: 112px; display: flex; justify-content: flex-end; }
   .item.person .status { flex: none; }
@@ -885,7 +887,7 @@
   .livegrid .livechat .chatlog { max-height: none; flex: 1; min-height: 0; }
   .livechat h3 { margin: 0 0 8px; font-size: 14px; }
   .chatsend.wrap { align-items: flex-end; }
-  .chatsend textarea.field { resize: none; overflow-y: auto; max-height: 40vh; line-height: 1.45; border-radius: 12px; }
+  .chatsend textarea.field { resize: none; overflow-y: auto; min-height: 66px; max-height: 40vh; line-height: 1.45; border-radius: 12px; padding: 10px 12px; }
   @media (max-width: 820px) { .livegrid { grid-template-columns: 1fr; } .livegrid .livechat { border-left: 0; padding: 12px 0 0; border-top: 1.5px solid var(--rule); } .livegrid .liveread { max-height: 44vh; } }
   /* Live comments, bottom right of a session's page while it runs. */
   .livedock { position: fixed; right: 16px; bottom: 16px; z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: var(--card); border: 1.5px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.14); }
@@ -893,6 +895,13 @@
   .livedock .ldhead button.ldtoggle { background: none; border: 0; padding: 0; font: 600 15px var(--ui); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
   .livedock .ldlist { max-height: 34vh; overflow-y: auto; border-top: 1.5px solid var(--rule); padding: 6px; }
   .livedock.folded .ldlist { display: none; }
+  .livedock .ldbtns { display: inline-flex; align-items: center; gap: 4px; }
+  .livedock .ldclose { font-size: 20px; line-height: 1; }
+  .livedock .ldicon { display: none; }
+  .livedock.min { width: auto; border-radius: 999px; }
+  .livedock.min .ldhead, .livedock.min .ldlist { display: none; }
+  .livedock.min .ldicon { display: inline-flex; position: relative; align-items: center; justify-content: center; width: 52px; height: 52px; border: 0; border-radius: 999px; background: none; color: var(--pen); cursor: pointer; }
+  .livedock.min .ldicon .ldcount { position: absolute; top: -4px; right: -4px; }
   .livedock .ldrow { display: flex; width: 100%; justify-content: space-between; gap: 8px; align-items: baseline; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 10px; font: 400 14px var(--ui); color: var(--ink); cursor: pointer; }
   .livedock .ldrow:hover { background: var(--hover); }
   .livedock .ldrow b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1445,7 +1454,7 @@
     <h2 style="margin:0">Names key</h2>
     <p class="sub" style="margin:4px 0 10px">Who each label on this page is. Only you see this.</p>
     <div class="anonkey" id="anonKeyList"></div>
-    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="anonKeyClose" type="button">Close</button></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="anonKeyPrint" type="button">Print</button><button class="btn ghost" id="anonKeyClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -1492,7 +1501,8 @@
 
 <!-- Live comments: on a session's page while it runs, bottom right -->
 <div class="livedock no-print" id="liveDock" hidden>
-  <div class="ldhead"><button type="button" class="ldtoggle" id="liveDockToggle" aria-expanded="true">Live comments <span class="ldcount" id="liveDockCount" hidden></span></button><button class="btn small ghost" id="chatAllBtn" type="button">Announcement</button></div>
+  <div class="ldhead"><button type="button" class="ldtoggle" id="liveDockToggle" aria-expanded="true">Live comments <span class="ldcount" id="liveDockCount" hidden></span></button><span class="ldbtns"><button class="btn small ghost" id="chatAllBtn" type="button">Announcement</button><button type="button" class="iconbtn ldclose" id="liveDockMin" aria-label="Shrink live comments to an icon" title="Shrink to an icon">×</button></span></div>
+  <button type="button" class="ldicon" id="liveDockIcon" aria-label="Live comments" title="Live comments"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H10l-5 4v-4H4z"/></svg><span class="ldcount" id="liveDockIconCount" hidden></span></button>
   <div class="ldlist" id="liveDockList"></div>
 </div>
 
@@ -3490,8 +3500,11 @@
     $('anonKeyBox').hidden = true;
     redrawTeacher();
   });
+  function anonKeyList() {
+    return Object.keys(anonSeen).map(function (k) { return anonSeen[k]; }).sort(function (a, b) { return a.alias.localeCompare(b.alias); });
+  }
   $('anonKeyBtn').addEventListener('click', function () {
-    var list = Object.keys(anonSeen).map(function (k) { return anonSeen[k]; }).sort(function (a, b) { return a.alias.localeCompare(b.alias); });
+    var list = anonKeyList();
     var box = $('anonKeyList');
     box.innerHTML = '';
     if (!list.length) box.appendChild(el('div', 'empty', 'No students on this page.'));
@@ -3508,6 +3521,23 @@
     $('anonKeyClose').focus();
   });
   $('anonKeyClose').addEventListener('click', function () { $('anonKeyBox').hidden = true; });
+  // Print the key on its own: a plain table in a window of its own, so the page showing stays as it is.
+  $('anonKeyPrint').addEventListener('click', function () {
+    var h = function (t) { return String(t || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+    var where = $('workWhere').textContent || 'Home';
+    var rows = anonKeyList().map(function (x) { return '<tr><td>' + h(x.alias) + '</td><td>' + h(x.name || x.email) + '</td><td>' + h(x.name ? x.email : '') + '</td></tr>'; }).join('');
+    var w = window.open('', '_blank');
+    if (!w) { tell('Couldn’t open the page to print', 'Allow pop-ups for this site, then try again.'); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Names key</title><style>'
+      + 'body{font:400 14px "Source Sans 3",system-ui,sans-serif;color:#2b2118;margin:32px}h1{font-size:22px;font-weight:600;margin:0 0 4px}p{margin:0 0 16px;color:#6b5d50}'
+      + 'table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #ccc}th{font-size:12px;text-transform:uppercase;letter-spacing:.05em}'
+      + '</style></head><body><h1>Names key</h1><p>' + h(where) + ' · ' + h(new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</p>'
+      + (rows ? '<table><thead><tr><th>Label</th><th>Name</th><th>Email</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p>No students on this page.</p>')
+      + '</body></html>');
+    w.document.close();
+    w.focus();
+    w.print();
+  });
   $('anonKeyBox').addEventListener('click', function (e) { if (e.target === $('anonKeyBox')) $('anonKeyBox').hidden = true; });
   // Redraw whichever teacher page is showing.
   function redrawTeacher() {
@@ -5350,12 +5380,15 @@
   // Live comments, bottom right while the session runs: everyone with a
   // thread, unread first, and Announcement. Folded or not is remembered here.
   var dockFolded = load('luddite.dockFolded') === '1';
-  function openLive(sub) { liveOpen = sub; drawLiveOpen(teacherRoom); $('liveBox').hidden = false; $('tChatInput').focus(); }
+  // × shrinks it to a speech-bubble icon (also remembered); a click on the icon brings it back.
+  var dockMin = load('luddite.dockMin') === '1';
+  function openLive(sub) { liveOpen = sub; drawLiveOpen(teacherRoom); $('liveBox').hidden = false; growChat(); $('tChatInput').focus(); }
   function drawLiveDock(room) {
     var dock = $('liveDock');
     dock.hidden = liveOff || !wantLive(room) || $('roomScreen').hidden;
     if (dock.hidden) return;
     dock.classList.toggle('folded', dockFolded);
+    dock.classList.toggle('min', dockMin);
     $('liveDockToggle').setAttribute('aria-expanded', dockFolded ? 'false' : 'true');
     var threads = Object.keys(room.students).map(function (sub) { var x = room.students[sub]; x.sub = sub; return x; })
       .filter(function (x) { return x.status === 'admitted' && (x.chatS || x.chatT); });
@@ -5363,6 +5396,9 @@
     var unread = threads.filter(chatUnread).length;
     $('liveDockCount').hidden = !unread;
     $('liveDockCount').textContent = unread;
+    $('liveDockIconCount').hidden = !unread;
+    $('liveDockIconCount').textContent = unread;
+    $('liveDockIcon').setAttribute('aria-label', 'Live comments' + (unread ? ', ' + unread + ' new' : ''));
     var list = $('liveDockList');
     list.innerHTML = '';
     if (!threads.length) list.appendChild(el('div', 'empty', 'No live comments yet. Click a student to write to them.'));
@@ -5375,13 +5411,22 @@
       list.appendChild(b);
     });
   }
+  function setDockMin(v) {
+    dockMin = v;
+    store('luddite.dockMin', v ? '1' : null);
+    if (teacherRoom) drawLiveDock(teacherRoom);
+    (v ? $('liveDockIcon') : $('liveDockToggle')).focus();
+  }
+  $('liveDockMin').addEventListener('click', function () { setDockMin(true); });
+  $('liveDockIcon').addEventListener('click', function () { setDockMin(false); });
   $('liveDockToggle').addEventListener('click', function () {
     dockFolded = !dockFolded;
     store('luddite.dockFolded', dockFolded ? '1' : null);
     if (teacherRoom) drawLiveDock(teacherRoom);
   });
   // The live comment box grows with what's typed, so the whole comment shows; Enter sends, Shift+Enter starts a new line.
-  function growChat() { var t = $('tChatInput'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 3, window.innerHeight * 0.4) + 'px'; }
+  // Measured only while it shows (hidden, it would measure nothing and shrink to a sliver).
+  function growChat() { var t = $('tChatInput'); if (!t.offsetParent) { t.style.height = ''; return; } t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 3, window.innerHeight * 0.4) + 'px'; }
   $('tChatInput').addEventListener('input', growChat);
   $('tChatInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('tChatForm').requestSubmit(); }
@@ -5540,6 +5585,25 @@
   }
   var LOCK_SHUT = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
   var LOCK_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 7.6-1.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  // What a click on a student's padlock does: locking someone who can write
+  // hands in what they have so far (they can't write until unlocked);
+  // unlocking lets them write again, even after the session has ended.
+  function lockToggle(room, state, p, f) {
+    var s = p.s;
+    if (!s || !s.sub || s.status !== 'admitted' || state === 'upcoming') return null;
+    if (f.canWrite) return async function () {
+      if (await ask({ title: 'Lock ' + p.name + '?', text: 'Locking hands in their paper now, with what they’ve written so far, and they can’t write again until you unlock them.' + (f.own ? ' Their alternative schedule ends here too.' : ''), ok: 'Lock and hand in', danger: true })) roomAction('handIn', [s.sub]);
+    };
+    var paused = !s.handedIn && !s.lockedOut && (s.pausedAt || room.pausedAt);
+    if (paused) return async function () {
+      if (await ask({ title: 'Let ' + p.name + ' write again?', text: s.pausedAt ? 'Their time is paused. Resuming starts their clock again.' : 'The whole session is paused. Resuming starts everyone’s clock again.', ok: 'Resume' })) roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []);
+    };
+    if (!s.handedIn && !s.lockedOut) return null;
+    var after = state === 'ended' && !f.own;
+    return async function () {
+      if (await ask({ title: 'Unlock ' + p.name + '?', text: (s.handedIn ? 'They’ve handed in. Unlocking lets them write on, and they’ll need to hand in again.' : 'They were locked out for leaving the page. Unlocking lets them pick up where they left off.') + (after ? ' The session is over, so they can write with no time limit until they hand in or you end the session again.' : ''), ok: 'Unlock' })) roomAction(s.handedIn ? 'release' : 'unlock', [s.sub]);
+    };
+  }
   var STATUS = { progress: ['In progress', 'gray'], grade: ['Grade!', 'pink'], graded: ['Graded', 'yellow'], shared: ['Grading shared', 'green'], none: ['Nothing handed in', 'gray'] };
   function personRow(room, state, p, showEmail) {
     var s = p.s, x = p.x, f = p.f || personFacts(room, state, p), stage = f.stage;
@@ -5550,6 +5614,16 @@
     lk.title = f.canWrite ? 'Can write' : f.locked ? 'Locked: left the page' : s && s.handedIn ? 'Locked: handed in' : f.text === 'Paused' ? 'Locked: paused' : 'Locked: can’t write';
     lk.setAttribute('role', 'img');
     lk.setAttribute('aria-label', lk.title);
+    // A click on the padlock locks or unlocks them, after a warning.
+    var lockAct = lockToggle(room, state, p, f);
+    if (lockAct) {
+      lk = el('button', lk.className + ' lockbtn');
+      lk.type = 'button';
+      lk.innerHTML = f.canWrite ? LOCK_OPEN : LOCK_SHUT;
+      lk.title = (f.canWrite ? 'Can write · click to lock' : 'Can’t write · click to unlock');
+      lk.setAttribute('aria-label', (f.canWrite ? 'Lock ' : 'Unlock ') + p.name);
+      lk.addEventListener('click', lockAct);
+    }
     row.appendChild(lk);
     var w = el('div', 'who');
     w.appendChild(el('b', null, p.name));
