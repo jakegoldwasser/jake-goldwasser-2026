@@ -1258,7 +1258,6 @@
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
             <button type="button" id="rubricBtn">Rubric…</button>
-            <button type="button" id="rubricShowBtn" hidden>Show students the rubric while they write</button>
             <button type="button" id="reopenBtn">Open it again now</button>
             <button type="button" id="printAllRoom">Print all papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
@@ -1528,6 +1527,7 @@
     <input class="field wide askfield" id="askInput" autocomplete="off" hidden>
     <textarea class="field promptfield askfield" id="askArea" maxlength="4000" hidden></textarea>
     <select class="field wide askfield" id="askSelect" hidden></select>
+    <label class="fine casualcheck" id="askCheckRow" hidden><input type="checkbox" id="askCheck"> <span id="askCheckText"></span></label>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
       <button class="btn small ghost" id="askNo" type="button">Cancel</button>
       <button class="btn small" id="askYes" type="button">OK</button>
@@ -1690,6 +1690,12 @@
       $('askSelect').innerHTML = '';
       (o.options || []).forEach(function (x) { var op = el('option', null, x.label); op.value = x.value; $('askSelect').appendChild(op); });
     }
+    // An optional checkbox under the field; read $('askCheck').checked after.
+    $('askCheckRow').hidden = !o.check;
+    $('askCheckText').textContent = o.check || '';
+    $('askCheck').checked = o.checked !== false;
+    $('askSelect').onchange = o.onSelect || null;
+    if (o.onSelect) setTimeout(o.onSelect, 0);
     $('askTitle').textContent = o.title || '';
     $('askText').textContent = o.text || '';
     $('askInput').hidden = field !== $('askInput');
@@ -5046,8 +5052,6 @@
       rl.appendChild(button('Open', 'btn small ghost', function () { openRubricView(room.rubric, room.code); }));
     }
     rl.hidden = !room.rubric;
-    $('rubricShowBtn').hidden = !room.rubric;
-    $('rubricShowBtn').textContent = room.rubricShown ? 'Hide the rubric from students' : 'Show students the rubric while they write';
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
@@ -5489,10 +5493,6 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
-  $('rubricShowBtn').addEventListener('click', function () {
-    $('roomMenu').open = false;
-    roomAction('rubricShown', [], { on: !teacherRoom.rubricShown });
-  });
   $('shareWorkBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction('shareWork', [], { on: !teacherRoom.shareWork });
@@ -5641,9 +5641,9 @@
   // Choosing something from the More menu closes it.
   each('#roomMenu .pop button', function (b) { b.addEventListener('click', function () { $('roomMenu').open = false; }); });
   $('rubricBtn').addEventListener('click', async function () {
-    var rb = await chooseRubric(teacherRoom.rubric);
-    if (rb === undefined) return;
-    try { await applyRubric(teacherRoom.code, rb); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); }
+    var pick = await chooseRubric(teacherRoom.rubric, rubricShownIn(teacherRoom));
+    if (pick === undefined) return;
+    try { await applyRubric(teacherRoom.code, pick); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); }
   });
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
@@ -6536,28 +6536,36 @@
     t.appendChild(tb);
     box.appendChild(t);
   }
-  // Pick one of the saved rubrics (or none) for a writing session.
-  // "+ New rubric…" opens the editor and resolves with what's saved there.
-  async function chooseRubric(current) {
+  // Pick one of the saved rubrics (or none) for a writing session, and
+  // whether students see it while they write (on unless the teacher turned
+  // it off for this session). "+ New rubric…" opens the editor and resolves
+  // with what's saved there, shown to students. Resolves { rb, shown }.
+  async function chooseRubric(current, shown) {
     var v = rubrics.length ? await ask({ title: 'Rubric for this session', text: 'Every paper in the session is marked against it.', input: 'select',
       options: [{ value: '', label: 'No rubric' }].concat(rubrics.map(function (x) { return { value: x.id, label: x.name + ' (' + rubricKindLabel(x) + ')' }; }), [{ value: '+new', label: '+ New rubric…' }]),
-      value: current ? current.id : '', ok: 'Use it' }) : '+new';
+      value: current ? current.id : '', ok: 'Use it',
+      check: 'Show students the rubric while they write', checked: shown !== false,
+      onSelect: function () { $('askCheckRow').hidden = !$('askSelect').value; } }) : '+new';
     if (v === null) return undefined;
-    if (v === '+new') return new Promise(function (resolve) { editRubric(null, resolve); });
-    return rubrics.filter(function (x) { return x.id === v; })[0] || null;
+    if (v === '+new') return new Promise(function (resolve) { editRubric(null, function (rb) { resolve({ rb: rb, shown: true }); }); });
+    return { rb: rubrics.filter(function (x) { return x.id === v; })[0] || null, shown: $('askCheck').checked };
   }
-  async function applyRubric(code, rb) {
-    var data = await api('/luddite/assignment', { code: code, action: 'rubric', rubric: rb });
+  // A rubric's session (the room) only knows it's shown once it's set.
+  function rubricShownIn(room) { return !room || !room.rubric || !!room.rubricShown; }
+  async function applyRubric(code, pick) {
+    var data = await api('/luddite/assignment', { code: code, action: 'rubric', rubric: pick.rb });
+    if (pick.rb && !!data.room.rubricShown !== pick.shown) data = await api('/luddite/assignment', { code: code, action: 'rubricShown', on: pick.shown });
     if (teacherRoom && teacherRoom.code === code) teacherRoom = data.room;
     return data.room.rubric || null;
   }
   async function pickRubricFor(code) {
-    var rb = await chooseRubric(activeRubric());
-    if (rb === undefined) return;
+    var pick = await chooseRubric(activeRubric(), rubricShownIn(teacherRoom && teacherRoom.code === code ? teacherRoom : null));
+    if (pick === undefined) return;
+    var rb = pick.rb;
     if (piece && piece.rubricScores && piece.rubricScores.some(function (x) { return x >= 0; }) && (!rb || !piece.rubric || rb.id !== piece.rubric.id)) {
       if (!await ask({ title: 'Change the rubric?', text: 'The levels you picked on this paper are cleared.', ok: 'Change it' })) return;
     }
-    try { roomRubric = await applyRubric(code, rb); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); return; }
+    try { roomRubric = await applyRubric(code, pick); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); return; }
     // Only a grid is kept on the paper, with its scores.
     if (piece) { piece.rubric = roomRubric && roomRubric.kind !== 'doc' ? roomRubric : null; piece.rubricScores = []; queueSave(); renderRubric(); }
   }
