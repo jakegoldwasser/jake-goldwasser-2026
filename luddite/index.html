@@ -170,8 +170,9 @@
   .dayclass + .dayclass { margin-top: 14px; }
   .dayclass .lbl { margin: 0; }
   /* A class's color: a small dot wherever the class is named. */
-  .cdot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; flex: none; }
-  h2 .cdot { width: 14px; height: 14px; margin-right: 10px; vertical-align: 3px; }
+  .cdot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; margin-right: 7px; vertical-align: -3px; flex: none; color: #fff; font: 600 12px/1 var(--ui); text-shadow: 0 0 2px rgba(0,0,0,.35); }
+  .cdot.noper { width: 12px; height: 12px; vertical-align: 0; }
+  h2 .cdot { width: 28px; height: 28px; font-size: 18px; border-radius: 4px; margin-right: 10px; vertical-align: 2px; }
   .classpick button .cdot { margin-right: 6px; box-shadow: 0 0 0 1.5px var(--card); }
   .swatches { display: inline-flex; gap: 8px; flex-wrap: wrap; }
   .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; padding: 0; }
@@ -639,9 +640,10 @@
   .promptfield { width: 100%; border-radius: 10px; resize: vertical; min-height: 84px; font: 400 16px/1.45 var(--ui); padding: 10px 14px; }
 
   /* Hiding names (marking page only): a button in the marking bar, and a band across the top while it's on. */
-  .markbar .anonbtn { font: 600 13.5px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--ink); border-radius: 999px; padding: 5px 14px; cursor: pointer; }
-  .markbar .anonbtn:hover { background: var(--hover); }
-  .markbar .anonbtn.on { background: var(--sun-tint); }
+  .topright #anonBtn.on, body.work .topright #anonBtn.on { background: var(--sun-tint); color: var(--ink); border-color: var(--sun-deep); }
+  .anonkey { max-height: 60vh; overflow-y: auto; }
+  .anonkey .item { gap: 16px; }
+  .anonkey .alias { flex: none; width: 8.5em; }
   body.is-anon::before { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 4px; background: var(--sun); z-index: 39; }
   .sheet, .piece { border-radius: 14px; }
   .sheet { border: 1.5px solid var(--edge); box-shadow: none; }
@@ -721,12 +723,9 @@
   .warntext { font-style: normal; color: var(--tomato-deep); }
   .statustext { font-style: normal; color: var(--ink); }
   .item.person .lockmark { flex: none; display: inline-flex; width: 26px; justify-content: center; }
-  .lockmark.open { color: var(--mint-deep); }
+  .lockmark.open { color: var(--pen); }
   .lockmark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
   .lockmark.bad { color: var(--tomato-deep); }
-  .item.person .eyemark { flex: none; display: inline-flex; width: 26px; justify-content: center; }
-  .eyemark.open { color: var(--pen); }
-  .eyemark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
   /* Fixed slots, so the status tags and ⋯ buttons line up down the list. */
   .item.person .mainslot { flex: none; min-width: 112px; display: flex; justify-content: flex-end; }
   .item.person .status { flex: none; }
@@ -874,8 +873,38 @@
   .livebox .card { max-width: 760px !important; width: 100%; text-align: left; }
   .livetile.newmsg { border-color: var(--pen); box-shadow: inset 0 0 0 1px var(--pen); }
   .livetile .lt-new, .item.person .lt-new { color: var(--pen); font-weight: 600; font-style: normal; }
-  .item.person .who .livepeek { font: 14px/1.45 Literata, Georgia, serif; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .item.person .who .livepeek[hidden] { display: none; }
+  /* One student's writing so far, with the live comments in its right margin. */
+  #liveBox .card { max-width: 1120px !important; }
+  .livegrid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; margin-top: 10px; }
+  .livegrid .liveread { max-height: 66vh; margin-top: 0; }
+  .livegrid .livechat { border-top: 0; margin-top: 0; padding: 0 0 0 18px; border-left: 1.5px solid var(--rule); display: flex; flex-direction: column; max-height: 66vh; min-height: 0; }
+  .livegrid .livechat .chatlog { max-height: none; flex: 1; min-height: 0; }
+  .livechat h3 { margin: 0 0 8px; font-size: 14px; }
+  .chatsend.wrap { align-items: flex-end; }
+  .chatsend textarea.field { resize: none; overflow-y: auto; max-height: 40vh; line-height: 1.45; border-radius: 12px; }
+  @media (max-width: 820px) { .livegrid { grid-template-columns: 1fr; } .livegrid .livechat { border-left: 0; padding: 12px 0 0; border-top: 1.5px solid var(--rule); } .livegrid .liveread { max-height: 44vh; } }
+  /* Live comments, bottom right of a session's page while it runs. */
+  .livedock { position: fixed; right: 16px; bottom: 16px; z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: var(--card); border: 1.5px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.14); }
+  .livedock .ldhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 10px 16px; }
+  .livedock .ldhead button.ldtoggle { background: none; border: 0; padding: 0; font: 600 15px var(--ui); color: var(--ink); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .livedock .ldlist { max-height: 34vh; overflow-y: auto; border-top: 1.5px solid var(--rule); padding: 6px; }
+  .livedock.folded .ldlist { display: none; }
+  .livedock .ldrow { display: flex; width: 100%; justify-content: space-between; gap: 8px; align-items: baseline; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 10px; font: 400 14px var(--ui); color: var(--ink); cursor: pointer; }
+  .livedock .ldrow:hover { background: var(--hover); }
+  .livedock .ldrow b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .livedock .ldrow .k { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .livedock .ldrow.new .k { color: var(--pen); font-weight: 600; }
+  .livedock .empty { padding: 8px 10px; font-size: 14px; }
+  .livedock .ldcount { background: var(--pen); color: #fff; border-radius: 999px; font-size: 12px; padding: 0 7px; }
+  /* Where each student's paper is, on the right of their row. */
+  .statusbub { flex: none; min-width: 112px; text-align: center; font: 600 13px var(--ui); padding: 4px 12px; border-radius: 999px; border: 1.5px solid transparent; white-space: nowrap; }
+  button.statusbub { cursor: pointer; }
+  button.statusbub:hover { filter: brightness(.96); text-decoration: underline; }
+  .statusbub.gray { background: #E7E3DB; color: #5C564C; border-color: #CFC8BB; }
+  .statusbub.pink { background: #F8D9E4; color: #8E2A55; border-color: #E59AB6; }
+  .statusbub.yellow { background: #F8EBB8; color: #6E5208; border-color: #E3BF5C; }
+  .statusbub.green { background: #D9ECD0; color: #2F5A1E; border-color: #8DBB72; }
+  @media (max-width: 640px) { .statusbub { min-width: 0; } }
   .item.person.newmsg { box-shadow: inset 3px 0 0 var(--pen); }
 
   /* Messages between a teacher and a student while they write. The teacher's
@@ -948,7 +977,7 @@
     font: 400 16px/1.4 var(--ui); }
   .field::placeholder, textarea::placeholder { font: 400 16px/1.4 var(--ui); color: var(--muted); opacity: .8; }
   .btn, .btn.huge, .btn.bigaction, .rcard .btn.go { font: 600 16px var(--ui); }
-  .btn.small, .segctl button, .topright button, .markbar .anonbtn, .linkish { font: 600 14px var(--ui); }
+  .btn.small, .segctl button, .topright button, .linkish { font: 600 14px var(--ui); }
   .fine, .help, .stamp, .stampline, .panel .rcard .stampline, .item .who span, .meta, .piece .meta, .quietline, .footline, .livetile .lt-meta, .groupempty { font-size: 14px; }
   .pbtn b { font: 600 18px/1.1 var(--ui); }
   [data-tip]:hover::after, [data-tip]:focus::after { font-size: 14px; }
@@ -1054,15 +1083,15 @@
   <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
-  <aside class="msgside" id="msgSide" hidden aria-label="Messages">
-    <div class="msghead"><span><b>Messages</b> <span class="fine" id="chatWith">Your teacher</span></span><button type="button" class="chatx" id="msgHide" aria-label="Hide messages" title="Hide messages">&rsaquo;</button></div>
+  <aside class="msgside" id="msgSide" hidden aria-label="Live comments">
+    <div class="msghead"><span><b>Live comments</b> <span class="fine" id="chatWith">Your teacher</span></span><button type="button" class="chatx" id="msgHide" aria-label="Hide live comments" title="Hide live comments">&rsaquo;</button></div>
     <div class="chatlog" id="chatLog"></div>
-    <p class="fine msgnone" id="msgNone">Messages from your teacher show up here.</p>
+    <p class="fine msgnone" id="msgNone">Live comments from your teacher show up here.</p>
     <form class="chatsend" id="chatForm" autocomplete="off"><input class="field" id="chatInput" maxlength="1000" aria-label="Your message" placeholder="Write to your teacher"><button class="btn small" type="submit">Send</button></form>
     <button type="button" class="btn ghost handbtn" id="handBtn">Raise hand</button>
   </aside>
   <div class="msgtab" id="msgTab" hidden>
-    <button type="button" class="msgshow" id="msgShow" aria-label="Show messages">&lsaquo; Messages<span class="msgdot" id="msgDot" hidden></span></button>
+    <button type="button" class="msgshow" id="msgShow" aria-label="Show live comments">&lsaquo; Live comments<span class="msgdot" id="msgDot" hidden></span></button>
     <button type="button" class="msgshow" id="handBtn2">Raise hand</button>
   </div>
   <div class="handin" id="handBox" hidden>
@@ -1106,7 +1135,7 @@
   <div class="card dash">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student with own time; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student on an alternative schedule; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3></div>
       <div id="proctorList"></div>
     </section>
     <div class="row" style="justify-content:center; margin-top:18px"><button class="btn small ghost" id="proctorWriteBtn" type="button">Type an Entry Phrase to write</button></div>
@@ -1278,8 +1307,13 @@
 
       <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
       <section class="panel tint-mint" id="secPeople" style="order:3">
-        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Each student who can still write shows the end of their writing so far; click them to read it all and send a message. Two marks on each row. The pencil: green, they can still write; crossed out, they can’t (handed in, paused, or the session is over). A red padlock in its place means they left the page and are locked out. The eye: open and green, you’ve shared your grading, so they can see your comments (and the grade, after five minutes reading them); crossed out, not yet. Anyone who needs you is at the top, with a button.">?</span></h3><button class="btn small ghost" id="chatAllBtn" type="button" hidden>Message everyone</button></div>
+        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Click a student who can still write to read their writing so far and send a live comment. The padlock: open and green, they can write; shut and red, they can’t (handed in, locked out after leaving the page, paused, or the session is over). On the right, where their paper is: In progress, Grade!, Graded, or Grading shared (they can see your comments, and the grade after five minutes reading them). Click it to open the grading; you can change comments and the grade any time. Anyone who needs you is at the top, with a button.">?</span></h3><button class="btn small ghost" id="unlockAllBtn" type="button" hidden>Unlock all</button></div>
         <div id="peopleList"></div>
+      </section>
+
+      <section class="panel" id="secOwn" style="order:3" hidden>
+        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes when their own time ends, or when they hand it in.">?</span></h3></div>
+        <div id="ownList"></div>
       </section>
 
       <section class="panel tint-sky" id="notHereSection" style="order:4" hidden>
@@ -1288,7 +1322,7 @@
       </section>
 
       <section class="panel" id="proctorsSection" style="order:5" hidden>
-        <div class="panelhead"><h3 class="sect">Proctors <span class="q" tabindex="0" data-tip="Proctors can let students in, unlock anyone locked out, and begin or pause the session or one student's time. They never see what anyone writes. The testing center proctors every student with own time on its own.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Proctors <span class="q" tabindex="0" data-tip="Proctors can let students in, unlock anyone locked out, and begin or pause the session or one student's time. They never see what anyone writes. The testing center proctors every student on an alternative schedule on its own.">?</span></h3></div>
         <div id="proctorsList"></div>
       </section>
 
@@ -1355,7 +1389,6 @@
       <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
-      <button type="button" class="anonbtn" id="anonBtn" aria-pressed="false"></button>
       <span class="savestate" id="markSaved"></span>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
@@ -1397,7 +1430,19 @@
 
 <!-- Settings, top right on the teacher pages -->
 <div class="topright no-print" id="topRight" hidden>
+  <button id="anonBtn" type="button" aria-pressed="false"></button>
+  <button id="anonKeyBtn" type="button" hidden>Names key</button>
   <button id="prefsBtn" type="button">Settings</button>
+</div>
+
+<!-- Names key: with names hidden, the real name behind each label on the page showing -->
+<div class="handin livebox" id="anonKeyBox" hidden>
+  <div class="card">
+    <h2 style="margin:0">Names key</h2>
+    <p class="sub" style="margin:4px 0 10px">Who each label on this page is. Only you see this.</p>
+    <div class="anonkey" id="anonKeyList"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="anonKeyClose" type="button">Close</button></div>
+  </div>
 </div>
 
 <!-- Away from Home (a session, a paper, a student, a class): a dark bar with one big way back -->
@@ -1410,10 +1455,13 @@
 <div class="handin livebox" id="liveBox" hidden>
   <div class="card">
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="liveName" style="margin:0"></h2><span class="fine" id="liveMeta" style="margin:0"></span></div>
-    <div class="liveread" id="liveText"></div>
-    <div class="livechat">
-      <div class="chatlog" id="tChatLog"></div>
-      <form class="chatsend" id="tChatForm" autocomplete="off"><input class="field" id="tChatInput" maxlength="1000" aria-label="Your message" placeholder="Message this student"><button class="btn small" type="submit">Send</button></form>
+    <div class="livegrid">
+      <div class="liveread" id="liveText"></div>
+      <div class="livechat">
+        <h3>Live comments</h3>
+        <div class="chatlog" id="tChatLog"></div>
+        <form class="chatsend wrap" id="tChatForm" autocomplete="off"><textarea class="field" id="tChatInput" rows="2" maxlength="1000" aria-label="Your live comment" placeholder="A live comment to this student"></textarea><button class="btn small" type="submit">Send</button></form>
+      </div>
     </div>
     <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><button class="btn ghost" id="liveClose" type="button">Close</button></div>
   </div>
@@ -1438,11 +1486,17 @@
   </div>
 </div>
 
+<!-- Live comments: on a session's page while it runs, bottom right -->
+<div class="livedock no-print" id="liveDock" hidden>
+  <div class="ldhead"><button type="button" class="ldtoggle" id="liveDockToggle" aria-expanded="true">Live comments <span class="ldcount" id="liveDockCount" hidden></span></button><button class="btn small ghost" id="chatAllBtn" type="button">Announcement</button></div>
+  <div class="ldlist" id="liveDockList"></div>
+</div>
+
 <div class="handin livebox" id="chatAllBox" hidden>
   <div class="card">
-    <h2>Message everyone</h2>
-    <p class="sub" style="margin:0 0 10px">Every student let in gets it in their Messages while they write.</p>
-    <textarea class="field promptfield" id="chatAllText" maxlength="1000" aria-label="Your message"></textarea>
+    <h2>Announcement</h2>
+    <p class="sub" style="margin:0 0 10px">Every student let in gets it in their Live comments while they write.</p>
+    <textarea class="field promptfield" id="chatAllText" maxlength="1000" aria-label="Your announcement"></textarea>
     <p class="fine warn" id="chatAllErr" hidden></p>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="chatAllCancel" type="button">Cancel</button><button class="btn" id="chatAllGo" type="button">Send</button></div>
   </div>
@@ -1468,7 +1522,7 @@
     </div>
     <div class="switchrow"><span class="nm">Show students a word count</span>
       <span class="segctl" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
-    <div class="switchrow"><span class="nm">Hand in by itself when own time ends <span class="q" tabindex="0" data-tip="For a student with their own time: when it runs out, their paper is handed in automatically. Off: the clock just says Time is up.">?</span></span>
+    <div class="switchrow"><span class="nm">Hand in by itself when time runs out <span class="q" tabindex="0" data-tip="In a timed writing session: when the time runs out, papers are handed in automatically. Off: the clock just says Time is up. (Ending a session always hands in and locks everyone not on an alternative schedule.)">?</span></span>
       <span class="segctl" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div id="teachersSection" hidden style="margin-top:22px">
       <h3 style="margin-top:0">Teachers who can make writing sessions</h3>
@@ -1486,7 +1540,7 @@
       </div>
     </div>
     <div id="permProctorsSection" hidden style="margin-top:22px">
-      <h3 style="margin-top:0">Permanent proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student with own time (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
+      <h3 style="margin-top:0">Permanent proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student on an alternative schedule (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
       <div id="permProctorList"></div>
       <button class="btn small" id="addPermProctorBtn" type="button" style="margin-top:10px">Add permanent proctor</button>
       <p class="fine" id="permProctorNote" hidden></p>
@@ -1606,7 +1660,7 @@
     <p class="tbox-preview" id="tbPreview"></p>
     <p class="fine warn" id="tbNote" hidden></p>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
-      <button class="linkish" id="tbRemove" hidden>Take away their own time</button>
+      <button class="linkish" id="tbRemove" hidden>Take away their alternative schedule</button>
       <span style="flex:1"></span>
       <button class="btn small ghost" id="tbCancel" type="button">Cancel</button>
       <button class="btn small" id="tbSave" type="button">Save</button>
@@ -1929,15 +1983,18 @@
     // writing or locked screens, which stay exactly as students get them.
     $('previewBar').hidden = !(previewing && (id === 'waitScreen' || id === 'readyScreen'));
     each('[data-preview]', function (b) { b.classList.toggle('on', b.getAttribute('data-preview') === id); });
-    // Settings sits on the teacher pages (not over the marking bar, which has its own Hide names).
+    // Hide names (and its Names key) sits top right on every teacher page; Settings on all but grading and printing.
+    anonSeen = {};
+    $('anonKeyBox').hidden = true;
     syncAnonBtn();
-    $('topRight').hidden = !(isTeacher && !previewing && ['dashScreen', 'roomScreen', 'classScreen', 'studentScreen'].indexOf(id) !== -1);
+    $('topRight').hidden = !(isTeacher && !previewing && ['dashScreen', 'roomScreen', 'classScreen', 'studentScreen', 'markScreen', 'printScreen'].indexOf(id) !== -1);
+    $('prefsBtn').hidden = id === 'markScreen' || id === 'printScreen';
     drawSwitcher(id);
     // Away from Home on a teacher page: the dark bar with the Home button.
     var where = isTeacher && !previewing && !reading && WORK_PAGES[id];
     document.body.classList.toggle('work', !!where);
     $('workWhere').textContent = where || '';
-    if (id !== 'roomScreen') $('liveBox').hidden = true;
+    if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
   }
   var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student work', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
   $('workHome').addEventListener('click', function () {
@@ -2127,7 +2184,7 @@
       who.appendChild(el('b', null, a.title));
       var line = a.state === 'running'
         ? a.teacherName + (a.endAt ? ' \u00b7 until ' + whenLabel(a.endAt) : '') + (a.own && a.multiplier > 1 ? ' \u00b7 extra time' : '')
-        : a.teacherName + ' \u00b7 opens ' + whenLabel(a.startAt) + (a.own ? ' (your own time)' : '');
+        : a.teacherName + ' \u00b7 opens ' + whenLabel(a.startAt) + (a.own ? ' (your own schedule)' : '');
       who.appendChild(el('span', null, line));
       row.appendChild(who);
       if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Open' : 'Enter', 'btn small', function () { roomCode = a.code; joinRoom(a.code); }));
@@ -2678,9 +2735,10 @@
       if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
-      // The teacher ended the session: hand in now, with everything written
-      // (replacing the copy Luddite handed in from the last backup).
-      if (roomInfo && writing && !locked && (d.room.autoHandedIn || (d.room.state === 'ended' && !d.room.own && P().autoHandIn))) {
+      // The teacher ended the session (or closed this paper): hand in now, with
+      // everything written (replacing the copy Luddite handed in from the last
+      // backup), and stop writing. An alternative schedule keeps going.
+      if (roomInfo && writing && !locked && (d.room.autoHandedIn || (d.room.state === 'ended' && !d.room.own))) {
         roomInfo.handedIn = d.room.handedIn; roomInfo.autoHandedIn = d.room.autoHandedIn;
         timeUp();
       }
@@ -3383,34 +3441,63 @@
     });
   }
 
-  // ---- Hiding names, on the marking page only ----
+  // ---- Hiding names, on every teacher page ----
   // With names hidden each address gets a short stable label ("Student K7Q"),
   // the same every time and in print, so a paper can be marked without
   // knowing whose it is, and the same student can still be followed across
-  // the year. Nothing is stored differently; it's only how the paper's
-  // heading is drawn. The choice is remembered on this device.
+  // the year. Nothing is stored differently; it's only how names are drawn.
+  // The choice is remembered on this device. Names key (beside the button)
+  // lists the names behind the labels on the page showing: who() notes each
+  // one it draws, and show() starts the list afresh.
   var anon = load('luddite.anon') === '1';
-  function anonOn() { return anon && !$('markScreen').hidden; }
+  var anonSeen = {};
+  function anonOn() { return anon && isTeacher && !previewing; }
   function aliasOf(email) {
     var str = 'luddite:' + (me.email || '') + ':' + String(email || '').toLowerCase(), h = 2166136261;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
     return 'Student ' + ('000' + h.toString(36).toUpperCase()).slice(-3);
   }
-  function who(name, email) { return anonOn() ? aliasOf(email) : (name || email || ''); }
+  function who(name, email) {
+    if (!anonOn()) return name || email || '';
+    var a = aliasOf(email), k = String(email || '').toLowerCase();
+    if (k) anonSeen[k] = { alias: a, email: k, name: name || (anonSeen[k] && anonSeen[k].name) || '' };
+    return a;
+  }
   function addr(email) { return anonOn() ? '' : email; }
   function syncAnonBtn() {
     var b = $('anonBtn');
     b.textContent = anon ? 'Names hidden \u00b7 Show names' : 'Hide names';
     b.classList.toggle('on', anon);
     b.setAttribute('aria-pressed', anon ? 'true' : 'false');
+    $('anonKeyBtn').hidden = !anon;
     document.body.classList.toggle('is-anon', anonOn());
   }
   $('anonBtn').addEventListener('click', function () {
     anon = !anon;
     store('luddite.anon', anon ? '1' : null);
     syncAnonBtn();
-    if (piece) showPieceHead();
+    $('anonKeyBox').hidden = true;
+    redrawTeacher();
   });
+  $('anonKeyBtn').addEventListener('click', function () {
+    var list = Object.keys(anonSeen).map(function (k) { return anonSeen[k]; }).sort(function (a, b) { return a.alias.localeCompare(b.alias); });
+    var box = $('anonKeyList');
+    box.innerHTML = '';
+    if (!list.length) box.appendChild(el('div', 'empty', 'No students on this page.'));
+    list.forEach(function (x) {
+      var row = el('div', 'item');
+      row.appendChild(el('b', 'alias', x.alias));
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, x.name || x.email));
+      if (x.name) w.appendChild(el('span', null, x.email));
+      row.appendChild(w);
+      box.appendChild(row);
+    });
+    $('anonKeyBox').hidden = false;
+    $('anonKeyClose').focus();
+  });
+  $('anonKeyClose').addEventListener('click', function () { $('anonKeyBox').hidden = true; });
+  $('anonKeyBox').addEventListener('click', function (e) { if (e.target === $('anonKeyBox')) $('anonKeyBox').hidden = true; });
   // Redraw whichever teacher page is showing.
   function redrawTeacher() {
     lastDrawn = '';
@@ -3419,6 +3506,7 @@
     else if (!$('classScreen').hidden) { drawClassScreen(); }
     else if (!$('studentScreen').hidden) { if (studentShown) openStudent(studentShown); }
     else if (!$('markScreen').hidden && piece) { showPieceHead(); }
+    else if (!$('printScreen').hidden) { drawPrintBody(); }
   }
   syncAnonBtn();
 
@@ -3502,7 +3590,9 @@
   function classDot(id) {
     var col = classColor(id);
     if (!col) return document.createTextNode('');
-    var d = el('span', 'cdot');
+    // A square (never a circle, which reads as a status mark), with the class's period letter in it.
+    var c = classById(id), per = c && c.period ? String(c.period) : '';
+    var d = el('span', 'cdot' + (per ? '' : ' noper'), per);
     d.style.background = col;
     d.setAttribute('aria-hidden', 'true');
     return d;
@@ -4735,7 +4825,7 @@
     });
   }
   $('addPermProctorBtn').addEventListener('click', async function () {
-    var e = await ask({ title: 'Add a permanent proctor', text: 'In every writing session, they can let in, unlock, and begin or pause the time of each student with own time. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
+    var e = await ask({ title: 'Add a permanent proctor', text: 'In every writing session, they can let in, unlock, and begin or pause the time of each student on an alternative schedule. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
     if (!e) return;
     var found = extractEmails(e)[0];
     var note = $('permProctorNote');
@@ -4772,14 +4862,14 @@
     if (box.getAttribute('data-sig') === sig) return;
     box.setAttribute('data-sig', sig);
     box.innerHTML = '';
-    if (!list.length) box.appendChild(el('div', 'empty', 'Nothing to proctor right now. Sessions show up here once a student has own time in one, or a teacher adds you.'));
+    if (!list.length) box.appendChild(el('div', 'empty', 'Nothing to proctor right now. Sessions show up here once a student has an alternative schedule in one, or a teacher adds you.'));
     list.forEach(function (x) {
       var row = el('div', 'item click');
       var w = el('div', 'who');
       w.appendChild(el('b', null, x.title));
       var bits = [x.teacherName];
       bits.push(x.state === 'running' ? 'happening now' : x.state === 'upcoming' ? 'starts ' + whenLabel(x.startAt) : 'past');
-      if (x.next && x.next < 9e15) bits.push('next own time ' + whenLabel(x.next));
+      if (x.next && x.next < 9e15) bits.push('next alternative schedule ' + whenLabel(x.next));
       if (x.writing) bits.push(x.writing + ' writing');
       w.appendChild(el('span', null, bits.join(' · ')));
       row.appendChild(w);
@@ -4835,7 +4925,7 @@
     var chip = $('pxStamp');
     chip.textContent = x.paused && x.state === 'running' ? '❚❚ Paused' : stateLabel(x.state, { startAt: x.startAt });
     chip.className = 'stamp chip ' + x.state;
-    $('pxWhen').textContent = x.teacherName + ' · ' + (x.reach === 'session' ? 'you proctor everyone in it' : 'you proctor the students with own time');
+    $('pxWhen').textContent = x.teacherName + ' · ' + (x.reach === 'session' ? 'you proctor everyone in it' : 'you proctor the students on an alternative schedule');
     $('pxPhrase').textContent = x.codeLabel;
     var whole = x.reach === 'session';
     $('pxStartBtn').hidden = !whole || x.state === 'running';
@@ -4868,7 +4958,7 @@
         var o = [];
         if (p.own.startAt) o.push(p.state === 'upcoming' ? 'starts ' + whenLabel(p.own.startAt) : 'started ' + whenLabel(p.own.startAt));
         if (p.own.multiplier > 1) o.push(p.own.multiplier + '× time');
-        bits.push('Own time' + (o.length ? ': ' + o.join(', ') : ''));
+        bits.push('Alternative schedule' + (o.length ? ': ' + o.join(', ') : ''));
       }
       if (p.endAt && p.state === 'running') bits.push('until ' + clock(p.endAt));
       w.appendChild(el('span', null, bits.join(' · ')));
@@ -4886,7 +4976,7 @@
       var slot = el('div', 'row');
       slot.style.gap = '6px';
       if (p.own && p.state === 'upcoming') slot.appendChild(button('Begin now', 'btn small', async function () {
-        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: 'Their own time starts now' + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
+        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: 'Their alternative schedule starts now' + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
       }));
       if (p.sub && p.lockedOut && !p.handedIn) slot.appendChild(button('Let them back in', 'btn small', function () { pxAction('unlock', [p.sub]); }));
       if (p.sub && !p.handedIn && p.state === 'running') {
@@ -4952,8 +5042,8 @@
     $('roomTitle').textContent = '';
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
-    ['waitingList', 'peopleList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
-    $('chatAllBtn').hidden = true;
+    ['waitingList', 'peopleList', 'ownList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
+    $('liveDock').hidden = true;
     liveData = null; liveAt = 0; liveSig = ''; liveOpen = null;
     show('roomScreen');
     poll(loadRoom, POLL_ROOM_MS);
@@ -5027,10 +5117,10 @@
     var parts = [];
     if (o.startAt) parts.push(whenLabel(o.startAt));
     if (o.multiplier > 1) parts.push(o.multiplier + '× time');
-    return 'Own time: ' + (parts.join(' · ') || 'same');
+    return 'Alternative schedule: ' + (parts.join(' · ') || 'same');
   }
   function ownButton(room, email, name) {
-    return button(room.own && room.own[email] ? 'Change own time' : 'Own time', 'btn small ghost', function () { openOwnTime(email, name); });
+    return button(room.own && room.own[email] ? 'Change alternative schedule' : 'Set Alternative Schedule', 'btn small ghost', function () { openOwnTime(email, name); });
   }
 
   function drawRoom(room, drive) {
@@ -5054,7 +5144,7 @@
     rl.hidden = !room.rubric;
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
-    $('openCloseBtn').textContent = state === 'running' ? 'End it now' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
+    $('openCloseBtn').textContent = state === 'running' ? 'End session' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
     $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : '');
     // Once it's over, grading is the main thing: reopening goes in the More menu.
     $('openCloseBtn').hidden = state === 'ended';
@@ -5143,18 +5233,47 @@
       nb.hidden = true;
     }
 
+    // Students on an alternative schedule have a panel of their own, just below the rest.
+    var isOwn = function (email) { return !!(room.own && email && room.own[String(email).toLowerCase()]); };
+    var regular = people.filter(function (p) { return !isOwn(p.email); });
+    var ownPeople = people.filter(function (p) { return isOwn(p.email); });
     var pl = $('peopleList');
     pl.innerHTML = '';
-    if (!people.length) pl.appendChild(el('div', 'empty', state === 'upcoming' ? 'Nobody yet. Students show up here once it starts.' : 'Nobody’s in yet.'));
-    people.forEach(function (p) { pl.appendChild(personRow(room, state, p, nameCount[p.name] > 1)); });
-    livePeople = people.filter(function (p) { return p.s && (p.f.canWrite || isLive(p.s)); }).map(function (p) { return p.s.sub; });
-    if (liveData) drawLive(room);
+    if (!regular.length) pl.appendChild(el('div', 'empty', state === 'upcoming' ? 'Nobody yet. Students show up here once it starts.' : 'Nobody’s in yet.'));
+    regular.forEach(function (p) { pl.appendChild(personRow(room, state, p, nameCount[p.name] > 1)); });
+    livePeople = regular.concat(ownPeople).filter(function (p) { return p.s && (p.f.canWrite || isLive(p.s)); }).map(function (p) { return p.s.sub; });
+    // Unlock all: everyone let in who's locked (left the page, or handed in) can write again.
+    var lockedOut = admitted.filter(function (s) { return s.lockedOut; }).map(function (s) { return s.sub; });
+    var handed = admitted.filter(function (s) { return s.handedIn; }).map(function (s) { return s.sub; });
+    unlockAllSubs = { out: lockedOut, handed: handed };
+    $('unlockAllBtn').hidden = !(lockedOut.length + handed.length) || state === 'upcoming';
 
-    // The class list: who hasn't come in yet, and who has their own time.
+    // The class list: who hasn't come in yet (those with an alternative schedule are in its panel).
     var inEmails = {};
     students.forEach(function (s) { if (s.email) inEmails[s.email.toLowerCase()] = 1; });
-    var notHere = teacherRoster ? teacherRoster.emails.filter(function (e) { return !inEmails[e]; }) : [];
-    $('notHereSection').hidden = !teacherRoster;
+    var notHereAll = teacherRoster ? teacherRoster.emails.filter(function (e) { return !inEmails[e]; }) : [];
+    var notHere = notHereAll.filter(function (e) { return !isOwn(e); });
+    var ownAway = Object.keys(room.own || {}).filter(function (e) { return !inEmails[e]; });
+    $('secOwn').hidden = !ownPeople.length && !ownAway.length;
+    var ol2 = $('ownList');
+    ol2.innerHTML = '';
+    ownPeople.forEach(function (p) {
+      var row = personRow(room, state, p, nameCount[p.name] > 1);
+      var lab = ownLabel(room, p.email.toLowerCase());
+      if (lab) row.querySelector('.who').appendChild(el('span', 'fine', lab.replace(/^Alternative schedule: /, '')));
+      ol2.appendChild(row);
+    });
+    ownAway.sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who('', email)));
+      w.appendChild(el('span', null, (state === 'ended' ? 'Didn’t come · ' : 'Not here yet · ') + ownLabel(room, email).replace(/^Alternative schedule: /, '')));
+      row.appendChild(w);
+      row.appendChild(ownButton(room, email, who('', email)));
+      ol2.appendChild(row);
+    });
+    if (liveData) drawLive(room);
+    $('notHereSection').hidden = !teacherRoster || (!notHere.length && notHereAll.length > 0);
     if (teacherRoster) {
       $('notHereTitle').textContent = state === 'ended' ? 'Didn’t come' : 'Not here yet';
       var nl = $('notHereList');
@@ -5165,10 +5284,7 @@
         var w = el('div', 'who');
         w.appendChild(el('b', null, who('', email)));
         row.appendChild(w);
-        var ol = ownLabel(room, email);
-        if (ol) row.appendChild(el('span', 'pill own', ol));
-        var ob = ownButton(room, email, who('', email));
-        if (ob) row.appendChild(ob);
+        row.appendChild(ownButton(room, email, who('', email)));
         nl.appendChild(row);
       });
     }
@@ -5190,14 +5306,14 @@
     return roomState(room) === 'running' || Object.keys(room.students).some(function (sub) { return isLive(room.students[sub]); });
   }
   async function loadLive(room) {
-    $('chatAllBtn').hidden = liveOff || !wantLive(room);
+    drawLiveDock(room);
     if (liveOff || !wantLive(room)) return;
     if (Date.now() - liveAt >= POLL_LIVE_MS) {
       liveAt = Date.now();
       try { liveData = await api('/luddite/watch?code=' + encodeURIComponent(room.code)); }
       catch (e) {
         // A server without live writing yet: leave it out until the page is reloaded.
-        if (e.status === 404 && e.message !== 'no_room') { liveOff = true; $('chatAllBtn').hidden = true; }
+        if (e.status === 404 && e.message !== 'no_room') { liveOff = true; $('liveDock').hidden = true; }
         return;
       }
       if (!teacherRoom || teacherRoom.code !== room.code) return;
@@ -5207,18 +5323,49 @@
   function liveStatus(s) {
     return s.handedIn ? 'handed in' : s.lockedOut ? 'locked out' : s.away ? 'off the page' : isLive(s) ? '' : 'not writing';
   }
-  // The end of each writer's text so far, in their Students row.
+  // A student's writing shows only once they're clicked (no snippets in the list).
   function drawLive(room) {
-    var drafts = (liveData && liveData.drafts) || {};
-    each('#peopleList .livepeek', function (n) {
-      var d = drafts[n.getAttribute('data-sub')];
-      var t = d && d.text ? plainOf(d.text).replace(/\s+/g, ' ').trim() : '';
-      var txt = t ? (t.length > 140 ? '\u2026' + t.slice(-140) : t) : '';
-      if (n.textContent !== txt) n.textContent = txt;
-      n.hidden = !t;
-    });
     if (liveOpen) drawLiveOpen(room);
   }
+  // Live comments, bottom right while the session runs: everyone with a
+  // thread, unread first, and Announcement. Folded or not is remembered here.
+  var dockFolded = load('luddite.dockFolded') === '1';
+  function openLive(sub) { liveOpen = sub; drawLiveOpen(teacherRoom); $('liveBox').hidden = false; $('tChatInput').focus(); }
+  function drawLiveDock(room) {
+    var dock = $('liveDock');
+    dock.hidden = liveOff || !wantLive(room) || $('roomScreen').hidden;
+    if (dock.hidden) return;
+    dock.classList.toggle('folded', dockFolded);
+    $('liveDockToggle').setAttribute('aria-expanded', dockFolded ? 'false' : 'true');
+    var threads = Object.keys(room.students).map(function (sub) { var x = room.students[sub]; x.sub = sub; return x; })
+      .filter(function (x) { return x.status === 'admitted' && (x.chatS || x.chatT); });
+    threads.sort(function (a, b) { return (chatUnread(b) ? 1 : 0) - (chatUnread(a) ? 1 : 0) || Math.max(b.chatS || 0, b.chatT || 0) - Math.max(a.chatS || 0, a.chatT || 0); });
+    var unread = threads.filter(chatUnread).length;
+    $('liveDockCount').hidden = !unread;
+    $('liveDockCount').textContent = unread;
+    var list = $('liveDockList');
+    list.innerHTML = '';
+    if (!threads.length) list.appendChild(el('div', 'empty', 'No live comments yet. Click a student to write to them.'));
+    threads.forEach(function (x) {
+      var b = el('button', 'ldrow' + (chatUnread(x) ? ' new' : ''));
+      b.type = 'button';
+      b.appendChild(el('b', null, who(x.name, x.email)));
+      b.appendChild(el('span', 'k', handUp(x) ? 'Hand raised' : chatUnread(x) ? 'New' : clock(Math.max(x.chatS || 0, x.chatT || 0))));
+      b.addEventListener('click', function () { openLive(x.sub); });
+      list.appendChild(b);
+    });
+  }
+  $('liveDockToggle').addEventListener('click', function () {
+    dockFolded = !dockFolded;
+    store('luddite.dockFolded', dockFolded ? '1' : null);
+    if (teacherRoom) drawLiveDock(teacherRoom);
+  });
+  // The live comment box grows with what's typed, so the whole comment shows; Enter sends, Shift+Enter starts a new line.
+  function growChat() { var t = $('tChatInput'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 3, window.innerHeight * 0.4) + 'px'; }
+  $('tChatInput').addEventListener('input', growChat);
+  $('tChatInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('tChatForm').requestSubmit(); }
+  });
   function drawLiveOpen(room) {
     var s = room.students[liveOpen];
     if (!s) return;
@@ -5268,7 +5415,7 @@
     if (key === liveChatKey) return;
     var other = liveChatKey.split('|').slice(0, 2).join('|') !== room.code + '|' + liveOpen;
     liveChatKey = key;
-    if (other) { liveChatMsgs = []; drawChat($('tChatLog'), [], 'teacher'); $('tChatInput').value = ''; }
+    if (other) { liveChatMsgs = []; drawChat($('tChatLog'), [], 'teacher'); $('tChatInput').value = ''; growChat(); }
     var sub = liveOpen;
     api('/luddite/chat?code=' + encodeURIComponent(room.code) + '&sub=' + encodeURIComponent(sub)).then(function (d) {
       if (liveOpen !== sub) return;
@@ -5283,6 +5430,7 @@
     var input = $('tChatInput'), text = input.value.trim(), sub = liveOpen;
     if (!text || !sub || !teacherRoom) return;
     input.value = '';
+    growChat();
     try {
       var d = await api('/luddite/chat', { code: teacherRoom.code, to: sub, text: text });
       if (liveOpen !== sub) return;
@@ -5335,17 +5483,20 @@
     var over = state === 'ended' && !ownLive;
     var paused = !!(s && (s.pausedAt || room.pausedAt));
     var f = { stage: stage, over: over };
-    // Anyone let in who hasn't handed in (or was unlocked since) can still write, even after the session ends.
-    f.canWrite = !!(s && !s.handedIn && !s.lockedOut && !paused && state !== 'upcoming');
+    // Ending the session locks out everyone not on an alternative schedule.
+    f.own = ownLive;
+    f.canWrite = !!(s && !s.handedIn && !s.lockedOut && !paused && state !== 'upcoming' && !over);
     f.locked = !over && !!(s && s.lockedOut && !s.handedIn);
     f.asks = !over && !!(s && s.askedAt && (s.handedIn || s.lockedOut));
     // What the teacher should do, if anything (the most pressing first).
     if (f.asks && s.handedIn) f.act = 'release';
     else if (f.locked) f.act = 'unlock';
     else if (!over && s && s.pausedAt && !s.handedIn) f.act = 'resume';
-    else if (stage === 'tograde') f.act = 'grade';
-    else if (stage === 'graded') f.act = 'handback';
-    f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' || (s && chatUnread(s) && !liveOff) ? 0 : f.act === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
+    else if (stage === 'graded' && !f.canWrite) f.act = 'handback';
+    // The status bubble: In progress, Grade!, Graded, Grading shared (once
+    // shared, always shared). Writing again over a paper not yet shared: in progress.
+    f.status = stage === 'back' ? 'shared' : f.canWrite || (!x && !over && !(s && s.handedIn)) ? 'progress' : stage === 'graded' ? 'graded' : stage === 'tograde' ? 'grade' : x ? 'progress' : 'none';
+    f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' || (s && chatUnread(s) && !liveOff) ? 0 : f.status === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
     // The one line.
     var gradeTxt = x && x.grade ? x.grade : '';
     var warn = false, txt;
@@ -5354,48 +5505,36 @@
     else if (!over && paused && s && !s.handedIn) txt = 'Paused';
     else if (f.canWrite && isLive(s)) txt = 'Writing now';
     else if (f.canWrite && s.away && !room.atHome) { txt = 'Off the page'; warn = true; }
-    else if (f.canWrite) txt = state === 'ended' && !x ? 'Didn’t hand in' : 'Not writing right now';
-    else if (stage === 'back' || stage === 'graded') txt = gradeTxt ? 'Graded: ' + gradeTxt : x.marked ? 'Marked up, no grade' : 'Not graded';
+    else if (f.canWrite) txt = 'Not writing right now';
+    else if (stage === 'back' || stage === 'graded') txt = gradeTxt ? 'Grade: ' + gradeTxt : x.marked ? 'Marked up, no grade' : 'Handed in, no grade';
     else if (x && !x.stored) { txt = 'Handed in, but not saved'; warn = true; }
     else if (x) txt = 'Handed in';
-    else txt = state === 'ended' ? 'Didn’t hand in' : 'Not writing';
+    else if (s && s.handedIn) txt = 'Handed in nothing';
+    else txt = state === 'ended' ? 'Didn’t hand in' : state === 'upcoming' ? 'Not started' : 'Not writing';
     // Writing again after handing in (revising): say both.
     if (f.canWrite && x && stage) txt += ' · revising' + (gradeTxt ? ' (graded ' + gradeTxt + ')' : '');
     f.text = txt; f.warn = warn;
     return f;
   }
-  var PENCIL = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 6.6l3.4 3.4" stroke="currentColor" stroke-width="2"/></svg>';
-  var PENCIL_NO = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 20l1.2-4.6L15.8 4.8a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   var LOCK_SHUT = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
-  var EYE_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>';
-  var EYE_SHUT = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 20L20 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  var LOCK_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 7.6-1.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  var STATUS = { progress: ['In progress', 'gray'], grade: ['Grade!', 'pink'], graded: ['Graded', 'yellow'], shared: ['Grading shared', 'green'], none: ['Nothing handed in', 'gray'] };
   function personRow(room, state, p, showEmail) {
     var s = p.s, x = p.x, f = p.f || personFacts(room, state, p), stage = f.stage;
     var row = el('div', 'item person' + (stage ? ' click' : '') + (f.canWrite ? ' canwrite' : ''));
-    var lk = el('span', 'lockmark ' + (f.canWrite ? 'open' : f.locked || f.asks ? 'bad' : 'shut'));
-    // A pencil says whether they can still write; a red padlock only when they're locked out.
-    var bad = f.locked || (f.asks && !s.handedIn);
-    lk.className = 'lockmark ' + (f.canWrite ? 'open' : bad ? 'bad' : 'shut');
-    lk.innerHTML = f.canWrite ? PENCIL : bad ? LOCK_SHUT : PENCIL_NO;
-    lk.title = f.canWrite ? 'Can still write' : bad ? 'Locked out: left the page' : s && s.handedIn ? 'Can’t write: handed in' : 'Can’t write';
+    // The padlock: open and green while they can write, shut and red when they can't.
+    var lk = el('span', 'lockmark ' + (f.canWrite ? 'open' : 'bad'));
+    lk.innerHTML = f.canWrite ? LOCK_OPEN : LOCK_SHUT;
+    lk.title = f.canWrite ? 'Can write' : f.locked ? 'Locked: left the page' : s && s.handedIn ? 'Locked: handed in' : f.text === 'Paused' ? 'Locked: paused' : 'Locked: can’t write';
     lk.setAttribute('role', 'img');
     lk.setAttribute('aria-label', lk.title);
     row.appendChild(lk);
-    // The eye: whether they can see the grade and comments (their paper is handed back).
-    var eye = el('span', 'eyemark ' + (stage === 'back' ? 'open' : stage ? 'shut' : 'none'));
-    eye.innerHTML = stage === 'back' ? EYE_OPEN : stage ? EYE_SHUT : '';
-    if (stage) {
-      eye.title = stage === 'back' ? 'Can see your comments and grade' : 'Can’t see your comments or grade yet';
-      eye.setAttribute('role', 'img');
-      eye.setAttribute('aria-label', eye.title);
-    }
-    row.appendChild(eye);
     var w = el('div', 'who');
     w.appendChild(el('b', null, p.name));
     var line = el('span');
     line.appendChild(el('em', f.warn ? 'warntext' : 'statustext', f.text));
     var bits = [];
-    if (showEmail && p.email) bits.push(p.email);
+    if (showEmail && addr(p.email)) bits.push(addr(p.email));
     // The session's date is in the header, so a same-day hand-in needs only its time.
     if (x && stage !== 'back') bits.push(new Date(x.at).toDateString() === new Date(room.startAt || x.at).toDateString() ? clock(x.at)
       : new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
@@ -5408,23 +5547,18 @@
     w.appendChild(line);
     row.appendChild(w);
 
-    // Still writing: the end of their text so far (filled by drawLive), and their messages.
+    // Still writing: a click opens their writing so far, and their live comments.
     var writer = !!(s && (f.canWrite || isLive(s)));
-    if (writer && s.sub && !liveOff) {
-      if (chatUnread(s)) line.insertBefore(el('em', 'lt-new', (handUp(s) ? 'Hand raised' : 'New message') + ' · '), line.firstChild);
-      var peek = el('span', 'livepeek');
-      peek.hidden = true;
-      peek.setAttribute('data-sub', s.sub);
-      w.appendChild(peek);
-      if (chatUnread(s)) row.classList.add('newmsg');
+    if (writer && s.sub && !liveOff && chatUnread(s)) {
+      line.insertBefore(el('em', 'lt-new', (handUp(s) ? 'Hand raised' : 'New live comment') + ' · '), line.firstChild);
+      row.classList.add('newmsg');
     }
     var open = function () { openMark(x.id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
-    var watch = function () { liveOpen = s.sub; drawLiveOpen(teacherRoom); $('liveBox').hidden = false; $('liveClose').focus(); };
+    var watch = function () { openLive(s.sub); };
     var main = null;
     if (f.act === 'release') main = button('Unlock', 'btn small', function () { roomAction('release', [s.sub]); });
     else if (f.act === 'unlock') main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
     else if (f.act === 'resume') main = button('Resume', 'btn small', function () { roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []); });
-    else if (f.act === 'grade') main = button('Grade', 'btn small tograde', open);
     else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
     });
@@ -5432,6 +5566,11 @@
     var slot = el('div', 'mainslot');
     if (main) slot.appendChild(main);
     row.appendChild(slot);
+    // The status bubble; with a paper, it opens the grading (comments and the grade can change any time).
+    var st = STATUS[f.status];
+    var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
+    if (x && x.stored) bub.title = 'Open the grading';
+    row.appendChild(bub);
 
     var menu = el('details', 'menu rowmenu');
     var sum = el('summary', 'iconbtn', '⋯');
@@ -5439,16 +5578,15 @@
     menu.appendChild(sum);
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
-    if (stage === 'back') item('Open the paper', open);
     if (stage === 'tograde') item('Share without a grade', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
     });
-    if (x && x.link) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
+    if (x && x.link && !anonOn()) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn && f.act !== 'release') item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
     if (!f.over && s && !s.handedIn && !s.pausedAt) item('Pause their time', function () { roomAction('pause', [s.sub]); });
     if (s && s.email) {
       var em = s.email.toLowerCase();
-      item(room.own && room.own[em] ? 'Change own time' : 'Own time', function () { openOwnTime(em, p.name); });
+      item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
     if (s) item('Remove from this session', async function () {
       if (await ask({ title: 'Take ' + p.name + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
@@ -5457,7 +5595,6 @@
 
     // The row opens their writing so far while they can still write, else their paper.
     var go = writer && !liveOff ? watch : stage ? open : null;
-    if (writer && stage) item('Open the paper they handed in', open);
     if (go) {
       row.classList.add('click');
       row.tabIndex = 0;
@@ -5484,7 +5621,7 @@
       var row = el('div', 'item');
       var w = el('div', 'who');
       w.appendChild(el('b', null, who(s.name, s.email)));
-      w.appendChild(el('span', null, s.email));
+      w.appendChild(el('span', null, addr(s.email)));
       row.appendChild(w);
       addControls(s, row);
       list.appendChild(row);
@@ -5493,6 +5630,13 @@
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
+  var unlockAllSubs = { out: [], handed: [] };
+  $('unlockAllBtn').addEventListener('click', async function () {
+    var u = unlockAllSubs, n = u.out.length + u.handed.length;
+    if (!n || !await ask({ title: 'Unlock ' + (n === 1 ? 'the one student' : 'all ' + n + ' students') + ' who are locked?', text: 'Anyone locked out after leaving the page, or locked after handing in, can write again.', ok: 'Unlock all' })) return;
+    if (u.out.length) await roomAction('unlock', u.out);
+    if (u.handed.length) await roomAction('release', u.handed);
+  });
   $('shareWorkBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction('shareWork', [], { on: !teacherRoom.shareWork });
@@ -5520,7 +5664,7 @@
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
-      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written. Students on a schedule of their own keep going.', ok: 'End it and hand in', danger: true })) return;
+      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written, and locked out. Students on an alternative schedule keep going until their own time ends or they hand in.', ok: 'End session', danger: true })) return;
       roomAction('close');
     } else {
       roomAction('startNow');
@@ -5581,7 +5725,7 @@
   function openOwnTime(email, name) {
     var room = teacherRoom, o = (room.own || {})[email];
     tb = { mode: 'own', email: email, mult: o ? o.multiplier : 1, useOwn: !!(o && o.startAt), picker: null };
-    $('tbTitle').textContent = 'Own time for ' + name + ' ';
+    $('tbTitle').textContent = 'Alternative schedule for ' + name + ' ';
     $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both. Their time ends by itself when it runs out.'));
     $('tbStartRow').hidden = false;
     $('tbRemove').hidden = !o;
