@@ -1329,7 +1329,7 @@
       </section>
 
       <section class="panel" id="secOwn" style="order:3" hidden>
-        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes five minutes after their time ends, when you or a proctor hand it in (⋯ › Hand in for them now), or when they hand it in.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes ten minutes after their time ends, when you or a proctor hand it in (⋯ › Hand in for them now), or when they hand it in.">?</span></h3></div>
         <div id="ownList"></div>
       </section>
 
@@ -1550,7 +1550,7 @@
     </div>
     <div class="switchrow"><span class="nm">Show students a word count</span>
       <span class="segctl" data-pref="showCount"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
-    <div class="switchrow"><span class="nm">Hand in by itself when time runs out <span class="q" tabindex="0" data-tip="In a timed writing session: when the time runs out, papers are handed in automatically. Off: the clock just says Time is up. (Ending a session always hands in and locks everyone not on an alternative schedule; an alternative schedule always closes five minutes after its time ends.)">?</span></span>
+    <div class="switchrow"><span class="nm">Hand in by itself when time runs out <span class="q" tabindex="0" data-tip="In a timed writing session: when the time runs out, papers are handed in automatically. Off: the clock just says Time is up. (Ending a session always hands in and locks everyone not on an alternative schedule; an alternative schedule always closes ten minutes after its time ends.)">?</span></span>
       <span class="segctl" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div id="teachersSection" hidden style="margin-top:22px">
       <h3 style="margin-top:0">Teachers who can make writing sessions</h3>
@@ -2794,7 +2794,7 @@
 
   // A timed writing session counts down on the writing page and hands the
   // paper in by itself when this student's time is up.
-  var timeTimer = null, timeUpBusy = false, OWN_GRACE_MS = 5 * 60000;
+  var timeTimer = null, timeUpBusy = false, OWN_GRACE_MS = 10 * 60000;
   function startTimer() {
     stopTimer();
     tickTimer();
@@ -2821,7 +2821,7 @@
     // the writing stops and waits for the next day.
     var today = roomInfo.sittingEnd && roomInfo.sittingEnd < roomInfo.endAt ? roomInfo.sittingEnd : 0;
     var left = (today || roomInfo.endAt) - now;
-    // An alternative schedule: five more minutes to finish, then it hands in by itself.
+    // An alternative schedule: ten more minutes to finish, then it hands in by itself.
     var grace = roomInfo.own && !today ? OWN_GRACE_MS + left : 0;
     tl.textContent = left > 0 ? minLeft(left) + (today ? (roomInfo.parts ? ' left in this part' : ' left today') : ' left') : grace > 0 ? 'Time is up · hands in by itself in ' + minLeft(grace) : 'Time is up';
     tl.classList.toggle('low', left <= 5 * 60000);
@@ -5844,7 +5844,7 @@
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
-      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written, and locked out. Students on an alternative schedule keep going: theirs closes five minutes after their time ends, when a proctor or you hand it in, or when they hand it in.', ok: 'End session', danger: true })) return;
+      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written, and locked out. Students on an alternative schedule keep going: theirs closes ten minutes after their time ends, when a proctor or you hand it in, or when they hand it in.', ok: 'End session', danger: true })) return;
       roomAction('close');
     } else {
       roomAction('startNow');
@@ -5884,7 +5884,7 @@
         out.appendChild(el('b', null, 'Part ' + (i + 1) + ': ' + dayClock(b.start) + ' \u2013 ' + clock(b.end)));
         out.appendChild(document.createTextNode(t.length ? ' (period ' + t.join(', ') + ')' : ''));
       });
-      if (bl.length) { out.appendChild(el('br')); out.appendChild(document.createTextNode(Math.round(total) + ' minutes in all.' + (bl.length < raw.length ? ' Back-to-back periods run on as one part, straight through the passing period.' : '') + ' Their writing is kept between parts, and it hands in by itself five minutes after the last one.')); }
+      if (bl.length) { out.appendChild(el('br')); out.appendChild(document.createTextNode(Math.round(total) + ' minutes in all.' + (bl.length < raw.length ? ' Back-to-back periods run on as one part, straight through the passing period.' : '') + ' Their writing is kept between parts, and it hands in by itself ten minutes after the last one.')); }
       return;
     }
     // Extra time is a multiple of one period (45 minutes); a session has no set length.
@@ -6019,7 +6019,7 @@
     $('tbParts').appendChild(add);
     if (o && o.blocks) o.blocks.forEach(function (b) { splitAdjacent(b).forEach(function (x) { tbAddPart(x); }); });
     $('tbTitle').textContent = 'Alternative schedule for ' + name + ' ';
-    $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both, or have them take it in parts (say the first half of D, then all of H), writing on where they left off. It ends by itself five minutes after their time runs out.'));
+    $('tbTitle').appendChild(tipEl('Everyone else keeps the regular time. Pick a different start for someone taking it outside class, extra time, or both, or have them take it in parts (say the first half of D, then all of H), writing on where they left off. It ends by itself ten minutes after their time runs out.'));
     $('tbStartRow').hidden = false;
     $('tbRemove').hidden = !o;
     tb.picker = makePicker($('tbPicker'), tbPreview);
