@@ -281,6 +281,7 @@
   #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
   /* A ruled column beside the paper for marking up by hand. */
   .ppbody.lined { display: grid; grid-template-columns: minmax(0, 1fr) 2.1in; gap: .3in; }
+  .ppbody.lined.wide { grid-template-columns: minmax(0, 1fr) 4in; gap: .25in; }
   /* Ruled lines are real borders a whole number of pixels apart (a
      gradient's lines print at uneven distances). */
   .ppbody .lmargin { border-left: 1px solid #bbb; margin-top: 14px; }
@@ -1476,7 +1477,9 @@
     <div class="printopts">
       <label class="printopt" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="duplex"> Two-sided: each paper on its own sheets <span class="q" tabindex="0" data-tip="Adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="lined"> Lined margin for marking up</label>
+      <span class="printopt sizeopt">Lined margin
+        <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
+      </span>
       <label class="printopt"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
@@ -7611,7 +7614,7 @@
       paper.appendChild(el('span', cls.trim(), text.slice(pt, next)));
     });
     if (printOpts.lined) {
-      var pb = el('div', 'ppbody lined');
+      var pb = el('div', 'ppbody lined' + (printOpts.lined === 'wide' ? ' wide' : ''));
       pb.appendChild(paper);
       pb.appendChild(el('div', 'lmargin'));
       box.appendChild(pb);
@@ -7819,6 +7822,9 @@
   function drawPrintOpts() {
     each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' ? printOpts.duplex !== false : !!printOpts[c.dataset.opt]; });
     each('#printSize button', function (b) { b.classList.toggle('on', Number(b.dataset.size) === (printOpts.size || 11.5)); });
+    // Lined margin: none, narrow (2.1in) or wide (4in, for long comments); true was narrow.
+    var lined = printOpts.lined === 'wide' ? 'wide' : printOpts.lined ? 'narrow' : '';
+    each('#printLined button', function (b) { b.classList.toggle('on', b.dataset.lined === lined); });
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
@@ -7828,6 +7834,7 @@
   }
   each('#printScreen [data-opt]', function (c) { c.addEventListener('change', function () { setPrintOpt(c.dataset.opt, c.checked); }); });
   each('#printSize button', function (b) { b.addEventListener('click', function () { setPrintOpt('size', Number(b.dataset.size)); }); });
+  each('#printLined button', function (b) { b.addEventListener('click', function () { setPrintOpt('lined', b.dataset.lined || false); }); });
   drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
     store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
