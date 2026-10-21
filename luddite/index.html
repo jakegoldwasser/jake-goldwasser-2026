@@ -7812,12 +7812,24 @@
   // a page less the foot, and at each page's end (and the paper's) a .pfoot
   // fills the rest of the page with its spacer, then the ruled lines.
   var FOOT_LINES = 6, FOOT_PX = 20 + FOOT_LINES * 30;
-  function footEl() {
-    var f = el('span', 'pfoot');
-    f.appendChild(el('span', 'pfsp'));
+  // A band of ruled lines labeled Comments, filled in (fillFoot) from where
+  // it starts down to the page's bottom margin, whatever room there is.
+  function footEl() { return el('span', 'pfoot'); }
+  function fillFoot(f, bottom) {
+    var room = Math.floor(bottom - f.getBoundingClientRect().top) - 20, n = Math.max(0, Math.floor(room / 30));
+    f.innerHTML = '';
+    var sp = el('span', 'pfsp');
+    sp.style.cssText = 'display:block;height:' + Math.max(0, room - n * 30) + 'px';
+    f.appendChild(sp);
     f.appendChild(el('b', null, 'Comments'));
-    for (var i = 0; i < FOOT_LINES; i++) f.appendChild(el('i'));
-    return f;
+    for (var i = 0; i < n; i++) f.appendChild(el('i'));
+    return n;
+  }
+  // Without a foot on every page, the room left on a paper's last page fills with lines.
+  function endFill(box) {
+    var last = pageSlices(box).pop(), f = footEl();
+    box.appendChild(f);
+    if (fillFoot(f, last.t + PAGE_PX - 6) < 2) f.remove();
   }
   // Where a line starts within its text node.
   function lineStart(n, top) {
@@ -7844,9 +7856,8 @@
         at.parentNode.insertBefore(f, at);
         f.classList.add('brk');
       }
-      // The spacer takes the foot down to the bottom of the page.
-      var top = f.getBoundingClientRect().top;
-      f.firstChild.style.cssText = 'display:block;height:' + Math.max(0, Math.floor(start + cap - top)) + 'px';
+      // Its lines fill the page down to the bottom margin.
+      fillFoot(f, start + PAGE_PX - 6);
       if (!brk) return;
       start = f.getBoundingClientRect().bottom;
     }
@@ -7857,7 +7868,7 @@
     var body = $('printBody');
     each('#printBody .pblank', function (b) { b.remove(); });
     body.classList.add('measuring');
-    if (printOpts.finalLines) each('#printBody .pp:not(.prub)', pageFeet);
+    each('#printBody .pp:not(.prub)', printOpts.finalLines ? pageFeet : endFill);
     each('#printBody .lmargin', function (m) {
       m.innerHTML = '';
       var n = Math.floor(m.getBoundingClientRect().height / 30);
