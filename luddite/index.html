@@ -478,6 +478,20 @@
   .endwrap label { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .endwrap textarea { width: 100%; min-height: 110px; margin-top: 6px; font: 17px/1.55 Literata, Georgia, serif; color: var(--pen);
     background: transparent; border: 0; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--rule); padding: 10px 12px; resize: vertical; }
+  /* Stock comments (marking page): a checklist by category under the end
+     comment; checked ones fill its On the Next Paper section. */
+  .stockbox { margin-top: 10px; border: 1.5px solid var(--rule); border-radius: 12px; padding: 8px 14px; background: var(--card); }
+  .stockbox summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 2px 0; }
+  .stockbox[open] summary { margin-bottom: 6px; }
+  .stockcat { margin: 10px 0 4px; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .stockitem { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; font-size: 14px; line-height: 1.4; cursor: pointer; }
+  .endwrap label.stockitem { font: 400 14px/1.4 var(--ui); letter-spacing: 0; text-transform: none; color: var(--ink); }
+  .stockitem input { margin-top: 3px; flex: none; accent-color: var(--pen); }
+  .stockitem .nx { display: block; color: var(--muted); }
+  .stockitem.on .nx { color: var(--pen); }
+  .stockbox > .btn { margin: 10px 0 4px; }
+  body.reading .stockbox { display: none; }
+  @media print { .stockbox { display: none !important; } }
   .endwrap textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
   .endprint { display: none; color: var(--pen); white-space: pre-wrap; font-size: 11.5pt; line-height: 1.55; margin-top: 6px; }
   .marktools, .markpop { position: fixed; z-index: 50; background: var(--card); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18), inset 0 0 0 1px var(--rule); }
@@ -1050,8 +1064,11 @@
   .pbtn b { font: 600 18px/1.1 var(--ui); }
   [data-tip]:hover::after, [data-tip]:focus::after { font-size: 14px; }
   /* Labels: small capitals, never a name */
-  .panel .grouphead, .panel .grouphead .n, .phraselbl, .joinlbl, .rcard .phraseline .k, .gradebox label, .endwrap label, .rubrichead .t, #promptBar .pk, .readyprompt b, .roomprompt b {
+  .panel .grouphead .n, .phraselbl, .joinlbl, .rcard .phraseline .k, .gradebox label, .endwrap label, .rubrichead .t, #promptBar .pk, .readyprompt b, .roomprompt b {
     font: 600 12px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  /* Home's Happening now / Coming up / Past: a label, but in ink and a size up, so it doesn't fade. */
+  .panel .grouphead { font: 600 14px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+  .panel .grouphead .dot { width: 10px; height: 10px; }
   .pill, .tag, .chip, .q, .pbtn span, .k { font-size: 12px; }
 </style>
 </head>
@@ -1380,7 +1397,7 @@
       </section>
 
       <section class="panel" id="secOwn" style="order:3" hidden>
-        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes ten minutes after their time ends, when you or a proctor hand it in (⋯ › Hand in for them now), or when they hand it in.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes ten minutes after their time ends, when you end it (End their session) or a proctor hands it in, or when they hand it in.">?</span></h3></div>
         <div id="ownList"></div>
       </section>
 
@@ -1483,6 +1500,11 @@
       <div class="endwrap">
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
+        <details class="stockbox" id="stockBox">
+          <summary>Stock comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to an On the Next Paper section at the end of the end comment, which the student sees with the rest.">?</span></summary>
+          <div id="stockList"></div>
+          <button type="button" class="btn small ghost" id="stockEdit">Edit stock comments…</button>
+        </details>
         <div class="endprint" id="endPrint"></div>
         <div class="rubricwrap" id="rubricWrap"></div>
         <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false"></div>
@@ -5892,6 +5914,11 @@
     else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
     });
+    // Still writing: End their session hands in their paper now and locks them
+    // (alternative schedule or not), as End session does for everyone.
+    else if (f.canWrite && s && s.sub && state !== 'upcoming') main = button('End their session', 'btn small danger', async function () {
+      if (await ask({ title: 'End ' + p.name + '’s session now?', text: 'Their paper is handed in now, with what they’ve written, and they can’t write on unless you unlock them.' + (f.own ? ' Their alternative schedule ends here too.' : ''), ok: 'End their session', danger: true })) roomAction('handIn', [s.sub]);
+    });
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
     var slot = el('div', 'mainslot');
     if (main) slot.appendChild(main);
@@ -5917,9 +5944,6 @@
     if (s && s.email) {
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
-      if (f.own && !s.handedIn && state !== 'upcoming') item('Hand in for them now', async function () {
-        if (await ask({ title: 'Hand in ' + p.name + '’s paper now?', text: 'It’s handed in with what they’ve written, and they can’t write on unless you unlock them.', ok: 'Hand in now' })) roomAction('handIn', [s.sub]);
-      });
     }
     if (s) item('Remove from this session', async function () {
       if (await ask({ title: 'Take ' + p.name + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
@@ -6354,6 +6378,7 @@
     showPieceHead();
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
+    drawStock();
     $('markGrade').value = piece.grade || '';
     showGradePrint();
     typeB = typeI = false; syncFmt();
@@ -7058,7 +7083,100 @@
   $('endComment').addEventListener('input', function () {
     piece.endComment = $('endComment').value;
     $('endPrint').textContent = piece.endComment;
+    drawStock();
     queueSave();
+  });
+
+  // ---- Stock comments ----
+  // Each is a comment the teacher often makes, with the goal it becomes for
+  // the student's next paper. Checking one puts that goal in an "On the
+  // Next Paper" section at the end of the end comment (rewritten from the
+  // checked ones each time); what's checked is read back from that section.
+  // The list is the teacher's own, kept on this device
+  // (luddite.stock.<email>); STOCK_DEFAULT is where it starts.
+  var STOCK_DEFAULT = [
+    ['Thesis', 'The thesis restates the prompt rather than making a claim.', 'Begin with a thematic statement that makes a claim someone could argue with, and label it clearly.'],
+    ['Thesis', 'The thesis is too obvious to need defending.', 'Push your thesis past what every reader already knows: claim something that takes the whole essay to prove.'],
+    ['Thesis', 'There\u2019s no clear thesis.', 'State your thesis in one sentence, at the top or at the end, and label it.'],
+    ['Topic sentences', 'This topic sentence summarizes the plot.', 'Make each topic sentence a claim that needs defending, not a summary of what happens.'],
+    ['Topic sentences', 'The topic sentence doesn\u2019t match what the paragraph argues.', 'Check that each paragraph proves exactly what its topic sentence claims.'],
+    ['Topic sentences', 'The topic sentences don\u2019t connect back to the thesis.', 'Let each topic sentence advance one part of your thesis.'],
+    ['Evidence', 'Claims without quotation.', 'Support each paragraph with one or two brief quotations.'],
+    ['Evidence', 'Quotations run too long.', 'Quote only the words you need, and work them into your own sentences.'],
+    ['Evidence', 'A quotation is dropped in without context.', 'Set up each quotation: who speaks, and when.'],
+    ['Analysis', 'The quotation is followed by summary, not analysis.', 'After each quotation, explain how its words prove your claim.'],
+    ['Analysis', 'Retells the plot.', 'Don\u2019t summarize the plot: assume your reader knows the book and spend your words on what it means.'],
+    ['Analysis', 'Close reading of a word or image would help here.', 'Slow down on a single word or image and show what it does.'],
+    ['Complexity', 'Smooths over the text\u2019s contradictions.', 'Don\u2019t be afraid of the messy contradictions in the text: name one and think it through.'],
+    ['Complexity', 'Only one side of the question.', 'Weigh a scene or character that seems to answer the question differently.'],
+    ['Complexity', 'Stays inside the book.', 'Ask what the theme means beyond the book: what new or surprising wisdom does it offer?'],
+    ['Style', 'Wordy or inflated sentences.', 'Write as plainly as possible (and no plainer).'],
+    ['Style', 'Vague words (\u201cthings,\u201d \u201cshows,\u201d \u201cinteresting\u201d).', 'Trade vague words for precise ones: say exactly what the text does.'],
+    ['Style', 'An introduction or conclusion that only repeats.', 'Skip the throat-clearing: start with your claim and stop when you\u2019ve proved it.'],
+    ['Mechanics', 'Quotations aren\u2019t cited.', 'Cite every quotation (book and line) in the same form throughout.'],
+    ['Mechanics', 'Proofreading.', 'Read your paper aloud once before you hand it in.']
+  ];
+  var STOCK_HEAD = 'On the Next Paper';
+  function stockKey() { return 'luddite.stock.' + (me && me.email || ''); }
+  function stockList() {
+    var t = load(stockKey());
+    if (t) { try { var l = JSON.parse(t); if (Array.isArray(l) && l.length) return l; } catch (e) {} }
+    return STOCK_DEFAULT;
+  }
+  // The end comment split at its On the Next Paper section.
+  function stockSplit(text) {
+    text = String(text || '');
+    var m = /(^|\n)On the Next Paper:?[ \t]*\n/.exec(text);
+    if (!m) return { before: text, goals: [] };
+    var goals = text.slice(m.index + m[0].length).split('\n').map(function (l) { return l.replace(/^\s*[\u2022\-*]\s*/, '').trim(); }).filter(Boolean);
+    return { before: text.slice(0, m.index), goals: goals };
+  }
+  function drawStock() {
+    var box = $('stockList');
+    if (!box) return;
+    box.innerHTML = '';
+    var goals = stockSplit(piece && piece.endComment).goals, cat = null;
+    stockList().forEach(function (it) {
+      if (it[0] !== cat) { cat = it[0]; box.appendChild(el('div', 'stockcat', cat)); }
+      var on = goals.indexOf(it[2]) !== -1;
+      var row = el('label', 'stockitem' + (on ? ' on' : ''));
+      var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
+      cb.addEventListener('change', function () { setStockGoal(it[2], cb.checked); });
+      var tx = el('span');
+      tx.appendChild(document.createTextNode(it[1]));
+      tx.appendChild(el('span', 'nx', '\u2192 ' + it[2]));
+      row.appendChild(cb); row.appendChild(tx);
+      box.appendChild(row);
+    });
+  }
+  function setStockGoal(goal, on) {
+    var sp = stockSplit(piece.endComment), goals = sp.goals.filter(function (g) { return g !== goal; });
+    if (on) goals.push(goal);
+    var before = sp.before.replace(/\s+$/, '');
+    piece.endComment = goals.length ? (before ? before + '\n\n' : '') + STOCK_HEAD + '\n' + goals.map(function (g) { return '\u2022 ' + g; }).join('\n') : before;
+    $('endComment').value = piece.endComment;
+    $('endPrint').textContent = piece.endComment;
+    drawStock();
+    queueSave();
+  }
+  // Editing the list as plain text: a line per category ("# Thesis"), then
+  // a line per comment, "comment => goal for the next paper".
+  $('stockEdit').addEventListener('click', async function () {
+    var cat = null, lines = [];
+    stockList().forEach(function (it) { if (it[0] !== cat) { cat = it[0]; lines.push((lines.length ? '\n' : '') + '# ' + cat); } lines.push(it[1] + ' => ' + it[2]); });
+    var t = await ask({ title: 'Stock comments', text: 'A line \u201c# Category\u201d starts a category; each comment is \u201cthe comment => the goal for the next paper.\u201d Saved on this computer. Empty it to get Luddite\u2019s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    if (t === null) return;
+    var list = [], c = 'Comments';
+    t.split('\n').forEach(function (l) {
+      l = l.trim();
+      if (!l) return;
+      if (l.charAt(0) === '#') { c = l.replace(/^#+\s*/, '') || 'Comments'; return; }
+      var parts = l.split('=>');
+      var say = parts[0].trim(), next = (parts.slice(1).join('=>').trim() || say);
+      list.push([c, say, next]);
+    });
+    store(stockKey(), list.length ? JSON.stringify(list) : null);
+    drawStock();
   });
 
   // ---- Rubrics on the marking page ----
