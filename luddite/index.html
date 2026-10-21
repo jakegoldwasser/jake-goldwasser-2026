@@ -172,6 +172,10 @@
   /* A class's color: a small dot wherever the class is named. */
   .cdot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; margin-right: 7px; vertical-align: -3px; flex: none; color: #fff; font: 600 12px/1 var(--ui); text-shadow: 0 0 2px rgba(0,0,0,.35); }
   .cdot.noper { width: 12px; height: 12px; vertical-align: 0; }
+  /* A session's page names its class and period big, above the title. */
+  #roomClass { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font: 600 25px/1.2 var(--ui); color: var(--ink); }
+  #roomClass .cdot { width: 44px; height: 44px; margin: 0; font-size: 28px; border-radius: 6px; vertical-align: 0; }
+  #roomClass .cdot.noper { width: 22px; height: 22px; }
   h2 .cdot { width: 28px; height: 28px; font-size: 18px; border-radius: 4px; margin-right: 10px; vertical-align: 2px; }
   .classpick button .cdot { margin-right: 6px; box-shadow: 0 0 0 1.5px var(--card); }
   .swatches { display: inline-flex; gap: 8px; flex-wrap: wrap; }
@@ -642,6 +646,15 @@
   .switchrow .segctl { flex: none; margin-left: auto; }
   #teacherClassBtn { white-space: normal; max-width: 100%; }
   .promptfield { width: 100%; border-radius: 10px; resize: vertical; min-height: 84px; font: 400 16px/1.45 var(--ui); padding: 10px 14px; }
+  /* A prompt is typed in a rich field (line breaks, and Cmd/Ctrl+B, I, U),
+     stored with the same markers as students' writing (see fmtScan). Drag
+     its corner to make it taller. */
+  .promptfield.rich { height: 132px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: break-word; cursor: text; outline: none; }
+  .promptfield.rich.empty::before { content: attr(data-placeholder); color: var(--muted); opacity: .8; pointer-events: none; }
+  .promptfield.rich b, .promptfield.rich strong { font-weight: 600; }
+  /* The pop-up asking for a prompt can be resized from its corner. */
+  #askBox .box.sizable { display: flex; flex-direction: column; resize: both; overflow: hidden; max-width: calc(100vw - 32px); max-height: calc(100vh - 18vh - 16px); min-width: min(320px, 100%); min-height: 300px; width: 560px; }
+  #askBox .box.sizable .promptfield.rich { flex: 1 1 auto; height: auto; min-height: 84px; resize: none; }
 
   /* Hiding names (marking page only): a button in the marking bar, and a band across the top while it's on. */
   .topright #anonBtn.on, body.work .topright #anonBtn.on { background: var(--sun-tint); color: var(--ink); border-color: var(--sun-deep); }
@@ -1214,7 +1227,7 @@
 
           <div class="formrow">
             <label class="lbl" for="newRoomPrompt">Prompt <span class="q" tabindex="0" data-tip="Optional. Students see it pinned at the top of their writing page until they close it. You can change it later.">?</span></label>
-            <textarea class="field promptfield" id="newRoomPrompt" maxlength="4000" placeholder="What should they write about?"></textarea>
+            <div class="field promptfield rich" id="newRoomPrompt" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="What should they write about?"></div>
           </div>
 
           <div class="formrow" id="classRow">
@@ -1288,7 +1301,7 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><p class="stamp" id="roomPromptLine" style="max-width:56ch"></p><p class="stamp" id="roomRubricLine" hidden></p></div>
+      <div><p id="roomClass" hidden></p><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><p class="stamp" id="roomPromptLine" style="max-width:56ch; white-space:pre-wrap"></p><p class="stamp" id="roomRubricLine" hidden></p></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -1608,6 +1621,7 @@
     <p class="asktext" id="askText"></p>
     <input class="field wide askfield" id="askInput" autocomplete="off" hidden>
     <textarea class="field promptfield askfield" id="askArea" maxlength="4000" hidden></textarea>
+    <div class="field promptfield askfield rich" id="askRich" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" hidden></div>
     <select class="field wide askfield" id="askSelect" hidden></select>
     <label class="fine casualcheck" id="askCheckRow" hidden><input type="checkbox" id="askCheck"> <span id="askCheckText"></span></label>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
@@ -1765,10 +1779,10 @@
   // Luddite's own pop-up, in place of the browser's alert/confirm/prompt.
   // ask({ title, text, ok, cancel, danger, input: 'line' | 'area', value })
   // resolves true/false, or for an input the text typed (null on Cancel).
-  var askDone = null;
+  var askDone = null, askRichSize = { w: '', h: '' };
   function ask(o) {
     if (askDone) askDone(false);
-    var field = o.input === 'area' ? $('askArea') : o.input === 'select' ? $('askSelect') : o.input ? $('askInput') : null;
+    var field = o.input === 'area' ? $('askArea') : o.input === 'rich' ? $('askRich') : o.input === 'select' ? $('askSelect') : o.input ? $('askInput') : null;
     $('askSelect').hidden = field !== $('askSelect');
     if (o.input === 'select') {
       $('askSelect').innerHTML = '';
@@ -1784,16 +1798,23 @@
     $('askText').textContent = o.text || '';
     $('askInput').hidden = field !== $('askInput');
     $('askArea').hidden = field !== $('askArea');
-    if (field) { field.value = o.value || (o.input === 'select' && o.options && o.options[0] ? o.options[0].value : ''); if (o.input !== 'select') field.placeholder = o.placeholder || ''; }
+    $('askRich').hidden = field !== $('askRich');
+    // A rich field's pop-up can be resized, and keeps its size for next time.
+    var box = $('askBox').querySelector('.box');
+    box.classList.toggle('sizable', o.input === 'rich');
+    box.style.width = o.input === 'rich' ? askRichSize.w : '';
+    box.style.height = o.input === 'rich' ? askRichSize.h : '';
+    if (field) { field.value = o.value || (o.input === 'select' && o.options && o.options[0] ? o.options[0].value : ''); if (o.input === 'rich') field.dataset.placeholder = o.placeholder || ''; else if (o.input !== 'select') field.placeholder = o.placeholder || ''; }
     $('askYes').textContent = o.ok || 'OK';
     $('askYes').className = 'btn small' + (o.danger ? ' danger' : '');
     $('askNo').textContent = o.cancel || 'Cancel';
     $('askNo').hidden = o.cancel === false;
     $('askBox').hidden = false;
-    setTimeout(function () { if (field) { field.focus(); if (o.input !== 'select') field.select(); } else $('askYes').focus(); }, 0);
+    setTimeout(function () { if (field) { field.focus(); if (o.input === 'rich') richCaretEnd(field); else if (o.input !== 'select') field.select(); } else $('askYes').focus(); }, 0);
     return new Promise(function (resolve) {
       askDone = function (yes) {
         askDone = null;
+        if (o.input === 'rich') askRichSize = { w: box.style.width, h: box.style.height };
         $('askBox').hidden = true;
         resolve(field ? (yes ? field.value : null) : !!yes);
       };
@@ -2464,7 +2485,8 @@
     var timed = inRoom && roomInfo && roomInfo.endAt && !previewing;
     var over = !!(timed && nowMs() >= roomInfo.endAt);
     $('readyPrompt').hidden = !(inRoom && roomInfo && roomInfo.prompt);
-    $('readyPromptText').textContent = inRoom && roomInfo && roomInfo.prompt ? roomInfo.prompt : '';
+    $('readyPromptText').textContent = '';
+    if (inRoom && roomInfo && roomInfo.prompt) fmtInto($('readyPromptText'), roomInfo.prompt);
     $('readyWindow').hidden = !timed;
     if (timed) {
       $('readyWindow').textContent = over ? 'Time is up for this writing session.'
@@ -2638,7 +2660,7 @@
       i = j;
     }
     // A last empty line needs a <br> of its own to show.
-    if (box === pad && text.charAt(n - 1) === '\n') box.appendChild(document.createElement('br'));
+    if ((box === pad || box.classList.contains('rich')) && text.charAt(n - 1) === '\n') box.appendChild(document.createElement('br'));
   }
   // The styles an element adds to (or takes off) what it's inside.
   function elFmt(n, f) {
@@ -2647,7 +2669,7 @@
     if (tag === 'I' || tag === 'EM') f |= 2;
     if (tag === 'U' || tag === 'INS') f |= 4;
     var st = n.style;
-    if (st && n !== pad) {
+    if (st && n !== pad && !(n.classList && n.classList.contains('rich'))) {
       var w = st.fontWeight;
       if (w) f = (w === 'bold' || w === 'bolder' || Number(w) >= 600) ? f | 1 : f & ~1;
       if (st.fontStyle) f = /italic|oblique/.test(st.fontStyle) ? f | 2 : f & ~2;
@@ -2694,18 +2716,59 @@
     setF(0);
     return out;
   }
-  function padValue() {
-    var v = padSerialize(pad);
+  function padValue(box) {
+    box = box || pad;
+    var v = padSerialize(box);
     // The stand-in <br> after a last line break isn't a line of its own.
-    var last = pad.lastChild;
+    var last = box.lastChild;
     while (last && last.lastChild && last.nodeName !== 'BR') last = last.lastChild;
     if (last && last.nodeName === 'BR' && v.charAt(v.length - 1) === '\n') v = v.slice(0, -1);
     return v;
   }
   Object.defineProperty(pad, 'value', {
-    get: padValue,
+    get: function () { return padValue(pad); },
     set: function (v) { padRender(String(v || '')); pad.classList.toggle('empty', !v); }
   });
+  // A teacher's rich field (the prompt): the same textarea-like `value`,
+  // with line breaks, and Cmd/Ctrl+B, I, U; pasting comes in as plain text.
+  function richField(box) {
+    Object.defineProperty(box, 'value', {
+      get: function () { return padValue(box); },
+      set: function (v) { padRender(String(v || ''), box); box.classList.toggle('empty', !v); }
+    });
+    function fmtDo(cmd, arg) {
+      try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+      document.execCommand(cmd, false, arg);
+    }
+    box.addEventListener('keydown', function (e) {
+      var k = (e.key || '').toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && { b: 1, i: 1, u: 1 }[k]) {
+        e.preventDefault();
+        fmtDo({ b: 'bold', i: 'italic', u: 'underline' }[k]);
+      }
+    });
+    box.addEventListener('beforeinput', function (e) {
+      if (e.inputType === 'insertParagraph') { e.preventDefault(); fmtDo('insertLineBreak'); }
+    });
+    box.addEventListener('input', function () { box.classList.toggle('empty', !box.value); });
+    box.addEventListener('paste', function (e) {
+      e.preventDefault();
+      if (e.clipboardData) fmtDo('insertText', e.clipboardData.getData('text/plain'));
+    });
+    box.addEventListener('drop', function (e) { e.preventDefault(); });
+    box.value = '';
+    return box;
+  }
+  function richCaretEnd(box) {
+    var r = document.createRange();
+    r.selectNodeContents(box);
+    r.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  richField($('askRich'));
+  richField($('newRoomPrompt'));
   function padRange() {
     var sel = window.getSelection();
     if (!sel.rangeCount) return null;
@@ -2785,7 +2848,8 @@
   function drawPrompt() {
     var text = mode === 'room' && roomInfo && roomInfo.prompt ? roomInfo.prompt : '';
     var closed = !!text && load(promptKey()) === '1';
-    $('promptText').textContent = text;
+    $('promptText').textContent = '';
+    fmtInto($('promptText'), text);
     $('promptBar').hidden = !text || closed;
     $('promptShow').hidden = !text || !closed;
   }
@@ -5170,6 +5234,7 @@
     teacherRoom = { code: code };
     teacherRoster = null;
     $('roomTitle').textContent = '';
+    $('roomClass').hidden = true;
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
     ['waitingList', 'peopleList', 'ownList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
@@ -5258,13 +5323,22 @@
     var state = roomState(room);
     var cn = room.classId && teacherRoster ? teacherRoster.name : '';
     $('roomTitle').textContent = room.title;
-    if (room.classId) $('roomTitle').insertBefore(classDot(room.classId), $('roomTitle').firstChild);
+    // The class and its period, big, above the title.
+    var rc = $('roomClass'), cls = room.classId ? classById(room.classId) : null;
+    if (!cn && cls) cn = cls.name || '';
+    rc.innerHTML = '';
+    rc.hidden = !room.classId;
+    if (room.classId) {
+      rc.appendChild(classDot(room.classId));
+      rc.appendChild(el('span', null, (cls && cls.period ? 'Period ' + cls.period + (cn ? ' · ' : '') : '') + cn));
+    }
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);
     chip.className = 'chip ' + state;
-    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + (room.shareWork ? 'Students see each other’s work · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state, sittings: room.sittings, atHome: room.atHome }) + (room.casual ? ' · Casual' : cn ? ' · Class: ' + cn : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
+    $('roomWhen').textContent = (room.atHome ? 'At home · ' : '') + (room.shareWork ? 'Students see each other’s work · ' : '') + whenRange({ startAt: room.startAt, createdAt: room.createdAt, endedAt: room.endedAt, state: state, sittings: room.sittings, atHome: room.atHome }) + (room.casual ? ' · Casual' : room.classId ? '' : teacherRoster && !teacherRoster.id ? ' · ' + plural(teacherRoster.emails.length, 'invited student', 'invited students') : ' · No class');
     if (phraseNext) { phraseNext = false; $('phraseBox').hidden = false; $('phraseCancel').hidden = false; }
-    $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' + room.prompt : '';
+    $('roomPromptLine').textContent = room.prompt ? 'Prompt: ' : '';
+    if (room.prompt) fmtInto($('roomPromptLine'), room.prompt);
     $('roomPromptLine').hidden = !room.prompt;
     var rl = $('roomRubricLine');
     rl.innerHTML = '';
@@ -6068,10 +6142,10 @@
   $('askBox').addEventListener('click', function (e) { if (e.target === $('askBox') && askDone) askDone(false); });
   $('askBox').addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (askDone) askDone(false); }
-    else if (e.key === 'Enter' && e.target.id !== 'askArea' && e.target.tagName !== 'BUTTON') { e.preventDefault(); if (askDone) askDone(true); }
+    else if (e.key === 'Enter' && e.target.id !== 'askArea' && e.target.id !== 'askRich' && e.target.tagName !== 'BUTTON') { e.preventDefault(); if (askDone) askDone(true); }
   });
   $('promptBtn').addEventListener('click', async function () {
-    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'area', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', ok: 'Save' });
+    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'rich', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', ok: 'Save' });
     if (t === null) return;
     roomAction('prompt', [], { prompt: t.trim() });
   });
