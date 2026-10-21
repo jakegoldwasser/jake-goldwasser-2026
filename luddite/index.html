@@ -274,21 +274,34 @@
   .printopt.sizeopt { cursor: default; padding: 3px 4px 3px 12px; }
   .printopt[hidden] { display: none; }
   /* The papers' text size; rubric pages keep their own. */
-  #printBody { --pp-size: 11.5pt; }
-  #printBody .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
+  .printdoc { --pp-size: 11.5pt; }
+  .printdoc .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
   /* Two-sided: a blank back page after a paper that ends on a front
      (pblank, print only). Pages are counted with the body laid out as it
      prints (.measuring), since Chrome ignores break-before: right. */
   .pblank { display: none; }
-  #printBody.measuring { width: 6.9in; }
-  #printBody.measuring .pp { padding: 0; border: 0; margin: 0; }
-  #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
+  .printdoc.measuring { width: 6.9in; }
+  .printdoc.measuring .pp { padding: 0; border: 0; margin: 0; }
+  .printdoc.double .pp:not(.prub) .paper { line-height: 2.3; }
+  /* On screen, the papers themselves are laid out out of sight, exactly as
+     they print; what shows is #printPreview: Letter sheets, each a window
+     onto one printed page of them (drawPreview). */
+  @media screen { #printBody { position: absolute; left: -10000px; top: 0; } }
+  #printPreview { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 6px 0 30px; overflow-x: auto; }
+  .psheet { flex: none; width: 8.5in; height: 11in; box-sizing: border-box; padding: .75in; background: #fff; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 6px 22px rgba(0,0,0,.14); position: relative; }
+  .psheet .pwin { position: relative; overflow: hidden; }
+  .psheet.blank::after { content: 'Blank back of the sheet'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #aaa; font: 400 14px var(--ui); }
+  .psheet.full { padding: 0; }
+  .psheet.full img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  #printPreview > .empty { width: 100%; }
+  @media (max-width: 880px) { .psheet { zoom: .42; } }
+  @media print { #printPreview { display: none !important; } }
   /* A ruled column beside the paper for marking up by hand. */
   .ppbody.lined { display: grid; grid-template-columns: minmax(0, 1fr) 2.1in; gap: .3in; }
   .ppbody.lined.wide { grid-template-columns: minmax(0, 1fr) 4in; gap: .25in; }
   /* Ruled lines are real borders a whole number of pixels apart (a
      gradient's lines print at uneven distances). */
-  .ppbody .lmargin { border-left: 1px solid #bbb; margin-top: 14px; }
+  .ppbody .lmargin { margin-top: 14px; }
   .ppbody .lmargin i, .pfoot i { display: block; height: 30px; border-bottom: 1px solid #b8b8b8; box-sizing: border-box; }
   /* Lines for comments at the foot of every page of a paper (pageFeet). */
   .pfoot { display: block; break-inside: avoid; white-space: normal; font-size: 0; }
@@ -889,12 +902,17 @@
     .pp:last-child { break-after: auto; }
     .sheet { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; width: 6.95in; }
     .paper { font-size: 11.5pt; line-height: 1.7; }
-    #printBody .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
+    .printdoc .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
     #printScreen .card > .head { display: none; }
+    /* A PDF rubric prints each page edge to edge, as the PDF itself does
+       (its own margins are in the page), not shrunk inside ours. */
+    @page rubricpdf { margin: 0; }
+    .pp.prub.pdfrub { page: rubricpdf; }
+    .pp.prub.pdfrub img.rpage { width: 8.5in; height: 11in; max-width: none; max-height: none; object-fit: contain; display: block; margin: 0; }
     #printBody { width: 6.9in; }
     #printBody .pp { margin: 0; orphans: 1; widows: 1; }
     .pblank { display: block; height: 1px; break-before: page; break-after: page; }
-    #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
+    .printdoc.double .pp:not(.prub) .paper { line-height: 2.3; }
     .printopts { display: none !important; }
     .mnote { font-size: 10.5pt; }
     .endwrap textarea { display: none; }
@@ -1491,7 +1509,8 @@
         <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
       </span>
     </div>
-    <div id="printBody"></div>
+    <div id="printBody" class="printdoc measuring"></div>
+    <div id="printPreview"></div>
   </div>
 </section>
 
@@ -7679,6 +7698,7 @@
       box.appendChild(wait);
       return { box: box, ready: rubricFilePages(rb, p.code).then(function (pages) {
         box.innerHTML = '';
+        box.classList.add('pdfrub');
         pages.forEach(function (src, i) { box.appendChild(pageImg(src, i)); });
       }, function () { wait.textContent = 'Couldn’t load this rubric.'; throw new Error('rubric'); }) };
     }
@@ -7748,14 +7768,45 @@
     items.sort(function (a, b) { return a.t - b.t; });
     return items;
   }
-  function blockPages(box) {
-    var start = box.getBoundingClientRect().top, pages = 1, afterFoot = false;
+  // Where a box's printed pages begin and end ({ t, b }, on screen).
+  function pageSlices(box) {
+    var r = box.getBoundingClientRect(), start = r.top, slices = [], afterFoot = false;
     lineItems(box).forEach(function (it) {
-      if (afterFoot) { pages++; start = it.t; afterFoot = false; }
-      else if (it.b - start > PAGE_PX + 0.5 && it.t > start + 0.5) { pages++; start = it.t; }
-      if (it.foot) afterFoot = true;
+      if (afterFoot || (it.b - start > PAGE_PX + 0.5 && it.t > start + 0.5)) {
+        // (a page after a foot starts below it: none of the foot shows there)
+        var next = afterFoot ? Math.max(it.t, afterFoot) : it.t;
+        slices.push({ t: start, b: Math.min(next, start + PAGE_PX) });
+        start = next; afterFoot = false;
+      }
+      if (it.foot) afterFoot = it.b;
     });
-    return pages;
+    slices.push({ t: start, b: Math.min(r.bottom, start + PAGE_PX) });
+    return slices;
+  }
+  function blockPages(box) { return pageSlices(box).length; }
+  // The preview: a Letter sheet for every page that prints.
+  function drawPreview() {
+    var body = $('printBody'), pv = $('printPreview');
+    pv.innerHTML = '';
+    Array.prototype.forEach.call(body.children, function (box) {
+      if (box.classList.contains('pblank')) { pv.appendChild(el('div', 'psheet blank')); return; }
+      if (!box.classList.contains('pp')) { pv.appendChild(box.cloneNode(true)); return; }
+      var imgs = box.querySelectorAll('img.rpage');
+      if (imgs.length) {
+        imgs.forEach(function (im) { var sh = el('div', 'psheet full'); sh.appendChild(im.cloneNode(true)); pv.appendChild(sh); });
+        return;
+      }
+      var top = box.getBoundingClientRect().top;
+      pageSlices(box).forEach(function (sl) {
+        var sh = el('div', 'psheet'), win = el('div', body.className + ' pwin');
+        win.style.cssText = body.style.cssText + ';height:' + Math.max(0, sl.b - sl.t) + 'px';
+        var c = box.cloneNode(true);
+        c.style.cssText = 'position:absolute;left:0;right:0;top:' + (top - sl.t) + 'px';
+        win.appendChild(c);
+        sh.appendChild(win);
+        pv.appendChild(sh);
+      });
+    });
   }
   // Lines for comments at the foot of every page of a paper: the text gets
   // a page less the foot, and at each page's end (and the paper's) a .pfoot
@@ -7813,7 +7864,7 @@
       for (var i = 0; i < n; i++) m.appendChild(el('i'));
     });
     if (printOpts.duplex !== false) backPages();
-    body.classList.remove('measuring');
+    drawPreview();
   }
   function backPages() {
     var body = $('printBody');
@@ -7865,12 +7916,13 @@
     show('printScreen');
     $('printTitle').textContent = title;
     $('printBody').innerHTML = '';
+    $('printPreview').innerHTML = '';
     $('printRubricsRow').hidden = true;
     $('printGo').disabled = $('printPdf').disabled = true;
     drawPrintOpts();
     printDrawn = []; printDrawSeq++;
     $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
-    if (!ids.length) { $('printBody').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
+    if (!ids.length) { $('printPreview').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
     var done = 0, drawn = [];
     for (var i = 0; i < ids.length; i += 6) {
       var batch = await Promise.all(ids.slice(i, i + 6).map(function (id) {
