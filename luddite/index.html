@@ -264,6 +264,28 @@
   #reFileView:empty { display: none; }
   .rvbody { max-height: 66vh; overflow-y: auto; margin-top: 12px; }
   .printrub { display: inline-flex; gap: 6px; align-items: center; margin: 0 6px 0 0; }
+  /* The print page's options (remembered on the device, luddite.printOpts). */
+  .printopts { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 4px 0 6px; }
+  .printopt { display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 999px; background: var(--card); font-size: 14px; cursor: pointer; }
+  .printopt.sizeopt { cursor: default; padding: 3px 4px 3px 12px; }
+  .printopt[hidden] { display: none; }
+  /* The papers' text size; rubric pages keep their own. */
+  #printBody { --pp-size: 11.5pt; }
+  #printBody .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
+  /* Two-sided: a blank back page after a paper that ends on a front
+     (pblank, print only). Pages are counted with the body laid out as it
+     prints (.measuring), since Chrome ignores break-before: right. */
+  .pblank { display: none; }
+  #printBody.measuring { width: 6.9in; }
+  #printBody.measuring .pp { padding: 0; border: 0; margin: 0; }
+  #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
+  /* A ruled column beside the paper for marking up by hand. */
+  .ppbody.lined { display: grid; grid-template-columns: minmax(0, 1fr) 2.1in; gap: .3in; }
+  .ppbody .lmargin { border-left: 1px solid #bbb; background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(.32in - 1px), #c4c4c4 calc(.32in - 1px), #c4c4c4 .32in); margin-top: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pp .flines { margin-top: 22px; break-inside: avoid; }
+  .pp .flines b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .pp .flines div { height: calc(10 * .36in); background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(.36in - 1px), #b5b5b5 calc(.36in - 1px), #b5b5b5 .36in); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pp .paper .topic:not(.hl) { background: #fbeea0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pp.prub .rtable { font-size: 10pt; }
   .pp.prub img.rpage { max-width: 100%; max-height: 9.3in; width: auto; margin: 0 auto; border: 0; break-after: page; }
   .pp.prub img.rpage:last-child { break-after: auto; }
@@ -836,6 +858,13 @@
     .pp:last-child { break-after: auto; }
     .sheet { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; width: 6.95in; }
     .paper { font-size: 11.5pt; line-height: 1.7; }
+    #printBody .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
+    #printScreen .card > .head { display: none; }
+    #printBody { width: 6.9in; }
+    #printBody .pp { margin: 0; orphans: 1; widows: 1; }
+    .pblank { display: block; height: 1px; break-before: page; break-after: page; }
+    #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
+    .printopts { display: none !important; }
     .mnote { font-size: 10.5pt; }
     .endwrap textarea { display: none; }
     .endprint { display: block; }
@@ -1411,10 +1440,21 @@
       <button class="linkish" id="printBack">&larr; Back</button>
       <span class="grow"></span>
       <span class="savestate" id="printStatus"></span>
-      <label class="fine printrub" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
+      <button class="btn small ghost" id="printPdf" disabled>Save PDF <span class="q" tabindex="0" data-tip="Opens the print window: pick Save as PDF as the printer. The file is named for these papers.">?</span></button>
       <button class="btn small" id="printGo" disabled>Print</button>
     </div>
     <div class="head"><h2 id="printTitle"></h2></div>
+    <div class="printopts">
+      <label class="printopt" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="duplex"> Two-sided: each paper on its own sheets <span class="q" tabindex="0" data-tip="Adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="lined"> Lined margin for marking up</label>
+      <label class="printopt"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for final comments <span class="q" tabindex="0" data-tip="Ruled lines under the rubric (or under the paper, without one) for an end comment by hand.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
+      <span class="printopt sizeopt">Text size
+        <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
+      </span>
+    </div>
     <div id="printBody"></div>
   </div>
 </section>
@@ -7357,6 +7397,8 @@
     allNotes.forEach(function (m, i) { num[m.id] = i + 1; });
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
     marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    var topics = printOpts.topics ? topicSentences(text) : [];
+    topics.forEach(function (t) { cuts[t[0]] = 1; cuts[t[1]] = 1; });
     var sc = fmtCuts(text, cuts);
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
     var paper = el('div', 'paper');
@@ -7372,10 +7414,15 @@
       if (next === undefined || next === pt) return;
       var on = marks.filter(function (m) { return (m.type === 'margin' || m.type === 'strike') && m.start <= pt && m.end >= next; });
       if (sc.hide[pt]) return;
-      var cls = (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl ' : '') + FMT_CLS[sc.f[pt]];
+      var cls = (topics.some(function (t) { return t[0] <= pt && t[1] >= next; }) ? 'topic ' : '') + (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl ' : '') + FMT_CLS[sc.f[pt]];
       paper.appendChild(el('span', cls.trim(), text.slice(pt, next)));
     });
-    box.appendChild(paper);
+    if (printOpts.lined) {
+      var pb = el('div', 'ppbody lined');
+      pb.appendChild(paper);
+      pb.appendChild(el('div', 'lmargin'));
+      box.appendChild(pb);
+    } else box.appendChild(paper);
     if (allNotes.length) {
       var notes = el('div', 'pnotes');
       allNotes.forEach(function (m) {
@@ -7387,6 +7434,32 @@
     }
     if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
     return box;
+  }
+  // Ruled lines for a final comment by hand.
+  function finalLines() {
+    var f = el('div', 'flines');
+    f.appendChild(el('b', null, 'Final comments'));
+    f.appendChild(el('div'));
+    return f;
+  }
+  // A guess at each paragraph's topic sentence: its first sentence, as
+  // [start, end) in the text. Short lines without an end stop (a title, a
+  // heading) are skipped.
+  function topicSentences(text) {
+    var out = [], start = 0;
+    while (start <= text.length) {
+      var end = text.indexOf('\n', start);
+      if (end < 0) end = text.length;
+      var line = text.slice(start, end), lead = line.search(/\S/);
+      if (lead >= 0) {
+        var m = /[.!?]+(?:\*+|_+)?["'”’)\]]*(?=\s|$)/.exec(line.slice(lead));
+        var plain = plainOf(line).trim(), words = (plain.match(/\S+/g) || []).length;
+        if (m) out.push([start + lead, start + lead + m.index + m[0].length]);
+        else if (words >= 8) out.push([start + lead, end]);
+      }
+      start = end + 1;
+    }
+    return out;
   }
 
   // A paper's rubric on a page of its own, to print right after the paper:
@@ -7417,10 +7490,18 @@
     var seq = ++printDrawSeq, body = $('printBody');
     var withRubrics = $('printRubrics').checked && !$('printRubricsRow').hidden;
     body.innerHTML = '';
+    body.classList.toggle('double', !!printOpts.double);
+    body.style.setProperty('--pp-size', (printOpts.size || 11.5) + 'pt');
     var waits = [];
     printDrawn.forEach(function (p) {
-      body.appendChild(staticPaper(p));
-      if (withRubrics && paperRubric(p)) { var r = rubricPage(p); body.appendChild(r.box); waits.push(r.ready); }
+      var paperBox = staticPaper(p);
+      body.appendChild(paperBox);
+      if (withRubrics && paperRubric(p)) {
+        var r = rubricPage(p);
+        body.appendChild(r.box);
+        // (after a PDF rubric's pages, which replace what's in the box)
+        waits.push(r.ready.then(function () { if (printOpts.finalLines) r.box.appendChild(finalLines()); }));
+      } else if (printOpts.finalLines) paperBox.appendChild(finalLines());
     });
     var status = plural(printDrawn.length, 'paper', 'papers') + (printMissing ? ' (' + printMissing + ' couldn’t be loaded)' : '');
     if (waits.length) {
@@ -7430,9 +7511,78 @@
       if (seq !== printDrawSeq) return;
       if (failed) status += ' · ' + plural(failed, 'rubric', 'rubrics') + ' couldn’t be loaded';
     }
+    if (printOpts.duplex !== false) {
+      try { await document.fonts.ready; } catch (e) {}
+      if (seq !== printDrawSeq) return;
+      backPages();
+    }
     $('printStatus').textContent = status;
-    $('printGo').disabled = !printDrawn.length;
+    $('printGo').disabled = $('printPdf').disabled = !printDrawn.length;
   }
+  // Two-sided printing: counts each paper's pages (with its rubric) as they
+  // will print on Letter with 0.75in margins, and puts a blank page after
+  // any paper ending on the front of a sheet, so the next starts a new sheet.
+  var PAGE_PX = 9.5 * 96;
+  function blockPages(box) {
+    var items = [];
+    box.querySelectorAll('.flines').forEach(function (f) { var r = f.getBoundingClientRect(); items.push({ t: r.top, b: r.bottom }); });
+    var walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), n;
+    while ((n = walk.nextNode())) {
+      if (!n.data.trim() || n.parentNode.closest('.flines')) continue;
+      var cs = getComputedStyle(n.parentNode), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
+      var rg = document.createRange();
+      rg.selectNodeContents(n);
+      Array.prototype.forEach.call(rg.getClientRects(), function (r) {
+        if (!r.height) return;
+        var mid = (r.top + r.bottom) / 2, h = Math.max(lh, r.height);
+        items.push({ t: mid - h / 2, b: mid + h / 2 });
+      });
+    }
+    items.sort(function (a, b) { return a.t - b.t; });
+    var start = box.getBoundingClientRect().top, pages = 1;
+    items.forEach(function (it) {
+      if (it.b - start > PAGE_PX + 0.5 && it.t > start + 0.5) { pages++; start = it.t; }
+    });
+    return pages;
+  }
+  function backPages() {
+    var body = $('printBody');
+    each('#printBody .pblank', function (b) { b.remove(); });
+    body.classList.add('measuring');
+    var packets = [], cur = null;
+    Array.prototype.forEach.call(body.children, function (box) {
+      if (!box.classList.contains('pp')) return;
+      if (!box.classList.contains('prub') || !cur) { cur = []; packets.push(cur); }
+      cur.push(box);
+    });
+    var odd = packets.map(function (boxes) {
+      var pages = 0;
+      boxes.forEach(function (box) {
+        var imgs = box.querySelectorAll('img.rpage').length;
+        pages += imgs ? imgs + (box.querySelector('.flines') ? 1 : 0) : blockPages(box);
+      });
+      return pages % 2 === 1;
+    });
+    body.classList.remove('measuring');
+    packets.forEach(function (boxes, i) {
+      if (odd[i] && i < packets.length - 1) boxes[boxes.length - 1].after(el('div', 'pblank'));
+    });
+  }
+  var PRINT_OPTS_KEY = 'luddite.printOpts', printOpts = {};
+  try { printOpts = JSON.parse(load(PRINT_OPTS_KEY) || '{}') || {}; } catch (e) { printOpts = {}; }
+  function drawPrintOpts() {
+    each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' ? printOpts.duplex !== false : !!printOpts[c.dataset.opt]; });
+    each('#printSize button', function (b) { b.classList.toggle('on', Number(b.dataset.size) === (printOpts.size || 11.5)); });
+  }
+  function setPrintOpt(k, v) {
+    printOpts[k] = v;
+    store(PRINT_OPTS_KEY, JSON.stringify(printOpts));
+    drawPrintOpts();
+    if (printDrawn.length) drawPrintBody();
+  }
+  each('#printScreen [data-opt]', function (c) { c.addEventListener('change', function () { setPrintOpt(c.dataset.opt, c.checked); }); });
+  each('#printSize button', function (b) { b.addEventListener('click', function () { setPrintOpt('size', Number(b.dataset.size)); }); });
+  drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
     store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
     drawPrintBody();
@@ -7445,7 +7595,8 @@
     $('printTitle').textContent = title;
     $('printBody').innerHTML = '';
     $('printRubricsRow').hidden = true;
-    $('printGo').disabled = true;
+    $('printGo').disabled = $('printPdf').disabled = true;
+    drawPrintOpts();
     printDrawn = []; printDrawSeq++;
     $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
     if (!ids.length) { $('printBody').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
@@ -7468,6 +7619,9 @@
     window.scrollTo(0, 0);
   }
   $('printBack').addEventListener('click', function () { (printBackTo || showDash)(); });
+  // Save PDF is the print window too (Chrome and Safari's Save as PDF); the
+  // page's title becomes the file's name.
+  $('printPdf').addEventListener('click', function () { $('printGo').click(); });
   $('printGo').addEventListener('click', function () {
     var prev = document.title;
     document.title = $('printTitle').textContent;
