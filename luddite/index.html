@@ -42,6 +42,10 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
+  /* While a student writes, scrolling past the end does nothing: no
+     trackpad swipe back to the last page, no pull to refresh (either one
+     leaves the page and locks them out). */
+  html.writingnow, html.writingnow body, html.writingnow #pad { overscroll-behavior: none; }
   body {
     background: var(--paper);
     color: var(--ink);
@@ -3208,6 +3212,7 @@
       updateCount();
       updateLeaves();
       show('writeScreen');
+      holdHistory();
       drawPrompt();
       pad.focus();
       setCaret(-1);
@@ -3218,6 +3223,18 @@
     });
   }
   $('startBtn').addEventListener('click', enterWriting);
+  // A Back (a swipe, a mouse's back button) while writing stays on the page:
+  // an extra history entry for it to use up, put back each time.
+  var historyHeld = false;
+  function holdHistory() {
+    document.documentElement.classList.add('writingnow');
+    if (historyHeld) return;
+    try { history.pushState({ luddite: 'writing' }, ''); historyHeld = true; } catch (e) {}
+  }
+  window.addEventListener('popstate', function () {
+    historyHeld = false;
+    if (writing) holdHistory();
+  });
 
   function lock(reason) {
     if (!writing || locked || leavingOnPurpose || !P().lockOnLeave) return;
@@ -3379,6 +3396,7 @@
     leavingOnPurpose = true;
     save();
     writing = false;
+    document.documentElement.classList.remove('writingnow');
     stopHeartbeat();
     stopTimer();
     report('idle');
