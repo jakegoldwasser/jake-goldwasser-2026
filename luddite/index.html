@@ -281,12 +281,17 @@
   #printBody.double .pp:not(.prub) .paper { line-height: 2.3; }
   /* A ruled column beside the paper for marking up by hand. */
   .ppbody.lined { display: grid; grid-template-columns: minmax(0, 1fr) 2.1in; gap: .3in; }
-  .ppbody .lmargin { border-left: 1px solid #bbb; background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(.32in - 1px), #c4c4c4 calc(.32in - 1px), #c4c4c4 .32in); margin-top: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .pp .flines { margin-top: 22px; break-inside: avoid; }
-  .pp .flines b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .pp .flines div { height: calc(10 * .36in); background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(.36in - 1px), #b5b5b5 calc(.36in - 1px), #b5b5b5 .36in); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Ruled lines are real borders a whole number of pixels apart (a
+     gradient's lines print at uneven distances). */
+  .ppbody .lmargin { border-left: 1px solid #bbb; margin-top: 14px; }
+  .ppbody .lmargin i, .pfoot i { display: block; height: 30px; border-bottom: 1px solid #b8b8b8; box-sizing: border-box; }
+  /* Lines for comments at the foot of every page of a paper (pageFeet). */
+  .pfoot { display: block; break-inside: avoid; white-space: normal; font-size: 0; }
+  .pfoot b { display: block; height: 20px; font: 600 9pt/20px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-top: 1px solid #b8b8b8; }
+  @media print { .pfoot.brk { break-after: page; } }
   .pp .paper .topic:not(.hl) { background: #fbeea0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .pp.prub .rtable { font-size: 10pt; }
+  .pp.prub .rtable { font-size: 12pt; }
+  .pp.prub .rubricdoc { font-size: 12pt; }
   .pp.prub img.rpage { max-width: 100%; max-height: 9.3in; width: auto; margin: 0 auto; border: 0; break-after: page; }
   .pp.prub img.rpage:last-child { break-after: auto; }
   @media print { .rubricdoc td { border-color: #999; } .pp.prub { break-before: page; } }
@@ -1471,7 +1476,7 @@
       <label class="printopt"><input type="checkbox" data-opt="duplex"> Two-sided: each paper on its own sheets <span class="q" tabindex="0" data-tip="Adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="lined"> Lined margin for marking up</label>
       <label class="printopt"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for final comments <span class="q" tabindex="0" data-tip="Ruled lines under the rubric (or under the paper, without one) for an end comment by hand.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
       <span class="printopt sizeopt">Text size
         <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
@@ -7575,13 +7580,6 @@
     if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
     return box;
   }
-  // Ruled lines for a final comment by hand.
-  function finalLines() {
-    var f = el('div', 'flines');
-    f.appendChild(el('b', null, 'Final comments'));
-    f.appendChild(el('div'));
-    return f;
-  }
   // A guess at each paragraph's topic sentence: its first sentence, as
   // [start, end) in the text. Short lines without an end stop (a title, a
   // heading) are skipped.
@@ -7639,9 +7637,8 @@
       if (withRubrics && paperRubric(p)) {
         var r = rubricPage(p);
         body.appendChild(r.box);
-        // (after a PDF rubric's pages, which replace what's in the box)
-        waits.push(r.ready.then(function () { if (printOpts.finalLines) r.box.appendChild(finalLines()); }));
-      } else if (printOpts.finalLines) paperBox.appendChild(finalLines());
+        waits.push(r.ready);
+      }
     });
     var status = plural(printDrawn.length, 'paper', 'papers') + (printMissing ? ' (' + printMissing + ' couldn’t be loaded)' : '');
     if (waits.length) {
@@ -7651,11 +7648,9 @@
       if (seq !== printDrawSeq) return;
       if (failed) status += ' · ' + plural(failed, 'rubric', 'rubrics') + ' couldn’t be loaded';
     }
-    if (printOpts.duplex !== false) {
-      try { await document.fonts.ready; } catch (e) {}
-      if (seq !== printDrawSeq) return;
-      backPages();
-    }
+    try { await document.fonts.ready; } catch (e) {}
+    if (seq !== printDrawSeq) return;
+    layoutForPrint();
     $('printStatus').textContent = status;
     $('printGo').disabled = $('printPdf').disabled = !printDrawn.length;
   }
@@ -7663,32 +7658,96 @@
   // will print on Letter with 0.75in margins, and puts a blank page after
   // any paper ending on the front of a sheet, so the next starts a new sheet.
   var PAGE_PX = 9.5 * 96;
-  function blockPages(box) {
+  // The text's lines in a box, top to bottom, each with its text node and
+  // line box (the line height, not just the letters); a .pfoot is one item
+  // that ends its page.
+  function lineItems(box) {
     var items = [];
-    box.querySelectorAll('.flines').forEach(function (f) { var r = f.getBoundingClientRect(); items.push({ t: r.top, b: r.bottom }); });
+    box.querySelectorAll('.pfoot').forEach(function (f) { var r = f.getBoundingClientRect(); items.push({ t: r.top, b: r.bottom, foot: true }); });
     var walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), n;
     while ((n = walk.nextNode())) {
-      if (!n.data.trim() || n.parentNode.closest('.flines')) continue;
+      if (!n.data.trim() || n.parentNode.closest('.pfoot')) continue;
       var cs = getComputedStyle(n.parentNode), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3;
       var rg = document.createRange();
       rg.selectNodeContents(n);
       Array.prototype.forEach.call(rg.getClientRects(), function (r) {
-        if (!r.height) return;
+        if (!r.height || !r.width) return;
         var mid = (r.top + r.bottom) / 2, h = Math.max(lh, r.height);
-        items.push({ t: mid - h / 2, b: mid + h / 2 });
+        items.push({ t: mid - h / 2, b: mid + h / 2, node: n, top: r.top });
       });
     }
     items.sort(function (a, b) { return a.t - b.t; });
-    var start = box.getBoundingClientRect().top, pages = 1;
-    items.forEach(function (it) {
-      if (it.b - start > PAGE_PX + 0.5 && it.t > start + 0.5) { pages++; start = it.t; }
+    return items;
+  }
+  function blockPages(box) {
+    var start = box.getBoundingClientRect().top, pages = 1, afterFoot = false;
+    lineItems(box).forEach(function (it) {
+      if (afterFoot) { pages++; start = it.t; afterFoot = false; }
+      else if (it.b - start > PAGE_PX + 0.5 && it.t > start + 0.5) { pages++; start = it.t; }
+      if (it.foot) afterFoot = true;
     });
     return pages;
   }
-  function backPages() {
+  // Lines for comments at the foot of every page of a paper: the text gets
+  // a page less the foot, and at each page's end (and the paper's) a .pfoot
+  // fills the rest of the page with its spacer, then the ruled lines.
+  var FOOT_LINES = 6, FOOT_PX = 20 + FOOT_LINES * 30;
+  function footEl() {
+    var f = el('span', 'pfoot');
+    f.appendChild(el('span', 'pfsp'));
+    f.appendChild(el('b', null, 'Comments'));
+    for (var i = 0; i < FOOT_LINES; i++) f.appendChild(el('i'));
+    return f;
+  }
+  // Where a line starts within its text node.
+  function lineStart(n, top) {
+    var lo = 0, hi = n.data.length - 1, rg = document.createRange();
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      rg.setStart(n, mid); rg.setEnd(n, mid + 1);
+      var r = rg.getClientRects()[0];
+      if (r && r.top >= top - 1) hi = mid; else lo = mid + 1;
+    }
+    return lo;
+  }
+  function pageFeet(box) {
+    var cap = PAGE_PX - FOOT_PX - 6, start = box.getBoundingClientRect().top;
+    for (var guard = 0; guard < 80; guard++) {
+      var items = lineItems(box).filter(function (it) { return !it.foot && it.t >= start - 0.5; });
+      var brk = null;
+      for (var i = 0; i < items.length; i++) if (items[i].b - start > cap + 0.5 && items[i].t > start + 0.5) { brk = items[i]; break; }
+      var f = footEl();
+      if (!brk) { box.appendChild(f); }
+      else {
+        var o = lineStart(brk.node, brk.top);
+        var at = o > 0 ? brk.node.splitText(o) : brk.node;
+        at.parentNode.insertBefore(f, at);
+        f.classList.add('brk');
+      }
+      // The spacer takes the foot down to the bottom of the page.
+      var top = f.getBoundingClientRect().top;
+      f.firstChild.style.cssText = 'display:block;height:' + Math.max(0, Math.floor(start + cap - top)) + 'px';
+      if (!brk) return;
+      start = f.getBoundingClientRect().bottom;
+    }
+  }
+  // Lays the papers out as they print (.measuring) to put in the feet, rule
+  // the lined margins, and count pages for two-sided printing.
+  function layoutForPrint() {
     var body = $('printBody');
     each('#printBody .pblank', function (b) { b.remove(); });
     body.classList.add('measuring');
+    if (printOpts.finalLines) each('#printBody .pp:not(.prub)', pageFeet);
+    each('#printBody .lmargin', function (m) {
+      m.innerHTML = '';
+      var n = Math.floor(m.getBoundingClientRect().height / 30);
+      for (var i = 0; i < n; i++) m.appendChild(el('i'));
+    });
+    if (printOpts.duplex !== false) backPages();
+    body.classList.remove('measuring');
+  }
+  function backPages() {
+    var body = $('printBody');
     var packets = [], cur = null;
     Array.prototype.forEach.call(body.children, function (box) {
       if (!box.classList.contains('pp')) return;
@@ -7699,11 +7758,10 @@
       var pages = 0;
       boxes.forEach(function (box) {
         var imgs = box.querySelectorAll('img.rpage').length;
-        pages += imgs ? imgs + (box.querySelector('.flines') ? 1 : 0) : blockPages(box);
+        pages += imgs ? imgs : blockPages(box);
       });
       return pages % 2 === 1;
     });
-    body.classList.remove('measuring');
     packets.forEach(function (boxes, i) {
       if (odd[i] && i < packets.length - 1) boxes[boxes.length - 1].after(el('div', 'pblank'));
     });
