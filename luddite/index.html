@@ -291,8 +291,7 @@
   .psheet { flex: none; width: 8.5in; height: 11in; box-sizing: border-box; padding: .75in; background: #fff; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 6px 22px rgba(0,0,0,.14); position: relative; }
   .psheet .pwin { position: relative; overflow: hidden; }
   .psheet.blank::after { content: 'Blank back of the sheet'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #aaa; font: 400 14px var(--ui); }
-  .psheet.full { padding: 0; }
-  .psheet.full img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .psheet.full img { display: block; width: 6.9in; height: 9.4in; object-fit: contain; object-position: top center; }
   #printPreview > .empty { width: 100%; }
   @media (max-width: 880px) { .psheet { zoom: .42; } }
   @media print { #printPreview { display: none !important; } }
@@ -904,11 +903,10 @@
     .paper { font-size: 11.5pt; line-height: 1.7; }
     .printdoc .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
     #printScreen .card > .head { display: none; }
-    /* A PDF rubric prints each page edge to edge, as the PDF itself does
-       (its own margins are in the page), not shrunk inside ours. */
-    @page rubricpdf { margin: 0; }
-    .pp.prub.pdfrub { page: rubricpdf; }
-    .pp.prub.pdfrub img.rpage { width: 8.5in; height: 11in; max-width: none; max-height: none; object-fit: contain; display: block; margin: 0; }
+    /* A PDF rubric's pages come trimmed of their own white margins
+       (cropMargins) and fill ours. Nothing may be laid out wider than the
+       text (6.9in): Chrome would shrink the whole printout to fit. */
+    .pp.prub.pdfrub img.rpage { width: 6.9in; height: 9.4in; max-width: none; max-height: none; object-fit: contain; object-position: top center; display: block; margin: 0; }
     #printBody { width: 6.9in; }
     #printBody .pp { margin: 0; orphans: 1; widows: 1; }
     .pblank { display: block; height: 1px; break-before: page; break-after: page; }
@@ -4049,6 +4047,35 @@
       rubricPages[rb.fileId].catch(function () { delete rubricPages[rb.fileId]; });
     }
     return rubricPages[rb.fileId];
+  }
+  // A page image trimmed to what's printed on it (plus a little white), so
+  // it can be printed as large as our margins allow.
+  function cropMargins(src) {
+    return new Promise(function (resolve) {
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var w = im.naturalWidth, h = im.naturalHeight, c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var g = c.getContext('2d');
+          g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(im, 0, 0);
+          var d = g.getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+          for (var y = 0; y < h; y += 2) for (var x = 0; x < w; x += 2) {
+            var k = (y * w + x) * 4;
+            if (d[k] < 235 || d[k + 1] < 235 || d[k + 2] < 235) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+          if (x1 < 0) return resolve(src);
+          var pad = Math.round(w * 0.015);
+          x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w, x1 + pad); y1 = Math.min(h, y1 + pad);
+          var o = document.createElement('canvas');
+          o.width = x1 - x0; o.height = y1 - y0;
+          o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+          resolve(o.toDataURL('image/png'));
+        } catch (e) { resolve(src); }
+      };
+      im.onerror = function () { resolve(src); };
+      im.src = src;
+    });
   }
   function pageImg(src, i) { var im = el('img', 'rpage'); im.src = src; im.alt = 'Rubric, page ' + (i + 1); return im; }
   // Draws any rubric to read (not to score): a grid, pasted text, or a PDF's
@@ -7697,6 +7724,8 @@
       var wait = el('p', 'fine', 'Loading the rubric…');
       box.appendChild(wait);
       return { box: box, ready: rubricFilePages(rb, p.code).then(function (pages) {
+        return Promise.all(pages.map(cropMargins));
+      }).then(function (pages) {
         box.innerHTML = '';
         box.classList.add('pdfrub');
         pages.forEach(function (src, i) { box.appendChild(pageImg(src, i)); });
