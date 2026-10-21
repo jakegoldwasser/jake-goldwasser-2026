@@ -484,10 +484,12 @@
   .endwrap textarea { width: 100%; min-height: 110px; margin-top: 6px; font: 17px/1.55 Literata, Georgia, serif; color: var(--pen);
     background: transparent; border: 0; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--rule); padding: 10px 12px; resize: vertical; }
   /* Stock comments (marking page): a checklist by category under the end
-     comment; checked ones fill its On the Next Paper section. */
+     comment; checked ones fill its On the Next Essay section. */
   .stockbox { margin-top: 10px; border: 1.5px solid var(--rule); border-radius: 12px; padding: 8px 14px; background: var(--card); }
   .stockbox summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 2px 0; }
   .stockbox[open] summary { margin-bottom: 6px; }
+  .stockkind { margin: 14px 0 0; font: 600 16px var(--ui); color: var(--ink); }
+  .stockkind:first-child { margin-top: 4px; }
   .stockcat { margin: 10px 0 4px; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .stockitem { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; font-size: 14px; line-height: 1.4; cursor: pointer; }
   .endwrap label.stockitem { font: 400 14px/1.4 var(--ui); letter-spacing: 0; text-transform: none; color: var(--ink); }
@@ -1511,7 +1513,7 @@
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
         <details class="stockbox" id="stockBox">
-          <summary>Stock comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to an On the Next Paper section at the end of the end comment, which the student sees with the rest.">?</span></summary>
+          <summary>Stock comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to the On the Next Essay section at the end of the end comment, under Keep Up the Good Work or Room for Improvement, which the student sees with the rest.">?</span></summary>
           <div id="stockList"></div>
           <button type="button" class="btn small ghost" id="stockEdit">Edit stock comments…</button>
         </details>
@@ -7102,17 +7104,34 @@
 
   // ---- Stock comments ----
   // Each is a comment the teacher often makes, with the goal it becomes for
-  // the student's next paper. Checking one puts that goal in an "On the
-  // Next Paper" section at the end of the end comment (rewritten from the
-  // checked ones each time); what's checked is read back from that section.
-  // The list is the teacher's own, kept on this device
-  // (luddite.stock.<email>); STOCK_DEFAULT is where it starts.
-  var STOCK_DEFAULT = [
+  // the student's next essay: Keep Up the Good Work (kind 'good') or Room
+  // for Improvement. Checking one puts its goal in the "On the Next Essay"
+  // section at the end of the end comment, under its kind's heading
+  // (rewritten from the checked ones each time); what's checked is read
+  // back from that section. The list is the teacher's own, kept on this
+  // device (luddite.stock.<email>); STOCK_DEFAULT is where it starts.
+  var STOCK_GOOD = [
+    ['Thesis', 'A bold, arguable thesis.', 'Keep making bold claims someone could argue with.'],
+    ['Thesis', 'A thesis with real stakes.', 'Keep giving your thesis stakes: you showed why it matters.'],
+    ['Topic sentences', 'Topic sentences that make claims.', 'Keep opening each paragraph with a claim, not a summary.'],
+    ['Topic sentences', 'Transitions that carry the argument.', 'Keep linking your paragraphs back to your broader argument.'],
+    ['Evidence', 'Brief, well-chosen quotations.', 'Keep choosing brief quotations that do real work.'],
+    ['Evidence', 'Quotations woven into the sentences.', 'Keep working quotations smoothly into your own sentences.'],
+    ['Analysis', 'Sharp close reading.', 'Keep slowing down on single words and images: your close reading is sharp.'],
+    ['Analysis', 'Analysis of language, not plot.', 'Keep your focus on how the language works, not on what happens.'],
+    ['Complexity', 'Grapples with the text’s tensions.', 'Keep grappling with the tensions and contradictions in the text.'],
+    ['Complexity', 'An original insight.', 'Keep reaching for insights that surprise your reader.'],
+    ['Style', 'Clear, plain sentences.', 'Keep writing clearly and plainly.'],
+    ['Style', 'A voice of your own.', 'Keep taking stylistic risks: your voice comes through.'],
+    ['Mechanics', 'Clean, careful prose.', 'Keep proofreading: your prose is clean.'],
+    ['Mechanics', 'Correct citations and formatting.', 'Keep citing and formatting as carefully as you did here.']
+  ].map(function (it) { return it.concat('good'); });
+  var STOCK_DEFAULT = STOCK_GOOD.concat([
     ['Thesis', 'The thesis restates the prompt rather than making a claim.', 'Begin with a thematic statement that makes a claim someone could argue with, and label it clearly.'],
     ['Thesis', 'The thesis is too obvious to need defending.', 'Push your thesis past what every reader already knows: claim something that takes the whole essay to prove.'],
     ['Thesis', 'There\u2019s no clear thesis.', 'State your thesis in one sentence, at the top or at the end, and label it.'],
     ['Thesis', 'The thesis has no stakes.', 'Give your thesis stakes: say why a reader should care about your claim.'],
-    ['Thesis', 'The thesis is about what happens, not how the text uses language.', 'Aim your thesis at how the text uses language, not just at what happens.'],
+    ['Thesis', 'Thesis is about plot, rather than subtext, style, or language.', 'Aim your thesis at subtext, style or language, not at plot.'],
     ['Topic sentences', 'This topic sentence summarizes the plot.', 'Make each topic sentence a claim that needs defending, not a summary of what happens.'],
     ['Topic sentences', 'The topic sentence doesn\u2019t match what the paragraph argues.', 'Check that each paragraph proves exactly what its topic sentence claims.'],
     ['Topic sentences', 'The topic sentences don\u2019t connect back to the thesis.', 'Let each topic sentence advance one part of your thesis.'],
@@ -7139,70 +7158,99 @@
     ['Style', 'Repetition and filler.', 'Cut repetition and filler: make every sentence do new work.'],
     ['Style', 'Sentences or paragraphs are hard to follow.', 'Make each sentence clear and compelling, and give each paragraph one idea.'],
     ['Mechanics', 'Quotations aren\u2019t cited.', 'Cite every quotation (book and line) in the same form throughout.'],
+    ['Mechanics', 'Spelling errors.', 'Check your spelling, especially names and words from the text.'],
+    ['Mechanics', 'Grammar errors.', 'Watch your grammar: subject\u2013verb agreement, run-ons and fragments.'],
     ['Mechanics', 'Proofreading.', 'Read your paper aloud once before you hand it in.'],
     ['Mechanics', 'The prompt\u2019s formatting isn\u2019t followed.', 'Follow the prompt\u2019s formatting: heading, title, font, margins and length.'],
     ['Mechanics', 'No Works Cited page.', 'Include a Works Cited page and cite in MLA style.']
-  ];
-  var STOCK_HEAD = 'On the Next Paper';
+  ]);
+  var STOCK_HEAD = 'On the Next Essay', STOCK_KINDS = [['good', 'Keep Up the Good Work'], ['', 'Room for Improvement']];
   function stockKey() { return 'luddite.stock.' + (me && me.email || ''); }
   function stockList() {
     var t = load(stockKey());
     if (t) { try { var l = JSON.parse(t); if (Array.isArray(l) && l.length) return l; } catch (e) {} }
     return STOCK_DEFAULT;
   }
-  // The end comment split at its On the Next Paper section.
+  function stockKind(it) { return it[3] === 'good' ? 'good' : ''; }
+  // The end comment split at its On the Next Essay section (once called On
+  // the Next Paper): the goals under each heading.
   function stockSplit(text) {
     text = String(text || '');
-    var m = /(^|\n)On the Next Paper:?[ \t]*\n/.exec(text);
+    var m = /(^|\n)On the Next (?:Essay|Paper):?[ \t]*\n/.exec(text);
     if (!m) return { before: text, goals: [] };
-    var goals = text.slice(m.index + m[0].length).split('\n').map(function (l) { return l.replace(/^\s*[\u2022\-*]\s*/, '').trim(); }).filter(Boolean);
+    var kind = '', goals = [];
+    text.slice(m.index + m[0].length).split('\n').forEach(function (l) {
+      l = l.trim();
+      if (!l) return;
+      var head = STOCK_KINDS.filter(function (k) { return l.replace(/:$/, '') === k[1]; })[0];
+      if (head) { kind = head[0]; return; }
+      goals.push({ kind: kind, text: l.replace(/^[•\-*]\s*/, '') });
+    });
     return { before: text.slice(0, m.index), goals: goals };
   }
   function drawStock() {
     var box = $('stockList');
     if (!box) return;
     box.innerHTML = '';
-    var goals = stockSplit(piece && piece.endComment).goals, cat = null;
-    stockList().forEach(function (it) {
-      if (it[0] !== cat) { cat = it[0]; box.appendChild(el('div', 'stockcat', cat)); }
-      var on = goals.indexOf(it[2]) !== -1;
-      var row = el('label', 'stockitem' + (on ? ' on' : ''));
-      var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
-      cb.addEventListener('change', function () { setStockGoal(it[2], cb.checked); });
-      var tx = el('span');
-      tx.appendChild(document.createTextNode(it[1]));
-      tx.appendChild(el('span', 'nx', '\u2192 ' + it[2]));
-      row.appendChild(cb); row.appendChild(tx);
-      box.appendChild(row);
+    var goals = stockSplit(piece && piece.endComment).goals.map(function (g) { return g.text; }), list = stockList();
+    STOCK_KINDS.forEach(function (k) {
+      var items = list.filter(function (it) { return stockKind(it) === k[0]; }), cat = null;
+      if (!items.length) return;
+      box.appendChild(el('div', 'stockkind', k[1]));
+      items.forEach(function (it) {
+        if (it[0] !== cat) { cat = it[0]; box.appendChild(el('div', 'stockcat', cat)); }
+        var on = goals.indexOf(it[2]) !== -1;
+        var row = el('label', 'stockitem' + (on ? ' on' : ''));
+        var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
+        cb.addEventListener('change', function () { setStockGoal(it[2], k[0], cb.checked); });
+        var tx = el('span');
+        tx.appendChild(document.createTextNode(it[1]));
+        tx.appendChild(el('span', 'nx', '→ ' + it[2]));
+        row.appendChild(cb); row.appendChild(tx);
+        box.appendChild(row);
+      });
     });
   }
-  function setStockGoal(goal, on) {
-    var sp = stockSplit(piece.endComment), goals = sp.goals.filter(function (g) { return g !== goal; });
-    if (on) goals.push(goal);
-    var before = sp.before.replace(/\s+$/, '');
-    piece.endComment = goals.length ? (before ? before + '\n\n' : '') + STOCK_HEAD + '\n' + goals.map(function (g) { return '\u2022 ' + g; }).join('\n') : before;
+  function setStockGoal(goal, kind, on) {
+    var sp = stockSplit(piece.endComment), goals = sp.goals.filter(function (g) { return g.text !== goal; });
+    if (on) goals.push({ kind: kind, text: goal });
+    var before = sp.before.replace(/\s+$/, ''), parts = [];
+    STOCK_KINDS.forEach(function (k) {
+      var mine = goals.filter(function (g) { return g.kind === k[0]; });
+      if (mine.length) parts.push(k[1] + '\n' + mine.map(function (g) { return '• ' + g.text; }).join('\n'));
+    });
+    piece.endComment = parts.length ? (before ? before + '\n\n' : '') + STOCK_HEAD + '\n\n' + parts.join('\n\n') : before;
     $('endComment').value = piece.endComment;
     $('endPrint').textContent = piece.endComment;
     drawStock();
     queueSave();
   }
-  // Editing the list as plain text: a line per category ("# Thesis"), then
-  // a line per comment, "comment => goal for the next paper".
+  // Editing the list as plain text: "## Keep Up the Good Work" and "## Room
+  // for Improvement" start the two kinds, "# Thesis" a category, then a line
+  // per comment, "comment => goal for the next essay".
   $('stockEdit').addEventListener('click', async function () {
-    var cat = null, lines = [];
-    stockList().forEach(function (it) { if (it[0] !== cat) { cat = it[0]; lines.push((lines.length ? '\n' : '') + '# ' + cat); } lines.push(it[1] + ' => ' + it[2]); });
-    var t = await ask({ title: 'Stock comments', text: 'A line \u201c# Category\u201d starts a category; each comment is \u201cthe comment => the goal for the next paper.\u201d Saved on this computer. Empty it to get Luddite\u2019s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    var lines = [], list = stockList();
+    STOCK_KINDS.forEach(function (k) {
+      var cat = null;
+      lines.push((lines.length ? '\n' : '') + '## ' + k[1]);
+      list.filter(function (it) { return stockKind(it) === k[0]; }).forEach(function (it) {
+        if (it[0] !== cat) { cat = it[0]; lines.push('\n# ' + cat); }
+        lines.push(it[1] + ' => ' + it[2]);
+      });
+    });
+    var t = await ask({ title: 'Stock comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each comment is “the comment => the goal for the next essay.” Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
     if (t === null) return;
-    var list = [], c = 'Comments';
+    var out = [], c = 'Comments', kind = '';
     t.split('\n').forEach(function (l) {
       l = l.trim();
       if (!l) return;
+      if (/^##/.test(l)) { kind = /good/i.test(l) ? 'good' : ''; return; }
       if (l.charAt(0) === '#') { c = l.replace(/^#+\s*/, '') || 'Comments'; return; }
       var parts = l.split('=>');
       var say = parts[0].trim(), next = (parts.slice(1).join('=>').trim() || say);
-      list.push([c, say, next]);
+      out.push(kind ? [c, say, next, kind] : [c, say, next]);
     });
-    store(stockKey(), list.length ? JSON.stringify(list) : null);
+    store(stockKey(), out.length ? JSON.stringify(out) : null);
     drawStock();
   });
 
