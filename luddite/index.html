@@ -683,7 +683,12 @@
   .roomprompt .rptext p { margin: 0 0 8px; white-space: pre-wrap; }
   .roomprompt .rptext p:last-child { margin-bottom: 0; }
   .roomprompt.cut .rptext { max-height: 7.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
-  .roomprompt .btn { margin-top: 10px; }
+  .roomprompt .rpfoot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 10px; }
+  .roomprompt .rpfoot:not(:has(> :not([hidden]))) { display: none; }
+  .roomprompt .rprubric { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 14px; }
+  .roomprompt [hidden] { display: none !important; }
+  /* A session's page keeps End session and More at the top right, however long the prompt. */
+  #roomScreen .head { align-items: flex-start; }
   .readyprompt { text-align: left; background: var(--sun-tint); border-radius: 12px; padding: 12px 16px; margin: 0 0 18px; white-space: pre-wrap; font-size: 16px; }
   .readyprompt b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .switchrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 12px; margin-top: 8px; background: var(--card); }
@@ -1356,7 +1361,7 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div><p id="roomClass" hidden></p><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><div class="roomprompt" id="roomPromptLine" hidden><b>Prompt</b><div class="rptext" id="roomPromptText"></div><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button></div><p class="stamp" id="roomRubricLine" hidden></p></div>
+      <div><p id="roomClass" hidden></p><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText"></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -5444,10 +5449,13 @@
     var rl = $('roomRubricLine');
     rl.innerHTML = '';
     if (room.rubric) {
-      rl.appendChild(document.createTextNode('Rubric: ' + room.rubric.name + (room.rubricShown ? ' · Students can see it while they write ' : ' · Hidden from students ')));
-      rl.appendChild(button('Open', 'btn small ghost', function () { openRubricView(room.rubric, room.code); }));
+      rl.appendChild(button('Rubric: ' + room.rubric.name, 'btn small ghost', function () { openRubricView(room.rubric, room.code); }));
+      rl.appendChild(el('span', null, room.rubricShown ? 'Students can see it while they write' : 'Hidden from students'));
     }
     rl.hidden = !room.rubric;
+    // The rubric sits in the prompt's card (which shows for either).
+    $('roomPromptLine').hidden = !room.prompt && !room.rubric;
+    $('roomPromptK').hidden = $('roomPromptText').hidden = !room.prompt;
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End session' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
