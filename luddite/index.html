@@ -189,6 +189,8 @@
   .sibmenu > summary.iconbtn { width: 34px; height: 34px; border: 0; font-size: 22px; list-style: none; }
   .sibmenu > summary::-webkit-details-marker { display: none; }
   .sibmenu > summary.iconbtn:hover { background: var(--hover); }
+  #gradePick .pop { left: 0; right: auto; min-width: 320px; max-width: min(460px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; }
+  #gradePick .pop button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #sibMenu .pop { left: 0; right: auto; min-width: 320px; max-width: min(460px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; }
   #sibMenu .pop button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sibmenu .pop button { display: flex; align-items: center; gap: 8px; }
@@ -724,6 +726,11 @@
   .menu .pop button.danger:hover { background: var(--tomato-tint); }
   /* The prompt stays pinned above the writing, however far they scroll. */
   #promptBar { flex: none; max-height: 34vh; overflow-y: auto; display: flex; gap: 14px; align-items: flex-start; padding: 12px 18px; background: var(--sun-tint); color: var(--ink); border-bottom: 1.5px solid var(--edge); }
+  /* A prompt longer than the bar says so, pinned at the bar's foot, until it's read to the end. */
+  #promptBar .pmore { position: sticky; bottom: 0; display: block; margin: 8px auto 0; padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer;
+    font: 600 14px var(--ui); color: var(--card); background: var(--ink); box-shadow: 0 -14px 14px var(--sun-tint); width: auto; height: auto; }
+  #promptBar .pmore:hover { background: var(--ink); opacity: .9; }
+  #promptBar .pmore[hidden] { display: none; }
   #promptBar .ptext { flex: 1; font: 400 17px/1.5 var(--ui); white-space: pre-wrap; max-width: 760px; margin: 0 auto; }
   #promptBar .pk { font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 2px; }
   #promptBar button { flex: none; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); width: 30px; height: 30px; border-radius: 50%; font: 400 18px/1 var(--ui); cursor: pointer; }
@@ -1279,6 +1286,7 @@
 <!-- A student reflecting on a paper they handed in: full screen and locked like writing -->
 <section class="screen page" id="reflectScreen" hidden>
   <div class="card reflectcard">
+    <div class="readyprompt" id="rfWritingPrompt" hidden><b>The prompt</b><span id="rfWritingPromptText"></span></div>
     <div id="rfPaper"></div>
     <div class="reflectbox">
       <h3>Your reflection</h3>
@@ -1302,7 +1310,7 @@
 <!-- Writing -->
 <section id="writeScreen" hidden>
   <div id="promptBar" hidden>
-    <div class="ptext"><span class="pk">Prompt</span><span id="promptText"></span></div>
+    <div class="ptext"><span class="pk">Prompt</span><span id="promptText"></span><button type="button" class="pmore" id="promptMore" hidden>&darr; More of the prompt below: scroll to read it all</button></div>
     <button type="button" id="promptClose" aria-label="Close the prompt" title="Close the prompt">&times;</button>
   </div>
   <button type="button" class="promptshow" id="promptShow" hidden>Show the prompt</button>
@@ -1711,6 +1719,7 @@
     </div>
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
+      <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
       <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous paper</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next paper &rsaquo;</button></span>
       <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
@@ -2623,6 +2632,15 @@
     show('reflectScreen');
     $('rfText').value = d.reflection.text || '';
     drawReflect(d);
+    // The prompt they wrote to, above their paper (from their place in the session).
+    $('rfWritingPrompt').hidden = true;
+    api('/luddite/assignment?code=' + encodeURIComponent(code) + '&as=student').then(function (a) {
+      var p = a.room && a.room.prompt;
+      if (!p || !reflecting || reflecting.code !== code) return;
+      $('rfWritingPromptText').textContent = '';
+      fmtInto($('rfWritingPromptText'), p);
+      $('rfWritingPrompt').hidden = false;
+    }).catch(function () {});
     clearInterval(rfBeat);
     rfBeat = setInterval(function () { if (reflecting && !reflecting.locked) rfSave(); }, 20000);
     if (d.lockedOut) rfLock(false); else { api('/luddite/reflect', { code: code, type: 'open' }).catch(function () {}); $('rfText').focus(); }
@@ -3305,7 +3323,16 @@
     fmtInto($('promptText'), text);
     $('promptBar').hidden = !text || closed;
     $('promptShow').hidden = !text || !closed;
+    promptMoreCue();
   }
+  // Does the prompt run past the bar? Then say so until they've scrolled to its end.
+  function promptMoreCue() {
+    var b = $('promptBar');
+    $('promptMore').hidden = b.hidden || b.scrollTop + b.clientHeight >= b.scrollHeight - 4;
+  }
+  $('promptBar').addEventListener('scroll', promptMoreCue);
+  window.addEventListener('resize', promptMoreCue);
+  $('promptMore').addEventListener('click', function () { $('promptBar').scrollBy({ top: $('promptBar').clientHeight * 0.8, behavior: 'smooth' }); pad.focus(); });
   $('promptClose').addEventListener('click', function () { store(promptKey(), '1'); drawPrompt(); pad.focus(); });
   $('promptShow').addEventListener('click', function () { store(promptKey(), null); drawPrompt(); pad.focus(); });
 
@@ -7109,6 +7136,7 @@
     piece.marks = piece.marks || [];
     resetUndo();
     showPieceHead();
+    drawGradePick();
     $('endComment').value = piece.endComment || '';
     $('endPrint').textContent = piece.endComment || '';
     // The student's reflection on it, if they've written one.
@@ -7126,6 +7154,34 @@
     window.scrollTo(0, 0);
   }
   // The paper's heading: whose it is (or an alias, with names hidden) and which writing session.
+  // The grading page's session picker: every writing session with papers,
+  // to grade first, then graded; picking one opens its first paper to grade.
+  async function drawGradePick() {
+    var pick = $('gradePick');
+    pick.open = false;
+    if (reading || !piece) { pick.hidden = true; return; }
+    if (!lastSessions.length) { try { lastSessions = (await api('/luddite/assignments')).assignments || []; } catch (e) {} }
+    var here = lastSessions.filter(function (r) { return r.code === piece.code; })[0];
+    var name = function (r) { return r.title + (r.classId ? ' \u00b7 ' + classNameOf(r.classId) : ''); };
+    $('gradePickLabel').textContent = (here ? name(here) : piece.roomTitle) + ' \u25be';
+    var list = $('gradePickList');
+    list.innerHTML = '';
+    var withPapers = lastSessions.filter(function (r) { return r.submissions; });
+    pick.hidden = withPapers.length < 2;
+    var recent = function (a, b) { return (b.endedAt || b.endAt || b.startAt || 0) - (a.endedAt || a.endAt || a.startAt || 0); };
+    [['To grade', withPapers.filter(function (r) { return r.submissions > (r.graded || 0); })], ['Graded', withPapers.filter(function (r) { return r.submissions <= (r.graded || 0); }).sort(recent).slice(0, 10)]].forEach(function (g) {
+      if (!g[1].length) return;
+      list.appendChild(el('div', 'popsec', g[0]));
+      g[1].forEach(function (r) {
+        var b = el('button', r.code === piece.code ? 'here' : null);
+        b.type = 'button';
+        if (r.classId) { var d = classDot(r.classId); if (d.nodeType === 1) b.appendChild(d); }
+        b.appendChild(document.createTextNode(name(r) + (r.submissions > (r.graded || 0) ? ' \u00b7 ' + (r.submissions - (r.graded || 0)) + ' to grade' : '')));
+        b.addEventListener('click', function () { pick.open = false; if (r.code !== piece.code) { flushMarks(); gradeSession(r.code); } });
+        list.appendChild(b);
+      });
+    });
+  }
   function showPieceHead() {
     $('markWho').textContent = who(piece.name, piece.email);
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
