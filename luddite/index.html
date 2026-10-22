@@ -993,6 +993,13 @@
      student or one class sit on a cool slate desk under a dark bar with a
      big Home button, so it's always clear you're away from Home. */
   .workbar { display: none; }
+  /* With Home's toggle at the top, no dark bar and no Back buttons: the lit tab goes back. */
+  body.nobar .workbar { display: none !important; }
+  body.work.nobar .topright button { background: var(--card); color: var(--ink); border-color: var(--edge); }
+  body.work.nobar .topright button:hover { background: var(--hover); }
+  body.work.nobar .screen.page { padding-top: 24px; }
+  body.nobar #printBack, body.nobar #studentBack, body.nobar #classBack, body:not(.reading) #markBack { display: none !important; }
+  body.reading .hometabs { display: none; }
   body.work { background: #DCE3E8; }
   /* A class's page is told apart from a session's by its desk: pink, not slate. */
   body.work.classpage { background: #F2DFE4; }
@@ -1529,6 +1536,11 @@
 <!-- Teacher: one class -->
 <section class="screen page" id="classScreen" hidden>
   <div class="card">
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+    </div>
     <p style="margin:0 0 10px"><button class="btn small ghost" id="classBack">&larr; Home</button></p>
     <div class="head">
       <div><h2 id="className"></h2><p class="stamp" id="classCountLine"></p></div>
@@ -1558,6 +1570,11 @@
 <!-- Teacher: every paper of a session, or of one student, together, to print -->
 <section class="screen page" id="printScreen" hidden>
   <div class="card">
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+    </div>
     <div class="markbar">
       <button class="linkish" id="printBack">&larr; Back</button>
       <span class="grow"></span>
@@ -1587,9 +1604,14 @@
 <!-- Teacher: marking up one handed-in piece -->
 <section class="screen page" id="markScreen" hidden>
   <div class="card">
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+    </div>
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
-      <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next &rsaquo;</button></span>
+      <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous paper</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next paper &rsaquo;</button></span>
       <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
@@ -1625,6 +1647,11 @@
 <!-- Teacher: one student's year -->
 <section class="screen page" id="studentScreen" hidden>
   <div class="card">
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+    </div>
     <div class="markbar">
       <button class="linkish" id="studentBack">&larr; Home</button>
       <span class="grow"></span>
@@ -2223,8 +2250,9 @@
     document.body.classList.toggle('work', !!where);
     document.body.classList.toggle('classpage', !!where && id === 'classScreen');
     if (id !== 'dashScreen') document.body.classList.remove('studentstab');
-    // A session's page has Home's toggle; the bar's Home button is for the other pages.
-    $('workHome').hidden = id === 'roomScreen';
+    // Teacher pages have Home's toggle instead of the dark bar (a proctor's page keeps the bar).
+    var tabbed = !!where && ['roomScreen', 'markScreen', 'studentScreen', 'classScreen', 'printScreen'].indexOf(id) !== -1;
+    document.body.classList.toggle('nobar', tabbed);
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
     $('comingBox').hidden = true;
@@ -4623,6 +4651,13 @@
   each('.hometabs button', function (b) {
     b.addEventListener('click', function () {
       var t = b.dataset.tab;
+      if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
+      // The lit tab on a page within it steps back to where that page was opened from.
+      if (b.classList.contains('on')) {
+        if (!$('markScreen').hidden && markBackTo) { markBackTo(); return; }
+        if (!$('printScreen').hidden && printBackTo) { printBackTo(); return; }
+        if (!$('studentScreen').hidden && studentBackTo) { studentBackTo(); return; }
+      }
       if (t === 'monitor') { openMonitor(); return; }
       if ($('dashScreen').hidden) showDash();
       setHomeTab(t);
@@ -5057,6 +5092,7 @@
   var openedClass = null;
   async function openClass(id) {
     setAnonCtx(null);
+    markTabs('students');
     show('classScreen');
     $('className').textContent = '';
     $('classRoster').innerHTML = '';
@@ -7768,6 +7804,7 @@
   var studentShown = '', studentPieceIds = [], studentShownIds = [], studentReturned = {};
   async function openStudent(email, back) {
     setAnonCtx(null);
+    markTabs('students');
     studentShown = email;
     studentBackTo = back || null;
     show('studentScreen');
