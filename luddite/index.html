@@ -889,6 +889,10 @@
   }
   .casualcheck { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink); font-size: 15px; }
   #classesBox { margin-top: 4px; }
+  .cgrade { font: 600 14px var(--ui); color: var(--muted); margin-left: 10px; letter-spacing: 0; text-transform: none; }
+  .gradeseg { align-items: center; }
+  .gradeseg .gradeother { width: 140px; margin-left: 4px; }
+  .gradeseg .gradeother[hidden] { display: none; }
   .classcard .classcaret { margin-left: auto; border: 0; width: 38px; height: 38px; font-size: 24px; }
   .classcard .classcaret:hover { background: var(--hover); }
   .classcard .classroster { flex-basis: 100%; border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 2px; cursor: default; }
@@ -1526,6 +1530,8 @@
             <input class="field wide" id="newClassName" maxlength="80" placeholder="D period English" autocomplete="off">
             <label class="lbl" style="margin-top:14px">Period <span class="q" tabindex="0" data-tip="Its writing sessions start at this period by default.">?</span></label>
             <div class="segctl periodseg" id="newClassPeriod"></div>
+            <label class="lbl" style="margin-top:14px">Grade</label>
+            <div class="segctl gradeseg" id="newClassGrade"></div>
             <label class="lbl" for="newClassEmails" style="margin-top:14px">Email Addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
             <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
             <div class="row" style="justify-content:flex-start; margin-top:8px">
@@ -1644,6 +1650,9 @@
     </div>
     <div class="switchrow"><span class="nm">Period <span class="q" tabindex="0" data-tip="This class's writing sessions start at this period by default.">?</span></span>
       <div class="segctl periodseg" id="classPeriodSeg"></div>
+    </div>
+    <div class="switchrow"><span class="nm">Grade</span>
+      <div class="segctl gradeseg" id="classGradeSeg"></div>
     </div>
     <div class="switchrow"><span class="nm">Color <span class="q" tabindex="0" data-tip="A small dot in this color marks the class wherever it’s named: on Home’s writing sessions, when you pick classes, and on a session’s page.">?</span></span>
       <div class="swatches" id="classColorSeg"></div>
@@ -5247,6 +5256,35 @@
     var m = String(name).match(/\b([A-H])\s*[- ]?\s*period\b|\bperiod\s*([A-H])\b|\(([A-H])\)/i);
     return m ? (m[1] || m[2] || m[3]).toUpperCase() : '';
   }
+  // A class's grade level: 9, 10, 11, 12, or Other with a box to say what.
+  var GRADES = ['9', '10', '11', '12'];
+  function gradeLabel(g) { g = String(g || '').trim(); return !g ? '' : /^\d+$/.test(g) ? 'Grade ' + g : g; }
+  function gradeSeg(host, value, onPick) {
+    host.innerHTML = '';
+    value = String(value || '');
+    var other = !!value && GRADES.indexOf(value) === -1;
+    var box = el('input', 'field gradeother');
+    box.placeholder = 'Say which';
+    box.maxLength = 24;
+    box.value = other ? value : '';
+    box.hidden = !other;
+    var mark = function (b) { each('#' + host.id + ' button', function (x) { x.classList.toggle('on', x === b); }); };
+    GRADES.concat('Other').forEach(function (g) {
+      var b = el('button', (g === value || (g === 'Other' && other)) ? 'on' : null, g);
+      b.type = 'button';
+      b.addEventListener('click', function () {
+        mark(b);
+        box.hidden = g !== 'Other';
+        if (g === 'Other') { box.focus(); if (box.value.trim()) onPick(box.value.trim()); }
+        else onPick(g);
+      });
+      host.appendChild(b);
+    });
+    box.addEventListener('change', function () { onPick(box.value.trim()); });
+    host.appendChild(box);
+  }
+  var newClassGrade = '';
+  gradeSeg($('newClassGrade'), '', function (g) { newClassGrade = g; });
   var newClassPeriod = '', newClassPeriodSet = false;
   periodSeg($('newClassPeriod'), '', function (l) { newClassPeriod = l; newClassPeriodSet = true; });
   $('newClassName').addEventListener('input', function () {
@@ -5293,6 +5331,7 @@
       h.appendChild(classDot(c.id));
       h.appendChild(document.createTextNode(c.name));
       info.appendChild(h);
+      if (gradeLabel(c.grade)) h.appendChild(el('span', 'cgrade', gradeLabel(c.grade)));
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students') + (c.period ? ' \u00b7 ' + c.period + ' period' : '')));
       card.appendChild(info);
       // ▾ shows the class's students right here, without opening the class.
@@ -5406,7 +5445,9 @@
     var found = $('newClassFound');
     if (!name) { found.className = 'fine warn'; found.textContent = 'Give the class a name first.'; $('newClassName').focus(); return; }
     try {
-      var data = await api('/luddite/classes', { name: name, emails: emails, period: newClassPeriod });
+      var data = await api('/luddite/classes', { name: name, emails: emails, period: newClassPeriod, grade: newClassGrade });
+      newClassGrade = '';
+      gradeSeg($('newClassGrade'), '', function (g) { newClassGrade = g; });
       $('newClassName').value = ''; $('newClassEmails').value = ''; found.textContent = '';
       newClassPeriod = ''; newClassPeriodSet = false;
       periodSeg($('newClassPeriod'), '', function (l) { newClassPeriod = l; newClassPeriodSet = true; });
@@ -5434,6 +5475,11 @@
     if (!openedClass) return;
     $('className').textContent = openedClass.name;
     $('classCountLine').textContent = plural(openedClass.emails.length, 'student', 'students') + ' on the list';
+    gradeSeg($('classGradeSeg'), openedClass.grade || '', function (g) {
+      classAction('gradeLevel', { grade: g }).then(function () { var c = classById(openedClass.id); if (c) c.grade = g; drawClasses(); });
+    });
+    var cg = gradeLabel(openedClass.grade);
+    if (cg) $('className').appendChild(el('span', 'cgrade', cg));
     periodSeg($('classPeriodSeg'), openedClass.period || '', function (l) {
       classAction('period', { period: l }).then(function () { var c = classById(openedClass.id); if (c) c.period = l; });
     });
@@ -6089,7 +6135,7 @@
       rc.title = 'Open the class';
       rc.appendChild(classDot(room.classId));
       var per = classPeriod(cls);
-      rc.appendChild(el('span', null, per && !/period/i.test(cn) ? per + ' period' + (cn ? ' · ' + cn : '') : cn));
+      rc.appendChild(el('span', null, (per && !/period/i.test(cn) ? per + ' period' + (cn ? ' · ' + cn : '') : cn) + (cls && gradeLabel(cls.grade) ? ' · ' + gradeLabel(cls.grade) : '')));
     }
     var chip = $('roomStamp');
     chip.textContent = stateLabel(state, room);

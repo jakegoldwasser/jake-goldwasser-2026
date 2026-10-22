@@ -571,7 +571,9 @@ async function getClass(id, me, role) {
   return state;
 }
 
-const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt, period: c.period || '', color: c.color == null ? null : c.color });
+const classSummary = (c) => ({ id: c.id, name: c.name, count: c.emails.length, createdAt: c.createdAt, period: c.period || '', grade: c.grade || '', color: c.color == null ? null : c.color });
+// A class's grade level: 9, 10, 11, 12, or what the teacher typed for Other.
+const cleanGradeLevel = (g) => String(g == null ? '' : g).replace(/\s+/g, ' ').trim().slice(0, 24);
 // A class's color: which of the page's class colors (0-7) marks it; null = picked for it by the page.
 const cleanColor = (x) => (Number.isInteger(x) && x >= 0 && x < 8 ? x : null);
 // The class's period letter (A-H), which its writing sessions start at by default.
@@ -1307,7 +1309,7 @@ async function routeLuddite(event, method, path, info) {
     if (emails.length > MAX_CLASS_EMAILS) throw new HttpError(413, 'too_many_emails');
     const id = randomBytes(6).toString('hex');
     const teacher = { ...me, name: await displayNameOf(info, role) };
-    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period), color: cleanColor(body.color) }));
+    const made = await mutate('luddite:class:' + id, () => ({ id, name, teacher, emails, assignments: [], createdAt: Date.now(), period: cleanPeriod(body.period), grade: cleanGradeLevel(body.grade), color: cleanColor(body.color) }));
     // A new class goes at the end of the list (see classIdsOf).
     await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), classes: [...classIdsOf(t), id], classesOrdered: true }));
     await indexClass(id, emails, []);
@@ -1319,7 +1321,7 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { class: await getClass(q.id, me, role) });
   }
 
-  // PUT /luddite/class { id, action: rename | period | color | add | remove | delete, name, period, color, emails }
+  // PUT /luddite/class { id, action: rename | period | gradeLevel | color | add | remove | delete, name, period, grade, color, emails }
   if (path === '/luddite/class' && method === 'PUT') {
     const cls = await getClass(body.id, me, role);
     const emails = cleanEmails(body.emails);
@@ -1332,6 +1334,7 @@ async function routeLuddite(event, method, path, info) {
         return { ...c, name };
       }
       if (body.action === 'period') return { ...c, period: cleanPeriod(body.period) };
+      if (body.action === 'gradeLevel') return { ...c, grade: cleanGradeLevel(body.grade) };
       if (body.action === 'color') return { ...c, color: cleanColor(body.color) };
       if (body.action === 'add') {
         added = emails.filter((e) => !c.emails.includes(e));
