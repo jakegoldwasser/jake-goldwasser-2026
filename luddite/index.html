@@ -140,7 +140,6 @@
   .rcard .state { font-weight: 600; }
   .rcard .state.on { color: var(--ok); }
   .rcard .badge { background: var(--lock); color: #fff; border-radius: 999px; padding: 3px 12px; font-weight: 600; font-size: 14px; }
-  .rcard .del { margin-left: auto; }
   /* Picking a time: the Horace Mann day as a row of period buttons. */
   .picker { margin-top: 10px; }
   .picker .when { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -798,8 +797,6 @@
   .panel.tint-sun { background: var(--sun-tint); border-color: var(--sun); }
   .panel.tint-mint { background: var(--mint-tint); border-color: var(--mint); }
   /* Delete on a session card is a bare X: it's on every card, so a worded button was noise. */
-  .rcard .del { width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 400 22px/1 var(--ui); cursor: pointer; padding: 0; }
-  .rcard .del:hover, .rcard .del:focus-visible { background: var(--tomato-tint); color: var(--tomato-deep); }
   .panel .grouphead .pasthide { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
   .classesbtn { margin-top: 14px; }
   /* ---- A writing session's page: one "what's next" band, then color-coded panels
@@ -847,6 +844,20 @@
   }
   .casualcheck { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink); font-size: 15px; }
   #classesBox { margin-top: 4px; }
+  /* Home's toggle: three big halves of one pill, the chosen one filled. */
+  .hometabs { display: flex; gap: 4px; padding: 4px; margin: 4px 0 20px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); }
+  .hometabs button { flex: 1; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: 600 17px/1.2 var(--ui); padding: 11px 8px; cursor: pointer; }
+  .hometabs button:hover:not(.on) { background: var(--hover); }
+  .hometabs button.on { background: var(--ink); color: var(--card); }
+  .hometab[hidden] { display: none; }
+  .panel.tint-rose { background: #F7E6EA; border-color: #D9A9B5; }
+  /* A writing session's card on Home: one per name; each class's square opens its session. */
+  .rcard .squares { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .rcard .sqbtn { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 6px; line-height: 0; }
+  .rcard .sqbtn .cdot { width: 34px; height: 34px; font-size: 18px; border-radius: 6px; margin: 0; vertical-align: 0; }
+  .rcard .sqbtn .cdot.noper { width: 34px; height: 34px; }
+  .rcard .sqbtn .cdot.none { background: var(--rule); color: var(--ink); text-shadow: none; }
+  .rcard .sqbtn:hover .cdot, .rcard .sqbtn:focus-visible .cdot { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--ink); }
   #classesBox #newClassToggle { margin-top: 10px; }
   #classesBox #newClassBox { border-top: 0; padding: 12px 0 4px; }
 
@@ -1258,7 +1269,7 @@
   <div class="card dash">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions you proctor: as the testing center, every student on an alternative schedule; otherwise the sessions a teacher added you to. You let students in, unlock them, and begin or pause their time. You never see what they write.">?</span></h3><button class="btn small" type="button" data-comingup>Coming up</button></div>
+      <div class="panelhead"><h3 class="sect">To proctor</h3><button class="btn small" type="button" data-comingup>Coming up</button></div>
       <div id="proctorList"></div>
     </section>
     <div class="row" style="justify-content:center; margin-top:18px"><button class="btn small ghost" id="proctorWriteBtn" type="button">Type an Entry Phrase to write</button></div>
@@ -1293,15 +1304,24 @@
       <h2 class="wordmark">Luddite</h2>
     </div>
 
+    <!-- Home is three tabs; this toggle picks one (remembered on the device, luddite.homeTab) -->
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="classes">Classes</button>
+    </div>
+
+    <div class="hometab" data-tab="sessions">
+
     <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
     <section class="panel tint-sky" id="forYouBox" hidden>
-      <div class="panelhead"><h3 class="sect">For you to write <span class="q" tabindex="0" data-tip="Writing sessions another teacher has given to a class you are on. Enter one to write in it like a student.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">For you to write</h3></div>
       <div id="forYouList"></div>
     </section>
 
     <!-- Writing sessions this teacher proctors (another teacher added them) -->
     <section class="panel tint-mint" id="proctorBox" hidden>
-      <div class="panelhead"><h3 class="sect">To proctor <span class="q" tabindex="0" data-tip="Writing sessions another teacher added you to as a proctor. You let students in, unlock them, and begin or pause their time, without seeing what they write.">?</span></h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
+      <div class="panelhead"><h3 class="sect">To proctor</h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
       <div id="proctorDashList"></div>
     </section>
 
@@ -1351,21 +1371,24 @@
     </section>
 
     <section class="panel tint-sun">
-      <div class="panelhead"><h3 class="sect">Writing sessions <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. Deleting a session only takes it off this list; work handed in stays under Students.">?</span></h3></div>
       <div id="roomList"></div>
     </section>
+    </div>
 
+    <div class="hometab" data-tab="students">
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3></div>
       <div class="row" style="justify-content:flex-start; margin-bottom:6px">
         <select class="field" id="studentClass" aria-label="Show students from" hidden></select>
         <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
       </div>
       <div id="studentList"></div>
       <button class="btn small ghost" id="studentAll" type="button" hidden></button>
-      <!-- Classes live here, folded away: they're set up once a term, so they don't need a panel of their own. -->
-      <button class="btn small ghost classesbtn" id="classesToggle" type="button" aria-expanded="false">Add or edit classes</button>
-      <div id="classesBox" hidden>
+    </section>
+    </div>
+
+    <div class="hometab" data-tab="classes">
+    <section class="panel tint-rose">
+      <div id="classesBox">
         <div id="classList"></div>
         <button class="btn small ghost" id="newClassToggle" type="button">+ New class</button>
         <div id="newClassBox" hidden>
@@ -1385,6 +1408,7 @@
         </div>
       </div>
     </section>
+    </div>
 
   </div>
 </section>
@@ -1435,12 +1459,12 @@
 
       <!-- Everyone in the session, once each: their paper's grading and their writing on one row. -->
       <section class="panel tint-mint" id="secPeople" style="order:3">
-        <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Click a student who can still write to read their writing so far and send a live comment. The padlock: open and green, they can write; shut and red, they can’t (handed in, locked out after leaving the page, paused, or the session is over). On the right, where their paper is: In progress, Grade!, Graded, or Grading shared (they can see your comments, and the grade after five minutes reading them). Click it to open the grading; you can change comments and the grade any time. Anyone who needs you is at the top, with a button.">?</span></h3><button class="btn small ghost" id="unlockAllBtn" type="button" hidden>Unlock all</button></div>
+        <div class="panelhead"><h3 class="sect">Students</h3><button class="btn small ghost" id="unlockAllBtn" type="button" hidden>Unlock all</button></div>
         <div id="peopleList"></div>
       </section>
 
       <section class="panel" id="secOwn" style="order:3" hidden>
-        <div class="panelhead"><h3 class="sect">Alternative schedule <span class="q" tabindex="0" data-tip="Students with a different start or extra time. Ending the session doesn’t end theirs: it closes ten minutes after their time ends, when you end it (End their session) or a proctor hands it in, or when they hand it in.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Alternative schedule</h3></div>
         <div id="ownList"></div>
       </section>
 
@@ -1450,7 +1474,7 @@
       </section>
 
       <section class="panel" id="proctorsSection" style="order:5" hidden>
-        <div class="panelhead"><h3 class="sect">Proctors <span class="q" tabindex="0" data-tip="Proctors can let students in, unlock anyone locked out, and begin or pause the session or one student's time. They never see what anyone writes. The testing center proctors every student on an alternative schedule on its own.">?</span></h3></div>
+        <div class="panelhead"><h3 class="sect">Proctors</h3></div>
         <div id="proctorsList"></div>
       </section>
 
@@ -4431,8 +4455,7 @@
       });
       var h = el('h4', 'grouphead ' + g[0]);
       h.appendChild(el('span', 'dot'));
-      h.appendChild(document.createTextNode(g[1] + ' '));
-      h.appendChild(tipEl(g[2]));
+      h.appendChild(document.createTextNode(g[1]));
       box.appendChild(h);
       if (g[0] === 'ended' && items.length) {
         var hide = el('button', 'linkish pasthide', hidePast ? 'Show' : 'Hide');
@@ -4447,10 +4470,17 @@
         if (hidePast) return;
       }
       if (!items.length) box.appendChild(el('p', 'groupempty', g[3]));
-      var shown = g[0] === 'ended' && !showAllPast ? items.slice(0, PAST_ON_HOME) : items;
-      shown.forEach(function (r) { box.appendChild(sessionCard(r)); });
-      if (g[0] === 'ended' && items.length > PAST_ON_HOME) {
-        var more = el('button', 'btn small ghost pastmore', showAllPast ? 'Show fewer' : 'Show all ' + items.length + ' past sessions');
+      // One card per name: the same writing session given to several classes.
+      var bundles = [], byTitle = {};
+      items.forEach(function (r) {
+        var k = String(r.title || '').trim().toLowerCase();
+        if (!byTitle[k]) { byTitle[k] = []; bundles.push(byTitle[k]); }
+        byTitle[k].push(r);
+      });
+      var shown = g[0] === 'ended' && !showAllPast ? bundles.slice(0, PAST_ON_HOME) : bundles;
+      shown.forEach(function (rs) { box.appendChild(sessionCard(rs)); });
+      if (g[0] === 'ended' && bundles.length > PAST_ON_HOME) {
+        var more = el('button', 'btn small ghost pastmore', showAllPast ? 'Show fewer' : 'Show all ' + bundles.length + ' past sessions');
         more.type = 'button';
         more.addEventListener('click', function () { showAllPast = !showAllPast; drawSessions(lastSessions); });
         box.appendChild(more);
@@ -4458,59 +4488,57 @@
     });
   }
 
-  function sessionCard(r) {
-    var card = el('div', 'rcard click ' + r.state);
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
+  // A card on Home: one writing session's name, and a square for each class
+  // it was given to (the class's color and period letter), which opens that
+  // class's session; no dates (they're on the session's page). A card for a
+  // single session opens it anywhere you click. Deleting is in the session's
+  // Session options.
+  function sessionCard(rs) {
+    var r0 = rs[0], one = rs.length === 1;
+    var card = el('div', 'rcard ' + r0.state + (one ? ' click' : ''));
     var top = el('div', 'top');
     var ttl = el('div', 'ttl');
-    ttl.appendChild(el('h4', null, r.title));
-    // Which class is taking (or took) it.
-    var forWhom = r.classId ? classNameOf(r.classId) : !r.casual && r.invited ? plural(r.invited, 'invited student', 'invited students') : '';
-    var sl = el('div', 'stampline');
-    if (forWhom) {
-      var fc = el('span', 'forclass');
-      if (r.classId) fc.appendChild(classDot(r.classId));
-      fc.appendChild(document.createTextNode(forWhom));
-      sl.appendChild(fc);
-      sl.appendChild(document.createTextNode(' \u00b7 '));
-    }
-    sl.appendChild(document.createTextNode(whenRange(r) + (r.atHome ? ' \u00b7 At home' : '')));
-    ttl.appendChild(sl);
+    ttl.appendChild(el('h4', null, r0.title));
+    var sq = el('div', 'squares');
+    rs.slice().sort(function (a, b) {
+      var pa = classPeriod(classById(a.classId)) || '~', pb = classPeriod(classById(b.classId)) || '~';
+      return pa.localeCompare(pb) || String(classNameOf(a.classId) || '').localeCompare(String(classNameOf(b.classId) || ''));
+    }).forEach(function (r) {
+      var name = r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : r.invited ? plural(r.invited, 'invited student', 'invited students') : 'No class';
+      var b = el('button', 'sqbtn');
+      b.type = 'button';
+      b.title = name;
+      b.setAttribute('aria-label', 'Open ' + r0.title + ': ' + name);
+      var d = r.classId ? classDot(r.classId) : null;
+      if (!d || d.nodeType !== 1) d = el('span', 'cdot none', '\u2022');
+      d.removeAttribute('aria-hidden');
+      b.appendChild(d);
+      b.addEventListener('click', function () { openRoom(r.code); });
+      sq.appendChild(b);
+    });
+    ttl.appendChild(sq);
     top.appendChild(ttl);
     card.appendChild(top);
+    // Only what needs doing, or how the grading stands.
     var facts = el('div', 'facts');
-    // Home keeps it short: the details are on the session's own page. Only
-    // students waiting to be let in, which needs doing, show here.
-    if (r.state === 'running' && nextSitting(r)) facts.appendChild(el('span', 'pill', 'Between days · next ' + whenLabel(nextSitting(r))));
-    if (r.waiting) facts.appendChild(el('span', 'badge', r.waiting + (r.waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
-    // A past session says whether its papers are graded yet: a paper counts
-    // once it has a grade or has been handed back.
-    if (r.state === 'ended' && typeof r.graded === 'number') {
-      if (!r.submissions) facts.appendChild(el('span', 'pill', 'Nothing handed in'));
-      else if (r.graded >= r.submissions) facts.appendChild(el('span', 'pill good', 'Graded'));
-      else facts.appendChild(el('span', 'pill own', r.graded ? r.graded + ' of ' + r.submissions + ' graded' : 'Not graded'));
+    var between = rs.filter(function (r) { return r.state === 'running' && nextSitting(r); })[0];
+    if (between) facts.appendChild(el('span', 'pill', 'Between days · next ' + whenLabel(nextSitting(between))));
+    var waiting = rs.reduce(function (n, r) { return n + (r.waiting || 0); }, 0);
+    if (waiting) facts.appendChild(el('span', 'badge', waiting + (waiting === 1 ? ' student is' : ' students are') + ' waiting to be let in'));
+    if (r0.state === 'ended' && rs.every(function (r) { return typeof r.graded === 'number'; })) {
+      var subs = rs.reduce(function (n, r) { return n + (r.submissions || 0); }, 0), graded = rs.reduce(function (n, r) { return n + Math.min(r.graded, r.submissions || 0); }, 0);
+      if (!subs) facts.appendChild(el('span', 'pill', 'Nothing handed in'));
+      else if (graded >= subs) facts.appendChild(el('span', 'pill good', 'Graded'));
+      else facts.appendChild(el('span', 'pill own', graded ? graded + ' of ' + subs + ' graded' : 'Not graded'));
     }
-    var del = el('button', 'del', '\u00d7');
-    del.type = 'button';
-    del.setAttribute('aria-label', 'Delete ' + r.title);
-    del.title = 'Delete';
-    del.addEventListener('click', function () { deleteRoom(r); });
-    facts.appendChild(del);
-    card.appendChild(facts);
-    // The whole card opens the writing session; Delete inside it only deletes.
-    card.addEventListener('click', function (e) { if (!e.target.closest('button, a')) openRoom(r.code); });
-    card.addEventListener('keydown', function (e) { if (e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRoom(r.code); } });
+    if (facts.children.length) card.appendChild(facts);
+    if (one) {
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      card.addEventListener('click', function (e) { if (!e.target.closest('button, a')) openRoom(r0.code); });
+      card.addEventListener('keydown', function (e) { if (e.target === card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openRoom(r0.code); } });
+    }
     return card;
-  }
-
-  async function deleteRoom(r) {
-    if (!await ask({ title: 'Delete “' + r.title + '”?', text: 'It comes off your list and nobody can join it. Work already handed in stays under Students (and in your Drive).', ok: 'Delete', danger: true })) return;
-    try {
-      await api('/luddite/assignment', { code: r.code, action: 'delete' });
-      lastDrawn = '';
-      await loadRooms();
-    } catch (e) { tell('Couldn’t delete that', 'Try again.'); }
   }
 
   // ---- Starting a writing session ----
@@ -4528,13 +4556,17 @@
     if (open) $('newClassName').focus();
   }
   $('newClassToggle').addEventListener('click', function () { setClassFormOpen($('newClassBox').hidden); });
-  function setClassesOpen(open) {
-    $('classesBox').hidden = !open;
-    $('classesToggle').setAttribute('aria-expanded', String(open));
-    $('classesToggle').textContent = open ? 'Done with classes' : 'Add or edit classes';
-    if (open && !classes.length) setClassFormOpen(true);
+  // ---- Home's three tabs: Writing sessions, Students, Classes ----
+  var homeTab = load('luddite.homeTab') || 'sessions';
+  function setHomeTab(t) {
+    homeTab = t;
+    store('luddite.homeTab', t === 'sessions' ? null : t);
+    each('.hometabs button', function (b) { var on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
+    if (t === 'classes' && !classes.length) setClassFormOpen(true);
   }
-  $('classesToggle').addEventListener('click', function () { setClassesOpen($('classesBox').hidden); });
+  each('.hometabs button', function (b) { b.addEventListener('click', function () { setHomeTab(b.dataset.tab); }); });
+  setHomeTab(homeTab);
   // The classes picked for a new writing session (one session each), or a list typed in.
   var pickedClasses = [], pickedList = false;
   function classById(id) { for (var i = 0; i < classes.length; i++) if (classes[i].id === id) return classes[i]; return null; }
@@ -5402,7 +5434,7 @@
     try {
       var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
       note.className = 'fine good';
-      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Students.';
+      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Classes.';
       lastDrawn = '';
       loadRooms();
     } catch (e) { note.className = 'fine warn'; note.textContent = 'Couldn’t make it. Try again.'; }
