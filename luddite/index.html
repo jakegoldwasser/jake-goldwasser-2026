@@ -842,8 +842,9 @@
   .nextstep { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; padding: 14px 18px; border-radius: 16px; border: 1.5px solid; }
   .nextstep p { flex: 1; min-width: 200px; margin: 0; font: 400 20px/1.3 var(--display); }
   /* Grading still to do is yellow, never the green that reads as done. */
-  .btn.tograde, .btn.tograde:hover:not(:disabled) { background: var(--sun); border-color: var(--sun-deep); color: var(--on-sun); }
-  .btn.tograde:hover:not(:disabled) { background: #D6AE45; }
+  /* Grading's buttons are the pink of the Grade! bubble, everywhere. */
+  .btn.tograde, .btn.tograde:hover:not(:disabled) { background: #F8D9E4; border-color: #E59AB6; color: #8E2A55; }
+  .btn.tograde:hover:not(:disabled) { background: #F2C6D6; }
   .nextstep.todo { background: var(--sun-tint); border-color: var(--sun); }
   .nextstep.ready { background: var(--card); border-color: var(--mint); }
   .nextstep.done { background: var(--mint-tint); border-color: var(--mint); }
@@ -4893,7 +4894,8 @@
       w.appendChild(el('span', null, (r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class') + ' \u00b7 ' + label));
       it.appendChild(w);
       var go = function () { gradeSession(r.code); };
-      it.appendChild(button(btn, 'btn small' + (btn === 'Grade' ? '' : ' ghost'), go));
+      // The same bubbles as a student's row on a session's page: pink Grade!, yellow Graded.
+      it.appendChild(button(btn, 'statusbub ' + (btn === 'Grade!' ? STATUS.grade[1] : STATUS.graded[1]), go));
       it.addEventListener('click', function (e) { if (!e.target.closest('button')) go(); });
       it.addEventListener('keydown', function (e) { if (e.target === it && e.key === 'Enter') go(); });
       return it;
@@ -4902,9 +4904,9 @@
     var todo = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions > r.graded; }).sort(recent);
     var done = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions && r.graded >= r.submissions; }).sort(recent).slice(0, 8);
     if (!todo.length) $('gradeTodo').appendChild(el('div', 'empty', 'Nothing to grade.'));
-    todo.forEach(function (r) { var n = r.submissions - r.graded; $('gradeTodo').appendChild(row(r, plural(n, 'paper', 'papers') + ' to grade', 'Grade')); });
+    todo.forEach(function (r) { var n = r.submissions - r.graded; $('gradeTodo').appendChild(row(r, plural(n, 'paper', 'papers') + ' to grade', 'Grade!')); });
     if (!done.length) $('gradeDone').appendChild(el('div', 'empty', 'Nothing graded yet.'));
-    done.forEach(function (r) { $('gradeDone').appendChild(row(r, 'all ' + plural(r.submissions, 'paper', 'papers') + ' graded', 'Open')); });
+    done.forEach(function (r) { $('gradeDone').appendChild(row(r, 'all ' + plural(r.submissions, 'paper', 'papers') + ' graded', 'Graded')); });
   }
   async function gradeSession(code) {
     var room;
