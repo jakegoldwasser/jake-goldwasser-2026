@@ -187,7 +187,8 @@
   .sibmenu > summary.iconbtn { width: 34px; height: 34px; border: 0; font-size: 22px; list-style: none; }
   .sibmenu > summary::-webkit-details-marker { display: none; }
   .sibmenu > summary.iconbtn:hover { background: var(--hover); }
-  .sibmenu .pop { left: 0; right: auto; }
+  #sibMenu .pop { left: 0; right: auto; min-width: 320px; max-width: min(460px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; }
+  #sibMenu .pop button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sibmenu .pop button { display: flex; align-items: center; gap: 8px; }
   .sibmenu .pop button.here { font-weight: 600; cursor: default; }
   .roomhead .chiprow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 4px; }
@@ -721,17 +722,20 @@
   .promptshow:hover { background: var(--hover); }
   /* A session's page: the prompt in a card, its paragraphs evenly spaced,
      a long one cut to a few lines until opened. */
-  .roomprompt { max-width: 64ch; margin: 14px 0 4px; padding: 12px 16px 14px; background: var(--card); border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--rule); color: var(--ink); }
+  .roomprompt { margin: 10px 0 4px; padding: 12px 16px 14px; background: var(--card); border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--rule); color: var(--ink); }
   .roomprompt > b { display: block; margin-bottom: 4px; }
   .roomprompt .rptext { font-size: 16px; line-height: 1.5; }
   .roomprompt .rptext p { margin: 0 0 8px; white-space: pre-wrap; }
   .roomprompt .rptext p:last-child { margin-bottom: 0; }
-  .roomprompt.cut .rptext { max-height: 7.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+  .roomprompt { position: relative; }
+  .roomprompt .rpmin { position: absolute; top: 10px; right: 10px; }
+  .roomprompt > b, .roomprompt .rptext { margin-right: 40px; }
+  .roomprompt.cut .rptext { max-height: 3em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
   .roomprompt .rptext { cursor: text; border-radius: 6px; }
   .roomprompt .rptext:hover { background: var(--hover); box-shadow: 0 0 0 6px var(--hover); }
   .roomprompt .rpedit .promptfield { min-height: 120px; height: auto; max-height: 60vh; resize: vertical; }
   .roomprompt .rpedit .row { justify-content: flex-end; margin-top: 8px; }
-  .roomprompt.editing .rptext, .roomprompt.editing .rpfoot { display: none; }
+  .roomprompt.editing .rptext, .roomprompt.editing .rpfoot, .roomprompt.editing .rpmin { display: none; }
   .roomprompt .rpfoot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 10px; }
   .roomprompt .rpfoot:not(:has(> :not([hidden]))) { display: none; }
   .roomprompt .rprubric { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 14px; }
@@ -1328,11 +1332,12 @@
       <h2 class="wordmark">Luddite</h2>
     </div>
 
-    <!-- Home is three tabs; this toggle picks one (remembered on the device, luddite.homeTab) -->
+    <!-- Home's toggle: Writing sessions and Students are Home's two tabs (remembered on the device,
+         luddite.homeTab); Monitor opens the session last opened. The same toggle tops a session's page. -->
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="classes">Classes</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
     </div>
 
     <div class="hometab" data-tab="sessions">
@@ -1410,7 +1415,7 @@
     </section>
     </div>
 
-    <div class="hometab" data-tab="classes">
+    <div class="hometab" data-tab="students">
     <section class="panel tint-rose">
       <div id="classesBox">
         <div id="classList"></div>
@@ -1441,8 +1446,14 @@
 <section class="screen page" id="roomScreen" hidden>
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+    </div>
+
     <div class="head">
-      <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><details class="menu sibmenu" id="sibMenu" hidden><summary class="iconbtn" aria-label="The same writing session for another class" title="Another class">&#9662;</summary><div class="pop" id="sibList"></div></details><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText" title="Click to edit the prompt"></div><div class="rpedit" id="roomPromptEdit" hidden><div class="field promptfield rich" id="roomPromptField" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The prompt" spellcheck="true" data-placeholder="What should they write about?"></div><div class="row"><button type="button" class="btn small ghost" id="roomPromptCancel">Cancel</button><button type="button" class="btn small" id="roomPromptSave">Save</button></div></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
+      <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><details class="menu sibmenu" id="sibMenu" hidden><summary class="iconbtn" aria-label="Switch to another writing session" title="Switch to another writing session">&#9662;</summary><div class="pop" id="sibList"></div></details><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -1471,6 +1482,7 @@
         </details>
       </div>
     </div>
+    <div class="roomprompt" id="roomPromptLine" hidden><button type="button" class="iconbtn rpmin" id="roomPromptMore" hidden aria-label="Minimize the prompt" title="Minimize the prompt">&ndash;</button><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText" title="Click to edit the prompt"></div><div class="rpedit" id="roomPromptEdit" hidden><div class="field promptfield rich" id="roomPromptField" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The prompt" spellcheck="true" data-placeholder="What should they write about?"></div><div class="row"><button type="button" class="btn small ghost" id="roomPromptCancel">Cancel</button><button type="button" class="btn small" id="roomPromptSave">Save</button></div></div><div class="rpfoot"><span class="rprubric" id="roomRubricLine" hidden></span></div></div>
 
     <!-- What to do next, in one line and one button: grade, hand back, or nothing left to do. -->
     <div class="nextstep" id="nextStep" hidden><p id="nextStepText"></p><button class="btn" id="nextStepBtn" type="button"></button></div>
@@ -2208,6 +2220,8 @@
     var where = isTeacher && !previewing && !reading && WORK_PAGES[id];
     document.body.classList.toggle('work', !!where);
     document.body.classList.toggle('classpage', !!where && id === 'classScreen');
+    // A session's page has Home's toggle; the bar's Home button is for the other pages.
+    $('workHome').hidden = id === 'roomScreen';
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
     $('comingBox').hidden = true;
@@ -3691,6 +3705,7 @@
     previewing = false;
     mode = 'room';
     setAnonCtx(null);
+    markTabs(homeTab);
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
@@ -4581,15 +4596,33 @@
   }
   $('newClassToggle').addEventListener('click', function () { setClassFormOpen($('newClassBox').hidden); });
   // ---- Home's three tabs: Writing sessions, Students, Classes ----
-  var homeTab = load('luddite.homeTab') || 'sessions';
+  var homeTab = load('luddite.homeTab') === 'students' ? 'students' : 'sessions';
+  function markTabs(t) {
+    each('.hometabs button', function (b) { var on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+  }
   function setHomeTab(t) {
     homeTab = t;
     store('luddite.homeTab', t === 'sessions' ? null : t);
-    each('.hometabs button', function (b) { var on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    markTabs(t);
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
-    if (t === 'classes' && !classes.length) setClassFormOpen(true);
   }
-  each('.hometabs button', function (b) { b.addEventListener('click', function () { setHomeTab(b.dataset.tab); }); });
+  // Monitor: the writing session last opened on this device, else one
+  // happening now, else the latest.
+  async function openMonitor() {
+    if (!lastSessions.length) { try { lastSessions = (await api('/luddite/assignments')).assignments || []; } catch (e) {} }
+    var last = load('luddite.lastRoom'), pick = lastSessions.filter(function (r) { return r.code === last; })[0];
+    if (!pick) pick = lastSessions.filter(function (r) { return r.state === 'running'; })[0] || lastSessions.slice().sort(function (a, b) { return (b.startAt || 0) - (a.startAt || 0); })[0];
+    if (pick) openRoom(pick.code);
+    else { showDash(); setHomeTab('sessions'); tell('Nothing to monitor yet', 'Start a writing session first.'); }
+  }
+  each('.hometabs button', function (b) {
+    b.addEventListener('click', function () {
+      var t = b.dataset.tab;
+      if (t === 'monitor') { openMonitor(); return; }
+      if ($('dashScreen').hidden) showDash();
+      setHomeTab(t);
+    });
+  });
   setHomeTab(homeTab);
   // The classes picked for a new writing session (one session each), or a list typed in.
   var pickedClasses = [], pickedList = false;
@@ -5467,11 +5500,13 @@
   function openRoom(code) {
     previewing = false;
     setAnonCtx(code);
+    store('luddite.lastRoom', code);
+    markTabs('monitor');
     teacherRoom = { code: code };
     teacherRoster = null;
     $('roomTitle').textContent = '';
     $('roomClass').hidden = true;
-    roomPromptOpen = false; roomPromptShown = null;
+    roomPromptMin = null; roomPromptShown = null;
     promptEditing = false; $('roomPromptLine').classList.remove('editing'); $('roomPromptEdit').hidden = true;
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
@@ -5559,7 +5594,7 @@
 
   // The prompt on a session's page: one paragraph per run of lines (blank
   // lines between are just the gap), cut to a few lines until opened.
-  var roomPromptOpen = false, roomPromptShown = null;
+  var roomPromptMin = null, roomPromptShown = null;
   function drawRoomPrompt(text) {
     if (promptEditing) return;
     $('roomPromptLine').hidden = !text;
@@ -5570,9 +5605,10 @@
     text.split(/\n[ \t]*\n\s*/).forEach(function (para) { if (para.trim()) box.appendChild(fmtInto(el('p'), para.replace(/^\s+|\s+$/g, ''))); });
     $('roomPromptLine').classList.remove('cut');
     var long = box.scrollHeight ? box.scrollHeight > parseFloat(getComputedStyle(box).lineHeight) * 6 : text.length > 360 || text.split('\n').length > 6;
-    $('roomPromptMore').hidden = !long;
-    $('roomPromptLine').classList.toggle('cut', long && !roomPromptOpen);
-    $('roomPromptMore').textContent = roomPromptOpen ? 'Show less' : 'Show the whole prompt';
+    // – minimizes it to its first lines, + brings it back; a long one starts minimized.
+    if (roomPromptMin === null) roomPromptMin = long;
+    $('roomPromptMore').hidden = !text;
+    syncPromptMin();
   }
   // A click on the prompt edits it right there (the same rich field as
   // Edit the prompt): Save, or Cancel / Esc; Cmd/Ctrl+Enter saves.
@@ -5608,37 +5644,56 @@
     if (e.key === 'Escape') { e.preventDefault(); stopEditingPrompt(); }
     else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('roomPromptSave').click(); }
   });
+  function syncPromptMin() {
+    var b = $('roomPromptMore');
+    $('roomPromptLine').classList.toggle('cut', !!roomPromptMin);
+    b.textContent = roomPromptMin ? '+' : '\u2013';
+    b.title = roomPromptMin ? 'Show the whole prompt' : 'Minimize the prompt';
+    b.setAttribute('aria-label', b.title);
+  }
   $('roomPromptMore').addEventListener('click', function () {
-    roomPromptOpen = !roomPromptOpen;
-    $('roomPromptLine').classList.toggle('cut', !roomPromptOpen);
-    this.textContent = roomPromptOpen ? 'Show less' : 'Show the whole prompt';
+    roomPromptMin = !roomPromptMin;
+    syncPromptMin();
   });
 
-  // The ▾ beside a session's name: the same writing session (same name) for
-  // each of the teacher's other classes, from Home's list (fetched if Home
-  // hasn't been drawn yet).
+  // The ▾ beside a session's name: a dropdown to switch to another writing
+  // session: first this one for the teacher's other classes, then the rest,
+  // Happening now, Coming up and the latest Past (from Home's list, fetched
+  // if Home hasn't been drawn yet).
+  var PICK_PAST = 8;
   function drawSiblings(room) {
-    var key = String(room.title || '').trim().toLowerCase();
-    var sibs = lastSessions.filter(function (r) { return String(r.title || '').trim().toLowerCase() === key; });
     if (!lastSessions.length && !drawSiblings.asked) {
       drawSiblings.asked = true;
       api('/luddite/assignments').then(function (d) { lastSessions = d.assignments || []; if (teacherRoom && teacherRoom.code === room.code) drawSiblings(room); }).catch(function () {});
     }
+    var key = String(room.title || '').trim().toLowerCase();
+    var same = function (r) { return String(r.title || '').trim().toLowerCase() === key; };
+    var byPeriod = function (a, b) { return (classPeriod(classById(a.classId)) || '~').localeCompare(classPeriod(classById(b.classId)) || '~'); };
     var menu = $('sibMenu'), list = $('sibList');
-    menu.hidden = !sibs.some(function (r) { return r.code !== room.code; });
     menu.open = false;
     list.innerHTML = '';
+    menu.hidden = lastSessions.filter(function (r) { return r.code !== room.code; }).length === 0;
     if (menu.hidden) return;
-    sibs.slice().sort(function (a, b) {
-      return (classPeriod(classById(a.classId)) || '~').localeCompare(classPeriod(classById(b.classId)) || '~');
-    }).forEach(function (r) {
+    var item = function (r, withTitle) {
       var b = el('button', r.code === room.code ? 'here' : null);
       b.type = 'button';
       var d = r.classId ? classDot(r.classId) : null;
       if (d && d.nodeType === 1) b.appendChild(d);
-      b.appendChild(document.createTextNode((r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class') + (r.code === room.code ? ' (this one)' : '')));
+      var cn = r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class';
+      b.appendChild(document.createTextNode(withTitle ? r.title + ' \u00b7 ' + cn : cn + (r.code === room.code ? ' (this one)' : '')));
       b.addEventListener('click', function () { menu.open = false; if (r.code !== room.code) openRoom(r.code); });
       list.appendChild(b);
+    };
+    var sibs = lastSessions.filter(same);
+    if (sibs.length > 1) { list.appendChild(el('div', 'popsec', 'This session')); sibs.slice().sort(byPeriod).forEach(function (r) { item(r, false); }); }
+    [['running', 'Happening now'], ['upcoming', 'Coming up'], ['ended', 'Past']].forEach(function (g) {
+      var rs = lastSessions.filter(function (r) { return r.state === g[0] && !same(r); });
+      if (g[0] === 'upcoming') rs.sort(function (a, b) { return a.startAt - b.startAt; });
+      else rs.sort(function (a, b) { return (b.endedAt || b.startAt || 0) - (a.endedAt || a.startAt || 0); });
+      if (g[0] === 'ended') rs = rs.slice(0, PICK_PAST);
+      if (!rs.length) return;
+      list.appendChild(el('div', 'popsec', g[1]));
+      rs.forEach(function (r) { item(r, true); });
     });
   }
 
