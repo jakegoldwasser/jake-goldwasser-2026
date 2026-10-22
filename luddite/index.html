@@ -1043,6 +1043,15 @@
   .rfviewnav .grow { flex: 1; }
   .rfviewnav .pos { font: 600 13px var(--ui); color: var(--muted); font-variant-numeric: tabular-nums; }
   .rfviewtext { white-space: pre-wrap; font: 17px/1.7 Literata, Georgia, serif; max-height: 60vh; overflow-y: auto; margin-top: 10px; }
+  .orphans { grid-column: 1 / -1; margin-top: 16px; border-top: 1px dashed var(--rule); padding-top: 10px; color: var(--pen); }
+  .orphans > b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .orphans .orphan { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--rule); }
+  .orphans .oq { font-style: italic; opacity: .8; flex: 0 1 40%; }
+  .orphans .on { flex: 1; }
+  .orphans .odel { width: 28px; height: 28px; border: 0; font-size: 18px; color: var(--muted); }
+  .mnote .fold { float: right; border: 0; background: none; color: inherit; font: 600 15px var(--ui); cursor: pointer; padding: 0 2px; margin-left: 6px; }
+  .mnote.min { color: transparent; height: 1.4em; overflow: hidden; }
+  .mnote.min .n, .mnote.min .fold { color: var(--pen); }
   .reflectread { grid-column: 1 / -1; margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
   .reflectread > b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .reflectread .rtext { white-space: pre-wrap; font: 16px/1.65 Literata, Georgia, serif; }
@@ -1730,6 +1739,7 @@
       </div>
       <div class="paper" id="paper" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       <div class="margin" id="margin"></div>
+      <div class="orphans" id="orphanBox" hidden><b>Comments on Deleted Words</b><div id="orphanList"></div></div>
       <!-- Arrows (right-drag between two points in the text) are drawn over the sheet by drawArrows() -->
       <div class="endwrap">
         <label for="endComment">End comment</label>
@@ -6673,8 +6683,6 @@
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
-    // Writing again over a paper: their new writing can be graded too (the bubble opens the paper).
-    if (f.canWrite && s && s.sub && x && x.stored) item('Grade their writing so far', function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, ['early:' + room.code + ':' + s.sub]); });
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
     if (s) item('Remove from this session', async function () {
       if (await ask({ title: 'Take ' + p.name + ' Out of This Writing Session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
@@ -7269,7 +7277,7 @@
   function showPieceHead() {
     $('markWho').textContent = who(piece.name, piece.email);
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
-      ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' : '');
+      ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = !!piece.early;
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
@@ -7340,13 +7348,16 @@
 
   // Everything that gets a numbered note in the margin: comments and arrows,
   // numbered together in the order they come in the text.
+  // Marks with a place in the text (an orphan, on words the student has since
+  // deleted, is listed under Comments on Deleted Words instead; see drawOrphans).
+  function liveMarks() { return piece.marks.filter(function (m) { return !m.orphan; }); }
   function marginMarks() {
-    return piece.marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    return liveMarks().filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
   }
   var noteNumbers = {};
 
   function drawPiece() {
-    var text = piece.text, marks = piece.marks;
+    var text = piece.text, marks = liveMarks();
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
     marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
     var sc = fmtCuts(text, cuts);
@@ -7397,11 +7408,50 @@
       note.appendChild(el('span', 'n', String(numbers[m.id])));
       if (m.type === 'arrow') note.appendChild(el('span', 'arw', '\u2197'));
       note.appendChild(document.createTextNode(m.note || (m.type === 'arrow' ? 'Arrow' : '')));
+      // A student reading can fold a comment to its number (on this device only; it's still there).
+      if (reading) {
+        var mins = minNotes();
+        if (mins[m.id]) note.classList.add('min');
+        var fold = el('button', 'fold', mins[m.id] ? '+' : '\u2013');
+        fold.type = 'button';
+        fold.title = mins[m.id] ? 'Show this comment' : 'Minimize this comment';
+        fold.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var all = minNotes();
+          if (all[m.id]) delete all[m.id]; else all[m.id] = 1;
+          store('luddite.minNotes.' + piece.id, Object.keys(all).length ? JSON.stringify(all) : null);
+          drawPiece();
+        });
+        note.insertBefore(fold, note.firstChild);
+      }
       margin.appendChild(note);
     });
     layoutNotes();
+    drawOrphans();
+  }
+  // Comments on Deleted Words: a comment (or insertion, or arrow) whose words
+  // the student has since deleted, with the words it was on. Only the
+  // teacher deletes one (\u00d7).
+  function drawOrphans() {
+    var list = piece.marks.filter(function (m) { return m.orphan; }), box = $('orphanList');
+    $('orphanBox').hidden = !list.length;
+    box.innerHTML = '';
+    list.forEach(function (m) {
+      var row = el('div', 'orphan');
+      row.appendChild(el('span', 'oq', (m.type === 'insert' ? 'Written in near: ' : m.type === 'arrow' ? 'Arrow between: ' : 'On: ') + '\u201c' + m.orphan + '\u201d'));
+      row.appendChild(el('span', 'on', m.note || (m.type === 'arrow' ? 'Arrow' : '')));
+      if (!reading) {
+        var del = el('button', 'iconbtn odel', '\u00d7');
+        del.type = 'button';
+        del.title = 'Delete this comment';
+        del.addEventListener('click', function () { deleteMark(m); });
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+    });
   }
 
+  function minNotes() { try { return JSON.parse(load('luddite.minNotes.' + (piece && piece.id)) || '{}') || {}; } catch (e) { return {}; } }
   // Each margin note sits level with the first line of the words it's
   // about, pushed down only as far as it takes not to overlap the one above.
   function layoutNotes() {
@@ -7498,7 +7548,7 @@
     each('#sheet > .arrowsvg:not(.draftsvg)', function (n) { n.parentNode.removeChild(n); });
     if (!piece) return;
     var box = sheetBox();
-    piece.marks.forEach(function (m) {
+    liveMarks().forEach(function (m) {
       if (m.type !== 'arrow') return;
       var g = arrowGeometry(m, box);
       if (!g) return;
@@ -7696,7 +7746,7 @@
     return { start: a, end: b };
   }
   function insertAt(p) {
-    for (var i = 0; i < piece.marks.length; i++) if (piece.marks[i].type === 'insert' && piece.marks[i].start === p) return piece.marks[i];
+    for (var i = 0; i < piece.marks.length; i++) if (piece.marks[i].type === 'insert' && !piece.marks[i].orphan && piece.marks[i].start === p) return piece.marks[i];
     return null;
   }
   function newMark(m) {
@@ -8295,7 +8345,7 @@
     var p = piece;
     try {
       if (p.early) await api('/luddite/early', { code: p.code, sub: p.sub, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
-      else await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
+      else await api('/luddite/marks', { id: p.id, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
       if (p === piece) $('markSaved').textContent = 'Saved';
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
@@ -8469,7 +8519,7 @@
     head.appendChild(el('span', null, (p.roomTitle || '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
     box.appendChild(head);
     if (p.grade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
-    var text = p.text, marks = p.marks || [];
+    var text = p.text, orphans = (p.marks || []).filter(function (m) { return m.orphan; }), marks = (p.marks || []).filter(function (m) { return !m.orphan; });
     var allNotes = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
     var margins = allNotes.filter(function (m) { return m.type === 'margin'; });
     var num = {};
@@ -8510,6 +8560,12 @@
         notes.appendChild(el('p', null, '[' + num[m.id] + '] “' + (q.length > 80 ? q.slice(0, 77) + '…' : q) + '” — ' + m.note));
       });
       box.appendChild(notes);
+    }
+    if (orphans.length) {
+      var on = el('div', 'pnotes');
+      on.appendChild(el('p', null, 'Comments on Deleted Words'));
+      orphans.forEach(function (m) { on.appendChild(el('p', null, '\u201c' + m.orphan + '\u201d \u2014 ' + (m.note || 'Arrow'))); });
+      box.appendChild(on);
     }
     if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
     return box;

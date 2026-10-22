@@ -804,12 +804,16 @@ function cleanMarks(list, length) {
     let start = clamp(m.start);
     let end = type === 'insert' ? start : Math.max(start, clamp(m.end));
     if (type === 'arrow') { const a = clamp(m.start), b = clamp(m.end); start = Math.min(a, b); end = Math.max(a, b); }
-    if (type !== 'insert' && end === start) throw new HttpError(400, 'bad_marks');
+    // (an orphan, on words since deleted, has no place in the text)
+    const orphan = type !== 'strike' && m.orphan ? String(m.orphan).slice(0, 300) : '';
+    if (orphan) { start = 0; end = 0; }
+    if (type !== 'insert' && end === start && !orphan) throw new HttpError(400, 'bad_marks');
     const note = String(m.note || '').slice(0, 2000);
     if (type === 'insert' && !note.trim()) throw new HttpError(400, 'bad_marks');
     chars += note.length;
     const mark = { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
     if (type === 'arrow') mark.head = m.head === 'start' ? 'start' : 'end';
+    if (orphan) mark.orphan = orphan;
     // An insert's look, letter by letter: ' ' plain, 'b' bold, 'i' italic, 'x' both.
     if (type === 'insert') {
       const f = String(m.fmt || '').replace(/[^bix ]/g, ' ').slice(0, note.length);
@@ -821,12 +825,18 @@ function cleanMarks(list, length) {
   return out;
 }
 
-// Grading a draft: the teacher's marks on a student's writing so far are
-// kept with the text they were made on (luddite:early:<code>:<sub> { base,
-// marks, endComment, grade, rubric, rubricScores, at, usedAt }). On the newer
-// text (opened again, or handed in) each mark is moved by finding the words
-// it was on, the nearest match to where it was; a mark whose words are gone is
-// dropped. An insertion or an arrow's end follows the words just before it.
+// One document per student per writing session (Jake, 2026-10-22): the
+// teacher's comments are never deleted except by the teacher. When the
+// student's text changes (writing again, handing in again), each mark moves
+// to where its words now are, the nearest match to where it was (an
+// insertion or an arrow's end follows the words just before it). A comment,
+// insertion or arrow whose words are gone goes to the paper's Comments on
+// Deleted Words (`orphan`: the words it was on; no place in the text,
+// start = end = 0) until the teacher deletes it. Only a cross-out of words
+// that are gone goes: there's nothing left for it to cross out.
+// Marks made on a student's writing before their first hand-in are kept with
+// that text (luddite:early:<code>:<sub> { base, marks, endComment, grade,
+// rubric, rubricScores, at, usedAt }) and land on the paper when it's made.
 function findNear(text, needle, want) {
   if (!needle) return -1;
   let best = -1, i = text.indexOf(needle);
@@ -844,24 +854,40 @@ function pointIn(base, text, at) {
     const after = base.slice(at, at + n);
     if (after.trim()) { const i = findNear(text, after, want); if (i !== -1) return i; }
   }
-  return at === 0 ? 0 : at >= base.length ? text.length : -1;
+  return at === 0 ? 0 : -1;
 }
+const quoteOf = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 300);
 function reanchorMarks(marks, base, text) {
-  if (base === text) return marks;
+  if (base === text) return marks || [];
+  const scale = (at) => (base.length ? Math.round(at * text.length / base.length) : 0);
+  const orphan = (m, words) => ({ ...m, start: 0, end: 0, orphan: quoteOf(words) || '(gone)' });
   const out = [];
   for (const m of marks || []) {
-    if (m.type === 'insert') { const p = pointIn(base, text, m.start); if (p !== -1) out.push({ ...m, start: p, end: p }); continue; }
+    if (m.orphan) { out.push(m); continue; }
+    if (m.type === 'insert') {
+      const p = pointIn(base, text, m.start);
+      out.push(p === -1 ? orphan(m, base.slice(Math.max(0, m.start - 40), m.start + 40)) : { ...m, start: p, end: p });
+      continue;
+    }
     if (m.type === 'arrow') {
       const a = pointIn(base, text, m.start), b = pointIn(base, text, m.end);
-      if (a !== -1 && b !== -1 && a !== b) out.push({ ...m, start: Math.min(a, b), end: Math.max(a, b), head: a < b ? m.head : (m.head === 'start' ? 'end' : 'start') });
+      if (a === -1 || b === -1 || a === b) { out.push(orphan(m, base.slice(m.start, Math.min(m.end, m.start + 300)))); continue; }
+      out.push({ ...m, start: Math.min(a, b), end: Math.max(a, b), head: a <= b ? m.head : (m.head === 'start' ? 'end' : 'start') });
       continue;
     }
     const q = base.slice(m.start, m.end);
-    const want = base.length ? Math.round(m.start * text.length / base.length) : 0;
-    const i = q.trim() ? findNear(text, q, want) : -1;
-    if (i !== -1) out.push({ ...m, start: i, end: i + q.length });
+    const i = q.trim() ? findNear(text, q, scale(m.start)) : -1;
+    if (i !== -1) { out.push({ ...m, start: i, end: i + q.length }); continue; }
+    if (m.type === 'strike') continue;
+    out.push(orphan(m, q));
   }
   return out;
+}
+// Marks from two places on one text (a paper's and ones made on the writing
+// before it), each once.
+function mergeMarks(a, b) {
+  const seen = new Set((a || []).map((m) => m.id));
+  return [...(a || []), ...(b || []).filter((m) => !seen.has(m.id))];
 }
 
 // ---- Routes ----
@@ -1411,8 +1437,16 @@ async function routeLuddite(event, method, path, info) {
 
   // GET /luddite/sub?id= -- one piece with its marks, for its teacher.
   if (path === '/luddite/sub' && method === 'GET') {
-    const piece = await ownSub(q.id, me, role);
+    let piece = await ownSub(q.id, me, role);
     const { state: room } = await readItem('luddite:room:' + piece.code);
+    // Writing again over it: the document is their writing now, every comment moved onto it.
+    const st = room && room.students && room.students[piece.sub];
+    if (st && st.status === 'admitted' && !st.handedIn) {
+      const { state: d } = await readItem('luddite:draft:' + piece.code + ':' + piece.sub);
+      if (d && typeof d.text === 'string' && d.text !== piece.text && (d.at || 0) > (piece.at || 0)) {
+        piece = { ...piece, text: d.text, words: (d.text.trim().match(/\S+/g) || []).length, marks: reanchorMarks(piece.marks, piece.text, d.text), live: true };
+      }
+    }
     return respond(200, { sub: piece, roomRubric: (room && room.rubric) || null });
   }
 
@@ -1421,13 +1455,21 @@ async function routeLuddite(event, method, path, info) {
   // (never-changing) text.
   if (path === '/luddite/marks' && method === 'PUT') {
     const piece = await ownSub(body.id, me, role);
-    const marks = cleanMarks(body.marks, piece.text.length);
+    // Marked on their writing since (see GET /luddite/sub): the document takes
+    // that writing, as it is now, and the marks move onto it.
+    let text = piece.text, marks;
+    if (typeof body.text === 'string' && body.text !== piece.text) {
+      const { state: d } = await readItem('luddite:draft:' + piece.code + ':' + piece.sub);
+      if (!d || typeof d.text !== 'string') throw new HttpError(409, 'text_changed');
+      text = d.text;
+      marks = cleanMarks(reanchorMarks(cleanMarks(body.marks, body.text.length), body.text, text), text.length);
+    } else marks = cleanMarks(body.marks, piece.text.length);
     const endComment = String(body.endComment || '').slice(0, 8000);
     const grade = String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40);
     const rubric = body.rubric === undefined ? piece.rubric || null : cleanRubric(body.rubric);
     const rubricScores = cleanScores(body.rubricScores === undefined ? piece.rubricScores : body.rubricScores, rubric);
     const saved = await mutate('luddite:sub:' + piece.id, (x) => {
-      const next = { ...x, marks, endComment, grade, rubric, rubricScores, markedAt: Date.now() };
+      const next = { ...x, text, words: (text.trim().match(/\S+/g) || []).length, marks, endComment, grade, rubric, rubricScores, markedAt: Date.now() };
       if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
       return next;
     });
@@ -2182,10 +2224,14 @@ async function handInFromBackups(code, list, label) {
 async function handInFor(room, code, me, s, text, label, auto) {
   const words = (text.trim().match(/\S+/g) || []).length;
   const who = me.name || me.email;
+  // One document: a student who handed in before (and was let back in)
+  // hands in to the same paper, its comments, grade and sharing kept.
+  const prevSub = (room.submissions || []).find((x) => x.sub === me.sub && x.stored);
+  const prev = prevSub ? (await readItem('luddite:sub:' + prevSub.id)).state : null;
   // Drive is where the teacher keeps it; Luddite keeps its own copy to
   // mark up. A Drive hiccup (or no Drive yet) no longer loses the piece.
   let file = null, driveError = null;
-  try {
+  if (!prev) try {
     file = await saveToDrive(room, {
       name: who + ' — ' + label,
       description: (auto ? 'Handed in by Luddite when the session ended, for ' : 'Submitted through Luddite by ') + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
@@ -2199,14 +2245,14 @@ async function handInFor(room, code, me, s, text, label, auto) {
   const stored = text.length <= MAX_STORED_CHARS;
   if (!file && !stored) throw new HttpError(409, driveError);
   const at = Date.now();
-  const id = file ? file.id : 'l' + randomUUID();
+  const id = prev ? prev.id : file ? file.id : 'l' + randomUUID();
   const win = windowOf(room, lower(me.email), s);
-  // A new hand-in replaces this student's earlier one in the session. The
-  // earlier ones aren't deleted: their copies stay, listed in `replaces`.
+  // (Before one document per student, a hand-in again made a new paper and
+  // the earlier ones were listed in `replaces`; those old copies stay listed.)
   const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
-  const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]);
+  const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]).filter((x) => x !== id);
   const submission = { id, sub: me.sub, ...(auto ? { auto: true } : {}), email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-    link: file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS),
+    link: prev ? prev.link || null : file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS),
     ...(replaces.length ? { replaces } : {}) };
   if (stored) {
     // The chat with the teacher while they wrote goes with the paper (the most
@@ -2220,23 +2266,32 @@ async function handInFor(room, code, me, s, text, label, auto) {
     }
     // Marks the teacher made on the draft move onto the paper (see reanchorMarks).
     const { state: early } = await readItem('luddite:early:' + code + ':' + me.sub);
-    const carried = early && !early.usedAt ? { marks: reanchorMarks(early.marks, early.base, text), endComment: early.endComment || '', grade: early.grade || '',
-      ...(early.rubric ? { rubric: early.rubric, rubricScores: early.rubricScores || [] } : {}), markedAt: early.at } : null;
-    if (carried) {
-      submission.marked = carried.marks.length + (carried.endComment.trim() ? 1 : 0);
-      if (carried.grade) submission.grade = carried.grade;
-      await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
-    }
-    await mutate('luddite:sub:' + id, () => ({
+    const early1 = early && !early.usedAt ? early : null;
+    const both = (x, y) => (x && y && x.trim() !== y.trim() ? x + '\n\n' + y : x || y || '');
+    const carried = {
+      marks: mergeMarks(prev ? reanchorMarks(prev.marks, prev.text, text) : [], early1 ? reanchorMarks(early1.marks, early1.base, text) : []),
+      endComment: both(prev && prev.endComment, early1 && early1.endComment),
+      grade: (early1 && early1.grade) || (prev && prev.grade) || ''
+    };
+    const rubricFrom = (early1 && early1.rubric) ? early1 : (prev && prev.rubric) ? prev : null;
+    if (rubricFrom) Object.assign(carried, { rubric: rubricFrom.rubric, rubricScores: rubricFrom.rubricScores || [] });
+    if (early1 || prev) Object.assign(carried, { markedAt: Math.max((early1 && early1.at) || 0, (prev && prev.markedAt) || 0) || undefined });
+    submission.marked = carried.marks.length + (carried.endComment.trim() ? 1 : 0);
+    if (carried.grade) submission.grade = carried.grade;
+    if (prev && prev.returnedAt) submission.returnedAt = prev.returnedAt;
+    if (early1) await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
+    const paper = await mutate('luddite:sub:' + id, () => ({
+      ...(prev || {}),
       id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
-      label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '', ...(carried || {}),
-      ...(chat.length ? { chat } : {}),
-      ...(replaces.length ? { replaces } : {})
+      label, text, words, leaves: s.leaves || 0, at, link: submission.link, ...carried,
+      ...(chat.length ? { chat } : {})
     }));
+    // The Drive copy is the same file, rewritten.
+    if (prev && paper.link) await updateDriveDoc(room.teacher.sub, paper).catch((e) => console.warn('drive update failed', e.detail || e.message));
     const email = me.email.toLowerCase();
     await mutate('luddite:tstudent:' + room.teacher.sub + ':' + email, (t) => ({
       email, name: me.name || (t && t.name) || '',
-      subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || []).filter((x) => !replaces.includes(x.id))]
+      subs: [{ id, at, roomTitle: titleOf(room), label, words }, ...((t && t.subs) || []).filter((x) => x.id !== id && !replaces.includes(x.id))]
     }));
     await mutate('luddite:teacher:' + room.teacher.sub, (t) => {
       const students = { ...((t && t.students) || {}) };
