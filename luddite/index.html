@@ -689,6 +689,9 @@
   .menu .pop { max-width: calc(100vw - 16px); }
   .menu .pop button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: 400 15px var(--ui); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
   .menu .pop button:hover { background: var(--hover); }
+  #roomMenu .pop { min-width: 290px; }
+  .menu .pop .popsec { font: 600 12px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 12px 3px; }
+  .menu .pop .popsec ~ .popsec { border-top: 1px solid var(--rule); margin-top: 4px; }
   .menu .pop button.danger { color: var(--tomato-deep); border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
   .menu .pop button.danger:hover { background: var(--tomato-tint); }
   /* The prompt stays pinned above the writing, however far they scroll. */
@@ -951,6 +954,8 @@
      big Home button, so it's always clear you're away from Home. */
   .workbar { display: none; }
   body.work { background: #DCE3E8; }
+  /* A class's page is told apart from a session's by its desk: pink, not slate. */
+  body.work.classpage { background: #F2DFE4; }
   body.work .workbar { display: flex; position: fixed; top: 0; left: 0; right: 0; z-index: 35; height: 56px; align-items: center; gap: 14px;
     padding: 0 16px; background: #2F3B45; color: #E8EEF2; }
   .workbar .homebtn { font: 600 16px var(--ui); color: #2F3B45; background: #FAF6EC; border: 0; border-radius: 999px; padding: 9px 20px 9px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
@@ -1346,12 +1351,12 @@
     </section>
 
     <section class="panel tint-sun">
-      <div class="panelhead"><h3 class="sect">Writing sessions <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. Deleting a session only takes it off this list; work handed in stays under Student work.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">Writing sessions <span class="q" tabindex="0" data-tip="Everything you have run or scheduled: Happening now, Coming up and Past. Click one to open it. Deleting a session only takes it off this list; work handed in stays under Students.">?</span></h3></div>
       <div id="roomList"></div>
     </section>
 
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">Student work <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3></div>
+      <div class="panelhead"><h3 class="sect">Students <span class="q" tabindex="0" data-tip="Everyone who has handed work in to you. Click a name to see everything they have handed in, and to mark it up.">?</span></h3></div>
       <div class="row" style="justify-content:flex-start; margin-bottom:6px">
         <select class="field" id="studentClass" aria-label="Show students from" hidden></select>
         <input class="field grow" id="studentSearch" type="search" placeholder="Find a student" aria-label="Find a student" style="min-width:180px">
@@ -1393,19 +1398,24 @@
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
-          <summary class="btn small ghost">More &#9662;</summary>
+          <summary class="btn small ghost">Session options &#9662;</summary>
           <div class="pop">
+            <div class="popsec">Students</div>
             <button type="button" id="phraseBtn">Entry Phrase and link</button>
-            <button type="button" id="renameBtn">Rename</button>
-            <button type="button" id="promptBtn">Edit the prompt</button>
-            <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="pauseAllBtn">Pause everyone</button>
-            <button type="button" id="atHomeBtn">Let students work on this at home</button>
-            <button type="button" id="shareWorkBtn">Allow students to see each other’s work</button>
+            <button type="button" id="anonBtn">Hide names</button>
+            <button type="button" id="anonKeyBtn" hidden>Names key</button>
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
+            <div class="popsec">The session</div>
+            <button type="button" id="renameBtn">Rename</button>
+            <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="rubricBtn">Rubric…</button>
+            <button type="button" id="timeBtn">Change the start time</button>
+            <button type="button" id="atHomeBtn">Let students work on this at home</button>
+            <button type="button" id="shareWorkBtn">Allow students to see each other’s work</button>
             <button type="button" id="reopenBtn">Open it again now</button>
+            <div class="popsec">Papers</div>
             <button type="button" id="printAllRoom">Print all papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
             <button type="button" id="deleteRoomBtn" class="danger">Delete this writing session</button>
@@ -1567,8 +1577,6 @@
 
 <!-- Settings, top right on the teacher pages -->
 <div class="topright no-print" id="topRight" hidden>
-  <button id="anonBtn" type="button" aria-pressed="false"></button>
-  <button id="anonKeyBtn" type="button" hidden>Names key</button>
   <button id="prefsBtn" type="button">Settings</button>
 </div>
 
@@ -1664,7 +1672,7 @@
     <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can cut, copy and paste within their own writing, but pasting, dropping or auto-inserting anything from elsewhere is refused.">?</span></span>
       <span class="segctl" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow" style="display:block">
-      <span class="nm">Rubrics <span class="q" tabindex="0" data-tip="Skills down the side, your own levels across the top, and optionally each skill's share of the grade. Apply one to a writing session from its More menu, or from the marking page.">?</span></span>
+      <span class="nm">Rubrics <span class="q" tabindex="0" data-tip="Skills down the side, your own levels across the top, and optionally each skill's share of the grade. Apply one to a writing session from its Session options menu, or from the marking page.">?</span></span>
       <div id="rubricList"></div>
       <button class="btn small ghost" type="button" id="newRubricBtn" style="margin-top:8px">+ New rubric</button>
     </div>
@@ -2141,7 +2149,7 @@
     // writing or locked screens, which stay exactly as students get them.
     $('previewBar').hidden = !(previewing && (id === 'waitScreen' || id === 'readyScreen'));
     each('[data-preview]', function (b) { b.classList.toggle('on', b.getAttribute('data-preview') === id); });
-    // Hide names (and its Names key) sits top right on every teacher page; Settings on all but grading and printing.
+    // Settings sits top right on teacher pages but grading and printing. (Hide names is in a writing session's menu.)
     anonSeen = {};
     $('anonKeyBox').hidden = true;
     syncAnonBtn();
@@ -2151,11 +2159,12 @@
     // Away from Home on a teacher page: the dark bar with the Home button.
     var where = isTeacher && !previewing && !reading && WORK_PAGES[id];
     document.body.classList.toggle('work', !!where);
+    document.body.classList.toggle('classpage', !!where && id === 'classScreen');
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
     $('comingBox').hidden = true;
   }
-  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student work', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
+  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
   $('workHome').addEventListener('click', function () {
     if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
     showDash();
@@ -3633,6 +3642,7 @@
   function showDash() {
     previewing = false;
     mode = 'room';
+    setAnonCtx(null);
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
@@ -3662,17 +3672,21 @@
     });
   }
 
-  // ---- Hiding names, on every teacher page ----
-  // With names hidden each address gets a short stable label ("Student K7Q"),
-  // the same every time and in print, so a paper can be marked without
-  // knowing whose it is, and the same student can still be followed across
-  // the year. Nothing is stored differently; it's only how names are drawn.
-  // The choice is remembered on this device. Names key (beside the button)
-  // lists the names behind the labels on the page showing: who() notes each
-  // one it draws, and show() starts the list afresh.
-  var anon = load('luddite.anon') === '1';
+  // ---- Hiding names, in one writing session ----
+  // Hide names (in a session's Session options menu) gives each address in
+  // that session a short stable label ("Student K7Q"), on its page, its
+  // grading and its printing, the same every time, so its papers can be
+  // marked without knowing whose they are. Home, a class and a student's
+  // page always show names. Nothing is stored differently; it's only how
+  // names are drawn. Which sessions hide names is remembered on this device
+  // (luddite.anonRooms). Names key lists the names behind the labels on the
+  // page showing: who() notes each one it draws, and show() starts afresh.
+  var anonRooms = {};
+  try { anonRooms = JSON.parse(load('luddite.anonRooms') || '{}') || {}; } catch (e) { anonRooms = {}; }
+  var anonCtx = null; // the writing session whose pages are showing (its page, then grading or printing from it)
   var anonSeen = {};
-  function anonOn() { return anon && isTeacher && !previewing; }
+  function anonOn() { return !!(anonCtx && anonRooms[anonCtx]) && isTeacher && !previewing; }
+  function setAnonCtx(code) { anonCtx = code || null; syncAnonBtn(); }
   function aliasOf(email) {
     var str = 'luddite:' + (me.email || '') + ':' + String(email || '').toLowerCase(), h = 2166136261;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -3686,16 +3700,15 @@
   }
   function addr(email) { return anonOn() ? '' : email; }
   function syncAnonBtn() {
-    var b = $('anonBtn');
-    b.textContent = anon ? 'Names hidden \u00b7 Show names' : 'Hide names';
-    b.classList.toggle('on', anon);
-    b.setAttribute('aria-pressed', anon ? 'true' : 'false');
-    $('anonKeyBtn').hidden = !anon;
-    document.body.classList.toggle('is-anon', anonOn());
+    var on = anonOn();
+    $('anonBtn').textContent = on ? 'Show names' : 'Hide names';
+    $('anonKeyBtn').hidden = !on;
+    document.body.classList.toggle('is-anon', on);
   }
   $('anonBtn').addEventListener('click', function () {
-    anon = !anon;
-    store('luddite.anon', anon ? '1' : null);
+    if (!anonCtx) return;
+    if (anonRooms[anonCtx]) delete anonRooms[anonCtx]; else anonRooms[anonCtx] = 1;
+    store('luddite.anonRooms', Object.keys(anonRooms).length ? JSON.stringify(anonRooms) : null);
     syncAnonBtn();
     $('anonKeyBox').hidden = true;
     redrawTeacher();
@@ -3745,7 +3758,7 @@
     if (!$('dashScreen').hidden) { loadRooms(); drawStudents(); }
     else if (!$('roomScreen').hidden) { loadRoom(); }
     else if (!$('classScreen').hidden) { drawClassScreen(); }
-    else if (!$('studentScreen').hidden) { if (studentShown) openStudent(studentShown); }
+    else if (!$('studentScreen').hidden) { if (studentShown) openStudent(studentShown, studentBackTo); }
     else if (!$('markScreen').hidden && piece) { showPieceHead(); }
     else if (!$('printScreen').hidden) { drawPrintBody(); }
   }
@@ -4492,7 +4505,7 @@
   }
 
   async function deleteRoom(r) {
-    if (!await ask({ title: 'Delete “' + r.title + '”?', text: 'It comes off your list and nobody can join it. Work already handed in stays under Student work (and in your Drive).', ok: 'Delete', danger: true })) return;
+    if (!await ask({ title: 'Delete “' + r.title + '”?', text: 'It comes off your list and nobody can join it. Work already handed in stays under Students (and in your Drive).', ok: 'Delete', danger: true })) return;
     try {
       await api('/luddite/assignment', { code: r.code, action: 'delete' });
       lastDrawn = '';
@@ -4949,6 +4962,7 @@
 
   var openedClass = null;
   async function openClass(id) {
+    setAnonCtx(null);
     show('classScreen');
     $('className').textContent = '';
     $('classRoster').innerHTML = '';
@@ -4979,10 +4993,17 @@
     box.innerHTML = '';
     if (!openedClass.emails.length) box.appendChild(el('div', 'empty', 'No one on this list yet. Add addresses above.'));
     openedClass.emails.slice().sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
-      var row = el('div', 'item');
+      var row = el('div', 'item click');
       var w = el('div', 'who');
       w.appendChild(el('b', null, who('', email)));
       row.appendChild(w);
+      // A student on the list opens everything they've handed in.
+      var cls = openedClass.id;
+      var theirs = function () { openStudent(email, function () { openClass(cls); }); };
+      row.tabIndex = 0;
+      row.addEventListener('click', function (e) { if (!e.target.closest('button')) theirs(); });
+      row.addEventListener('keydown', function (e) { if (e.target === row && e.key === 'Enter') theirs(); });
+      row.appendChild(button('Their work', 'btn small ghost', theirs));
       row.appendChild(button('Remove', 'linkish', async function () {
         if (!await ask({ title: 'Take ' + who('', email) + ' off this class list?', ok: 'Remove', danger: true })) return;
         await classAction('remove', { emails: [email] });
@@ -5381,7 +5402,7 @@
     try {
       var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
       note.className = 'fine good';
-      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Student work.';
+      note.textContent = 'Made “' + NAME + '” with ' + plural(data['class'].emails.length, 'person', 'people') + '. Find it under Students.';
       lastDrawn = '';
       loadRooms();
     } catch (e) { note.className = 'fine warn'; note.textContent = 'Couldn’t make it. Try again.'; }
@@ -5389,6 +5410,7 @@
 
   function openRoom(code) {
     previewing = false;
+    setAnonCtx(code);
     teacherRoom = { code: code };
     teacherRoster = null;
     $('roomTitle').textContent = '';
@@ -5534,7 +5556,7 @@
     $('roomLink').textContent = joinLink(room);
     $('openCloseBtn').textContent = state === 'running' ? 'End session' : state === 'upcoming' ? 'Start it now' : 'Open it again now';
     $('openCloseBtn').className = 'btn small ' + (state === 'running' ? 'danger' : '');
-    // Once it's over, grading is the main thing: reopening goes in the More menu.
+    // Once it's over, grading is the main thing: reopening goes in Session options.
     $('openCloseBtn').hidden = state === 'ended';
     $('reopenBtn').hidden = state !== 'ended';
     $('pauseAllBtn').hidden = state !== 'running' || !!room.atHome;
@@ -6334,7 +6356,7 @@
     if (t === null) return;
     roomAction('prompt', [], { prompt: t.trim() });
   });
-  // Choosing something from the More menu closes it.
+  // Choosing something from Session options closes it.
   each('#roomMenu .pop button', function (b) { b.addEventListener('click', function () { $('roomMenu').open = false; }); });
   $('rubricBtn').addEventListener('click', async function () {
     var pick = await chooseRubric(teacherRoom.rubric, rubricShownIn(teacherRoom));
@@ -7562,15 +7584,21 @@
   }
 
   var studentShown = '', studentPieceIds = [], studentShownIds = [], studentReturned = {};
-  async function openStudent(email) {
+  async function openStudent(email, back) {
+    setAnonCtx(null);
     studentShown = email;
+    studentBackTo = back || null;
     show('studentScreen');
     $('studentName').textContent = '';
     $('studentMeta').textContent = 'Loading…';
     $('pieceList').innerHTML = '';
     var data;
     try { data = await api('/luddite/student?email=' + encodeURIComponent(email)); }
-    catch (e) { $('studentMeta').textContent = 'Couldn’t load this student.'; return; }
+    catch (e) {
+      if (e.message === 'no_student') { $('studentName').textContent = who('', email); $('studentMeta').textContent = email + ' · Nothing handed in yet.'; }
+      else $('studentMeta').textContent = 'Couldn’t load this student.';
+      return;
+    }
     $('studentName').textContent = who(data.student.name, data.student.email);
     var comments = data.pieces.reduce(function (n, p) { return n + p.marks.filter(function (m) { return m.type !== 'strike'; }).length + (p.endComment ? 1 : 0); }, 0);
     var first = data.pieces.length ? data.pieces[data.pieces.length - 1].at : 0;
@@ -7591,7 +7619,7 @@
       h.appendChild(el('div', 'meta', new Date(p.at).toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) +
         (p.words ? ' · ' + plural(p.words, 'word', 'words') : '') + (p.grade ? ' · Grade: ' + p.grade : '')));
       head.appendChild(h);
-      if (!p.missing) head.appendChild(button('Grade', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown); }, studentShownIds, studentReturned); }));
+      if (!p.missing) head.appendChild(button('Grade', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown, studentBackTo); }, studentShownIds, studentReturned); }));
       box.appendChild(head);
       if (p.endComment) box.appendChild(el('p', 'endc', p.endComment));
       if (p.marks.length) {
@@ -7624,10 +7652,11 @@
     });
     if (!data.pieces.length) list.appendChild(el('div', 'empty', 'Nothing yet.'));
   }
-  $('studentBack').addEventListener('click', showDash);
+  var studentBackTo = null;
+  $('studentBack').addEventListener('click', function () { (studentBackTo || showDash)(); });
   $('studentPrintAll').addEventListener('click', function () {
     var ids = studentPieceIds.slice();
-    openPrintAll(ids, $('studentName').textContent + ': all papers', function () { openStudent(studentShown); }, true);
+    openPrintAll(ids, $('studentName').textContent + ': all papers', function () { openStudent(studentShown, studentBackTo); }, true);
   });
   $('studentPrint').addEventListener('click', function () {
     var prev = document.title;
