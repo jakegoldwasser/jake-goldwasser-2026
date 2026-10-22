@@ -98,9 +98,11 @@ function verifySession(token) {
 //   luddite:teacher:<sub>   { rooms: [code, ...], classes: [id, ...] }  newest first
 //   luddite:class:<id>      { id, name, teacher: { sub, email, name }, emails: [...],
 //                             assignments: [code, ...] newest first, createdAt }
-//   luddite:mine:<email>    { classes: [id, ...], own: [code, ...], rooms: [code, ...] }: how a
-//                           student's login finds their assignments (their
-//                           classes' assignments, and ones with their own time)
+//   luddite:mine:<email>    { classes: [id, ...], own: [code, ...], rooms: [code, ...],
+//                           handed: [code, ...] }: how a student's login finds
+//                           their assignments (their classes' assignments, ones
+//                           with their own time, and ones they've handed in to,
+//                           for reflections)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
 //                             classId, casual, startAt, prompt, endedAt, open,
 //                             own: { [email]: { startAt, multiplier } },
@@ -110,7 +112,8 @@ function verifySession(token) {
 //   luddite:sub:<id>        one handed-in piece, kept so its teacher can mark
 //                           it up: { id, code, roomTitle, teacherSub, sub,
 //                           email, name, label, text, words, leaves, at, link,
-//                           marks: [...], endComment }
+//                           marks: [...], endComment, reflection: { text,
+//                           words, at, handedInAt } }
 //   luddite:tstudent:<teacherSub>:<email>
 //                           { email, name, subs: [{ id, at, roomTitle, label,
 //                           words }] } newest first: a student's year with
@@ -167,6 +170,7 @@ const REF_MINUTES = 45;
 const MAX_SITTINGS = 10;
 const MAX_OPEN_MS = 12 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS = 4000;
+const MAX_REFLECTION_CHARS = 20000;
 // What a teacher can switch in Preferences; these are the defaults.
 const DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
 function cleanPrefs(p) {
@@ -1006,6 +1010,79 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { paper: studentPaper(paper) });
   }
 
+  // ---- Reflections: a student rereads a paper they handed in and writes about it ----
+  // The teacher asks for one (room.reflect { prompt, showGrading, at }, Session
+  // options). Only a student whose paper is handed in can reflect. Their entry
+  // keeps reflect { status: 'reflecting' | 'done', at, lockedOut, leaves, words,
+  // writing, lastSeen }; the text goes on the paper (reflection { text, words,
+  // at, handedInAt }). Reflecting is locked down like writing: leaving the page
+  // locks them out until the teacher lets them back in ('reflectUnlock').
+
+  // GET /luddite/reflections -- the reflections asked of this student.
+  if (path === '/luddite/reflections' && method === 'GET') {
+    const em = lower(me.email);
+    const { state: mine } = await readItem('luddite:mine:' + em);
+    const codes = new Set([...((mine && mine.handed) || []), ...((mine && mine.rooms) || []), ...((mine && mine.own) || [])]);
+    const classes = await Promise.all(((mine && mine.classes) || []).map((id) => readItem('luddite:class:' + id)));
+    classes.forEach(({ state: c }) => { if (c && !c.deletedAt && c.emails.includes(em)) (c.assignments || []).forEach((code) => codes.add(code)); });
+    const rooms = await Promise.all([...codes].map((c) => readItem('luddite:room:' + c)));
+    const list = [];
+    rooms.forEach(({ state: r }) => {
+      if (!r || r.deletedAt || !r.reflect) return;
+      const s = r.students[me.sub];
+      if (!reflectable(r, me.sub)) return;
+      list.push({ code: r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email, prompt: r.reflect.prompt || '',
+        status: (s.reflect && s.reflect.status) || 'new', lockedOut: !!(s.reflect && s.reflect.lockedOut), at: r.reflect.at || 0 });
+    });
+    list.sort((a, b) => b.at - a.at);
+    return respond(200, { reflections: list });
+  }
+
+  // GET /luddite/reflect?code= -- what a student reflects on: their paper
+  // (with the teacher's comments and grade if the teacher chose), the prompt,
+  // and the reflection so far.
+  if (path === '/luddite/reflect' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    const sub = reflectable(room, me.sub);
+    if (!sub) throw new HttpError(403, 'no_reflection');
+    const { state: paper } = await readItem('luddite:sub:' + sub.id);
+    if (!paper) throw new HttpError(404, 'no_sub');
+    return respond(200, reflectView(room, me.sub, paper));
+  }
+
+  // PUT /luddite/reflect { code, type: 'open' | 'save' | 'left' | 'ask' | 'handin', text, words }
+  if (path === '/luddite/reflect' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const before = await getRoom(code);
+    const sub = reflectable(before, me.sub);
+    if (!sub) throw new HttpError(403, 'no_reflection');
+    const type = String(body.type || '');
+    const room = await mutate('luddite:room:' + code, (r) => {
+      const s = r.students[me.sub];
+      const rf = { ...(s.reflect || {}) };
+      if (rf.status === 'done' && type !== 'open') return undefined;
+      rf.lastSeen = Date.now();
+      if (!rf.status) { rf.status = 'reflecting'; rf.at = Date.now(); }
+      if (type === 'left') Object.assign(rf, { leaves: (rf.leaves || 0) + 1, writing: false, lockedOut: !TEST_EMAILS.includes(lower(me.email)) });
+      if (type === 'ask' && rf.lockedOut) rf.askedAt = Date.now();
+      if (type === 'save' || type === 'handin') rf.writing = type === 'save' && !!body.writing;
+      if (Number.isFinite(body.words)) rf.words = Math.max(0, Math.floor(body.words));
+      if (type === 'handin' && !rf.lockedOut) Object.assign(rf, { status: 'done', handedInAt: Date.now(), writing: false });
+      return { ...r, students: { ...r.students, [me.sub]: { ...s, reflect: rf } } };
+    });
+    const rf = room.students[me.sub].reflect || {};
+    let paper = (await readItem('luddite:sub:' + sub.id)).state;
+    if (typeof body.text === 'string' && (type === 'save' || type === 'handin') && !rf.lockedOut && (rf.status !== 'done' || type === 'handin')) {
+      const text = body.text.slice(0, MAX_REFLECTION_CHARS);
+      paper = await mutate('luddite:sub:' + sub.id, (x) => {
+        const prev = x.reflection || {};
+        if (prev.handedInAt) return undefined;
+        return { ...x, reflection: { text, words: (text.trim().match(/\S+/g) || []).length, at: Date.now(), ...(rf.status === 'done' ? { handedInAt: rf.handedInAt } : {}) } };
+      });
+    }
+    return respond(200, reflectView(room, me.sub, paper));
+  }
+
   // PUT /luddite/submit { code, text, words, label } -- hand the piece in.
   if (path === '/luddite/submit' && method === 'PUT') {
     const code = cleanCode(body.code);
@@ -1454,6 +1531,19 @@ async function routeLuddite(event, method, path, info) {
         return { ...r, atHome: on, students };
       }
       else if (body.action === 'prompt') return { ...r, prompt: String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS) };
+      // Reflections (see /luddite/reflect): ask for one, stop asking, let a
+      // student locked out of theirs back in, or let them change a handed-in one.
+      else if (body.action === 'reflect') return { ...r, reflect: { prompt: String(body.prompt || '').trim().slice(0, MAX_PROMPT_CHARS), showGrading: !!body.showGrading, at: (r.reflect && r.reflect.at) || Date.now() } };
+      else if (body.action === 'reflectOff') return { ...r, reflect: null };
+      else if (body.action === 'reflectUnlock' || body.action === 'reflectReopen') {
+        const students = { ...r.students };
+        subs.forEach((sub) => {
+          const s = students[sub];
+          if (!s || !s.reflect) return;
+          students[sub] = { ...s, reflect: body.action === 'reflectUnlock' ? { ...s.reflect, lockedOut: false, askedAt: 0 } : { ...s.reflect, status: 'reflecting', handedInAt: 0, lockedOut: false } };
+        });
+        return { ...r, students };
+      }
       else if (body.action === 'rename') {
         const title = String(body.title || '').trim().slice(0, 80);
         if (!title) throw new HttpError(400, 'need_title');
@@ -2060,6 +2150,11 @@ async function handInFor(room, code, me, s, text, label, auto) {
       return { ...(t || { rooms: [] }), students };
     });
   }
+  // So the student finds this session again for a reflection (/luddite/reflections).
+  await mutate('luddite:mine:' + lower(me.email), (m) => {
+    const handed = (m && m.handed) || [];
+    return handed.includes(code) ? undefined : { ...(m || {}), handed: [code, ...handed].slice(0, 300) };
+  });
   const saved = await mutate('luddite:room:' + code, (r) => ({
     ...r,
     submissions: [submission, ...(r.submissions || []).filter((x) => x.sub !== me.sub)],
@@ -2132,6 +2227,25 @@ function cleanScores(scores, rubric) {
 function viewedMs(paper) { return (paper.view && paper.view.ms) || 0; }
 // A handed-back paper as its student sees it: the grade only once they've
 // spent GRADE_AFTER_MS with the comments.
+// A student may reflect on a session that asks for it once their paper is
+// handed in and kept: their latest paper's submission entry, else null.
+function reflectable(room, sub) {
+  if (!room || room.deletedAt || !room.reflect) return null;
+  const s = room.students && room.students[sub];
+  if (!s || s.status === 'removed' || !s.handedIn) return null;
+  return (room.submissions || []).find((x) => x.sub === sub && x.stored) || null;
+}
+function reflectView(room, sub, paper) {
+  const s = room.students[sub] || {}, rf = s.reflect || {}, show = !!room.reflect.showGrading;
+  return {
+    room: { code: room.code, title: titleOf(room), teacherName: room.teacher.name || room.teacher.email, prompt: room.reflect.prompt || '', showGrading: show },
+    paper: { id: paper.id, at: paper.at, words: paper.words, text: paper.text,
+      ...(show ? { marks: paper.marks || [], endComment: paper.endComment || '', grade: paper.grade || '', rubric: paper.rubric || null, rubricScores: paper.rubricScores || [] } : { marks: [] }) },
+    reflection: { text: (paper.reflection && paper.reflection.text) || '', handedInAt: (paper.reflection && paper.reflection.handedInAt) || 0 },
+    status: rf.status || 'new', lockedOut: !!rf.lockedOut, askedAt: rf.askedAt || 0, leaves: rf.leaves || 0
+  };
+}
+
 function studentPaper(x) {
   const seen = viewedMs(x), ready = seen >= GRADE_AFTER_MS;
   return {
