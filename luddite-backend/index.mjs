@@ -1447,6 +1447,19 @@ async function routeLuddite(event, method, path, info) {
         piece = { ...piece, text: d.text, words: (d.text.trim().match(/\S+/g) || []).length, marks: reanchorMarks(piece.marks, piece.text, d.text), live: true };
       }
     }
+    // One document: comments made before it was one -- on the student's
+    // earlier papers in this session (`replaces`, from when each hand-in made
+    // a new paper) or on their writing in progress (luddite:early) -- are
+    // gathered onto it; the teacher's next save keeps them there.
+    const olds = await Promise.all((piece.replaces || []).slice(0, 10).map((id) => readItem('luddite:sub:' + id).then((x) => x.state).catch(() => null)));
+    const { state: early } = await readItem('luddite:early:' + piece.code + ':' + piece.sub);
+    const sources = [...olds.filter((x) => x && Array.isArray(x.marks)).map((x) => ({ text: x.text, marks: x.marks, endComment: x.endComment, grade: x.grade })),
+      ...(early && !early.usedAt ? [{ text: early.base, marks: early.marks, endComment: early.endComment, grade: early.grade }] : [])];
+    for (const src of sources) {
+      piece = { ...piece, marks: mergeMarks(piece.marks, reanchorMarks(src.marks, String(src.text || ''), piece.text)) };
+      if (src.endComment && src.endComment.trim() && !(piece.endComment || '').includes(src.endComment.trim())) piece.endComment = piece.endComment ? piece.endComment + '\n\n' + src.endComment : src.endComment;
+      if (!piece.grade && src.grade) piece.grade = src.grade;
+    }
     return respond(200, { sub: piece, roomRubric: (room && room.rubric) || null });
   }
 
@@ -1473,6 +1486,7 @@ async function routeLuddite(event, method, path, info) {
       if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
       return next;
     });
+    await mutate('luddite:early:' + piece.code + ':' + piece.sub, (x) => (x && !x.usedAt ? { ...x, usedAt: Date.now(), paperId: piece.id } : undefined)).catch(() => {});
     // The room's list shows which pieces have been marked.
     // Drive's copy carries the mark-up too (green text, cross-outs, comments, grade).
     await updateDriveDoc(piece.teacherSub, saved).catch((e) => console.warn('drive markup failed', e.detail || e.message));
