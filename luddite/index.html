@@ -5828,8 +5828,10 @@
 
     // Students on an alternative schedule have a panel of their own, just below the rest.
     var isOwn = function (email) { return !!(room.own && email && room.own[String(email).toLowerCase()]); };
-    var regular = people.filter(function (p) { return !isOwn(p.email); });
-    var ownPeople = people.filter(function (p) { return isOwn(p.email); });
+    // Once they've handed in, they're back in the regular list.
+    var ownNow = function (p) { return isOwn(p.email) && !(!p.f.canWrite && (p.x || (p.s && p.s.handedIn))); };
+    var regular = people.filter(function (p) { return !ownNow(p); });
+    var ownPeople = people.filter(ownNow);
     var pl = $('peopleList');
     pl.innerHTML = '';
     if (!regular.length) pl.appendChild(el('div', 'empty', state === 'upcoming' ? 'Nobody yet. Students show up here once it starts.' : 'Nobody’s in yet.'));
@@ -5866,12 +5868,12 @@
       ol2.appendChild(row);
     });
     if (liveData) drawLive(room);
-    $('notHereSection').hidden = !teacherRoster || (!notHere.length && notHereAll.length > 0);
+    // Not here yet / Didn't come: only while someone on the list is missing.
+    $('notHereSection').hidden = !teacherRoster || !notHere.length;
     if (teacherRoster) {
       $('notHereTitle').textContent = state === 'ended' ? 'Didn’t come' : 'Not here yet';
       var nl = $('notHereList');
       nl.innerHTML = '';
-      if (!notHere.length) nl.appendChild(el('div', 'empty', 'Everyone on the list has come in.'));
       notHere.sort(function (a, b) { return who('', a).localeCompare(who('', b)); }).forEach(function (email) {
         var row = el('div', 'item');
         var w = el('div', 'who');
