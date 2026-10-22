@@ -2507,7 +2507,8 @@
     var linked = new URLSearchParams(location.search).get('room') || '';
     if (linked) history.replaceState(null, '', location.pathname);
     if (isTeacher) {
-      if (!linked) { showDash(); return; }
+      // (a refresh comes back to where they were)
+      if (!linked) { if (!(initialRoute && openRoute(initialRoute))) showDash(); return; }
       // Their own writing session opens as its teacher; anyone else's, they join to write.
       api('/luddite/assignment?code=' + encodeURIComponent(linked)).then(function (d) {
         if (d.room && d.room.students && d.room.teacher && d.room.teacher.email === me.email) openRoom(linked);
@@ -4038,6 +4039,7 @@
     mode = 'room';
     setAnonCtx(null);
     markTabs(homeTab);
+    setRoute(homeTab === 'students' ? 'students' : 'overview');
     document.body.classList.toggle('studentstab', homeTab === 'students');
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
@@ -4929,6 +4931,33 @@
   }
   $('newClassToggle').addEventListener('click', function () { setClassFormOpen($('newClassBox').hidden); });
   // ---- Home's three tabs: Writing sessions, Students, Classes ----
+  // Where a teacher is, kept in the address so a refresh comes back to it:
+  // #overview, #students, #session/<code>, #session/<code>/paper/<id>,
+  // #class/<id>, #student/<email>, #student/<email>/paper/<id>.
+  var initialRoute = location.hash.replace(/^#/, '');
+  function setRoute(r) {
+    if (!isTeacher || previewing) return;
+    try { history.replaceState(history.state, '', location.pathname + location.search + (r ? '#' + r : '')); } catch (e) {}
+  }
+  function openRoute(h) {
+    var parts = h.split('/').map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } });
+    var paper = parts[2] === 'paper' && parts[3] ? parts[3] : null;
+    if (parts[0] === 'overview' || parts[0] === 'students') { showDash(); setHomeTab(parts[0] === 'students' ? 'students' : 'sessions'); return true; }
+    if (parts[0] === 'session' && parts[1]) {
+      var code = parts[1];
+      openRoom(code);
+      if (paper) openMark(paper, function () { openRoom(code); }, null);
+      return true;
+    }
+    if (parts[0] === 'class' && parts[1]) { openClass(parts[1]); return true; }
+    if (parts[0] === 'student' && parts[1]) {
+      var email = parts[1];
+      openStudent(email);
+      if (paper) openMark(paper, function () { openStudent(email); }, null);
+      return true;
+    }
+    return false;
+  }
   var homeTab = load('luddite.homeTab') === 'students' ? 'students' : 'sessions';
   function markTabs(t) {
     each('.hometabs button', function (b) { var on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
@@ -4936,6 +4965,7 @@
   function setHomeTab(t) {
     homeTab = t;
     store('luddite.homeTab', t === 'sessions' ? null : t);
+    if (!$('dashScreen').hidden) setRoute(t === 'students' ? 'students' : 'overview');
     markTabs(t);
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
     document.body.classList.toggle('studentstab', t === 'students' && !$('dashScreen').hidden);
@@ -5488,6 +5518,7 @@
   var openedClass = null;
   async function openClass(id) {
     setAnonCtx(null);
+    setRoute('class/' + encodeURIComponent(id));
     markTabs('students');
     show('classScreen');
     $('className').textContent = '';
@@ -5942,6 +5973,7 @@
   function openRoom(code) {
     previewing = false;
     setAnonCtx(code);
+    setRoute('session/' + encodeURIComponent(code));
     store('luddite.lastRoom', code);
     markTabs('monitor');
     teacherRoom = { code: code };
@@ -6252,6 +6284,7 @@
     }).filter(Boolean);
     roomReturned = {};
     papers.forEach(function (x) { if (x.returnedAt) roomReturned[x.id] = true; });
+    if (!$('markScreen').hidden && piece && markList.length < 2 && roomPaperIds.indexOf(piece.id) !== -1) { markList = roomPaperIds; drawPaperNav(piece.id); }
     // Only papers of students whose status is Handed in (not writing again) count.
     // Every paper, as its bubble shows it (a student writing again still has their one document).
     var done = people.filter(function (p) { return p.x && p.x.stored; }).map(function (p) { return p.x; });
@@ -7219,6 +7252,8 @@
   // not yet handed back.
   var markList = [], markReturned = {};
   async function openMark(id, back, list, returned) {
+    if (!$('roomScreen').hidden && teacherRoom) setRoute('session/' + encodeURIComponent(teacherRoom.code) + '/paper/' + encodeURIComponent(id));
+    else if (!$('studentScreen').hidden && studentShown) setRoute('student/' + encodeURIComponent(studentShown) + '/paper/' + encodeURIComponent(id));
     markBackTo = back || showDash;
     markList = list && list.indexOf(id) !== -1 ? list : [id];
     if (returned) markReturned = returned;
@@ -7333,13 +7368,17 @@
   });
   // Closing the grading window: the page under it is redrawn with what changed.
   function closeMarking() {
-    flushMarks(); hideTools(); closePop();
+    var saving = flushMarks();
+    hideTools(); closePop();
     $('markScreen').hidden = true;
     $('markShade').hidden = true;
     document.body.classList.remove('markfloat');
-    if (!$('roomScreen').hidden) { lastDrawn = ''; loadRoom(); }
-    else if (!$('studentScreen').hidden && studentShown) openStudent(studentShown, studentBackTo);
-    else (markBackTo || showDash)();
+    // (the page under it is redrawn once the last comments are saved, so it shows them)
+    Promise.resolve(saving).then(function () {
+      if (!$('roomScreen').hidden) { setRoute('session/' + encodeURIComponent(teacherRoom.code)); lastDrawn = ''; loadRoom(); }
+      else if (!$('studentScreen').hidden && studentShown) openStudent(studentShown, studentBackTo);
+      else (markBackTo || showDash)();
+    });
   }
   $('markClose').addEventListener('click', closeMarking);
   $('markShade').addEventListener('click', closeMarking);
@@ -8359,8 +8398,19 @@
     clearTimeout(markSaveTimer);
     markSaveTimer = setTimeout(saveMarks, 700);
   }
-  function flushMarks() { if (markSaveTimer) { clearTimeout(markSaveTimer); saveMarks(); } }
-  async function saveMarks() {
+  // flushMarks: save now if a save is waiting; either way, a promise for the last save.
+  var marksInFlight = null;
+  function flushMarks() {
+    if (markSaveTimer) { clearTimeout(markSaveTimer); return saveMarks(); }
+    return marksInFlight || Promise.resolve();
+  }
+  function saveMarks() {
+    var pr = doSaveMarks();
+    marksInFlight = pr;
+    pr.then(function () { if (marksInFlight === pr) marksInFlight = null; });
+    return pr;
+  }
+  async function doSaveMarks() {
     markSaveTimer = null;
     if (!piece) return;
     var p = piece;
@@ -8368,6 +8418,10 @@
       if (p.early) await api('/luddite/early', { code: p.code, sub: p.sub, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
       else await api('/luddite/marks', { id: p.id, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
       if (p === piece) $('markSaved').textContent = 'Saved';
+      // The session's list counts it graded at once (its bubble, the next step).
+      if (!p.early && teacherRoom && teacherRoom.submissions) teacherRoom.submissions.forEach(function (x) {
+        if (x.id === p.id) { x.marked = (p.marks || []).length + ((p.endComment || '').trim() ? 1 : 0); x.grade = p.grade || ''; }
+      });
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
       if (e.message !== 'too_many_marks' && e.message !== 'signed_out') { clearTimeout(markSaveTimer); markSaveTimer = setTimeout(saveMarks, 4000); }
@@ -8446,6 +8500,7 @@
   var studentShown = '', studentPieceIds = [], studentShownIds = [], studentReturned = {};
   async function openStudent(email, back) {
     setAnonCtx(null);
+    setRoute('student/' + encodeURIComponent(email));
     markTabs('students');
     studentShown = email;
     studentBackTo = back || null;
