@@ -227,6 +227,10 @@
   #askBox .box { max-width: 460px; }
   .asktext { margin: 8px 0 0; white-space: pre-wrap; color: var(--ink); line-height: 1.5; }
   .asktext:empty { display: none; }
+  .askothers { margin-top: 14px; }
+  .askothers p { margin: 0 0 4px; }
+  .askothers label { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .askothers .cdot { margin: 0; }
   .askfield { width: 100%; margin-top: 14px; }
   .timeleft.low { color: var(--lock); font-weight: 600; }
   .stamp { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
@@ -873,10 +877,12 @@
   #classesBox { margin-top: 4px; }
   /* Home's toggle: three big halves of one pill, the chosen one filled. */
   .hometabs { display: flex; gap: 4px; padding: 4px; margin: 4px 0 20px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); }
-  .hometabs button { flex: 1; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: 600 17px/1.2 var(--ui); padding: 11px 8px; cursor: pointer; }
+  .hometabs button { flex: 1; white-space: nowrap; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: 600 17px/1.2 var(--ui); padding: 11px 8px; cursor: pointer; }
   .hometabs button:hover:not(.on) { background: var(--hover); }
   .hometabs button.on { background: var(--ink); color: var(--card); }
   .hometab[hidden] { display: none; }
+  /* The wordmark and toggle sit at Home's width on every page, wide ones too. */
+  .hometabs, .card > .dashtop { max-width: 760px; box-sizing: border-box; margin-left: auto; margin-right: auto; }
   /* Home's Students tab: the whole page pink (like a class's page), its panels plain cards. */
   body.studentstab { background: #F2DFE4; }
   .hometab[data-tab="students"] .panel { background: var(--card); border-color: #D9A9B5; }
@@ -1389,6 +1395,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
 
     <div class="hometab" data-tab="sessions">
@@ -1502,6 +1509,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
 
     <div class="head">
@@ -1586,6 +1594,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
     <p style="margin:0 0 10px"><button class="btn small ghost" id="classBack">&larr; Home</button></p>
     <div class="head">
@@ -1621,6 +1630,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
     <div class="markbar">
       <button class="linkish" id="printBack">&larr; Back</button>
@@ -1648,6 +1658,27 @@
   </div>
 </section>
 
+<!-- Teacher: the grading overview (Home's Grading tab): sessions with papers to grade, and recently graded -->
+<section class="screen page" id="gradingScreen" hidden>
+  <div class="card">
+    <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
+    <div class="hometabs" role="tablist" aria-label="Home">
+      <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
+      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
+    </div>
+    <section class="panel tint-sun">
+      <div class="panelhead"><h3 class="sect">To grade</h3></div>
+      <div id="gradeTodo"></div>
+    </section>
+    <section class="panel">
+      <div class="panelhead"><h3 class="sect">Recently graded</h3></div>
+      <div id="gradeDone"></div>
+    </section>
+  </div>
+</section>
+
 <!-- Teacher: marking up one handed-in piece -->
 <section class="screen page" id="markScreen" hidden>
   <div class="card">
@@ -1656,6 +1687,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
@@ -1701,6 +1733,7 @@
       <button type="button" role="tab" data-tab="sessions">Writing sessions</button>
       <button type="button" role="tab" data-tab="students">Students</button>
       <button type="button" role="tab" data-tab="monitor">Monitor</button>
+      <button type="button" role="tab" data-tab="grading">Grading</button>
     </div>
     <div class="markbar">
       <button class="linkish" id="studentBack">&larr; Home</button>
@@ -1878,6 +1911,7 @@
     <div class="field promptfield askfield rich" id="askRich" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" hidden></div>
     <select class="field wide askfield" id="askSelect" hidden></select>
     <label class="fine casualcheck" id="askCheckRow" hidden><input type="checkbox" id="askCheck"> <span id="askCheckText"></span></label>
+    <div class="askothers" id="askOthers" hidden><p class="fine">Also for the same session in:</p><div id="askOthersList"></div></div>
     <div class="row" style="justify-content:flex-end; margin-top:18px">
       <button class="btn small ghost" id="askNo" type="button">Cancel</button>
       <button class="btn small" id="askYes" type="button">OK</button>
@@ -2045,6 +2079,17 @@
     // An optional checkbox under the field; read $('askCheck').checked after.
     $('askCheckRow').hidden = !o.check;
     $('askCheckText').textContent = o.check || '';
+    // Other sessions this change could go to too (o.others: [{ label, value, dot }]); read askOthersPicked() after.
+    $('askOthers').hidden = !(o.others && o.others.length);
+    $('askOthersList').innerHTML = '';
+    (o.others || []).forEach(function (x) {
+      var l = el('label', 'fine casualcheck');
+      var cb = el('input'); cb.type = 'checkbox'; cb.value = x.value;
+      l.appendChild(cb);
+      if (x.dot && x.dot.nodeType === 1) l.appendChild(x.dot);
+      l.appendChild(document.createTextNode(x.label));
+      $('askOthersList').appendChild(l);
+    });
     $('askCheck').checked = o.checked !== false;
     $('askSelect').onchange = o.onSelect || null;
     if (o.onSelect) setTimeout(o.onSelect, 0);
@@ -2074,6 +2119,7 @@
       };
     });
   }
+  function askOthersPicked() { return Array.prototype.filter.call($('askOthersList').querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
   function tell(title, text) { return ask({ title: title, text: text, ok: 'OK', cancel: false }); }
   function decodeJwtPayload(token) {
     try {
@@ -2274,7 +2320,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'proctorScreen', 'proctorRoomScreen', 'reflectScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'proctorScreen', 'proctorRoomScreen', 'reflectScreen', 'gradingScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -2301,13 +2347,13 @@
     document.body.classList.toggle('classpage', !!where && id === 'classScreen');
     if (id !== 'dashScreen') document.body.classList.remove('studentstab');
     // Teacher pages have Home's toggle instead of the dark bar (a proctor's page keeps the bar).
-    var tabbed = !!where && ['roomScreen', 'markScreen', 'studentScreen', 'classScreen', 'printScreen'].indexOf(id) !== -1;
+    var tabbed = !!where && ['roomScreen', 'markScreen', 'studentScreen', 'classScreen', 'printScreen', 'gradingScreen'].indexOf(id) !== -1;
     document.body.classList.toggle('nobar', tabbed);
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
     $('comingBox').hidden = true;
   }
-  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
+  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring', gradingScreen: 'Grading' };
   $('workHome').addEventListener('click', function () {
     if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
     showDash();
@@ -4816,6 +4862,57 @@
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
     document.body.classList.toggle('studentstab', t === 'students' && !$('dashScreen').hidden);
   }
+  // Grading: every writing session with papers to grade (handed in, no grade
+  // or comments yet), then the latest ones fully graded. A session's Grade
+  // opens its first paper to grade, stepping through its papers.
+  async function openGrading() {
+    setAnonCtx(null);
+    show('gradingScreen');
+    markTabs('grading');
+    $('gradeTodo').innerHTML = '';
+    $('gradeDone').innerHTML = '';
+    try { lastSessions = (await api('/luddite/assignments')).assignments || []; } catch (e) { $('gradeTodo').appendChild(el('div', 'empty', 'Couldn’t load your writing sessions.')); return; }
+    if ($('gradingScreen').hidden) return;
+    var row = function (r, label, btn) {
+      var it = el('div', 'item click');
+      it.tabIndex = 0;
+      var w = el('div', 'who');
+      var b = el('b');
+      if (r.classId) { var d = classDot(r.classId); if (d.nodeType === 1) b.appendChild(d); }
+      b.appendChild(document.createTextNode(r.title));
+      w.appendChild(b);
+      w.appendChild(el('span', null, (r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class') + ' \u00b7 ' + label));
+      it.appendChild(w);
+      var go = function () { gradeSession(r.code); };
+      it.appendChild(button(btn, 'btn small' + (btn === 'Grade' ? '' : ' ghost'), go));
+      it.addEventListener('click', function (e) { if (!e.target.closest('button')) go(); });
+      it.addEventListener('keydown', function (e) { if (e.target === it && e.key === 'Enter') go(); });
+      return it;
+    };
+    var recent = function (a, b) { return (b.endedAt || b.endAt || b.startAt || 0) - (a.endedAt || a.endAt || a.startAt || 0); };
+    var todo = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions > r.graded; }).sort(recent);
+    var done = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions && r.graded >= r.submissions; }).sort(recent).slice(0, 8);
+    if (!todo.length) $('gradeTodo').appendChild(el('div', 'empty', 'Nothing to grade.'));
+    todo.forEach(function (r) { var n = r.submissions - r.graded; $('gradeTodo').appendChild(row(r, plural(n, 'paper', 'papers') + ' to grade', 'Grade')); });
+    if (!done.length) $('gradeDone').appendChild(el('div', 'empty', 'Nothing graded yet.'));
+    done.forEach(function (r) { $('gradeDone').appendChild(row(r, 'all ' + plural(r.submissions, 'paper', 'papers') + ' graded', 'Open')); });
+  }
+  async function gradeSession(code) {
+    var room;
+    try { room = (await api('/luddite/assignment?code=' + encodeURIComponent(code))).room; } catch (e) { tell('Couldn’t open that session', 'Try again.'); return; }
+    // Its papers by name, leaving out students writing again.
+    var papers = latestPerStudent(room.submissions).filter(function (x) {
+      var st = room.students && room.students[x.sub];
+      return x.stored && !(st && st.status === 'admitted' && !st.handedIn);
+    }).sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
+    if (!papers.length) { tell('No papers to grade', 'Nobody in this session has a paper handed in.'); return; }
+    var returned = {};
+    papers.forEach(function (x) { if (x.returnedAt) returned[x.id] = true; });
+    var first = papers.filter(function (x) { return paperStage(x) === 'tograde'; })[0] || papers[0];
+    setAnonCtx(code);
+    openMark(first.id, openGrading, papers.map(function (x) { return x.id; }), returned);
+  }
+
   // Monitor: the writing session last opened on this device, else one
   // happening now, else the latest.
   async function openMonitor() {
@@ -4830,8 +4927,8 @@
       var t = b.dataset.tab;
       if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
       // The lit tab on a page within it steps back to where that page was opened from.
+      if (t === 'grading') { openGrading(); return; }
       if (b.classList.contains('on')) {
-        if (!$('markScreen').hidden && markBackTo) { markBackTo(); return; }
         if (!$('printScreen').hidden && printBackTo) { printBackTo(); return; }
         if (!$('studentScreen').hidden && studentBackTo) { studentBackTo(); return; }
       }
@@ -5852,11 +5949,14 @@
   }
   $('roomPromptText').addEventListener('click', function (e) { if (!window.getSelection().toString()) editPromptHere(); });
   $('roomPromptCancel').addEventListener('click', stopEditingPrompt);
-  $('roomPromptSave').addEventListener('click', function () {
+  $('roomPromptSave').addEventListener('click', async function () {
     var t = $('roomPromptField').value.trim();
     if (teacherRoom) teacherRoom.prompt = t;
     stopEditingPrompt();
     roomAction('prompt', [], { prompt: t });
+    var others = otherClassesOf(teacherRoom);
+    if (others.length && await ask({ title: 'Change the prompt for other classes too?', text: 'It’s saved for this class.', others: others, ok: 'Change those too', cancel: 'Just this class' }))
+      applyToOthers(askOthersPicked(), { action: 'prompt', prompt: t });
   });
   $('roomPromptField').addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { e.preventDefault(); stopEditingPrompt(); }
@@ -6763,19 +6863,37 @@
     var rf = teacherRoom.reflect;
     var t = await ask({ title: rf ? 'Reflection' : 'Ask for a reflection', text: 'Students whose paper is handed in reflect on it from their own Luddite page, full screen and locked like writing. Give them a prompt if you like.',
       input: 'rich', value: rf ? rf.prompt || '' : '', placeholder: 'Optional: what should they think about?',
-      check: 'Show them my comments and grade while they reflect', checked: rf ? !!rf.showGrading : false, ok: rf ? 'Save' : 'Ask for it' });
+      check: 'Show them my comments and grade while they reflect', checked: rf ? !!rf.showGrading : false, others: otherClassesOf(teacherRoom), ok: rf ? 'Save' : 'Ask for it' });
     if (t === null) return;
-    roomAction('reflect', [], { prompt: t.trim(), showGrading: $('askCheck').checked });
+    var show = $('askCheck').checked, picked = askOthersPicked();
+    roomAction('reflect', [], { prompt: t.trim(), showGrading: show });
+    applyToOthers(picked, { action: 'reflect', prompt: t.trim(), showGrading: show });
   });
   $('reflectOffBtn').addEventListener('click', async function () {
     if (!await ask({ title: 'Stop asking for reflections?', text: 'Students can’t start or go on with one. Reflections already written stay with their papers.', ok: 'Stop asking' })) return;
     roomAction('reflectOff', []);
   });
   $('promptBtn').addEventListener('click', async function () {
-    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'rich', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', ok: 'Save' });
+    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'rich', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', others: otherClassesOf(teacherRoom), ok: 'Save' });
     if (t === null) return;
+    var picked = askOthersPicked();
     roomAction('prompt', [], { prompt: t.trim() });
+    applyToOthers(picked, { action: 'prompt', prompt: t.trim() });
   });
+  // The same writing session (same name) for the teacher's other classes, to
+  // offer a change to them too (the prompt, a reflection), and sending it.
+  function otherClassesOf(room) {
+    var key = String(room.title || '').trim().toLowerCase();
+    return lastSessions.filter(function (r) { return r.code !== room.code && String(r.title || '').trim().toLowerCase() === key; }).map(function (r) {
+      return { value: r.code, label: r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class', dot: r.classId ? classDot(r.classId) : null };
+    });
+  }
+  function applyToOthers(codes, body) {
+    if (!codes.length) return;
+    Promise.all(codes.map(function (c) { return api('/luddite/assignment', Object.assign({ code: c, subs: [] }, body)); }))
+      .catch(function () { tell('Couldn’t change the other classes’ sessions', 'Try again from each one.'); });
+  }
+
   // Choosing something from Session options closes it.
   each('#roomMenu .pop button', function (b) { b.addEventListener('click', function () { $('roomMenu').open = false; }); });
   $('rubricBtn').addEventListener('click', async function () {
@@ -6876,6 +6994,7 @@
   // not yet handed back.
   var markList = [], markReturned = {};
   async function openMark(id, back, list, returned) {
+    markTabs('grading');
     markBackTo = back || showDash;
     markList = list && list.indexOf(id) !== -1 ? list : [id];
     if (returned) markReturned = returned;
