@@ -176,9 +176,20 @@
   .cdot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; margin-right: 7px; vertical-align: -3px; flex: none; color: #fff; font: 600 12px/1 var(--ui); text-shadow: 0 0 2px rgba(0,0,0,.35); }
   .cdot.noper { width: 12px; height: 12px; vertical-align: 0; }
   /* A session's page names its class and period big, above the title. */
-  #roomClass { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font: 600 25px/1.2 var(--ui); color: var(--ink); }
-  #roomClass .cdot { width: 44px; height: 44px; margin: 0; font-size: 28px; border-radius: 6px; vertical-align: 0; }
-  #roomClass .cdot.noper { width: 22px; height: 22px; }
+  /* A session's page: its name, then its class right beside it; under them
+     the state and, beside it, when; End session and Session options stay
+     top right. */
+  #roomScreen .head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 16px; }
+  #roomScreen .head > .row { flex-wrap: nowrap; padding-top: 6px; }
+  .roomhead .titlerow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
+  .roomhead .titlerow h2 { margin: 0; }
+  .roomhead .chiprow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 4px; }
+  .roomhead .chiprow .stamp { margin: 0; }
+  #roomClass { display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px 10px 4px 4px; border: 0; border-radius: 10px; background: none; cursor: pointer; font: 600 25px/1.2 var(--ui); color: var(--ink); }
+  #roomClass:hover, #roomClass:focus-visible { background: var(--hover); }
+  #roomClass[hidden] { display: none; }
+  #roomClass .cdot { width: 34px; height: 34px; margin: 0; font-size: 21px; border-radius: 6px; vertical-align: 0; }
+  #roomClass .cdot.noper { width: 18px; height: 18px; }
   h2 .cdot { width: 28px; height: 28px; font-size: 18px; border-radius: 4px; margin-right: 10px; vertical-align: 2px; }
   .classpick button .cdot { margin-right: 6px; box-shadow: 0 0 0 1.5px var(--card); }
   .swatches { display: inline-flex; gap: 8px; flex-wrap: wrap; }
@@ -689,7 +700,7 @@
   .menu .pop button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: 400 15px var(--ui); padding: 8px 12px; border-radius: 8px; cursor: pointer; }
   .menu .pop button:hover { background: var(--hover); }
   #roomMenu .pop { min-width: 290px; }
-  .menu .pop .popsec { font: 600 12px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 12px 3px; }
+  .menu .pop .popsec { font: 600 13px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); padding: 12px 12px 4px; }
   .menu .pop .popsec ~ .popsec { border-top: 1px solid var(--rule); margin-top: 4px; }
   .menu .pop button.danger { color: var(--tomato-deep); border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
   .menu .pop button.danger:hover { background: var(--tomato-tint); }
@@ -714,7 +725,7 @@
   .roomprompt .rprubric { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 14px; }
   .roomprompt [hidden] { display: none !important; }
   /* A session's page keeps End session and More at the top right, however long the prompt. */
-  #roomScreen .head { align-items: flex-start; }
+
   .readyprompt { text-align: left; background: var(--sun-tint); border-radius: 12px; padding: 12px 16px; margin: 0 0 18px; white-space: pre-wrap; font-size: 16px; }
   .readyprompt b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .switchrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 12px; margin-top: 8px; background: var(--card); }
@@ -1030,6 +1041,7 @@
   /* Where each student's paper is, on the right of their row. */
   .statusbub { flex: none; min-width: 112px; text-align: center; font: 600 13px var(--ui); padding: 4px 12px; border-radius: 999px; border: 1.5px solid transparent; white-space: nowrap; }
   button.statusbub { cursor: pointer; }
+  .statusbub.none { visibility: hidden; }
   button.statusbub:hover { filter: brightness(.96); text-decoration: underline; }
   .statusbub.gray { background: #E7E3DB; color: #5C564C; border-color: #CFC8BB; }
   .statusbub.pink { background: #F8D9E4; color: #8E2A55; border-color: #E59AB6; }
@@ -1418,7 +1430,7 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div><p id="roomClass" hidden></p><h2 id="roomTitle"></h2><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText"></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
+      <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText"></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -5563,7 +5575,12 @@
     if (!cn && cls) cn = cls.name || '';
     rc.innerHTML = '';
     rc.hidden = !room.classId;
+    rc.onclick = null;
     if (room.classId) {
+      // The class (its square and name) opens the class's page.
+      var cid = room.classId;
+      rc.onclick = function () { openClass(cid); };
+      rc.title = 'Open the class';
       rc.appendChild(classDot(room.classId));
       var per = classPeriod(cls);
       rc.appendChild(el('span', null, per && !/period/i.test(cn) ? per + ' period' + (cn ? ' · ' + cn : '') : cn));
@@ -5650,17 +5667,19 @@
     roomPaperIds = papers.map(function (x) { return x.id; });
     roomReturned = {};
     papers.forEach(function (x) { if (x.returnedAt) roomReturned[x.id] = true; });
-    var toGrade = papers.filter(function (x) { return paperStage(x) === 'tograde'; });
-    var toHand = papers.filter(function (x) { return paperStage(x) === 'graded'; });
+    // Only papers of students whose status is Handed in (not writing again) count.
+    var done = people.filter(function (p) { return p.x && p.x.stored && !p.f.canWrite; }).map(function (p) { return p.x; });
+    var toGrade = done.filter(function (x) { return paperStage(x) === 'tograde'; });
+    var toHand = done.filter(function (x) { return paperStage(x) === 'graded'; });
     var ns = $('nextStep'), nb = $('nextStepBtn');
-    ns.hidden = !papers.length;
+    ns.hidden = !done.length;
     nb.hidden = false;
     nb.onclick = null;
     if (toGrade.length) {
       ns.className = 'nextstep todo';
       nb.className = 'btn tograde';
       $('nextStepText').textContent = plural(toGrade.length, 'paper', 'papers') + ' to grade.';
-      nb.textContent = toGrade.length === papers.length ? 'Start grading' : 'Grade the next one';
+      nb.textContent = toGrade.length === done.length ? 'Start grading' : 'Grade the next one';
       nb.onclick = function () { openMark(toGrade[0].id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     } else if (toHand.length) {
       ns.className = 'nextstep ready';
@@ -5670,7 +5689,7 @@
       nb.onclick = function () { $('handBackAllBtn').click(); };
     } else {
       ns.className = 'nextstep done';
-      var ungraded = papers.filter(function (x) { return !x.grade && !x.marked; }).length;
+      var ungraded = done.filter(function (x) { return !x.grade && !x.marked; }).length;
       $('nextStepText').textContent = ungraded ? '✓ All grading is shared (' + ungraded + ' ungraded).' : '✓ Every paper is graded and its grading shared.';
       nb.hidden = true;
     }
@@ -5956,22 +5975,11 @@
     // shared, always shared). Writing again over a paper not yet shared: in progress.
     f.status = stage === 'back' ? 'shared' : f.canWrite || (!x && !over && !(s && s.handedIn)) ? 'progress' : stage === 'graded' ? 'graded' : stage === 'tograde' ? 'grade' : x ? 'progress' : 'none';
     f.rank = f.act === 'release' || f.act === 'unlock' || f.act === 'resume' || (s && chatUnread(s) && !liveOff) ? 0 : f.status === 'grade' ? 1 : f.act === 'handback' ? 2 : 3;
-    // The one line.
-    var gradeTxt = x && x.grade ? x.grade : '';
-    var warn = false, txt;
-    if (f.asks) { txt = s.handedIn ? '⚑ Asks to be unlocked' : '⚑ Asks to be let back in'; warn = true; }
-    else if (f.locked) { txt = 'Locked out: left the page'; warn = true; }
-    else if (!over && paused && s && !s.handedIn) txt = 'Paused';
-    else if (f.canWrite && isLive(s)) txt = 'Writing now';
-    else if (f.canWrite && s.away && !room.atHome) { txt = 'Off the page'; warn = true; }
-    else if (f.canWrite) txt = 'Not writing right now';
-    else if (stage === 'back' || stage === 'graded') txt = gradeTxt ? 'Grade: ' + gradeTxt : x.marked ? 'Marked up, no grade' : 'Handed in, no grade';
-    else if (x && !x.stored) { txt = 'Handed in, but not saved'; warn = true; }
-    else if (x) txt = 'Handed in';
-    else if (s && s.handedIn) txt = 'Handed in nothing';
-    else txt = state === 'ended' ? 'Didn’t hand in' : state === 'upcoming' ? 'Not started' : 'Not writing';
-    // Writing again after handing in (revising): say both.
-    if (f.canWrite && x && stage) txt += ' · revising' + (gradeTxt ? ' (graded ' + gradeTxt + ')' : '');
+    // The one word for where they are: Working (writing right now), Idle
+    // (could write, or is waiting, locked out or paused: the padlock and the
+    // row's button say which) or Handed in.
+    var handed = !f.canWrite && !!(x || (s && s.handedIn));
+    var txt = handed ? 'Handed in' : f.canWrite && isLive(s) ? 'Working' : 'Idle', warn = false;
     f.text = txt; f.warn = warn;
     return f;
   }
@@ -6003,7 +6011,7 @@
     // The padlock: open and green while they can write, shut and red when they can't.
     var lk = el('span', 'lockmark ' + (f.canWrite ? 'open' : 'bad'));
     lk.innerHTML = f.canWrite ? LOCK_OPEN : LOCK_SHUT;
-    lk.title = f.canWrite ? 'Can write' : f.locked ? 'Locked: left the page' : s && s.handedIn ? 'Locked: handed in' : f.text === 'Paused' ? 'Locked: paused' : 'Locked: can’t write';
+    lk.title = f.canWrite ? 'Can write' : f.locked ? 'Locked: left the page' : s && s.handedIn ? 'Locked: handed in' : s && !s.handedIn && (s.pausedAt || room.pausedAt) ? 'Locked: paused' : 'Locked: can’t write';
     lk.setAttribute('role', 'img');
     lk.setAttribute('aria-label', lk.title);
     // A click on the padlock locks or unlocks them, after a warning.
@@ -6061,9 +6069,12 @@
     row.appendChild(slot);
     // The status bubble; with a paper, it opens the grading (comments and the grade can change any time).
     var st = STATUS[f.status];
-    var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
-    if (x && x.stored) bub.title = 'Open the grading';
-    row.appendChild(bub);
+    // (no bubble while they're still writing: the line already says so)
+    if (f.status !== 'progress') {
+      var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
+      if (x && x.stored) bub.title = 'Open the grading';
+      row.appendChild(bub);
+    } else row.appendChild(el('span', 'statusbub none'));
 
     var menu = el('details', 'menu rowmenu');
     var sum = el('summary', 'iconbtn', '⋯');
