@@ -6244,7 +6244,12 @@
 
     // What's next across the session's papers, said once at the top.
     var papers = people.map(function (p) { return p.x; }).filter(function (x) { return x && x.stored; });
-    roomPaperIds = papers.map(function (x) { return x.id; });
+    // What Previous / Next steps through in the grading window: everyone in
+    // the Students list's order, their paper, or (no paper yet) their writing so far.
+    roomPaperIds = people.map(function (p) {
+      if (p.x && p.x.stored) return p.x.id;
+      return p.s && p.s.sub && p.s.status === 'admitted' && !p.s.handedIn ? 'early:' + room.code + ':' + p.s.sub : null;
+    }).filter(Boolean);
     roomReturned = {};
     papers.forEach(function (x) { if (x.returnedAt) roomReturned[x.id] = true; });
     // Only papers of students whose status is Handed in (not writing again) count.
@@ -6678,7 +6683,7 @@
       row.appendChild(bub);
     } else if (f.canWrite && s && s.sub) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
-      var early = button('Grade so far', 'statusbub ' + STATUS.grade[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, ['early:' + room.code + ':' + s.sub]); });
+      var early = button('Grade so far', 'statusbub ' + STATUS.grade[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
       early.title = 'Comment and grade what they’ve written so far; it moves to their paper when they hand it in';
       row.appendChild(early);
     } else row.appendChild(el('span', 'statusbub none'));
