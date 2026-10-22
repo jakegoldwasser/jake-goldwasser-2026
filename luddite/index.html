@@ -1034,8 +1034,10 @@
   .reflectsum .rfp { white-space: pre-wrap; flex: 1; }
   .reflectsum .rfcounts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .reflectsum .rfcounts .statusbub { min-width: 0; }
-  .reflectsum .rfwho { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .reflectsum .rfwho .statusbub { min-width: 0; }
+  .reflectsum #roomReflectWatch { margin-top: 10px; }
+  .rfviewnav { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+  .rfviewnav .grow { flex: 1; }
+  .rfviewnav .pos { font: 600 13px var(--ui); color: var(--muted); font-variant-numeric: tabular-nums; }
   .rfviewtext { white-space: pre-wrap; font: 17px/1.7 Literata, Georgia, serif; max-height: 60vh; overflow-y: auto; margin-top: 10px; }
   .reflectread { grid-column: 1 / -1; margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
   .reflectread > b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
@@ -1575,7 +1577,7 @@
       </div>
     </div>
     <div class="roomprompt" id="roomPromptLine" hidden><button type="button" class="iconbtn rpmin" id="roomPromptMore" hidden aria-label="Minimize the prompt" title="Minimize the prompt">&ndash;</button><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText" title="Click to edit the prompt"></div><div class="rpedit" id="roomPromptEdit" hidden><div class="field promptfield rich" id="roomPromptField" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The prompt" spellcheck="true" data-placeholder="What should they write about?"></div><div class="row"><button type="button" class="btn small ghost" id="roomPromptCancel">Cancel</button><button type="button" class="btn small" id="roomPromptSave">Save</button></div></div><div class="rpfoot"><span class="rprubric" id="roomRubricLine" hidden></span></div></div>
-    <div class="reflectsum" id="roomReflectLine" hidden><b>Reflection</b><div class="rftop"><div class="rfp" id="roomReflectPrompt"></div><button type="button" class="btn small ghost" id="roomReflectEdit">Edit</button></div><div class="rfcounts" id="roomReflectCounts"></div><div class="rfwho" id="roomReflectWho"></div></div>
+    <div class="reflectsum" id="roomReflectLine" hidden><b>Reflection</b><div class="rftop"><div class="rfp" id="roomReflectPrompt"></div><button type="button" class="btn small ghost" id="roomReflectEdit">Edit</button></div><div class="rfcounts" id="roomReflectCounts"></div><button type="button" class="btn small" id="roomReflectWatch" hidden>See reflections</button></div>
 
     <!-- What to do next, in one line and one button: grade, hand back, or nothing left to do. -->
     <div class="nextstep" id="nextStep" hidden><p id="nextStepText"></p><button class="btn" id="nextStepBtn" type="button"></button></div>
@@ -1939,7 +1941,7 @@
     <h2 id="rfViewTitle"></h2>
     <p class="fine" id="rfViewState"></p>
     <div class="rfviewtext" id="rfViewText"></div>
-    <div class="row" style="justify-content:flex-end; margin-top:16px"><button class="btn small" id="rfViewClose" type="button">Close</button></div>
+    <div class="rfviewnav"><button class="btn small ghost" id="rfViewPrev" type="button">&lsaquo; Previous</button><span class="pos" id="rfViewPos"></span><button class="btn small ghost" id="rfViewNext" type="button">Next &rsaquo;</button><span class="grow"></span><button class="btn small" id="rfViewClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -7007,34 +7009,39 @@
     box.appendChild(el('span', 'statusbub yellow', n.on + ' reflecting'));
     box.appendChild(el('span', 'statusbub gray', n.none + ' not started'));
     if (rf.showGrading) box.appendChild(el('span', 'fine', 'They see your comments and grade.'));
-    // Who: each one reflecting or done opens what they've written (live while they write).
-    var who2 = $('roomReflectWho');
-    who2.innerHTML = '';
+    // Everyone reflecting or done, in name order, for the window See reflections opens.
     var papersBy = {};
     latestPerStudent(room.submissions).forEach(function (x) { if (x.stored) papersBy[x.sub] = x.id; });
-    Object.keys(room.students || {}).map(function (sub) { return { sub: sub, st: room.students[sub] }; })
+    rfViewList = Object.keys(room.students || {}).map(function (sub) { return { sub: sub, st: room.students[sub] }; })
       .filter(function (p) { return p.st.status === 'admitted' && p.st.handedIn && p.st.reflect && papersBy[p.sub]; })
       .sort(function (a, b) { return who(a.st.name, a.st.email).localeCompare(who(b.st.name, b.st.email)); })
-      .forEach(function (p) {
-        var done = p.st.reflect.status === 'done';
-        var b = button(who(p.st.name, p.st.email), 'statusbub ' + (done ? 'green' : 'yellow'), function () { openReflectView(papersBy[p.sub], who(p.st.name, p.st.email)); });
-        b.title = done ? 'Reflection handed in: read it' : 'Reflecting: see what they\u2019re writing';
-        who2.appendChild(b);
-      });
+      .map(function (p) { return { paperId: papersBy[p.sub], name: who(p.st.name, p.st.email) }; });
+    $('roomReflectWatch').hidden = !rfViewList.length;
+    if (!$('rfViewBox').hidden) drawReflectNav();
   }
-  // One student's reflection, read by the teacher; while they're still
-  // writing it, it refreshes every few seconds.
-  var rfViewTimer = null;
-  async function openReflectView(paperId, name) {
-    $('rfViewTitle').textContent = name + '\u2019s reflection';
+  // The reflections window: one student's reflection at a time (refreshed every
+  // few seconds while they're still writing it), Previous / Next through the rest.
+  var rfViewTimer = null, rfViewList = [], rfViewAt = 0;
+  $('roomReflectWatch').addEventListener('click', function () { openReflectView(0); });
+  function drawReflectNav() {
+    $('rfViewPos').textContent = (rfViewAt + 1) + ' of ' + rfViewList.length;
+    $('rfViewPrev').disabled = rfViewAt <= 0;
+    $('rfViewNext').disabled = rfViewAt >= rfViewList.length - 1;
+  }
+  async function openReflectView(i) {
+    if (!rfViewList.length) return;
+    rfViewAt = Math.max(0, Math.min(rfViewList.length - 1, i));
+    var item = rfViewList[rfViewAt];
+    $('rfViewTitle').textContent = item.name + '\u2019s reflection';
     $('rfViewState').textContent = 'Loading\u2026';
     $('rfViewText').textContent = '';
     $('rfViewBox').hidden = false;
+    drawReflectNav();
     clearInterval(rfViewTimer);
     var load = async function () {
       try {
-        var p = (await api('/luddite/sub?id=' + encodeURIComponent(paperId))).sub, r = p.reflection || {};
-        if ($('rfViewBox').hidden) return;
+        var p = (await api('/luddite/sub?id=' + encodeURIComponent(item.paperId))).sub, r = p.reflection || {};
+        if ($('rfViewBox').hidden || rfViewList[rfViewAt] !== item) return;
         $('rfViewText').textContent = r.text || '';
         $('rfViewState').textContent = r.handedInAt ? 'Handed in ' + dayClock(r.handedInAt) : r.text ? 'Still writing \u00b7 ' + plural((r.text.trim().match(/\S+/g) || []).length, 'word', 'words') + ' so far' : 'Nothing written yet';
         if (r.handedInAt) clearInterval(rfViewTimer);
@@ -7043,6 +7050,13 @@
     await load();
     rfViewTimer = setInterval(load, 6000);
   }
+  $('rfViewPrev').addEventListener('click', function () { openReflectView(rfViewAt - 1); });
+  $('rfViewNext').addEventListener('click', function () { openReflectView(rfViewAt + 1); });
+  $('rfViewBox').addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') openReflectView(rfViewAt - 1);
+    else if (e.key === 'ArrowRight') openReflectView(rfViewAt + 1);
+    else if (e.key === 'Escape') { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); }
+  });
   $('rfViewClose').addEventListener('click', function () { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); });
   $('rfViewBox').addEventListener('click', function (e) { if (e.target === $('rfViewBox')) { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); } });
   $('roomReflectEdit').addEventListener('click', function () { $('reflectBtn').click(); });
