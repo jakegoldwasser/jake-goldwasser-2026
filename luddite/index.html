@@ -2723,7 +2723,7 @@
   document.addEventListener('webkitfullscreenchange', function () { if (!isFs()) rfLeft(); });
   setInterval(function () {
     if (!reflecting || reflecting.locked || reflecting.leaving || settling()) return;
-    if ((fsNeeded() && !isFs()) || document.hidden || !document.hasFocus()) rfLeft();
+    if ((fsNeeded() && (!isFs() || splitScreen())) || document.hidden || !document.hasFocus()) rfLeft();
   }, 500);
   $('rfHandIn').addEventListener('click', async function () {
     if (!reflecting) return;
@@ -3529,6 +3529,15 @@
 
   function fsNeeded() { return !fsExempt() && P().lockOnLeave; }
   function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  // Full screen, but sharing the screen with another window: a Mac's Split
+  // View (or a Chromebook's side by side) keeps Luddite in full screen and
+  // focused while another app shows beside it. Real full screen fills the
+  // screen; this doesn't. (outerWidth and screen.width are both in screen
+  // points, so the page's zoom doesn't change them.)
+  function splitScreen() {
+    if (!isFs() || !window.outerWidth || !screen.width) return false;
+    return window.outerWidth < screen.width * 0.9 || window.outerHeight < screen.height * 0.8;
+  }
   function keyboardLock() {
     // Chromium only: in full screen, send Esc, Cmd/Ctrl+W/T/N and the
     // like to the page instead of the browser, so they can be swallowed
@@ -3578,6 +3587,7 @@
   function checkStillHere() {
     if (!writing || locked || leavingOnPurpose || !P().lockOnLeave || settling()) return;
     if (fsNeeded() && !isFs()) lock('You left full screen');
+    else if (fsNeeded() && splitScreen()) lock('You put another window beside this one');
     else if (document.hidden) lock('You switched tabs');
     else if (!document.hasFocus()) lock('You switched to another window');
   }
