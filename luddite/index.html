@@ -1818,7 +1818,7 @@
         <form class="chatsend wrap" id="tChatForm" autocomplete="off"><textarea class="field" id="tChatInput" rows="2" maxlength="1000" aria-label="Your live comment" placeholder="A live comment to this student"></textarea><button class="btn small" type="submit">Send</button></form>
       </div>
     </div>
-    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><button class="btn ghost" id="liveClose" type="button">Close</button></div>
+    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><span class="row" style="margin:0;gap:8px"><button class="btn tograde" id="liveGrade" type="button">Grade</button><button class="btn ghost" id="liveClose" type="button">Close</button></span></div>
   </div>
 </div>
 
@@ -6445,6 +6445,16 @@
     if (atEnd || fresh) box.scrollTop = box.scrollHeight;
   }
   $('liveClose').addEventListener('click', function () { $('liveBox').hidden = true; liveOpen = null; });
+  // Grade, from the live view: this student's grading window (their paper if
+  // they have one, with its comments; else their writing so far).
+  $('liveGrade').addEventListener('click', function () {
+    var room = teacherRoom, sub = liveOpen;
+    if (!room || !sub) return;
+    var paper = latestPerStudent(room.submissions).filter(function (x) { return x.sub === sub && x.stored; })[0];
+    var id = paper ? paper.id : 'early:' + room.code + ':' + sub;
+    $('liveBox').hidden = true; liveOpen = null;
+    openMark(id, function () { openRoom(room.code); }, roomPaperIds.indexOf(id) !== -1 ? roomPaperIds : [id], roomReturned);
+  });
   // Previous / Next (or the arrow keys): the students still writing, in the Students list's order.
   var livePeople = [];
   function liveStep(by) {
