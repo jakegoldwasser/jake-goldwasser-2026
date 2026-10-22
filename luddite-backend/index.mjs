@@ -1439,6 +1439,37 @@ async function routeLuddite(event, method, path, info) {
   if (path === '/luddite/sub' && method === 'GET') {
     let piece = await ownSub(q.id, me, role);
     const { state: room } = await readItem('luddite:room:' + piece.code);
+    // One document: comments made before it was one -- on the student's
+    // earlier papers in this session (`replaces`, from when each hand-in made
+    // a new paper) or on their writing in progress (luddite:early) -- are
+    // moved onto it and saved there, once (`gathered`); after that only the
+    // teacher deletes them.
+    const { state: early } = await readItem('luddite:early:' + piece.code + ':' + piece.sub);
+    const olds = piece.gathered ? [] : await Promise.all((piece.replaces || []).slice(0, 10).map((id) => readItem('luddite:sub:' + id).then((x) => x.state).catch(() => null)));
+    const sources = [...olds.filter((x) => x && Array.isArray(x.marks) && (x.marks.length || (x.endComment || '').trim() || x.grade)),
+      ...(early && !early.usedAt ? [{ text: early.base, marks: early.marks, endComment: early.endComment, grade: early.grade }] : [])];
+    if (sources.length || (!piece.gathered && (piece.replaces || []).length)) {
+      piece = await mutate('luddite:sub:' + piece.id, (x) => {
+        let next = { ...x, gathered: true };
+        for (const src of sources) {
+          next.marks = mergeMarks(next.marks, reanchorMarks(src.marks || [], String(src.text || ''), next.text));
+          const ec = (src.endComment || '').trim();
+          if (ec && !(next.endComment || '').includes(ec)) next.endComment = next.endComment ? next.endComment + '\n\n' + src.endComment : src.endComment;
+          if (!next.grade && src.grade) next.grade = src.grade;
+        }
+        return next;
+      });
+      if (early && !early.usedAt) await mutate('luddite:early:' + piece.code + ':' + piece.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: piece.id } : undefined));
+      const count = (piece.marks || []).length + ((piece.endComment || '').trim() ? 1 : 0);
+      await mutate('luddite:room:' + piece.code, (r) => {
+        if (!r) return undefined;
+        const i = (r.submissions || []).findIndex((x) => x.id === piece.id);
+        if (i === -1) return undefined;
+        const submissions = r.submissions.slice();
+        submissions[i] = { ...submissions[i], marked: count, grade: piece.grade || '' };
+        return { ...r, submissions };
+      }).catch(() => {});
+    }
     // Writing again over it: the document is their writing now, every comment moved onto it.
     const st = room && room.students && room.students[piece.sub];
     if (st && st.status === 'admitted' && !st.handedIn) {
@@ -1447,21 +1478,9 @@ async function routeLuddite(event, method, path, info) {
         piece = { ...piece, text: d.text, words: (d.text.trim().match(/\S+/g) || []).length, marks: reanchorMarks(piece.marks, piece.text, d.text), live: true };
       }
     }
-    // One document: comments made before it was one -- on the student's
-    // earlier papers in this session (`replaces`, from when each hand-in made
-    // a new paper) or on their writing in progress (luddite:early) -- are
-    // gathered onto it; the teacher's next save keeps them there.
-    const olds = await Promise.all((piece.replaces || []).slice(0, 10).map((id) => readItem('luddite:sub:' + id).then((x) => x.state).catch(() => null)));
-    const { state: early } = await readItem('luddite:early:' + piece.code + ':' + piece.sub);
-    const sources = [...olds.filter((x) => x && Array.isArray(x.marks)).map((x) => ({ text: x.text, marks: x.marks, endComment: x.endComment, grade: x.grade })),
-      ...(early && !early.usedAt ? [{ text: early.base, marks: early.marks, endComment: early.endComment, grade: early.grade }] : [])];
-    for (const src of sources) {
-      piece = { ...piece, marks: mergeMarks(piece.marks, reanchorMarks(src.marks, String(src.text || ''), piece.text)) };
-      if (src.endComment && src.endComment.trim() && !(piece.endComment || '').includes(src.endComment.trim())) piece.endComment = piece.endComment ? piece.endComment + '\n\n' + src.endComment : src.endComment;
-      if (!piece.grade && src.grade) piece.grade = src.grade;
-    }
     return respond(200, { sub: piece, roomRubric: (room && room.rubric) || null });
   }
+
 
   // PUT /luddite/marks { id, marks, endComment, grade, rubric, rubricScores } -- the teacher's comments,
   // cross-outs and insertions, all anchored to character offsets in the
@@ -2296,6 +2315,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
     if (early1) await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
     const paper = await mutate('luddite:sub:' + id, () => ({
       ...(prev || {}),
+      ...(prev ? { gathered: prev.gathered || !(prev.replaces || []).length } : {}),
       id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
       label, text, words, leaves: s.leaves || 0, at, link: submission.link, ...carried,
       ...(chat.length ? { chat } : {})
