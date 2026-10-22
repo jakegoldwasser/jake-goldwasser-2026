@@ -1075,8 +1075,9 @@ async function routeLuddite(event, method, path, info) {
     if (typeof body.text === 'string' && (type === 'save' || type === 'handin') && !rf.lockedOut && (rf.status !== 'done' || type === 'handin')) {
       const text = body.text.slice(0, MAX_REFLECTION_CHARS);
       paper = await mutate('luddite:sub:' + sub.id, (x) => {
+        // (a reflection the teacher reopened is written over; its old hand-in time goes)
         const prev = x.reflection || {};
-        if (prev.handedInAt) return undefined;
+        if (prev.handedInAt && rf.status === 'done' && type !== 'handin') return undefined;
         return { ...x, reflection: { text, words: (text.trim().match(/\S+/g) || []).length, at: Date.now(), ...(rf.status === 'done' ? { handedInAt: rf.handedInAt } : {}) } };
       });
     }
