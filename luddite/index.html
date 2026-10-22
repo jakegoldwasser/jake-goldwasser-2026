@@ -183,6 +183,13 @@
   #roomScreen .head > .row { flex-wrap: nowrap; padding-top: 6px; }
   .roomhead .titlerow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
   .roomhead .titlerow h2 { margin: 0; }
+  .sibmenu { margin-left: -10px; }
+  .sibmenu > summary.iconbtn { width: 34px; height: 34px; border: 0; font-size: 22px; list-style: none; }
+  .sibmenu > summary::-webkit-details-marker { display: none; }
+  .sibmenu > summary.iconbtn:hover { background: var(--hover); }
+  .sibmenu .pop { left: 0; right: auto; }
+  .sibmenu .pop button { display: flex; align-items: center; gap: 8px; }
+  .sibmenu .pop button.here { font-weight: 600; cursor: default; }
   .roomhead .chiprow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 4px; }
   .roomhead .chiprow .stamp { margin: 0; }
   #roomClass { display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px 10px 4px 4px; border: 0; border-radius: 10px; background: none; cursor: pointer; font: 600 25px/1.2 var(--ui); color: var(--ink); }
@@ -715,11 +722,16 @@
   /* A session's page: the prompt in a card, its paragraphs evenly spaced,
      a long one cut to a few lines until opened. */
   .roomprompt { max-width: 64ch; margin: 14px 0 4px; padding: 12px 16px 14px; background: var(--card); border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--rule); color: var(--ink); }
-  .roomprompt b { display: block; margin-bottom: 4px; }
+  .roomprompt > b { display: block; margin-bottom: 4px; }
   .roomprompt .rptext { font-size: 16px; line-height: 1.5; }
   .roomprompt .rptext p { margin: 0 0 8px; white-space: pre-wrap; }
   .roomprompt .rptext p:last-child { margin-bottom: 0; }
   .roomprompt.cut .rptext { max-height: 7.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+  .roomprompt .rptext { cursor: text; border-radius: 6px; }
+  .roomprompt .rptext:hover { background: var(--hover); box-shadow: 0 0 0 6px var(--hover); }
+  .roomprompt .rpedit .promptfield { min-height: 120px; height: auto; max-height: 60vh; resize: vertical; }
+  .roomprompt .rpedit .row { justify-content: flex-end; margin-top: 8px; }
+  .roomprompt.editing .rptext, .roomprompt.editing .rpfoot { display: none; }
   .roomprompt .rpfoot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 10px; }
   .roomprompt .rpfoot:not(:has(> :not([hidden]))) { display: none; }
   .roomprompt .rprubric { display: inline-flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; color: var(--muted); font-size: 14px; }
@@ -727,7 +739,7 @@
   /* A session's page keeps End session and More at the top right, however long the prompt. */
 
   .readyprompt { text-align: left; background: var(--sun-tint); border-radius: 12px; padding: 12px 16px; margin: 0 0 18px; white-space: pre-wrap; font-size: 16px; }
-  .readyprompt b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .readyprompt > b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .switchrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 12px; margin-top: 8px; background: var(--card); }
   .switchrow .nm { font-weight: 600; font-size: 15px; }
   .switchrow .segctl { flex: none; margin-left: auto; }
@@ -1125,7 +1137,7 @@
   .pbtn b { font: 600 18px/1.1 var(--ui); }
   [data-tip]:hover::after, [data-tip]:focus::after { font-size: 14px; }
   /* Labels: small capitals, never a name */
-  .panel .grouphead .n, .phraselbl, .joinlbl, .rcard .phraseline .k, .gradebox label, .endwrap label, .rubrichead .t, #promptBar .pk, .readyprompt b, .roomprompt b {
+  .panel .grouphead .n, .phraselbl, .joinlbl, .rcard .phraseline .k, .gradebox label, .endwrap label, .rubrichead .t, #promptBar .pk, .readyprompt > b, .roomprompt > b {
     font: 600 12px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   /* Home's Happening now / Coming up / Past: a label, but in ink and a size up, so it doesn't fade. */
   .panel .grouphead { font: 600 14px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
@@ -1430,7 +1442,7 @@
   <div class="card">
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="head">
-      <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText"></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
+      <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><details class="menu sibmenu" id="sibMenu" hidden><summary class="iconbtn" aria-label="The same writing session for another class" title="Another class">&#9662;</summary><div class="pop" id="sibList"></div></details><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div><div class="roomprompt" id="roomPromptLine" hidden><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText" title="Click to edit the prompt"></div><div class="rpedit" id="roomPromptEdit" hidden><div class="field promptfield rich" id="roomPromptField" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The prompt" spellcheck="true" data-placeholder="What should they write about?"></div><div class="row"><button type="button" class="btn small ghost" id="roomPromptCancel">Cancel</button><button type="button" class="btn small" id="roomPromptSave">Save</button></div></div><div class="rpfoot"><button type="button" class="btn small ghost" id="roomPromptMore" hidden>Show the whole prompt</button><span class="rprubric" id="roomRubricLine" hidden></span></div></div></div>
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
@@ -5460,6 +5472,7 @@
     $('roomTitle').textContent = '';
     $('roomClass').hidden = true;
     roomPromptOpen = false; roomPromptShown = null;
+    promptEditing = false; $('roomPromptLine').classList.remove('editing'); $('roomPromptEdit').hidden = true;
     $('roomCode').textContent = '';
     $('roomLink').textContent = '';
     ['waitingList', 'peopleList', 'ownList', 'notHereList'].forEach(function (id) { $(id).innerHTML = ''; });
@@ -5548,6 +5561,7 @@
   // lines between are just the gap), cut to a few lines until opened.
   var roomPromptOpen = false, roomPromptShown = null;
   function drawRoomPrompt(text) {
+    if (promptEditing) return;
     $('roomPromptLine').hidden = !text;
     if (text === roomPromptShown) return;
     roomPromptShown = text;
@@ -5560,17 +5574,80 @@
     $('roomPromptLine').classList.toggle('cut', long && !roomPromptOpen);
     $('roomPromptMore').textContent = roomPromptOpen ? 'Show less' : 'Show the whole prompt';
   }
+  // A click on the prompt edits it right there (the same rich field as
+  // Edit the prompt): Save, or Cancel / Esc; Cmd/Ctrl+Enter saves.
+  var promptEditing = false;
+  richField($('roomPromptField'));
+  function editPromptHere() {
+    if (!teacherRoom) return;
+    promptEditing = true;
+    $('roomPromptLine').hidden = false;
+    $('roomPromptLine').classList.add('editing');
+    $('roomPromptEdit').hidden = false;
+    $('roomPromptField').value = teacherRoom.prompt || '';
+    $('roomPromptField').focus();
+    richCaretEnd($('roomPromptField'));
+  }
+  function stopEditingPrompt() {
+    promptEditing = false;
+    $('roomPromptLine').classList.remove('editing');
+    $('roomPromptEdit').hidden = true;
+    roomPromptShown = null;
+    drawRoomPrompt(teacherRoom && teacherRoom.prompt || '');
+    if (teacherRoom) $('roomPromptLine').hidden = !teacherRoom.prompt && !teacherRoom.rubric;
+  }
+  $('roomPromptText').addEventListener('click', function (e) { if (!window.getSelection().toString()) editPromptHere(); });
+  $('roomPromptCancel').addEventListener('click', stopEditingPrompt);
+  $('roomPromptSave').addEventListener('click', function () {
+    var t = $('roomPromptField').value.trim();
+    if (teacherRoom) teacherRoom.prompt = t;
+    stopEditingPrompt();
+    roomAction('prompt', [], { prompt: t });
+  });
+  $('roomPromptField').addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); stopEditingPrompt(); }
+    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('roomPromptSave').click(); }
+  });
   $('roomPromptMore').addEventListener('click', function () {
     roomPromptOpen = !roomPromptOpen;
     $('roomPromptLine').classList.toggle('cut', !roomPromptOpen);
     this.textContent = roomPromptOpen ? 'Show less' : 'Show the whole prompt';
   });
 
+  // The ▾ beside a session's name: the same writing session (same name) for
+  // each of the teacher's other classes, from Home's list (fetched if Home
+  // hasn't been drawn yet).
+  function drawSiblings(room) {
+    var key = String(room.title || '').trim().toLowerCase();
+    var sibs = lastSessions.filter(function (r) { return String(r.title || '').trim().toLowerCase() === key; });
+    if (!lastSessions.length && !drawSiblings.asked) {
+      drawSiblings.asked = true;
+      api('/luddite/assignments').then(function (d) { lastSessions = d.assignments || []; if (teacherRoom && teacherRoom.code === room.code) drawSiblings(room); }).catch(function () {});
+    }
+    var menu = $('sibMenu'), list = $('sibList');
+    menu.hidden = !sibs.some(function (r) { return r.code !== room.code; });
+    menu.open = false;
+    list.innerHTML = '';
+    if (menu.hidden) return;
+    sibs.slice().sort(function (a, b) {
+      return (classPeriod(classById(a.classId)) || '~').localeCompare(classPeriod(classById(b.classId)) || '~');
+    }).forEach(function (r) {
+      var b = el('button', r.code === room.code ? 'here' : null);
+      b.type = 'button';
+      var d = r.classId ? classDot(r.classId) : null;
+      if (d && d.nodeType === 1) b.appendChild(d);
+      b.appendChild(document.createTextNode((r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class') + (r.code === room.code ? ' (this one)' : '')));
+      b.addEventListener('click', function () { menu.open = false; if (r.code !== room.code) openRoom(r.code); });
+      list.appendChild(b);
+    });
+  }
+
   function drawRoom(room, drive) {
     var state = roomState(room);
     var cn = room.classId && teacherRoster ? teacherRoster.name : '';
     $('roomTitle').textContent = room.title;
-    // The class and its period, big, above the title.
+    drawSiblings(room);
+    // The class and its period, beside the title.
     var rc = $('roomClass'), cls = room.classId ? classById(room.classId) : null;
     if (!cn && cls) cn = cls.name || '';
     rc.innerHTML = '';
@@ -5599,7 +5676,7 @@
     }
     rl.hidden = !room.rubric;
     // The rubric sits in the prompt's card (which shows for either).
-    $('roomPromptLine').hidden = !room.prompt && !room.rubric;
+    if (!promptEditing) $('roomPromptLine').hidden = !room.prompt && !room.rubric;
     $('roomPromptK').hidden = $('roomPromptText').hidden = !room.prompt;
     $('roomCode').textContent = room.codeLabel || room.code;
     $('roomLink').textContent = joinLink(room);
