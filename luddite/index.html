@@ -882,6 +882,10 @@
   }
   .casualcheck { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; color: var(--ink); font-size: 15px; }
   #classesBox { margin-top: 4px; }
+  .classcard .classcaret { margin-left: auto; border: 0; width: 38px; height: 38px; font-size: 24px; }
+  .classcard .classcaret:hover { background: var(--hover); }
+  .classcard .classroster { flex-basis: 100%; border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 2px; cursor: default; }
+  .classcard .classroster .item { padding: 6px 4px; }
   /* Home's toggle: three big halves of one pill, the chosen one filled. */
   .hometabs { display: flex; gap: 4px; padding: 4px; margin: 4px 0 20px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); }
   .hometabs button { flex: 1; white-space: nowrap; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font: 600 17px/1.2 var(--ui); padding: 11px 8px; cursor: pointer; }
@@ -5258,6 +5262,30 @@
     var g = periodInName($('newClassName').value);
     if (g !== newClassPeriod) { newClassPeriod = g; periodSeg($('newClassPeriod'), g, function (l) { newClassPeriod = l; newClassPeriodSet = true; }); }
   });
+  var openRosters = {};
+  // A class's students, under its card: each opens everything they've handed in.
+  async function fillRoster(box, id) {
+    box.innerHTML = '';
+    box.appendChild(el('div', 'empty', 'Loading…'));
+    var emails;
+    try { emails = (await api('/luddite/class?id=' + encodeURIComponent(id)))['class'].emails; } catch (e) { box.innerHTML = ''; box.appendChild(el('div', 'empty', 'Couldn’t load the students.')); return; }
+    var names = {};
+    students.forEach(function (x) { names[x.email] = x.name; });
+    box.innerHTML = '';
+    if (!emails.length) { box.appendChild(el('div', 'empty', 'No one on this list yet.')); return; }
+    emails.slice().sort(function (a, b) { return who(names[a], a).localeCompare(who(names[b], b)); }).forEach(function (email) {
+      var row = el('div', 'item click');
+      row.tabIndex = 0;
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, who(names[email], email)));
+      if (names[email]) w.appendChild(el('span', null, email));
+      row.appendChild(w);
+      var go = function (e) { if (e) e.stopPropagation(); openStudent(email, function () { showDash(); setHomeTab('students'); }); };
+      row.addEventListener('click', go);
+      row.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(e); });
+      box.appendChild(row);
+    });
+  }
   function drawClasses() {
     var box = $('classList');
     box.innerHTML = '';
@@ -5275,7 +5303,25 @@
       info.appendChild(h);
       info.appendChild(el('div', 'meta', plural(c.count, 'student', 'students') + (c.period ? ' \u00b7 ' + c.period + ' period' : '')));
       card.appendChild(info);
-      card.addEventListener('click', function () { openClass(c.id); });
+      // ▾ shows the class's students right here, without opening the class.
+      var caret = el('button', 'iconbtn classcaret', openRosters[c.id] ? '\u25b4' : '\u25be');
+      caret.type = 'button';
+      caret.title = 'Show the students';
+      caret.setAttribute('aria-expanded', String(!!openRosters[c.id]));
+      var roster = el('div', 'classroster');
+      roster.hidden = !openRosters[c.id];
+      if (openRosters[c.id]) fillRoster(roster, c.id);
+      caret.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openRosters[c.id] = !openRosters[c.id];
+        roster.hidden = !openRosters[c.id];
+        caret.textContent = openRosters[c.id] ? '\u25b4' : '\u25be';
+        caret.setAttribute('aria-expanded', String(!!openRosters[c.id]));
+        if (openRosters[c.id]) fillRoster(roster, c.id);
+      });
+      card.appendChild(caret);
+      card.appendChild(roster);
+      card.addEventListener('click', function (e) { if (!e.target.closest('.classroster')) openClass(c.id); });
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openClass(c.id); } });
       box.appendChild(card);
     });
