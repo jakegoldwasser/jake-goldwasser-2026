@@ -877,7 +877,9 @@
   .hometabs button:hover:not(.on) { background: var(--hover); }
   .hometabs button.on { background: var(--ink); color: var(--card); }
   .hometab[hidden] { display: none; }
-  .panel.tint-rose { background: #F7E6EA; border-color: #D9A9B5; }
+  /* Home's Students tab: the whole page pink (like a class's page), its panels plain cards. */
+  body.studentstab { background: #F2DFE4; }
+  .hometab[data-tab="students"] .panel { background: var(--card); border-color: #D9A9B5; }
   /* A writing session's card on Home: one per name; each class's square opens its session. */
   .rcard .squares { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .rcard .sqbtn { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 6px; line-height: 0; }
@@ -1416,7 +1418,7 @@
     </div>
 
     <div class="hometab" data-tab="students">
-    <section class="panel tint-rose">
+    <section class="panel">
       <div id="classesBox">
         <div id="classList"></div>
         <button class="btn small ghost" id="newClassToggle" type="button">+ New class</button>
@@ -2220,6 +2222,7 @@
     var where = isTeacher && !previewing && !reading && WORK_PAGES[id];
     document.body.classList.toggle('work', !!where);
     document.body.classList.toggle('classpage', !!where && id === 'classScreen');
+    if (id !== 'dashScreen') document.body.classList.remove('studentstab');
     // A session's page has Home's toggle; the bar's Home button is for the other pages.
     $('workHome').hidden = id === 'roomScreen';
     $('workWhere').textContent = where || '';
@@ -3706,6 +3709,7 @@
     mode = 'room';
     setAnonCtx(null);
     markTabs(homeTab);
+    document.body.classList.toggle('studentstab', homeTab === 'students');
     show('dashScreen');
     $('teachersSection').hidden = me.role !== 'owner';
     if (me.role === 'owner') loadTeachers();
@@ -4605,6 +4609,7 @@
     store('luddite.homeTab', t === 'sessions' ? null : t);
     markTabs(t);
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
+    document.body.classList.toggle('studentstab', t === 'students' && !$('dashScreen').hidden);
   }
   // Monitor: the writing session last opened on this device, else one
   // happening now, else the latest.
