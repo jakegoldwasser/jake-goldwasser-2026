@@ -1034,6 +1034,9 @@
   .reflectsum .rfp { white-space: pre-wrap; flex: 1; }
   .reflectsum .rfcounts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .reflectsum .rfcounts .statusbub { min-width: 0; }
+  .reflectsum .rfwho { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .reflectsum .rfwho .statusbub { min-width: 0; }
+  .rfviewtext { white-space: pre-wrap; font: 17px/1.7 Literata, Georgia, serif; max-height: 60vh; overflow-y: auto; margin-top: 10px; }
   .reflectread { grid-column: 1 / -1; margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
   .reflectread > b { display: block; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .reflectread .rtext { white-space: pre-wrap; font: 16px/1.65 Literata, Georgia, serif; }
@@ -1572,7 +1575,7 @@
       </div>
     </div>
     <div class="roomprompt" id="roomPromptLine" hidden><button type="button" class="iconbtn rpmin" id="roomPromptMore" hidden aria-label="Minimize the prompt" title="Minimize the prompt">&ndash;</button><b id="roomPromptK">Prompt</b><div class="rptext" id="roomPromptText" title="Click to edit the prompt"></div><div class="rpedit" id="roomPromptEdit" hidden><div class="field promptfield rich" id="roomPromptField" contenteditable="true" role="textbox" aria-multiline="true" aria-label="The prompt" spellcheck="true" data-placeholder="What should they write about?"></div><div class="row"><button type="button" class="btn small ghost" id="roomPromptCancel">Cancel</button><button type="button" class="btn small" id="roomPromptSave">Save</button></div></div><div class="rpfoot"><span class="rprubric" id="roomRubricLine" hidden></span></div></div>
-    <div class="reflectsum" id="roomReflectLine" hidden><b>Reflection</b><div class="rftop"><div class="rfp" id="roomReflectPrompt"></div><button type="button" class="btn small ghost" id="roomReflectEdit">Edit</button></div><div class="rfcounts" id="roomReflectCounts"></div></div>
+    <div class="reflectsum" id="roomReflectLine" hidden><b>Reflection</b><div class="rftop"><div class="rfp" id="roomReflectPrompt"></div><button type="button" class="btn small ghost" id="roomReflectEdit">Edit</button></div><div class="rfcounts" id="roomReflectCounts"></div><div class="rfwho" id="roomReflectWho"></div></div>
 
     <!-- What to do next, in one line and one button: grade, hand back, or nothing left to do. -->
     <div class="nextstep" id="nextStep" hidden><p id="nextStepText"></p><button class="btn" id="nextStepBtn" type="button"></button></div>
@@ -1927,6 +1930,16 @@
     <span style="flex:1"></span>
     <button class="btn small ghost" id="popCancel">Cancel</button>
     <button class="btn small" id="popSave">Save</button>
+  </div>
+</div>
+
+<!-- Teacher: one student's reflection, read (live while they write it) -->
+<div class="overlay no-print" id="rfViewBox" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="rfViewTitle" style="max-width:640px">
+    <h2 id="rfViewTitle"></h2>
+    <p class="fine" id="rfViewState"></p>
+    <div class="rfviewtext" id="rfViewText"></div>
+    <div class="row" style="justify-content:flex-end; margin-top:16px"><button class="btn small" id="rfViewClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -4939,10 +4952,11 @@
       return it;
     };
     var recent = function (a, b) { return (b.endedAt || b.endAt || b.startAt || 0) - (a.endedAt || a.endAt || a.startAt || 0); };
-    var todo = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions > r.graded; }).sort(recent);
+    // (a session happening now is listed too: its writing so far can be graded)
+    var todo = lastSessions.filter(function (r) { return r.state === 'running' || (typeof r.graded === 'number' && r.submissions > r.graded); }).sort(recent);
     var done = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions && r.graded >= r.submissions; }).sort(recent).slice(0, 8);
     if (!todo.length) $('gradeTodo').appendChild(el('div', 'empty', 'Nothing to grade.'));
-    todo.forEach(function (r) { var n = r.submissions - r.graded; $('gradeTodo').appendChild(row(r, plural(n, 'paper', 'papers') + ' to grade', 'Grade!')); });
+    todo.forEach(function (r) { var n = (r.submissions || 0) - (r.graded || 0); $('gradeTodo').appendChild(row(r, (n > 0 ? plural(n, 'paper', 'papers') + ' to grade' : 'nothing handed in yet') + (r.state === 'running' ? ' \u00b7 happening now' : ''), 'Grade!')); });
     if (!done.length) $('gradeDone').appendChild(el('div', 'empty', 'Nothing graded yet.'));
     done.forEach(function (r) { $('gradeDone').appendChild(row(r, 'all ' + plural(r.submissions, 'paper', 'papers') + ' graded', 'Graded')); });
   }
@@ -4954,12 +4968,16 @@
       var st = room.students && room.students[x.sub];
       return x.stored && !(st && st.status === 'admitted' && !st.handedIn);
     }).sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
-    if (!papers.length) { tell('No papers to grade', 'Nobody in this session has a paper handed in.'); return; }
+    // Then everyone still writing: their writing so far (see /luddite/early).
+    var writers = Object.keys(room.students || {}).filter(function (sub) { var st = room.students[sub]; return st.status === 'admitted' && !st.handedIn; })
+      .sort(function (a, b) { return who(room.students[a].name, room.students[a].email).localeCompare(who(room.students[b].name, room.students[b].email)); });
+    var ids = papers.map(function (x) { return x.id; }).concat(writers.map(function (sub) { return 'early:' + room.code + ':' + sub; }));
+    if (!ids.length) { tell('Nothing to grade yet', 'Nobody in this session has written anything yet.'); return; }
     var returned = {};
     papers.forEach(function (x) { if (x.returnedAt) returned[x.id] = true; });
-    var first = papers.filter(function (x) { return paperStage(x) === 'tograde'; })[0] || papers[0];
+    var first = papers.filter(function (x) { return paperStage(x) === 'tograde'; })[0];
     setAnonCtx(code);
-    openMark(first.id, openGrading, papers.map(function (x) { return x.id; }), returned);
+    openMark(first ? first.id : ids[0], openGrading, ids, returned);
   }
 
   // Monitor: the writing session last opened on this device, else one
@@ -6627,6 +6645,11 @@
       var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
       if (x && x.stored) bub.title = 'Open the grading';
       row.appendChild(bub);
+    } else if (f.canWrite && s && s.sub) {
+      // Grading can start before they hand in: their writing so far, marks moving to the paper later.
+      var early = button('Grade so far', 'statusbub ' + STATUS.grade[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, ['early:' + room.code + ':' + s.sub]); });
+      early.title = 'Comment and grade what they’ve written so far; it moves to their paper when they hand it in';
+      row.appendChild(early);
     } else row.appendChild(el('span', 'statusbub none'));
 
     var menu = el('details', 'menu rowmenu');
@@ -6984,7 +7007,44 @@
     box.appendChild(el('span', 'statusbub yellow', n.on + ' reflecting'));
     box.appendChild(el('span', 'statusbub gray', n.none + ' not started'));
     if (rf.showGrading) box.appendChild(el('span', 'fine', 'They see your comments and grade.'));
+    // Who: each one reflecting or done opens what they've written (live while they write).
+    var who2 = $('roomReflectWho');
+    who2.innerHTML = '';
+    var papersBy = {};
+    latestPerStudent(room.submissions).forEach(function (x) { if (x.stored) papersBy[x.sub] = x.id; });
+    Object.keys(room.students || {}).map(function (sub) { return { sub: sub, st: room.students[sub] }; })
+      .filter(function (p) { return p.st.status === 'admitted' && p.st.handedIn && p.st.reflect && papersBy[p.sub]; })
+      .sort(function (a, b) { return who(a.st.name, a.st.email).localeCompare(who(b.st.name, b.st.email)); })
+      .forEach(function (p) {
+        var done = p.st.reflect.status === 'done';
+        var b = button(who(p.st.name, p.st.email), 'statusbub ' + (done ? 'green' : 'yellow'), function () { openReflectView(papersBy[p.sub], who(p.st.name, p.st.email)); });
+        b.title = done ? 'Reflection handed in: read it' : 'Reflecting: see what they\u2019re writing';
+        who2.appendChild(b);
+      });
   }
+  // One student's reflection, read by the teacher; while they're still
+  // writing it, it refreshes every few seconds.
+  var rfViewTimer = null;
+  async function openReflectView(paperId, name) {
+    $('rfViewTitle').textContent = name + '\u2019s reflection';
+    $('rfViewState').textContent = 'Loading\u2026';
+    $('rfViewText').textContent = '';
+    $('rfViewBox').hidden = false;
+    clearInterval(rfViewTimer);
+    var load = async function () {
+      try {
+        var p = (await api('/luddite/sub?id=' + encodeURIComponent(paperId))).sub, r = p.reflection || {};
+        if ($('rfViewBox').hidden) return;
+        $('rfViewText').textContent = r.text || '';
+        $('rfViewState').textContent = r.handedInAt ? 'Handed in ' + dayClock(r.handedInAt) : r.text ? 'Still writing \u00b7 ' + plural((r.text.trim().match(/\S+/g) || []).length, 'word', 'words') + ' so far' : 'Nothing written yet';
+        if (r.handedInAt) clearInterval(rfViewTimer);
+      } catch (e) { $('rfViewState').textContent = 'Couldn\u2019t load it.'; }
+    };
+    await load();
+    rfViewTimer = setInterval(load, 6000);
+  }
+  $('rfViewClose').addEventListener('click', function () { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); });
+  $('rfViewBox').addEventListener('click', function (e) { if (e.target === $('rfViewBox')) { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); } });
   $('roomReflectEdit').addEventListener('click', function () { $('reflectBtn').click(); });
   $('reflectOffBtn').addEventListener('click', async function () {
     if (!await ask({ title: 'Stop asking for reflections?', text: 'Students can’t start or go on with one. Reflections already written stay with their papers.', ok: 'Stop asking' })) return;
@@ -7126,8 +7186,10 @@
     $('margin').innerHTML = '';
     $('markSaved').textContent = '';
     try {
-      var got = await api('/luddite/sub?id=' + encodeURIComponent(id));
-      piece = got.sub;
+      // 'early:<code>:<sub>': a student's writing so far (see /luddite/early).
+      var ep = /^early:([^:]+):(.+)$/.exec(id);
+      var got = ep ? await api('/luddite/early?code=' + encodeURIComponent(ep[1]) + '&sub=' + encodeURIComponent(ep[2])) : await api('/luddite/sub?id=' + encodeURIComponent(id));
+      piece = ep ? got.piece : got.sub;
       roomRubric = got.roomRubric || null;
     } catch (e) {
       $('paper').textContent = e.message === 'no_sub' ? 'This paper was handed in before Luddite kept copies. Open it in Drive instead.' : 'Couldn’t load this paper.';
@@ -7185,7 +7247,8 @@
   function showPieceHead() {
     $('markWho').textContent = who(piece.name, piece.email);
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
-      ' · ' + plural(piece.words, 'word', 'words');
+      ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' : '');
+    $('markHandBack').hidden = !!piece.early;
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
     if (piece.link) $('markDrive').href = piece.link;
@@ -8197,7 +8260,8 @@
     if (!piece) return;
     var p = piece;
     try {
-      await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
+      if (p.early) await api('/luddite/early', { code: p.code, sub: p.sub, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
+      else await api('/luddite/marks', { id: p.id, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
       if (p === piece) $('markSaved').textContent = 'Saved';
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';

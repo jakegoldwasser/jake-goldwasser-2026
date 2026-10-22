@@ -819,6 +819,49 @@ function cleanMarks(list, length) {
   return out;
 }
 
+// Grading a draft: the teacher's marks on a student's writing so far are
+// kept with the text they were made on (luddite:early:<code>:<sub> { base,
+// marks, endComment, grade, rubric, rubricScores, at, usedAt }). On the newer
+// text (opened again, or handed in) each mark is moved by finding the words
+// it was on, the nearest match to where it was; a mark whose words are gone is
+// dropped. An insertion or an arrow's end follows the words just before it.
+function findNear(text, needle, want) {
+  if (!needle) return -1;
+  let best = -1, i = text.indexOf(needle);
+  while (i !== -1) {
+    if (best === -1 || Math.abs(i - want) < Math.abs(best - want)) best = i;
+    i = text.indexOf(needle, i + 1);
+  }
+  return best;
+}
+function pointIn(base, text, at) {
+  const want = base.length ? Math.round(at * text.length / base.length) : 0;
+  for (const n of [40, 20, 10]) {
+    const before = base.slice(Math.max(0, at - n), at);
+    if (before.trim()) { const i = findNear(text, before, want - before.length); if (i !== -1) return i + before.length; }
+    const after = base.slice(at, at + n);
+    if (after.trim()) { const i = findNear(text, after, want); if (i !== -1) return i; }
+  }
+  return at === 0 ? 0 : at >= base.length ? text.length : -1;
+}
+function reanchorMarks(marks, base, text) {
+  if (base === text) return marks;
+  const out = [];
+  for (const m of marks || []) {
+    if (m.type === 'insert') { const p = pointIn(base, text, m.start); if (p !== -1) out.push({ ...m, start: p, end: p }); continue; }
+    if (m.type === 'arrow') {
+      const a = pointIn(base, text, m.start), b = pointIn(base, text, m.end);
+      if (a !== -1 && b !== -1 && a !== b) out.push({ ...m, start: Math.min(a, b), end: Math.max(a, b), head: a < b ? m.head : (m.head === 'start' ? 'end' : 'start') });
+      continue;
+    }
+    const q = base.slice(m.start, m.end);
+    const want = base.length ? Math.round(m.start * text.length / base.length) : 0;
+    const i = q.trim() ? findNear(text, q, want) : -1;
+    if (i !== -1) out.push({ ...m, start: i, end: i + q.length });
+  }
+  return out;
+}
+
 // ---- Routes ----
 async function handleLuddite(event, method, path, info) {
   try {
@@ -1320,6 +1363,45 @@ async function routeLuddite(event, method, path, info) {
     const drafts = {};
     subs.forEach((sub, i) => { const d = got[i].state; drafts[sub] = d ? { text: d.text, at: d.at } : null; });
     return respond(200, { drafts });
+  }
+
+  // ---- Grading a draft (see reanchorMarks) ----
+
+  // GET /luddite/early?code=&sub= -- a student's writing so far, with the
+  // teacher's marks on it, as a paper to grade (id 'early:<code>:<sub>').
+  if (path === '/luddite/early' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(q.sub || ''), st = room.students[sub];
+    if (!st) throw new HttpError(404, 'no_student');
+    const { state: d } = await readItem('luddite:draft:' + room.code + ':' + sub);
+    const { state: e } = await readItem('luddite:early:' + room.code + ':' + sub);
+    const text = d ? String(d.text || '') : '';
+    const live = e && !e.usedAt ? e : null;
+    return respond(200, {
+      piece: { id: 'early:' + room.code + ':' + sub, early: true, code: room.code, sub, name: st.name, email: st.email, roomTitle: titleOf(room),
+        text, words: (text.trim().match(/\S+/g) || []).length, at: d ? d.at : Date.now(),
+        marks: live ? reanchorMarks(live.marks, live.base, text) : [], endComment: live ? live.endComment || '' : '', grade: live ? live.grade || '' : '',
+        rubric: live ? live.rubric || null : null, rubricScores: live ? live.rubricScores || [] : [] },
+      roomRubric: room.rubric || null
+    });
+  }
+
+  // PUT /luddite/early { code, sub, text, marks, endComment, grade, rubric, rubricScores }
+  // -- the marks on `text`, the draft as the teacher saw it.
+  if (path === '/luddite/early' && method === 'PUT') {
+    const room = await getRoom(cleanCode(body.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(body.sub || '');
+    if (!room.students[sub]) throw new HttpError(404, 'no_student');
+    const base = String(body.text || '').slice(0, MAX_STORED_CHARS);
+    const marks = cleanMarks(body.marks, base.length);
+    const rubric = body.rubric ? cleanRubric(body.rubric) : null;
+    const saved = { base, marks, endComment: String(body.endComment || '').slice(0, 8000), grade: String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40),
+      rubric, rubricScores: cleanScores(body.rubricScores || [], rubric), at: Date.now() };
+    if (Buffer.byteLength(JSON.stringify(saved)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
+    await mutate('luddite:early:' + room.code + ':' + sub, () => saved);
+    return respond(200, { ok: true });
   }
 
   // ---- Marking up handed-in work ----
@@ -2133,9 +2215,18 @@ async function handInFor(room, code, me, s, text, label, auto) {
       if ((left -= m.text.length) < 0) break;
       chat.unshift(m);
     }
+    // Marks the teacher made on the draft move onto the paper (see reanchorMarks).
+    const { state: early } = await readItem('luddite:early:' + code + ':' + me.sub);
+    const carried = early && !early.usedAt ? { marks: reanchorMarks(early.marks, early.base, text), endComment: early.endComment || '', grade: early.grade || '',
+      ...(early.rubric ? { rubric: early.rubric, rubricScores: early.rubricScores || [] } : {}), markedAt: early.at } : null;
+    if (carried) {
+      submission.marked = carried.marks.length + (carried.endComment.trim() ? 1 : 0);
+      if (carried.grade) submission.grade = carried.grade;
+      await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
+    }
     await mutate('luddite:sub:' + id, () => ({
       id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
-      label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '',
+      label, text, words, leaves: s.leaves || 0, at, link: submission.link, marks: [], endComment: '', ...(carried || {}),
       ...(chat.length ? { chat } : {}),
       ...(replaces.length ? { replaces } : {})
     }));
