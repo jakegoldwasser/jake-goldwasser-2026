@@ -4930,13 +4930,13 @@
   async function gradeSession(code) {
     var room;
     try { room = (await api('/luddite/assignment?code=' + encodeURIComponent(code))).room; } catch (e) { tell('Couldn’t Open That Session', 'Try again.'); return; }
-    // Its papers by name, leaving out students writing again.
-    var papers = latestPerStudent(room.submissions).filter(function (x) {
-      var st = room.students && room.students[x.sub];
-      return x.stored && !(st && st.status === 'admitted' && !st.handedIn);
-    }).sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
-    // Then everyone still writing: their writing so far (see /luddite/early).
-    var writers = Object.keys(room.students || {}).filter(function (sub) { var st = room.students[sub]; return st.status === 'admitted' && !st.handedIn; })
+    // Its papers by name (a student writing again still has their paper, with its comments).
+    var papers = latestPerStudent(room.submissions).filter(function (x) { return x.stored; })
+      .sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
+    var hasPaper = {};
+    papers.forEach(function (x) { hasPaper[x.sub] = 1; });
+    // Then everyone still writing who has no paper yet: their writing so far (see /luddite/early).
+    var writers = Object.keys(room.students || {}).filter(function (sub) { var st = room.students[sub]; return st.status === 'admitted' && !st.handedIn && !hasPaper[sub]; })
       .sort(function (a, b) { return who(room.students[a].name, room.students[a].email).localeCompare(who(room.students[b].name, room.students[b].email)); });
     var ids = papers.map(function (x) { return x.id; }).concat(writers.map(function (sub) { return 'early:' + room.code + ':' + sub; }));
     if (!ids.length) { tell('Nothing to Grade Yet', 'Nobody in this session has written anything yet.'); return; }
@@ -6644,7 +6644,9 @@
     // The status bubble; with a paper, it opens the grading (comments and the grade can change any time).
     var st = STATUS[f.status];
     // (no bubble while they're still writing: the line already says so)
-    if (f.status !== 'progress') {
+    // Writing again with a paper already handed in: the paper's own bubble, opening that paper (with its comments).
+    if (f.status === 'progress' && x && x.stored) { var stg = paperStage(x); st = STATUS[stg === 'back' ? 'shared' : stg === 'graded' ? 'graded' : 'grade']; }
+    if (f.status !== 'progress' || (x && x.stored)) {
       var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
       if (x && x.stored) bub.title = 'Open the grading';
       row.appendChild(bub);
@@ -6671,6 +6673,8 @@
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
+    // Writing again over a paper: their new writing can be graded too (the bubble opens the paper).
+    if (f.canWrite && s && s.sub && x && x.stored) item('Grade their writing so far', function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, ['early:' + room.code + ':' + s.sub]); });
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
     if (s) item('Remove from this session', async function () {
       if (await ask({ title: 'Take ' + p.name + ' Out of This Writing Session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
