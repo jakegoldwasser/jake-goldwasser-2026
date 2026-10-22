@@ -1054,7 +1054,18 @@
   /* A class's page is told apart from a session's by its desk: pink, not slate. */
   body.work.classpage { background: #F2DFE4; }
   /* Grade (the overview and the grading page) has a desk of its own: sage, not Monitor's slate. */
-  body.work.gradepage { background: #E1EADB; }
+  /* Grading floats over the page it was opened from, in a large window on a sage desk. */
+  body.markfloat { overflow: hidden; }
+  #markShade { position: fixed; inset: 0; z-index: 48; background: rgba(28, 34, 40, .45); }
+  body.markfloat #markScreen { position: fixed; inset: 2.5vh 2.5vw; z-index: 49; overflow-y: auto; background: #E1EADB; border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.35); padding: 14px 12px 40px !important; min-height: 0; }
+  body.markfloat #markScreen > .card { margin: 0 auto; }
+  .markclose { width: 38px; height: 38px; font-size: 22px; }
+  body.reading .markclose { display: none !important; }
+  @media print {
+    body.markfloat .screen:not(#markScreen), #markShade, .markclose { display: none !important; }
+    body.markfloat #markScreen { position: static; box-shadow: none; padding: 0 !important; background: #fff; }
+  }
   body.work .workbar { display: flex; position: fixed; top: 0; left: 0; right: 0; z-index: 35; height: 56px; align-items: center; gap: 14px;
     padding: 0 16px; background: #2F3B45; color: #E8EEF2; }
   .workbar .homebtn { font: 600 16px var(--ui); color: #2F3B45; background: #FAF6EC; border: 0; border-radius: 999px; padding: 9px 20px 9px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
@@ -1228,7 +1239,7 @@
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
     <div id="mineBox" hidden style="margin-bottom:26px">
-      <label class="joinlbl">Your writing sessions</label>
+      <label class="joinlbl">Your Writing Sessions</label>
       <div id="mineList"></div>
     </div>
     <div id="reflectBox" hidden style="margin-bottom:26px">
@@ -1236,7 +1247,7 @@
       <div id="reflectList"></div>
     </div>
     <div id="backBox" hidden style="margin-bottom:26px">
-      <label class="joinlbl">Grading shared with you</label>
+      <label class="joinlbl">Grading Shared with You</label>
       <div id="backList"></div>
     </div>
     <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
@@ -1294,7 +1305,7 @@
     <div class="readyprompt" id="rfWritingPrompt" hidden><b>The prompt</b><span id="rfWritingPromptText"></span></div>
     <div id="rfPaper"></div>
     <div class="reflectbox">
-      <h3>Your reflection</h3>
+      <h3>Your Reflection</h3>
       <div class="rfask" id="rfAsk" hidden><b id="rfFrom"></b><div id="rfPrompt"></div></div>
       <textarea id="rfText" class="field" spellcheck="true" placeholder="Your thoughts about your writing"></textarea>
       <div class="rffoot"><span class="stamp" id="rfSaved"></span><button class="btn" id="rfHandIn" type="button">Hand in reflection</button></div>
@@ -1302,7 +1313,7 @@
   </div>
   <div class="overlay" id="rfLocked" hidden>
     <div class="box">
-      <h2>You left the page</h2>
+      <h2>You Left the Page</h2>
       <p class="asktext" id="rfLockedText">Your teacher has to let you back in.</p>
       <div class="row" style="justify-content:flex-end; margin-top:18px">
         <button class="btn small ghost" id="rfAskBtn" type="button">Ask your teacher to let you back in</button>
@@ -1347,7 +1358,7 @@
   </div>
   <div class="handin" id="handBox" hidden>
     <div class="card">
-      <h2>Raise your hand</h2>
+      <h2>Raise Your Hand</h2>
       <p class="sub" style="margin:0 0 10px">Your question or comment goes to your teacher. You can keep writing while you wait.</p>
       <textarea class="field promptfield" id="handText" maxlength="1000" aria-label="Your question or comment" placeholder="Your question or comment"></textarea>
       <p class="fine warn" id="handErr" hidden></p>
@@ -1356,7 +1367,7 @@
   </div>
   <div class="handin" id="handinBox" hidden>
     <div class="card">
-      <h2>Hand this in?</h2>
+      <h2>Hand This In?</h2>
       <p class="sub" style="margin:0" id="handinText"></p>
       <p class="fine warn" id="handinErr" hidden></p>
       <div class="row">
@@ -1386,7 +1397,7 @@
   <div class="card dash">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <section class="panel tint-mint">
-      <div class="panelhead"><h3 class="sect">To proctor</h3><button class="btn small" type="button" data-comingup>Coming up</button></div>
+      <div class="panelhead"><h3 class="sect">To Proctor</h3><button class="btn small" type="button" data-comingup>Coming up</button></div>
       <div id="proctorList"></div>
     </section>
     <div class="row" style="justify-content:center; margin-top:18px"><button class="btn small ghost" id="proctorWriteBtn" type="button">Type an Entry Phrase to write</button></div>
@@ -1403,7 +1414,7 @@
       <div class="row"><button class="btn small" id="pxStartBtn" type="button" hidden>Start it now</button><button class="btn small ghost" id="pxPauseAllBtn" type="button" hidden>Pause everyone</button></div>
     </div>
     <section class="panel tint-sun" id="pxWaitSec" hidden>
-      <div class="panelhead"><h3 class="sect">Waiting room</h3></div>
+      <div class="panelhead"><h3 class="sect">Waiting Room</h3></div>
       <div id="pxWaiting"></div>
     </section>
     <section class="panel tint-mint">
@@ -1424,23 +1435,22 @@
     <!-- Home's toggle: Writing sessions and Students are Home's two tabs (remembered on the device,
          luddite.homeTab); Monitor opens the session last opened. The same toggle tops a session's page. -->
     <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
+      <button type="button" role="tab" data-tab="sessions">Overview</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
+      <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
 
     <div class="hometab" data-tab="sessions">
 
     <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
     <section class="panel tint-sky" id="forYouBox" hidden>
-      <div class="panelhead"><h3 class="sect">For you to write</h3></div>
+      <div class="panelhead"><h3 class="sect">For You to Write</h3></div>
       <div id="forYouList"></div>
     </section>
 
     <!-- Writing sessions this teacher proctors (another teacher added them) -->
     <section class="panel tint-mint" id="proctorBox" hidden>
-      <div class="panelhead"><h3 class="sect">To proctor</h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
+      <div class="panelhead"><h3 class="sect">To Proctor</h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
       <div id="proctorDashList"></div>
     </section>
 
@@ -1472,7 +1482,7 @@
           </div>
 
           <div class="formrow">
-            <label class="lbl">When does it start?</label>
+            <label class="lbl">When Does It Start?</label>
             <div class="segctl" id="whenSeg">
               <button type="button" class="on" data-when="now">Right now</button>
               <button type="button" data-when="later">At a set time</button>
@@ -1512,11 +1522,11 @@
         <button class="btn small ghost" id="newClassToggle" type="button">+ New class</button>
         <div id="newClassBox" hidden>
           <form id="newClassForm">
-            <label class="lbl" for="newClassName">Class name</label>
+            <label class="lbl" for="newClassName">Class Name</label>
             <input class="field wide" id="newClassName" maxlength="80" placeholder="D period English" autocomplete="off">
             <label class="lbl" style="margin-top:14px">Period <span class="q" tabindex="0" data-tip="Its writing sessions start at this period by default.">?</span></label>
             <div class="segctl periodseg" id="newClassPeriod"></div>
-            <label class="lbl" for="newClassEmails" style="margin-top:14px">Email addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
+            <label class="lbl" for="newClassEmails" style="margin-top:14px">Email Addresses <span class="q" tabindex="0" data-tip="Optional. Paste a list (names, commas and <brackets> are fine), or upload a .csv or .txt file. You can add addresses later.">?</span></label>
             <textarea class="field" id="newClassEmails" rows="4" style="resize:vertical; width:100%" placeholder="jane_smith27@horacemann.org, bob_lee27@horacemann.org"></textarea>
             <div class="row" style="justify-content:flex-start; margin-top:8px">
               <input type="file" id="newClassFile" accept=".csv,.txt,.tsv,text/plain,text/csv" aria-label="Upload a list of email addresses">
@@ -1538,10 +1548,9 @@
     <p style="margin:0 0 10px"><button class="btn small ghost" id="backToDash">&larr; Home</button></p>
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
+      <button type="button" role="tab" data-tab="sessions">Overview</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
+      <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
 
     <div class="head">
@@ -1549,7 +1558,7 @@
       <div class="row">
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
-          <summary class="btn small ghost">Session options &#9662;</summary>
+          <summary class="btn small ghost">Session Options &#9662;</summary>
           <div class="pop">
             <div class="popsec">Students</div>
             <button type="button" id="phraseBtn">Entry Phrase and link</button>
@@ -1558,7 +1567,7 @@
             <button type="button" id="anonKeyBtn" hidden>Names key</button>
             <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
             <button type="button" id="previewBtn">See what students see</button>
-            <div class="popsec">The session</div>
+            <div class="popsec">The Session</div>
             <button type="button" id="renameBtn">Rename</button>
             <button type="button" id="promptBtn">Edit the prompt</button>
             <button type="button" id="rubricBtn">Rubric…</button>
@@ -1584,7 +1593,7 @@
 
     <div id="roomBody">
       <section class="panel tint-sun" id="secWaiting" style="order:1">
-        <div class="panelhead"><h3 class="sect">Waiting room</h3><button class="btn small" id="admitAllBtn">Let everyone in</button></div>
+        <div class="panelhead"><h3 class="sect">Waiting Room</h3><button class="btn small" id="admitAllBtn">Let everyone in</button></div>
         <div id="waitingList"></div>
       </section>
 
@@ -1595,12 +1604,12 @@
       </section>
 
       <section class="panel" id="secOwn" style="order:3" hidden>
-        <div class="panelhead"><h3 class="sect">Alternative schedule</h3></div>
+        <div class="panelhead"><h3 class="sect">Alternative Schedule</h3></div>
         <div id="ownList"></div>
       </section>
 
       <section class="panel tint-sky" id="notHereSection" style="order:4" hidden>
-        <div class="panelhead"><h3 class="sect" id="notHereTitle">Not here yet</h3></div>
+        <div class="panelhead"><h3 class="sect" id="notHereTitle">Not Here Yet</h3></div>
         <div id="notHereList"></div>
       </section>
 
@@ -1624,10 +1633,9 @@
   <div class="card">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
+      <button type="button" role="tab" data-tab="sessions">Overview</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
+      <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <p style="margin:0 0 10px"><button class="btn small ghost" id="classBack">&larr; Home</button></p>
     <div class="head">
@@ -1640,7 +1648,7 @@
     <div class="switchrow"><span class="nm">Color <span class="q" tabindex="0" data-tip="A small dot in this color marks the class wherever it’s named: on Home’s writing sessions, when you pick classes, and on a session’s page.">?</span></span>
       <div class="swatches" id="classColorSeg"></div>
     </div>
-    <h3>Add students</h3>
+    <h3>Add Students</h3>
     <form id="classAddForm">
       <textarea class="field" id="classAddEmails" rows="3" style="resize:vertical; width:100%" placeholder="Paste addresses here, or upload a file below"></textarea>
       <div class="row" style="justify-content:flex-start; margin-top:8px">
@@ -1649,7 +1657,7 @@
       </div>
       <p class="fine" id="classAddNote" hidden></p>
     </form>
-    <h3>On the list</h3>
+    <h3>On the List</h3>
     <div id="classRoster"></div>
     <p class="fine" style="margin-top:28px"><button class="btn small danger" id="classDeleteBtn">Delete this class</button></p>
   </div>
@@ -1660,10 +1668,9 @@
   <div class="card">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
+      <button type="button" role="tab" data-tab="sessions">Overview</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
+      <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <div class="markbar">
       <button class="linkish" id="printBack">&larr; Back</button>
@@ -1691,37 +1698,10 @@
   </div>
 </section>
 
-<!-- Teacher: the grading overview (Home's Grading tab): sessions with papers to grade, and recently graded -->
-<section class="screen page" id="gradingScreen" hidden>
-  <div class="card">
-    <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
-    <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
-    </div>
-    <section class="panel tint-sun">
-      <div class="panelhead"><h3 class="sect">To grade</h3></div>
-      <div id="gradeTodo"></div>
-    </section>
-    <section class="panel">
-      <div class="panelhead"><h3 class="sect">Recently graded</h3></div>
-      <div id="gradeDone"></div>
-    </section>
-  </div>
-</section>
-
 <!-- Teacher: marking up one handed-in piece -->
+<div id="markShade" hidden></div>
 <section class="screen page" id="markScreen" hidden>
   <div class="card">
-    <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
-    <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
-    </div>
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
       <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
@@ -1733,6 +1713,7 @@
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
       <button class="btn small ghost" id="markPrint">Print</button>
+      <button type="button" class="iconbtn markclose" id="markClose" aria-label="Close grading" title="Close grading">&times;</button>
     </div>
     <p class="gradewait" id="readBanner" hidden></p>
     <div class="sheet" id="sheet">
@@ -1745,7 +1726,7 @@
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
         <details class="stockbox" id="stockBox">
-          <summary>Stock comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to the On the Next Essay section at the end of the end comment, under Keep Up the Good Work or Room for Improvement, which the student sees with the rest.">?</span></summary>
+          <summary>Stock Comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to the On the Next Essay section at the end of the end comment, under Keep Up the Good Work or Room for Improvement, which the student sees with the rest.">?</span></summary>
           <div id="stockList"></div>
           <button type="button" class="btn small ghost" id="stockEdit">Edit stock comments…</button>
         </details>
@@ -1764,10 +1745,9 @@
   <div class="card">
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
-      <button type="button" role="tab" data-tab="sessions">Sessions</button>
+      <button type="button" role="tab" data-tab="sessions">Overview</button>
       <button type="button" role="tab" data-tab="students">Students</button>
-      <button type="button" role="tab" data-tab="monitor">Monitor</button>
-      <button type="button" role="tab" data-tab="grading">Grade</button>
+      <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <div class="markbar">
       <button class="linkish" id="studentBack">&larr; Home</button>
@@ -1789,7 +1769,7 @@
 <!-- Names key: with names hidden, the real name behind each label on the page showing -->
 <div class="handin livebox" id="anonKeyBox" hidden>
   <div class="card">
-    <h2 style="margin:0">Names key</h2>
+    <h2 style="margin:0">Names Key</h2>
     <p class="sub" style="margin:4px 0 10px">Who each label on this page is. Only you see this.</p>
     <div class="anonkey" id="anonKeyList"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="anonKeyPrint" type="button">Print</button><button class="btn ghost" id="anonKeyClose" type="button">Close</button></div>
@@ -1809,7 +1789,7 @@
     <div class="livegrid">
       <div class="liveread" id="liveText"></div>
       <div class="livechat">
-        <h3>Live comments</h3>
+        <h3>Live Comments</h3>
         <div class="chatlog" id="tChatLog"></div>
         <form class="chatsend wrap" id="tChatForm" autocomplete="off"><textarea class="field" id="tChatInput" rows="2" maxlength="1000" aria-label="Your live comment" placeholder="A live comment to this student"></textarea><button class="btn small" type="submit">Send</button></form>
       </div>
@@ -1830,7 +1810,7 @@
 <!-- Classmates' work: while the teacher allows it, a student reads the others' writing so far -->
 <div class="handin livebox" id="classWorkBox" hidden>
   <div class="card">
-    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="cwTitle" style="margin:0">Classmates’ work</h2><span class="fine" id="cwMeta" style="margin:0"></span></div>
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="cwTitle" style="margin:0">Classmates’ Work</h2><span class="fine" id="cwMeta" style="margin:0"></span></div>
     <div class="cwlist" id="cwList"></div>
     <div class="liveread" id="cwText" hidden></div>
     <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
@@ -1847,7 +1827,7 @@
 <!-- Proctors: everything coming up, by day -->
 <div class="handin livebox" id="comingBox" hidden>
   <div class="card">
-    <h2 style="margin:0">Coming up</h2>
+    <h2 style="margin:0">Coming Up</h2>
     <p class="sub" style="margin:4px 0 10px" id="comingMeta"></p>
     <div class="comingup" id="comingList"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn small ghost" id="comingPrint" type="button">Print</button><button class="btn ghost" id="comingClose" type="button">Close</button></div>
@@ -1887,9 +1867,9 @@
     <div class="switchrow"><span class="nm">Hand in by itself when time runs out <span class="q" tabindex="0" data-tip="In a timed writing session: when the time runs out, papers are handed in automatically. Off: the clock just says Time is up. (Ending a session always hands in and locks everyone not on an alternative schedule; an alternative schedule always closes ten minutes after its time ends.)">?</span></span>
       <span class="segctl" data-pref="autoHandIn"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div id="teachersSection" hidden style="margin-top:22px">
-      <h3 style="margin-top:0">Teachers who can make writing sessions</h3>
+      <h3 style="margin-top:0">Teachers Who Can Make Writing Sessions</h3>
       <div style="margin-top:8px">
-        <label class="lbl" for="addTeacherEmail">Add teachers <span class="q" tabindex="0" data-tip="Anyone listed here can make classes and writing sessions (you and your other address always can). Paste one address or a whole list.">?</span></label>
+        <label class="lbl" for="addTeacherEmail">Add Teachers <span class="q" tabindex="0" data-tip="Anyone listed here can make classes and writing sessions (you and your other address always can). Paste one address or a whole list.">?</span></label>
         <form class="row" id="addTeacherForm" style="justify-content:flex-start; align-items:flex-start">
           <textarea class="field grow" id="addTeacherEmail" rows="2" style="resize:vertical"
             placeholder="Jane Smith <jane_smith@horacemann.org>, bob_lee@horacemann.org" aria-label="Teacher email addresses"></textarea>
@@ -1902,7 +1882,7 @@
       </div>
     </div>
     <div id="permProctorsSection" hidden style="margin-top:22px">
-      <h3 style="margin-top:0">Permanent proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student on an alternative schedule (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
+      <h3 style="margin-top:0">Permanent Proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student on an alternative schedule (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
       <div id="permProctorList"></div>
       <button class="btn small" id="addPermProctorBtn" type="button" style="margin-top:10px">Add permanent proctor</button>
       <p class="fine" id="permProctorNote" hidden></p>
@@ -1966,7 +1946,7 @@
 <!-- Teacher: making or changing a rubric (from Settings) -->
 <div class="overlay no-print" id="rubricBox" hidden>
   <div class="box">
-    <h2 id="reTitle">New rubric</h2>
+    <h2 id="reTitle">New Rubric</h2>
     <div class="segctl" id="reKind" style="margin-top:10px">
       <button type="button" data-k="grid">Make a grid</button>
       <button type="button" data-k="paste">Paste it in</button>
@@ -2364,7 +2344,7 @@
   // ---------------------------------------------------------------------
   // Screens, and the one timer that keeps whatever's on screen live
   // ---------------------------------------------------------------------
-  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'proctorScreen', 'proctorRoomScreen', 'reflectScreen', 'gradingScreen'];
+  var screens = ['signInScreen', 'joinScreen', 'waitScreen', 'readyScreen', 'writeScreen', 'lockScreen', 'dashScreen', 'roomScreen', 'classScreen', 'markScreen', 'studentScreen', 'printScreen', 'proctorScreen', 'proctorRoomScreen', 'reflectScreen'];
   var previewing = false; // a teacher looking at the student screens
   var pollTimer = null;
   var pollFn = null;
@@ -2389,16 +2369,17 @@
     var where = isTeacher && !previewing && !reading && WORK_PAGES[id];
     document.body.classList.toggle('work', !!where);
     document.body.classList.toggle('classpage', !!where && id === 'classScreen');
-    document.body.classList.toggle('gradepage', !!where && (id === 'gradingScreen' || id === 'markScreen'));
+    // (grading floats over a page: any page shown closes it)
+    if (id !== 'markScreen' || reading) { document.body.classList.remove('markfloat'); $('markShade').hidden = true; }
     if (id !== 'dashScreen') document.body.classList.remove('studentstab');
     // Teacher pages have Home's toggle instead of the dark bar (a proctor's page keeps the bar).
-    var tabbed = !!where && ['roomScreen', 'markScreen', 'studentScreen', 'classScreen', 'printScreen', 'gradingScreen'].indexOf(id) !== -1;
+    var tabbed = !!where && ['roomScreen', 'markScreen', 'studentScreen', 'classScreen', 'printScreen'].indexOf(id) !== -1;
     document.body.classList.toggle('nobar', tabbed);
     $('workWhere').textContent = where || '';
     if (id !== 'roomScreen') { $('liveBox').hidden = true; $('liveDock').hidden = true; }
     $('comingBox').hidden = true;
   }
-  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring', gradingScreen: 'Grading' };
+  var WORK_PAGES = { roomScreen: 'Writing session', markScreen: 'Grading', studentScreen: 'Student', classScreen: 'Class', printScreen: 'Printing', proctorRoomScreen: 'Proctoring' };
   $('workHome').addEventListener('click', function () {
     if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
     showDash();
@@ -2640,8 +2621,8 @@
   async function openReflect(code) {
     var d;
     try { d = await api('/luddite/reflect?code=' + encodeURIComponent(code)); }
-    catch (e) { tell('Couldn’t open the reflection', 'Try again.'); return; }
-    try { await requestFs(); } catch (e) { tell('Luddite needs full screen', 'Allow it and try again.'); return; }
+    catch (e) { tell('Couldn’t Open the Reflection', 'Try again.'); return; }
+    try { await requestFs(); } catch (e) { tell('Luddite Needs Full Screen', 'Allow it and try again.'); return; }
     settle();
     reflecting = { code: code, locked: false, leaving: false };
     show('reflectScreen');
@@ -2724,7 +2705,7 @@
       reflecting.locked = false;
       $('rfLocked').hidden = true;
       $('rfText').focus();
-    }).catch(function () { tell('Luddite needs full screen', 'Allow it and try again.'); });
+    }).catch(function () { tell('Luddite Needs Full Screen', 'Allow it and try again.'); });
   });
   function rfLeft() { if (reflecting && !reflecting.locked && !reflecting.leaving && !settling() && $('rfLocked').hidden) rfLock(true); }
   document.addEventListener('visibilitychange', function () { if (document.hidden) rfLeft(); });
@@ -2738,10 +2719,10 @@
   $('rfHandIn').addEventListener('click', async function () {
     if (!reflecting) return;
     reflecting.leaving = true;
-    var ok = await ask({ title: 'Hand in your reflection?', text: 'After you hand it in, you can’t change it unless your teacher lets you.', ok: 'Hand in' });
+    var ok = await ask({ title: 'Hand In Your Reflection?', text: 'After you hand it in, you can’t change it unless your teacher lets you.', ok: 'Hand in' });
     if (!ok) { reflecting.leaving = false; settle(); $('rfText').focus(); return; }
     var d = await rfSave('handin');
-    if (!d || d.status !== 'done') { reflecting.leaving = false; tell('Couldn’t hand it in', 'Check your connection and try again.'); return; }
+    if (!d || d.status !== 'done') { reflecting.leaving = false; tell('Couldn’t Hand It In', 'Check your connection and try again.'); return; }
     clearInterval(rfBeat); clearInterval(rfPoll);
     reflecting = null;
     await exitFs();
@@ -2873,7 +2854,7 @@
       if (e.message !== 'not_started') store(roomKey(), null);
       roomCode = '';
       // Teachers have no join screen; they go back Home and are told why.
-      if (isTeacher) { showDash(); tell('Couldn’t open that', joinError(e, code).replace(' If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.', '')); return; }
+      if (isTeacher) { showDash(); tell('Couldn’t Open That', joinError(e, code).replace(' If your teacher has given you another Entry Phrase, type it above; work you were in the middle of is kept.', '')); return; }
       await loadMine();
       showJoin(joinError(e, code));
     }
@@ -3073,7 +3054,7 @@
   }
 
   $('newPageBtn').addEventListener('click', async function () {
-    if (!await ask({ title: 'Clear the page?', text: 'Everything on it is gone for good. This can’t be undone.', ok: 'Clear the page', danger: true })) return;
+    if (!await ask({ title: 'Clear the Page?', text: 'Everything on it is gone for good. This can’t be undone.', ok: 'Clear the page', danger: true })) return;
     store(textKey(), null);
     store(leavesKey(), null);
     store(startedKey(), null);
@@ -3083,7 +3064,7 @@
   $('submitBtn').addEventListener('click', async function () {
     var text = load(textKey()) || '';
     if (!text.trim()) return;
-    if (!await ask({ title: 'Hand this in to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '?', text: 'After you hand it in, you can’t keep writing unless your teacher lets you back in.', ok: 'Hand in' })) return;
+    if (!await ask({ title: 'Hand This In to ' + (roomInfo ? roomInfo.teacherName : 'your teacher') + '?', text: 'After you hand it in, you can’t keep writing unless your teacher lets you back in.', ok: 'Hand in' })) return;
     var btn = $('submitBtn');
     btn.disabled = true;
     btn.textContent = 'Handing in…';
@@ -3624,7 +3605,7 @@
       startHeartbeat();
       startTimer();
     }).catch(function () {
-      tell('Luddite needs full screen', 'Allow it and try again.');
+      tell('Luddite Needs Full Screen', 'Allow it and try again.');
     });
   }
   $('startBtn').addEventListener('click', enterWriting);
@@ -4121,11 +4102,11 @@
     var where = $('workWhere').textContent || 'Home';
     var rows = anonKeyList().map(function (x) { return '<tr><td>' + h(x.alias) + '</td><td>' + h(x.name || x.email) + '</td><td>' + h(x.name ? x.email : '') + '</td></tr>'; }).join('');
     var w = window.open('', '_blank');
-    if (!w) { tell('Couldn’t open the page to print', 'Allow pop-ups for this site, then try again.'); return; }
+    if (!w) { tell('Couldn’t Open the Page to Print', 'Allow pop-ups for this site, then try again.'); return; }
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Names key</title><style>'
       + 'body{font:400 14px "Source Sans 3",system-ui,sans-serif;color:#2b2118;margin:32px}h1{font-size:22px;font-weight:600;margin:0 0 4px}p{margin:0 0 16px;color:#6b5d50}'
       + 'table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #ccc}th{font-size:12px;text-transform:uppercase;letter-spacing:.05em}'
-      + '</style></head><body><h1>Names key</h1><p>' + h(where) + ' · ' + h(new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</p>'
+      + '</style></head><body><h1>Names Key</h1><p>' + h(where) + ' · ' + h(new Date().toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) + '</p>'
       + (rows ? '<table><thead><tr><th>Label</th><th>Name</th><th>Email</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p>No students on this page.</p>')
       + '<\/body></html>');
     w.document.close();
@@ -4155,11 +4136,11 @@
     return new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
   $('changeNameBtn').addEventListener('click', async function () {
-    var name = await ask({ title: 'What should students see you as?', input: 'line', value: displayName, placeholder: 'For example, Ms. Smith', ok: 'Save' });
+    var name = await ask({ title: 'What Should Students See You As?', input: 'line', value: displayName, placeholder: 'For example, Ms. Smith', ok: 'Save' });
     if (!name || !name.trim()) return;
     try {
       setDisplayName((await api('/luddite/me', { displayName: name.trim() })).displayName);
-    } catch (e) { tell('Couldn’t save that', 'Try again.'); }
+    } catch (e) { tell('Couldn’t Save That', 'Try again.'); }
   });
   $('dashLink').addEventListener('click', showDash);
   $('backToDash').addEventListener('click', showDash);
@@ -4257,7 +4238,7 @@
       row.appendChild(el('span', 'k', rubricKindLabel(rb)));
       row.appendChild(button('Edit', 'linkish', function () { editRubric(rb); }));
       row.appendChild(button('Delete', 'linkish', async function () {
-        if (!await ask({ title: 'Delete the rubric “' + rb.name + '”?', text: 'Papers already marked with it keep their rubric.', ok: 'Delete', danger: true })) return;
+        if (!await ask({ title: 'Delete the Rubric “' + rb.name + '”?', text: 'Papers already marked with it keep their rubric.', ok: 'Delete', danger: true })) return;
         saveRubrics(rubrics.filter(function (x) { return x !== rb; }));
       }));
       list.appendChild(row);
@@ -4265,7 +4246,7 @@
   }
   async function saveRubrics(next) {
     try { rubrics = (await api('/luddite/rubrics', { rubrics: next })).rubrics; drawRubricList(); return true; }
-    catch (e) { tell('Couldn’t save the rubrics', 'Try again.'); return false; }
+    catch (e) { tell('Couldn’t Save the Rubrics', 'Try again.'); return false; }
   }
   function rubricKindLabel(rb) {
     return rb.kind !== 'doc' ? 'Grid' : rb.docId ? 'Google Doc' : rb.fileId ? 'PDF' : 'Pasted';
@@ -4519,13 +4500,13 @@
 
   // A picked or fetched PDF, held until the rubric is saved.
   async function takePdf(bytes, name) {
-    if (bytes.byteLength > 2.5 * 1024 * 1024) { tell('That PDF is too big', 'A rubric’s PDF can be up to 2.5 MB.'); return false; }
+    if (bytes.byteLength > 2.5 * 1024 * 1024) { tell('That PDF Is Too Big', 'A rubric’s PDF can be up to 2.5 MB.'); return false; }
     var b64 = bytesToB64(bytes);
     var view = $('reFileView');
     view.innerHTML = '';
     view.appendChild(el('p', 'fine', 'Reading the PDF…'));
     try { var pages = await pdfPageImages(b64); }
-    catch (e) { view.innerHTML = ''; tell('Couldn’t read that PDF', 'Try saving it again as a PDF, or paste the rubric in instead.'); return false; }
+    catch (e) { view.innerHTML = ''; tell('Couldn’t Read That PDF', 'Try saving it again as a PDF, or paste the rubric in instead.'); return false; }
     editing._b64 = b64;
     editing.pages = pages.length;
     view.innerHTML = '';
@@ -4585,9 +4566,9 @@
   }
   function docsTrouble(e) {
     if (e.message === 'declined') return;
-    if (e.message === 'other_account') { tell('That’s a different Google account', 'Choose the Google Doc from ' + me.email + ', the account you’re signed in to Luddite with.'); return; }
-    if (e.message === 'no_google' || e.message === 'gapi') { tell('Google didn’t load', 'Reload the page and try again.'); return; }
-    tell('Couldn’t get the Google Doc', 'Try again, or download it as a PDF and upload that.');
+    if (e.message === 'other_account') { tell('That’s a Different Google Account', 'Choose the Google Doc from ' + me.email + ', the account you’re signed in to Luddite with.'); return; }
+    if (e.message === 'no_google' || e.message === 'gapi') { tell('Google Didn’t Load', 'Reload the page and try again.'); return; }
+    tell('Couldn’t Get the Google Doc', 'Try again, or download it as a PDF and upload that.');
   }
   function pickDoc(token) {
     return new Promise(function (resolve) {
@@ -4628,7 +4609,7 @@
     try { await bringInDoc(editing.docId, editing.name, ''); }
     catch (e) {
       $('reFileName').textContent = '';
-      if (e.message === 'not_found') tell('Couldn’t find that Google Doc', 'It may have been deleted, or it’s in another account. Choose it again.');
+      if (e.message === 'not_found') tell('Couldn’t Find That Google Doc', 'It may have been deleted, or it’s in another account. Choose it again.');
       else docsTrouble(e);
     }
   });
@@ -4799,8 +4780,8 @@
     }
     loadRooms.seen = true;
     var groups = [
-      ['running', 'Happening now', 'Students can write in these right now.', 'Nothing is happening right now.'],
-      ['upcoming', 'Coming up', 'Scheduled but not started. Your classes are let in on their own when these start.', 'Nothing scheduled.'],
+      ['running', 'Happening Now', 'Students can write in these right now.', 'Nothing is happening right now.'],
+      ['upcoming', 'Coming Up', 'Scheduled but not started. Your classes are let in on their own when these start.', 'Nothing scheduled.'],
       ['ended', 'Past', 'Over. Open one to read and mark up what the class handed in.', 'No past writing sessions yet.']
     ];
     groups.forEach(function (g) {
@@ -4925,46 +4906,11 @@
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
     document.body.classList.toggle('studentstab', t === 'students' && !$('dashScreen').hidden);
   }
-  // Grading: every writing session with papers to grade (handed in, no grade
-  // or comments yet), then the latest ones fully graded. A session's Grade
-  // opens its first paper to grade, stepping through its papers.
-  async function openGrading() {
-    setAnonCtx(null);
-    show('gradingScreen');
-    markTabs('grading');
-    $('gradeTodo').innerHTML = '';
-    $('gradeDone').innerHTML = '';
-    try { lastSessions = (await api('/luddite/assignments')).assignments || []; } catch (e) { $('gradeTodo').appendChild(el('div', 'empty', 'Couldn’t load your writing sessions.')); return; }
-    if ($('gradingScreen').hidden) return;
-    var row = function (r, label, btn) {
-      var it = el('div', 'item click');
-      it.tabIndex = 0;
-      var w = el('div', 'who');
-      var b = el('b');
-      if (r.classId) { var d = classDot(r.classId); if (d.nodeType === 1) b.appendChild(d); }
-      b.appendChild(document.createTextNode(r.title));
-      w.appendChild(b);
-      w.appendChild(el('span', null, (r.classId ? classNameOf(r.classId) : r.casual ? 'Casual session' : 'No class') + ' \u00b7 ' + label));
-      it.appendChild(w);
-      var go = function () { gradeSession(r.code); };
-      // The same bubbles as a student's row on a session's page: pink Grade!, yellow Graded.
-      it.appendChild(button(btn, 'statusbub ' + (btn === 'Grade!' ? STATUS.grade[1] : STATUS.graded[1]), go));
-      it.addEventListener('click', function (e) { if (!e.target.closest('button')) go(); });
-      it.addEventListener('keydown', function (e) { if (e.target === it && e.key === 'Enter') go(); });
-      return it;
-    };
-    var recent = function (a, b) { return (b.endedAt || b.endAt || b.startAt || 0) - (a.endedAt || a.endAt || a.startAt || 0); };
-    // (a session happening now is listed too: its writing so far can be graded)
-    var todo = lastSessions.filter(function (r) { return r.state === 'running' || (typeof r.graded === 'number' && r.submissions > r.graded); }).sort(recent);
-    var done = lastSessions.filter(function (r) { return typeof r.graded === 'number' && r.submissions && r.graded >= r.submissions; }).sort(recent).slice(0, 8);
-    if (!todo.length) $('gradeTodo').appendChild(el('div', 'empty', 'Nothing to grade.'));
-    todo.forEach(function (r) { var n = (r.submissions || 0) - (r.graded || 0); $('gradeTodo').appendChild(row(r, (n > 0 ? plural(n, 'paper', 'papers') + ' to grade' : 'nothing handed in yet') + (r.state === 'running' ? ' \u00b7 happening now' : ''), 'Grade!')); });
-    if (!done.length) $('gradeDone').appendChild(el('div', 'empty', 'Nothing graded yet.'));
-    done.forEach(function (r) { $('gradeDone').appendChild(row(r, 'all ' + plural(r.submissions, 'paper', 'papers') + ' graded', 'Graded')); });
-  }
+  // A session's papers to grade (from the grading window's session picker):
+  // its page opens, and grading floats over it at its first paper to grade.
   async function gradeSession(code) {
     var room;
-    try { room = (await api('/luddite/assignment?code=' + encodeURIComponent(code))).room; } catch (e) { tell('Couldn’t open that session', 'Try again.'); return; }
+    try { room = (await api('/luddite/assignment?code=' + encodeURIComponent(code))).room; } catch (e) { tell('Couldn’t Open That Session', 'Try again.'); return; }
     // Its papers by name, leaving out students writing again.
     var papers = latestPerStudent(room.submissions).filter(function (x) {
       var st = room.students && room.students[x.sub];
@@ -4974,12 +4920,12 @@
     var writers = Object.keys(room.students || {}).filter(function (sub) { var st = room.students[sub]; return st.status === 'admitted' && !st.handedIn; })
       .sort(function (a, b) { return who(room.students[a].name, room.students[a].email).localeCompare(who(room.students[b].name, room.students[b].email)); });
     var ids = papers.map(function (x) { return x.id; }).concat(writers.map(function (sub) { return 'early:' + room.code + ':' + sub; }));
-    if (!ids.length) { tell('Nothing to grade yet', 'Nobody in this session has written anything yet.'); return; }
+    if (!ids.length) { tell('Nothing to Grade Yet', 'Nobody in this session has written anything yet.'); return; }
     var returned = {};
     papers.forEach(function (x) { if (x.returnedAt) returned[x.id] = true; });
     var first = papers.filter(function (x) { return paperStage(x) === 'tograde'; })[0];
-    setAnonCtx(code);
-    openMark(first ? first.id : ids[0], openGrading, ids, returned);
+    openRoom(code);
+    openMark(first ? first.id : ids[0], function () { openRoom(code); }, ids, returned);
   }
 
   // Monitor: the writing session last opened on this device, else one
@@ -4989,14 +4935,13 @@
     var last = load('luddite.lastRoom'), pick = lastSessions.filter(function (r) { return r.code === last; })[0];
     if (!pick) pick = lastSessions.filter(function (r) { return r.state === 'running'; })[0] || lastSessions.slice().sort(function (a, b) { return (b.startAt || 0) - (a.startAt || 0); })[0];
     if (pick) openRoom(pick.code);
-    else { showDash(); setHomeTab('sessions'); tell('Nothing to monitor yet', 'Start a writing session first.'); }
+    else { showDash(); setHomeTab('sessions'); tell('Nothing to Monitor Yet', 'Start a writing session first.'); }
   }
   each('.hometabs button', function (b) {
     b.addEventListener('click', function () {
       var t = b.dataset.tab;
       if (!$('markScreen').hidden) { flushMarks(); hideTools(); closePop(); }
       // The lit tab on a page within it steps back to where that page was opened from.
-      if (t === 'grading') { openGrading(); return; }
       if (b.classList.contains('on')) {
         if (!$('printScreen').hidden && printBackTo) { printBackTo(); return; }
         if (!$('studentScreen').hidden && studentBackTo) { studentBackTo(); return; }
@@ -5427,7 +5372,7 @@
     classes = ids.map(function (id) { return byId[id]; }).filter(Boolean);
     fillClassSelects();
     try { classes = (await api('/luddite/classes/order', { ids: ids })).classes; }
-    catch (e) { if (e.message !== 'signed_out') tell('Couldn’t save the order of your classes', 'Try again.'); }
+    catch (e) { if (e.message !== 'signed_out') tell('Couldn’t Save the Order of Your Classes', 'Try again.'); }
   }
 
   // Reads a picked .csv/.txt file, adds its addresses to the box, and says how many are in it.
@@ -5535,7 +5480,7 @@
       openedClass = data['class'] || openedClass;
       drawClassScreen();
       return true;
-    } catch (e) { tell('Couldn’t save that change', 'Try again.'); }
+    } catch (e) { tell('Couldn’t Save That Change', 'Try again.'); }
   }
   wireEmailFile($('classAddFile'), $('classAddEmails'), $('classAddNote'));
   $('classAddForm').addEventListener('submit', async function (e) {
@@ -5548,11 +5493,11 @@
   });
   $('classBack').addEventListener('click', showDash);
   $('classRenameBtn').addEventListener('click', async function () {
-    var n = await ask({ title: 'Rename the class', input: 'line', value: openedClass.name, ok: 'Save' });
+    var n = await ask({ title: 'Rename the Class', input: 'line', value: openedClass.name, ok: 'Save' });
     if (n && n.trim()) await classAction('rename', { name: n.trim() });
   });
   $('classDeleteBtn').addEventListener('click', async function () {
-    if (await ask({ title: 'Delete the class “' + openedClass.name + '”?', text: 'Writing sessions that used it keep working for people already in them, but its list stops letting anyone in on their own.', ok: 'Delete', danger: true })) classAction('delete');
+    if (await ask({ title: 'Delete the Class “' + openedClass.name + '”?', text: 'Writing sessions that used it keep working for people already in them, but its list stops letting anyone in on their own.', ok: 'Delete', danger: true })) classAction('delete');
   });
 
   // ---- Google Drive, where handed-in work goes ----
@@ -5579,7 +5524,7 @@
   }
 
   function connectDrive() {
-    if (!(window.google && google.accounts && google.accounts.oauth2)) { tell('Google didn’t load', 'Reload the page and try again.'); return; }
+    if (!(window.google && google.accounts && google.accounts.oauth2)) { tell('Google Didn’t Load', 'Reload the page and try again.'); return; }
     google.accounts.oauth2.initCodeClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: 'openid email https://www.googleapis.com/auth/drive.file',
@@ -5590,7 +5535,7 @@
         try {
           await api('/luddite/drive', { code: resp.code });
         } catch (e) {
-          tell('Couldn’t connect Google Drive', e.message === 'drive_not_granted' ? 'Luddite needs the Google Drive box ticked. Try again and leave it on.'
+          tell('Couldn’t Connect Google Drive', e.message === 'drive_not_granted' ? 'Luddite needs the Google Drive box ticked. Try again and leave it on.'
             : e.message === 'drive_no_refresh' ? 'Google didn’t give Luddite lasting access. Remove Luddite at myaccount.google.com/permissions, then connect again.'
             : e.message === 'drive_not_configured' ? 'Drive isn’t set up on the server yet.'
             : 'Couldn’t connect Google Drive. Try again.');
@@ -5613,7 +5558,7 @@
       row.appendChild(who);
       var rm = el('button', 'linkish', 'Remove');
       rm.addEventListener('click', async function () {
-        if (!await ask({ title: 'Stop ' + t.email + ' from making writing sessions?', text: 'Their existing ones stay.', ok: 'Remove', danger: true })) return;
+        if (!await ask({ title: 'Stop ' + t.email + ' from Making Writing Sessions?', text: 'Their existing ones stay.', ok: 'Remove', danger: true })) return;
         loadTeachers(await api('/luddite/teachers', { remove: t.email }));
       });
       row.appendChild(rm);
@@ -5632,14 +5577,14 @@
       row.appendChild(w);
       if (data.always.indexOf(email) !== -1) { row.appendChild(el('span', 'pill', 'Testing center')); list.appendChild(row); return; }
       row.appendChild(button('Remove', 'btn small ghost', async function () {
-        if (!await ask({ title: 'Stop ' + email + ' proctoring?', text: 'Sessions a teacher added them to themselves keep them.', ok: 'Remove', danger: true })) return;
+        if (!await ask({ title: 'Stop ' + email + ' Proctoring?', text: 'Sessions a teacher added them to themselves keep them.', ok: 'Remove', danger: true })) return;
         loadPermProctors(await api('/luddite/proctors', { remove: email }));
       }));
       list.appendChild(row);
     });
   }
   $('addPermProctorBtn').addEventListener('click', async function () {
-    var e = await ask({ title: 'Add a permanent proctor', text: 'In every writing session, they can let in, unlock, and begin or pause the time of each student on an alternative schedule. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
+    var e = await ask({ title: 'Add a Permanent Proctor', text: 'In every writing session, they can let in, unlock, and begin or pause the time of each student on an alternative schedule. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
     if (!e) return;
     var found = extractEmails(e)[0];
     var note = $('permProctorNote');
@@ -5748,7 +5693,7 @@
   // Print: a plain list in a window of its own.
   $('comingPrint').addEventListener('click', function () {
     var esc = function (t) { return String(t).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
-    var html = '<!doctype html><meta charset="utf-8"><title>Coming up</title><style>body{font:14px/1.45 system-ui,sans-serif;margin:32px}h2{font-size:15px;margin:20px 0 6px}td{padding:3px 14px 3px 0;vertical-align:top}</style><h1>Coming up</h1>';
+    var html = '<!doctype html><meta charset="utf-8"><title>Coming up</title><style>body{font:14px/1.45 system-ui,sans-serif;margin:32px}h2{font-size:15px;margin:20px 0 6px}td{padding:3px 14px 3px 0;vertical-align:top}</style><h1>Coming Up</h1>';
     var day = '';
     comingRows.forEach(function (r) {
       var d = new Date(r.start).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
@@ -5857,7 +5802,7 @@
       var slot = el('div', 'row');
       slot.style.gap = '6px';
       if (p.own && (p.state === 'upcoming' || (p.own.blocks && p.nextAt))) slot.appendChild(button(p.state === 'upcoming' ? 'Begin now' : 'Begin the next part now', 'btn small', async function () {
-        if (await ask({ title: 'Begin ' + p.label + '’s time now?', text: (p.own.blocks ? 'Their next part starts now' : 'Their alternative schedule starts now') + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
+        if (await ask({ title: 'Begin ' + p.label + '’s Time Now?', text: (p.own.blocks ? 'Their next part starts now' : 'Their alternative schedule starts now') + (p.own.multiplier > 1 ? ', with ' + p.own.multiplier + '× time' : '') + '. Luddite lets them in when they sign in.', ok: 'Begin now' })) pxAction('begin', [], { email: p.email });
       }));
       if (p.sub && p.lockedOut && !p.handedIn) slot.appendChild(button('Let them back in', 'btn small', function () { pxAction('unlock', [p.sub]); }));
       else if (p.sub && p.handedIn) slot.appendChild(button('Unlock', 'btn small ghost', async function () {
@@ -5869,7 +5814,7 @@
       }
       // Closing their paper: handed in now, with what they've written.
       if (p.sub && p.status === 'admitted' && !p.handedIn && p.state !== 'upcoming') slot.appendChild(button('Hand in now', 'btn small ghost', async function () {
-        if (await ask({ title: 'Hand in ' + p.label + '’s paper now?', text: 'It’s handed in with what they’ve written, and they can’t write on unless their teacher unlocks them.', ok: 'Hand in now' })) pxAction('handIn', [p.sub]);
+        if (await ask({ title: 'Hand In ' + p.label + '’s Paper Now?', text: 'It’s handed in with what they’ve written, and they can’t write on unless their teacher unlocks them.', ok: 'Hand in now' })) pxAction('handIn', [p.sub]);
       }));
       row.appendChild(slot);
       box.appendChild(row);
@@ -5912,7 +5857,7 @@
   $('teacherClassBtn').addEventListener('click', async function () {
     var note = $('teacherClassNote');
     var NAME = 'UD English Teachers';
-    if (classes.some(function (c) { return c.name === NAME; }) && !await ask({ title: 'You already have a class called “' + NAME + '”', text: 'Make another one?', ok: 'Make another' })) return;
+    if (classes.some(function (c) { return c.name === NAME; }) && !await ask({ title: 'You Already Have a Class Called “' + NAME + '”', text: 'Make another one?', ok: 'Make another' })) return;
     note.hidden = false;
     try {
       var data = await api('/luddite/classes', { name: NAME, fromTeachers: true });
@@ -6066,7 +6011,7 @@
     stopEditingPrompt();
     roomAction('prompt', [], { prompt: t });
     var others = otherClassesOf(teacherRoom);
-    if (others.length && await ask({ title: 'Change the prompt for other classes too?', text: 'It’s saved for this class.', others: others, ok: 'Change those too', cancel: 'Just this class' }))
+    if (others.length && await ask({ title: 'Change the Prompt for Other Classes Too?', text: 'It’s saved for this class.', others: others, ok: 'Change those too', cancel: 'Just this class' }))
       applyToOthers(askOthersPicked(), { action: 'prompt', prompt: t });
   });
   $('roomPromptField').addEventListener('keydown', function (e) {
@@ -6114,8 +6059,8 @@
       list.appendChild(b);
     };
     var sibs = lastSessions.filter(same);
-    if (sibs.length > 1) { list.appendChild(el('div', 'popsec', 'This session')); sibs.slice().sort(byPeriod).forEach(function (r) { item(r, false); }); }
-    [['running', 'Happening now'], ['upcoming', 'Coming up'], ['ended', 'Past']].forEach(function (g) {
+    if (sibs.length > 1) { list.appendChild(el('div', 'popsec', 'This Session')); sibs.slice().sort(byPeriod).forEach(function (r) { item(r, false); }); }
+    [['running', 'Happening Now'], ['upcoming', 'Coming Up'], ['ended', 'Past']].forEach(function (g) {
       var rs = lastSessions.filter(function (r) { return r.state === g[0] && !same(r); });
       if (g[0] === 'upcoming') rs.sort(function (a, b) { return a.startAt - b.startAt; });
       else rs.sort(function (a, b) { return (b.endedAt || b.startAt || 0) - (a.endedAt || a.startAt || 0); });
@@ -6478,7 +6423,7 @@
       if (liveOpen !== sub) return;
       liveChatMsgs.push(d.msg);
       drawChat($('tChatLog'), liveChatMsgs, 'teacher');
-    } catch (err) { input.value = text; tell('Couldn’t send that', err.message === 'not_in_room' ? 'They aren’t in this writing session any more.' : 'Check your connection and try again.'); }
+    } catch (err) { input.value = text; tell('Couldn’t Send That', err.message === 'not_in_room' ? 'They aren’t in this writing session any more.' : 'Check your connection and try again.'); }
   });
   $('chatAllBtn').addEventListener('click', function () {
     $('chatAllErr').hidden = true;
@@ -6568,7 +6513,7 @@
     };
     var paused = !s.handedIn && !s.lockedOut && (s.pausedAt || room.pausedAt);
     if (paused) return async function () {
-      if (await ask({ title: 'Let ' + p.name + ' write again?', text: s.pausedAt ? 'Their time is paused. Resuming starts their clock again.' : 'The whole session is paused. Resuming starts everyone’s clock again.', ok: 'Resume' })) roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []);
+      if (await ask({ title: 'Let ' + p.name + ' Write Again?', text: s.pausedAt ? 'Their time is paused. Resuming starts their clock again.' : 'The whole session is paused. Resuming starts everyone’s clock again.', ok: 'Resume' })) roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []);
     };
     if (!s.handedIn && !s.lockedOut) return null;
     var after = state === 'ended' && !f.own;
@@ -6629,12 +6574,12 @@
     else if (f.act === 'unlock') main = button('Let them back in', 'btn small', function () { roomAction('unlock', [s.sub]); });
     else if (f.act === 'resume') main = button('Resume', 'btn small', function () { roomAction(s.pausedAt ? 'resume' : 'resumeAll', s.pausedAt ? [s.sub] : []); });
     else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
-      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
     });
     // Still writing: End their session hands in their paper now and locks them
     // (alternative schedule or not), as End session does for everyone.
     else if (f.canWrite && s && s.sub && state !== 'upcoming') main = button('End their session', 'btn small danger', async function () {
-      if (await ask({ title: 'End ' + p.name + '’s session now?', text: 'Their paper is handed in now, with what they’ve written, and they can’t write on unless you unlock them.' + (f.own ? ' Their alternative schedule ends here too.' : ''), ok: 'End their session', danger: true })) roomAction('handIn', [s.sub]);
+      if (await ask({ title: 'End ' + p.name + '’s Session Now?', text: 'Their paper is handed in now, with what they’ve written, and they can’t write on unless you unlock them.' + (f.own ? ' Their alternative schedule ends here too.' : ''), ok: 'End their session', danger: true })) roomAction('handIn', [s.sub]);
     });
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
     var slot = el('div', 'mainslot');
@@ -6661,7 +6606,7 @@
     var pop = el('div', 'pop');
     var item = function (text, fn) { var b = el('button', null, text); b.type = 'button'; b.addEventListener('click', function () { menu.open = false; fn(); }); pop.appendChild(b); };
     if (stage === 'tograde') item('Share without a grade', async function () {
-      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
+      try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
     });
     if (x && x.link && !anonOn()) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn && f.act !== 'release') item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
@@ -6672,7 +6617,7 @@
     }
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
     if (s) item('Remove from this session', async function () {
-      if (await ask({ title: 'Take ' + p.name + ' out of this writing session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
+      if (await ask({ title: 'Take ' + p.name + ' Out of This Writing Session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
     });
     if (pop.children.length) { menu.appendChild(pop); row.appendChild(menu); }
 
@@ -6716,7 +6661,7 @@
   var unlockAllSubs = { out: [], handed: [] };
   $('unlockAllBtn').addEventListener('click', async function () {
     var u = unlockAllSubs, n = u.out.length + u.handed.length;
-    if (!n || !await ask({ title: 'Unlock ' + (n === 1 ? 'the one student' : 'all ' + n + ' students') + ' who are locked?', text: 'Anyone locked out after leaving the page, or locked after handing in, can write again.', ok: 'Unlock all' })) return;
+    if (!n || !await ask({ title: 'Unlock ' + (n === 1 ? 'the One Student' : 'All ' + n + ' Students') + ' Who Are Locked?', text: 'Anyone locked out after leaving the page, or locked after handing in, can write again.', ok: 'Unlock all' })) return;
     if (u.out.length) await roomAction('unlock', u.out);
     if (u.handed.length) await roomAction('release', u.handed);
   });
@@ -6728,7 +6673,7 @@
     $('roomMenu').open = false;
     var on = !teacherRoom.atHome;
     if (!await ask(on
-      ? { title: 'Let students work on “' + teacherRoom.title + '” at home?', text: 'Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click, or press Leave for now and come back later, on any computer, until you end the session. Anyone locked out now is let back in.', ok: 'Let them work at home' }
+      ? { title: 'Let Students Work on “' + teacherRoom.title + '” at Home?', text: 'Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click, or press Leave for now and come back later, on any computer, until you end the session. Anyone locked out now is let back in.', ok: 'Let them work at home' }
       : { title: 'Back to class rules?', text: 'Leaving the page locks them out again until you let them back in.', ok: 'Back to class rules' })) return;
     roomAction('atHome', [], { on: on });
   });
@@ -6738,23 +6683,23 @@
   });
   $('addProctorRoomBtn').addEventListener('click', async function () {
     $('roomMenu').open = false;
-    var e = await ask({ title: 'Add a proctor to “' + teacherRoom.title + '”', text: 'They can let students in, unlock anyone locked out, and begin or pause the session or one student’s time. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
+    var e = await ask({ title: 'Add a Proctor to “' + teacherRoom.title + '”', text: 'They can let students in, unlock anyone locked out, and begin or pause the session or one student’s time. They never see what anyone writes.', input: 'line', placeholder: 'name@horacemann.org', ok: 'Add' });
     var found = e ? extractEmails(e)[0] : '';
-    if (e && !found) { tell('That isn’t an email address', 'Try again with the proctor’s full address.'); return; }
+    if (e && !found) { tell('That Isn’t an Email Address', 'Try again with the proctor’s full address.'); return; }
     if (found) roomAction('addProctor', [], { email: found });
   });
   $('reopenBtn').addEventListener('click', function () { $('roomMenu').open = false; roomAction('startNow'); });
   $('openCloseBtn').addEventListener('click', async function () {
     var state = roomState(teacherRoom);
     if (state === 'running') {
-      if (!await ask({ title: 'End “' + teacherRoom.title + '” now?', text: 'Everyone still writing is handed in now, with what they’ve written, and locked out. Students on an alternative schedule keep going: theirs closes ten minutes after their time ends, when a proctor or you hand it in, or when they hand it in.', ok: 'End session', danger: true })) return;
+      if (!await ask({ title: 'End “' + teacherRoom.title + '” Now?', text: 'Everyone still writing is handed in now, with what they’ve written, and locked out. Students on an alternative schedule keep going: theirs closes ten minutes after their time ends, when a proctor or you hand it in, or when they hand it in.', ok: 'End session', danger: true })) return;
       roomAction('close');
     } else {
       roomAction('startNow');
     }
   });
   $('renameBtn').addEventListener('click', async function () {
-    var t = await ask({ title: 'Rename this writing session', text: 'Name it for the work.', input: 'line', value: teacherRoom.title, ok: 'Save' });
+    var t = await ask({ title: 'Rename This Writing Session', text: 'Name it for the work.', input: 'line', value: teacherRoom.title, ok: 'Save' });
     if (!t || !t.trim()) return;
     await roomAction('rename', [], { title: t.trim() });
   });
@@ -6767,7 +6712,7 @@
     (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function () {
       $('copyLinkBtn').textContent = 'Copied';
       setTimeout(function () { $('copyLinkBtn').textContent = 'Copy link'; }, 1500);
-    }).catch(function () { ask({ title: 'Copy this link', input: 'line', value: link, ok: 'Done', cancel: false }); });
+    }).catch(function () { ask({ title: 'Copy This Link', input: 'line', value: link, ok: 'Done', cancel: false }); });
   });
 
   // ---- Picking a time: a writing session's, or one student's own ----
@@ -6978,7 +6923,7 @@
   // whether they see the comments and grade while they do.
   $('reflectBtn').addEventListener('click', async function () {
     var rf = teacherRoom.reflect;
-    var t = await ask({ title: rf ? 'Reflection' : 'Ask for a reflection', text: 'Students whose paper is handed in reflect on it from their own Luddite page, full screen and locked like writing. Give them a prompt if you like.',
+    var t = await ask({ title: rf ? 'Reflection' : 'Ask for a Reflection', text: 'Students whose paper is handed in reflect on it from their own Luddite page, full screen and locked like writing. Give them a prompt if you like.',
       input: 'rich', value: rf ? rf.prompt || '' : '', placeholder: 'Optional: what should they think about?',
       check: 'Show them my comments and grade while they reflect', checked: rf ? !!rf.showGrading : false, others: otherClassesOf(teacherRoom), ok: rf ? 'Save' : 'Ask for it' });
     if (t === null) return;
@@ -7061,11 +7006,11 @@
   $('rfViewBox').addEventListener('click', function (e) { if (e.target === $('rfViewBox')) { $('rfViewBox').hidden = true; clearInterval(rfViewTimer); } });
   $('roomReflectEdit').addEventListener('click', function () { $('reflectBtn').click(); });
   $('reflectOffBtn').addEventListener('click', async function () {
-    if (!await ask({ title: 'Stop asking for reflections?', text: 'Students can’t start or go on with one. Reflections already written stay with their papers.', ok: 'Stop asking' })) return;
+    if (!await ask({ title: 'Stop Asking for Reflections?', text: 'Students can’t start or go on with one. Reflections already written stay with their papers.', ok: 'Stop asking' })) return;
     roomAction('reflectOff', []);
   });
   $('promptBtn').addEventListener('click', async function () {
-    var t = await ask({ title: 'The prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'rich', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', others: otherClassesOf(teacherRoom), ok: 'Save' });
+    var t = await ask({ title: 'The Prompt', text: 'Students see it pinned at the top of their writing page. Leave it empty for none.', input: 'rich', value: teacherRoom.prompt || '', placeholder: 'What should they write about?', others: otherClassesOf(teacherRoom), ok: 'Save' });
     if (t === null) return;
     var picked = askOthersPicked();
     roomAction('prompt', [], { prompt: t.trim() });
@@ -7082,7 +7027,7 @@
   function applyToOthers(codes, body) {
     if (!codes.length) return;
     Promise.all(codes.map(function (c) { return api('/luddite/assignment', Object.assign({ code: c, subs: [] }, body)); }))
-      .catch(function () { tell('Couldn’t change the other classes’ sessions', 'Try again from each one.'); });
+      .catch(function () { tell('Couldn’t Change the Other Classes’ Sessions', 'Try again from each one.'); });
   }
 
   // Choosing something from Session options closes it.
@@ -7090,18 +7035,18 @@
   $('rubricBtn').addEventListener('click', async function () {
     var pick = await chooseRubric(teacherRoom.rubric, rubricShownIn(teacherRoom));
     if (pick === undefined) return;
-    try { await applyRubric(teacherRoom.code, pick); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); }
+    try { await applyRubric(teacherRoom.code, pick); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t Set the Rubric', 'Try again.'); }
   });
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
     var due = latestPerStudent(teacherRoom.submissions).filter(function (x) { return x.stored && !x.returnedAt; });
-    if (!due.length) { tell('Nothing to share', 'The grading of every paper in this session is shared already.'); return; }
+    if (!due.length) { tell('Nothing to Share', 'The grading of every paper in this session is shared already.'); return; }
     var unmarked = due.filter(function (x) { return !x.marked && !x.grade; }).length;
-    if (!await ask({ title: 'Share the grading of ' + plural(due.length, 'paper', 'papers') + '?',
+    if (!await ask({ title: 'Share the Grading of ' + plural(due.length, 'paper', 'papers') + '?',
       text: 'Students can then read your comments, and see their grade after five minutes with them.' + (unmarked ? ' ' + plural(unmarked, 'paper has', 'papers have') + ' no comments or grade yet.' : ''),
       ok: 'Share Grading' })) return;
     try { await handBack(due.map(function (x) { return x.id; }), true); lastDrawn = ''; loadRoom(); }
-    catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
+    catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
   });
   // A menu opens leftward from its button; one near the left of its panel (or
   // the screen) is slid right instead, so it never hangs off either edge.
@@ -7185,7 +7130,6 @@
   // not yet handed back.
   var markList = [], markReturned = {};
   async function openMark(id, back, list, returned) {
-    markTabs('grading');
     markBackTo = back || showDash;
     markList = list && list.indexOf(id) !== -1 ? list : [id];
     if (returned) markReturned = returned;
@@ -7195,7 +7139,11 @@
     $('readBanner').hidden = true;
     $('paper').contentEditable = 'true';
     $('markBack').innerHTML = '&larr; Back';
-    show('markScreen');
+    // Grading floats over the page it was opened from (a session's, a student's).
+    $('markScreen').hidden = false;
+    $('markShade').hidden = false;
+    document.body.classList.add('markfloat');
+    $('markScreen').scrollTop = 0;
     $('paper').textContent = 'Loading…';
     $('margin').innerHTML = '';
     $('markSaved').textContent = '';
@@ -7245,7 +7193,7 @@
     var withPapers = lastSessions.filter(function (r) { return r.submissions; });
     pick.hidden = withPapers.length < 2;
     var recent = function (a, b) { return (b.endedAt || b.endAt || b.startAt || 0) - (a.endedAt || a.endAt || a.startAt || 0); };
-    [['To grade', withPapers.filter(function (r) { return r.submissions > (r.graded || 0); })], ['Graded', withPapers.filter(function (r) { return r.submissions <= (r.graded || 0); }).sort(recent).slice(0, 10)]].forEach(function (g) {
+    [['To Grade', withPapers.filter(function (r) { return r.submissions > (r.graded || 0); })], ['Graded', withPapers.filter(function (r) { return r.submissions <= (r.graded || 0); }).sort(recent).slice(0, 10)]].forEach(function (g) {
       if (!g[1].length) return;
       list.appendChild(el('div', 'popsec', g[0]));
       g[1].forEach(function (r) {
@@ -7282,7 +7230,7 @@
   $('markHandBack').addEventListener('click', async function () {
     if (!piece) return;
     var back = !piece.returnedAt;
-    if (!back && !await ask({ title: 'Stop sharing this grading?', text: 'The student won’t see your comments until you share them again.', ok: 'Stop sharing' })) return;
+    if (!back && !await ask({ title: 'Stop Sharing This Grading?', text: 'The student won’t see your comments until you share them again.', ok: 'Stop sharing' })) return;
     flushMarks();
     try {
       var done = await handBack([piece.id], back);
@@ -7292,8 +7240,20 @@
       // Handed back: on to the next student's paper.
       var nx = back && nextToHandBack(piece.id);
       if (nx) goPaper(nx).then(function () { $('markSaved').textContent = 'Handed that one back ✓'; });
-    } catch (e) { tell('Couldn’t share the grading', 'Try again.'); }
+    } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
   });
+  // Closing the grading window: the page under it is redrawn with what changed.
+  function closeMarking() {
+    flushMarks(); hideTools(); closePop();
+    $('markScreen').hidden = true;
+    $('markShade').hidden = true;
+    document.body.classList.remove('markfloat');
+    if (!$('roomScreen').hidden) { lastDrawn = ''; loadRoom(); }
+    else if (!$('studentScreen').hidden && studentShown) openStudent(studentShown, studentBackTo);
+    else (markBackTo || showDash)();
+  }
+  $('markClose').addEventListener('click', closeMarking);
+  $('markShade').addEventListener('click', closeMarking);
   $('markBack').addEventListener('click', function () { flushMarks(); hideTools(); closePop(); (markBackTo || showDash)(); });
   function drawPaperNav(id) {
     var i = markList.indexOf(id), n = markList.length;
@@ -7970,8 +7930,8 @@
   var STOCK_GOOD = [
     ['Thesis', 'A bold, arguable thesis.', 'Keep making bold claims someone could argue with.'],
     ['Thesis', 'A thesis with real stakes.', 'Keep giving your thesis stakes: you showed why it matters.'],
-    ['Topic sentences', 'Topic sentences that make claims.', 'Keep opening each paragraph with a claim, not a summary.'],
-    ['Topic sentences', 'Transitions that carry the argument.', 'Keep linking your paragraphs back to your broader argument.'],
+    ['Topic Sentences', 'Topic sentences that make claims.', 'Keep opening each paragraph with a claim, not a summary.'],
+    ['Topic Sentences', 'Transitions that carry the argument.', 'Keep linking your paragraphs back to your broader argument.'],
     ['Evidence', 'Brief, well-chosen quotations.', 'Keep choosing brief quotations that do real work.'],
     ['Evidence', 'Quotations woven into the sentences.', 'Keep working quotations smoothly into your own sentences.'],
     ['Analysis', 'Sharp close reading.', 'Keep slowing down on single words and images: your close reading is sharp.'],
@@ -7989,11 +7949,11 @@
     ['Thesis', 'There\u2019s no clear thesis.', 'State your thesis in one sentence, at the top or at the end, and label it.'],
     ['Thesis', 'The thesis has no stakes.', 'Give your thesis stakes: say why a reader should care about your claim.'],
     ['Thesis', 'Thesis is about plot, rather than subtext, style, or language.', 'Aim your thesis at subtext, style or language, not at plot.'],
-    ['Topic sentences', 'This topic sentence summarizes the plot.', 'Make each topic sentence a claim that needs defending, not a summary of what happens.'],
-    ['Topic sentences', 'The topic sentence doesn\u2019t match what the paragraph argues.', 'Check that each paragraph proves exactly what its topic sentence claims.'],
-    ['Topic sentences', 'The topic sentences don\u2019t connect back to the thesis.', 'Let each topic sentence advance one part of your thesis.'],
-    ['Topic sentences', 'The paragraph ends without a transition.', 'End each paragraph with a transition sentence that connects back to your broader argument.'],
-    ['Topic sentences', 'The paragraphs don\u2019t build on each other.', 'Order your paragraphs so the argument proceeds logically, each one building on the last.'],
+    ['Topic Sentences', 'This topic sentence summarizes the plot.', 'Make each topic sentence a claim that needs defending, not a summary of what happens.'],
+    ['Topic Sentences', 'The topic sentence doesn\u2019t match what the paragraph argues.', 'Check that each paragraph proves exactly what its topic sentence claims.'],
+    ['Topic Sentences', 'The topic sentences don\u2019t connect back to the thesis.', 'Let each topic sentence advance one part of your thesis.'],
+    ['Topic Sentences', 'The paragraph ends without a transition.', 'End each paragraph with a transition sentence that connects back to your broader argument.'],
+    ['Topic Sentences', 'The paragraphs don\u2019t build on each other.', 'Order your paragraphs so the argument proceeds logically, each one building on the last.'],
     ['Evidence', 'Claims without quotation.', 'Support each paragraph with one or two brief quotations.'],
     ['Evidence', 'Quotations run too long.', 'Quote only the words you need, and work them into your own sentences.'],
     ['Evidence', 'A quotation is dropped in without context.', 'Set up each quotation: who speaks, and when.'],
@@ -8095,7 +8055,7 @@
         lines.push(it[1] + ' => ' + it[2]);
       });
     });
-    var t = await ask({ title: 'Stock comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each comment is “the comment => the goal for the next essay.” Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each comment is “the comment => the goal for the next essay.” Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
     if (t === null) return;
     var out = [], c = 'Comments', kind = '';
     t.split('\n').forEach(function (l) {
@@ -8186,7 +8146,7 @@
   // it off for this session). "+ New rubric…" opens the editor and resolves
   // with what's saved there, shown to students. Resolves { rb, shown }.
   async function chooseRubric(current, shown) {
-    var v = rubrics.length ? await ask({ title: 'Rubric for this session', text: 'Every paper in the session is marked against it.', input: 'select',
+    var v = rubrics.length ? await ask({ title: 'Rubric for This Session', text: 'Every paper in the session is marked against it.', input: 'select',
       options: [{ value: '', label: 'No rubric' }].concat(rubrics.map(function (x) { return { value: x.id, label: x.name + ' (' + rubricKindLabel(x) + ')' }; }), [{ value: '+new', label: '+ New rubric…' }]),
       value: current ? current.id : '', ok: 'Use it',
       check: 'Show students the rubric while they write', checked: shown !== false,
@@ -8208,9 +8168,9 @@
     if (pick === undefined) return;
     var rb = pick.rb;
     if (piece && piece.rubricScores && piece.rubricScores.some(function (x) { return x >= 0; }) && (!rb || !piece.rubric || rb.id !== piece.rubric.id)) {
-      if (!await ask({ title: 'Change the rubric?', text: 'The levels you picked on this paper are cleared.', ok: 'Change it' })) return;
+      if (!await ask({ title: 'Change the Rubric?', text: 'The levels you picked on this paper are cleared.', ok: 'Change it' })) return;
     }
-    try { roomRubric = await applyRubric(code, pick); } catch (e) { tell('Couldn’t set the rubric', 'Try again.'); return; }
+    try { roomRubric = await applyRubric(code, pick); } catch (e) { tell('Couldn’t Set the Rubric', 'Try again.'); return; }
     // Only a grid is kept on the paper, with its scores.
     if (piece) { piece.rubric = roomRubric && roomRubric.kind !== 'doc' ? roomRubric : null; piece.rubricScores = []; queueSave(); renderRubric(); }
   }
