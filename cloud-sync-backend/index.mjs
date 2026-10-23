@@ -1,6 +1,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { isIP } from 'node:net';
 
 // This is the AWS Lambda behind Bookbug's "sign in with Google to save to
@@ -134,7 +135,125 @@ function bookStamp(e) {
   return Math.max(Number(e.deletedAt) || 0, Number(e.updatedAt) || 0, Number(e.archiveChangedAt) || 0);
 }
 
-export function mergeLibraryPair(storedLib, storedTrash, incomingLib, incomingTrash) {
+// ---- Merging two copies of one book, entry by entry ----
+// Two devices can each hold a copy of the same book. Picking the copy
+// saved last lost whatever only the other copy had: a poem added on one
+// device vanished when a tab elsewhere, still holding the book from
+// before, saved any edit. So copies are merged by entry (a poem,
+// section, chapter or scene, matched by id):
+// - the newer copy's order and settings are kept;
+// - an entry only one copy has is kept, in its place next to the
+//   entries around it, unless the other copy deleted it after it was
+//   last changed (`gone`, or Recently deleted) -- nothing is dropped
+//   just because a copy hadn't heard of it;
+// - where both copies have an entry, the one changed last (`editedAt`,
+//   stamped on every save that changes it, or `archivedAt`) wins, and
+//   ties go to the newer copy.
+// Losing nothing comes first: at worst something deleted on a device
+// that was out of date comes back, and can be deleted again.
+// The same function runs in the page (bookbug/index.html) and in the
+// sync backend (cloud-sync-backend/index.mjs): keep the two identical.
+var GONE_KEEP_MS = 400 * 24 * 3600 * 1000;
+function bookEntryStamp(p) { return Math.max(Number(p && p.editedAt) || 0, Number(p && p.archivedAt) || 0); }
+function bookEntryEmpty(p) {
+  if (!p || p.kind === 'section') return false;
+  return !String(p.title || '').trim() && !(p.lines || []).join('').trim() && !(p.images && p.images.length) && !p.image;
+}
+export function mergeBookData(newer, older) {
+  if (!newer || !older || !Array.isArray(newer.poems) || !Array.isArray(older.poems)) return newer;
+  var out = JSON.parse(JSON.stringify(newer));
+  out.archivedPoems = Array.isArray(out.archivedPoems) ? out.archivedPoems : [];
+  var now = Date.now();
+  // Removals either copy knows of: id -> when.
+  var gone = {};
+  [older.gone, newer.gone].forEach(function (g) {
+    if (g && typeof g === 'object') Object.keys(g).forEach(function (id) {
+      var t = Number(g[id]) || 0;
+      if (t > now - GONE_KEEP_MS && t > (gone[id] || 0)) gone[id] = t;
+    });
+  });
+  var deleted = {};
+  [older.deletedPoems, newer.deletedPoems].forEach(function (list) {
+    (Array.isArray(list) ? list : []).forEach(function (d) {
+      if (!d || !d.poem || !d.poem.id) return;
+      var cur = deleted[d.poem.id];
+      if (!cur || (Number(d.deletedAt) || 0) > (Number(cur.deletedAt) || 0)) deleted[d.poem.id] = d;
+    });
+  });
+  // What the newer copy removed, and when (its own gone and deletions).
+  function newerRemovedAt(id) {
+    var t = Number(newer.gone && newer.gone[id]) || 0;
+    (Array.isArray(newer.deletedPoems) ? newer.deletedPoems : []).forEach(function (d) {
+      if (d && d.poem && d.poem.id === id) t = Math.max(t, Number(d.deletedAt) || 0);
+    });
+    return t;
+  }
+  function where(id) {
+    for (var i = 0; i < out.poems.length; i++) if (out.poems[i] && out.poems[i].id === id) return { list: out.poems, i: i };
+    for (i = 0; i < out.archivedPoems.length; i++) if (out.archivedPoems[i] && out.archivedPoems[i].id === id) return { list: out.archivedPoems, i: i };
+    return null;
+  }
+  function copyOf(p) { return JSON.parse(JSON.stringify(p)); }
+  // Into the book, after the nearest entry before it in the older copy
+  // that's in the result (else before the nearest one after it).
+  function placeInBook(p, olderIndex) {
+    for (var j = olderIndex - 1; j >= 0; j--) {
+      var prev = older.poems[j] && where(older.poems[j].id);
+      if (prev && prev.list === out.poems) { out.poems.splice(prev.i + 1, 0, p); return; }
+    }
+    for (j = olderIndex + 1; j < older.poems.length; j++) {
+      var next = older.poems[j] && where(older.poems[j].id);
+      if (next && next.list === out.poems) { out.poems.splice(next.i, 0, p); return; }
+    }
+    out.poems.push(p);
+  }
+  var olderEntries = [];
+  older.poems.forEach(function (p, i) { if (p && p.id) olderEntries.push({ p: p, inBook: true, i: i }); });
+  (Array.isArray(older.archivedPoems) ? older.archivedPoems : []).forEach(function (p) { if (p && p.id) olderEntries.push({ p: p, inBook: false }); });
+  olderEntries.forEach(function (o) {
+    var mine = where(o.p.id);
+    if (mine) {
+      // Both copies have it: the one changed last wins.
+      if (bookEntryStamp(o.p) <= bookEntryStamp(mine.list[mine.i])) return;
+      if ((mine.list === out.poems) === o.inBook) { mine.list[mine.i] = copyOf(o.p); return; }
+      mine.list.splice(mine.i, 1);
+    } else {
+      // Only the older copy has it: kept, unless the newer copy removed
+      // it after its last change there, or it's an empty entry.
+      if (newerRemovedAt(o.p.id) > bookEntryStamp(o.p)) return;
+      if (o.inBook && bookEntryEmpty(o.p)) return;
+    }
+    if (o.inBook) placeInBook(copyOf(o.p), o.i); else out.archivedPoems.push(copyOf(o.p));
+  });
+  // Removed in the older copy after the newer copy last changed it: gone
+  // here too. (An entry never stamped can't be dated, so it stays.)
+  function olderRemovedAt(id) {
+    var t = Number(older.gone && older.gone[id]) || 0;
+    (Array.isArray(older.deletedPoems) ? older.deletedPoems : []).forEach(function (d) {
+      if (d && d.poem && d.poem.id === id) t = Math.max(t, Number(d.deletedAt) || 0);
+    });
+    return t;
+  }
+  [out.poems, out.archivedPoems].forEach(function (list) {
+    for (var k = list.length - 1; k >= 0; k--) {
+      var s = bookEntryStamp(list[k]);
+      if (s > 0 && olderRemovedAt(list[k].id) > s) list.splice(k, 1);
+    }
+  });
+  // Recently deleted lists only what isn't back in the book or archive;
+  // gone forgets what's present again.
+  out.deletedPoems = Object.keys(deleted).map(function (id) { return deleted[id]; })
+    .filter(function (d) { return !where(d.poem.id); })
+    .sort(function (a, b) { return (Number(a.deletedAt) || 0) - (Number(b.deletedAt) || 0); });
+  Object.keys(gone).forEach(function (id) { if (where(id)) delete gone[id]; });
+  if (Object.keys(gone).length) out.gone = gone; else delete out.gone;
+  return out;
+}
+
+// mergeEntries: where both sides have a text book (chapbooks) in the
+// library and they differ, merge them entry by entry (mergeBookData)
+// rather than letting the copy saved last replace the other.
+export function mergeLibraryPair(storedLib, storedTrash, incomingLib, incomingTrash, mergeEntries) {
   const winners = new Map();
   function consider(entry, inTrash) {
     if (!entry || !entry.id) return;
@@ -153,8 +272,80 @@ export function mergeLibraryPair(storedLib, storedTrash, incomingLib, incomingTr
   [incomingLib, incomingTrash, storedLib, storedTrash].forEach(list => (list || []).forEach(e => {
     if (e && e.id && !seen.has(e.id)) { seen.add(e.id); order.push(e.id); }
   }));
-  order.forEach(id => { const w = winners.get(id); (w.inTrash ? trash : lib).push(w.entry); });
+  const libCopies = new Map();
+  if (mergeEntries) [storedLib, incomingLib].forEach(list => (list || []).forEach(e => {
+    if (e && e.id && e.data && Array.isArray(e.data.poems)) (libCopies.get(e.id) || libCopies.set(e.id, []).get(e.id)).push(e);
+  }));
+  order.forEach(id => {
+    const w = winners.get(id);
+    let entry = w.entry;
+    if (!w.inTrash && libCopies.has(id) && entry.data && Array.isArray(entry.data.poems)) {
+      libCopies.get(id).forEach(other => {
+        if (other === w.entry || JSON.stringify(other.data) === JSON.stringify(entry.data)) return;
+        entry = { ...entry, data: mergeBookData(entry.data, other.data) };
+      });
+    }
+    (w.inTrash ? trash : lib).push(entry);
+  });
   return { lib, trash };
+}
+
+// ---- Earlier versions of books ----
+// Before a save changes a text book, the copy it replaces is kept, so a
+// poem that goes missing can be found again (GET ?bookVersions=<id>,
+// ?bookVersion=<id>&at=<at>). One item per version in the images table,
+// "bookver:<book>:<at>" (the whole library entry, gzipped), and a list of
+// them in "bookvers:<book>". A version is kept at most every 10 minutes
+// while a book is being typed in, but always when a save removes
+// entries from the book, and the newest VERSION_MAX are kept.
+const VERSION_EVERY_MS = 10 * 60 * 1000;
+const VERSION_MAX = 80;
+const VERSION_MAX_BYTES = 380 * 1024;
+function entryIds(data) {
+  const ids = new Set();
+  if (data) [data.poems, data.archivedPoems].forEach(list => (Array.isArray(list) ? list : []).forEach(p => { if (p && p.id) ids.add(p.id); }));
+  return ids;
+}
+function versionSummary(entry, at, removed) {
+  const d = entry.data || {};
+  const poems = (d.poems || []).filter(p => p && p.kind !== 'section');
+  return { at, title: String(entry.title || d.bookTitle || ''), entries: poems.length, archived: (d.archivedPoems || []).length,
+    ...(removed && removed.length ? { removed: removed.slice(0, 20) } : {}) };
+}
+async function keepBookVersions(owner, before, after) {
+  const was = new Map(((before && before.chapbooks) || []).concat((before && before.trash) || []).filter(e => e && e.id && e.data).map(e => [e.id, e]));
+  const now = new Map(((after && after.chapbooks) || []).concat((after && after.trash) || []).filter(e => e && e.id).map(e => [e.id, e]));
+  for (const [id, old] of was) {
+    const cur = now.get(id);
+    if (!cur || !cur.data || !Array.isArray(old.data.poems)) continue;
+    if (JSON.stringify(old.data) === JSON.stringify(cur.data)) continue;
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) continue;
+    // Entries the save takes out of the book and archive without Delete
+    // putting them in Recently deleted: a version is kept whatever its age.
+    const left = entryIds(cur.data), deleted = new Set((cur.data.deletedPoems || []).map(d => d && d.poem && d.poem.id));
+    const removed = [];
+    (old.data.poems || []).concat(old.data.archivedPoems || []).forEach(p => {
+      if (p && p.id && !left.has(p.id) && !deleted.has(p.id) && p.kind !== 'section') removed.push(String(p.title || (p.lines || []).find(l => String(l).trim()) || 'Untitled').slice(0, 80));
+    });
+    const listKey = { userId: { S: owner }, imageId: { S: 'bookvers:' + id } };
+    const got = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: listKey }));
+    let list = [];
+    try { list = got.Item && got.Item.json ? JSON.parse(got.Item.json.S) : []; } catch (e) { list = []; }
+    const last = list[list.length - 1];
+    if (!removed.length && last && Date.now() - last.at < VERSION_EVERY_MS) continue;
+    const body = gzipSync(Buffer.from(JSON.stringify(old)));
+    if (body.length > VERSION_MAX_BYTES) continue;
+    const at = Math.max(Date.now(), last ? last.at + 1 : 0);
+    await ddb.send(new PutItemCommand({ TableName: IMAGE_TABLE_NAME,
+      Item: { userId: { S: owner }, imageId: { S: 'bookver:' + id + ':' + at }, data: { B: body }, updatedAt: { N: String(at) } } }));
+    list.push(versionSummary(old, at, removed));
+    while (list.length > VERSION_MAX) {
+      const drop = list.shift();
+      await ddb.send(new DeleteItemCommand({ TableName: IMAGE_TABLE_NAME, Key: { userId: { S: owner }, imageId: { S: 'bookver:' + id + ':' + drop.at } } }));
+    }
+    await ddb.send(new PutItemCommand({ TableName: IMAGE_TABLE_NAME,
+      Item: { ...listKey, json: { S: JSON.stringify(list) }, updatedAt: { N: String(at) } } }));
+  }
 }
 
 function newerStamped(a, b) {
@@ -170,7 +361,7 @@ export function mergeBookbugSave(stored, incoming) {
   BOOK_LISTS.forEach(([libKey, trashKey]) => {
     if (!Array.isArray(stored[libKey]) && !Array.isArray(stored[trashKey])) return;
     if (!Array.isArray(incoming[libKey]) && !Array.isArray(incoming[trashKey])) { out[libKey] = stored[libKey]; out[trashKey] = stored[trashKey]; return; }
-    const m = mergeLibraryPair(stored[libKey], stored[trashKey], incoming[libKey], incoming[trashKey]);
+    const m = mergeLibraryPair(stored[libKey], stored[trashKey], incoming[libKey], incoming[trashKey], libKey === 'chapbooks');
     out[libKey] = m.lib;
     out[trashKey] = m.trash;
   });
@@ -937,6 +1128,26 @@ export const handler = async (event) => {
     }
   }
 
+  // ---- Earlier versions of a book (see keepBookVersions) ----
+  const versionsOf = event.queryStringParameters?.bookVersions;
+  const versionOf = event.queryStringParameters?.bookVersion;
+  if (versionsOf !== undefined || versionOf !== undefined) {
+    if (method !== 'GET') return respond(405, { error: 'Method not allowed' });
+    const id = versionsOf !== undefined ? versionsOf : versionOf;
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) return respond(400, { error: 'Bad book id' });
+    if (versionsOf !== undefined) {
+      const got = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: { userId: { S: userId }, imageId: { S: 'bookvers:' + id } } }));
+      let list = [];
+      try { list = got.Item && got.Item.json ? JSON.parse(got.Item.json.S) : []; } catch (e) { list = []; }
+      return respond(200, { versions: list.slice().reverse() });
+    }
+    const at = event.queryStringParameters?.at;
+    if (!/^\d{1,16}$/.test(at || '')) return respond(400, { error: 'Bad version' });
+    const got = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: { userId: { S: userId }, imageId: { S: 'bookver:' + id + ':' + at } } }));
+    if (!got.Item) return respond(404, { error: 'No such version' });
+    return respond(200, { entry: JSON.parse(gunzipSync(Buffer.from(got.Item.data.B)).toString('utf8')) });
+  }
+
   // ---- Snapshots ----
   // An entry's saved drafts, too big to ride in the account's one item:
   // GET ?snaps=<book>.<entry> -> { snaps: [...] }, PUT with { snaps } to
@@ -1034,6 +1245,7 @@ export const handler = async (event) => {
     // devices saving at once); on a clash, read again and redo the merge.
     for (let attempt = 0; attempt < 4; attempt++) {
       const { state, updatedAt, createdAt, exists } = await getStoredState(userId);
+      const before = state[app];
       state[app] = app === 'chapbookbuilder' ? mergeBookbugSave(state[app], payload.data) : payload.data;
       const now = Math.max(Date.now(), updatedAt + 1);
       // createdAt (for usage stats) is stamped on an account's first save and
@@ -1055,6 +1267,11 @@ export const handler = async (event) => {
             ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
             : { ConditionExpression: exists ? 'attribute_not_exists(updatedAt)' : 'attribute_not_exists(userId)' })
         }));
+        // Saved: keep the copies of text books this save changed. A
+        // failure here never fails the save itself.
+        if (app === 'chapbookbuilder') {
+          try { await keepBookVersions(userId, before, state[app]); } catch (e) { console.error('keepBookVersions', e); }
+        }
         return respond(200, { ok: true });
       } catch (e) {
         if (e.name !== 'ConditionalCheckFailedException') throw e;

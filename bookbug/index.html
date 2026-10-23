@@ -4020,6 +4020,7 @@
 
 <div class="entry-menu" id="bookMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="share" hidden>Share a read-only link…</button>
+  <button type="button" role="menuitem" data-action="versions" hidden>Earlier versions…</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete…</button>
@@ -14859,6 +14860,8 @@
     // Picture books, cartoon batches and comics need the backend that
     // shares every kind (cloud-sync-backend's SHARE_LIBRARIES) deployed.
     bookMenu.querySelector('[data-action="share"]').hidden = !(bookMenuFromEditor && cloudAuthToken && (btn.id === 'currentBookMenuBtn' || SHARE_ALL_KINDS));
+    // A text book's earlier versions are kept by the account's backend.
+    bookMenu.querySelector('[data-action="versions"]').hidden = !(btn.id === 'currentBookMenuBtn' && cloudAuthToken);
     bookMenu.hidden = false;
     var r = btn.getBoundingClientRect();
     var mw = bookMenu.offsetWidth, mh = bookMenu.offsetHeight;
@@ -14875,6 +14878,7 @@
     var fromEditor = bookMenuFromEditor;
     closeBookMenu();
     if (item.dataset.action === 'share') { openShareDialog(); return; }
+    if (item.dataset.action === 'versions') { openBookVersions(); return; }
     if (cmEntry(entry.id) === entry) {
       if (item.dataset.action === 'duplicate') duplicateComic(entry.id, fromEditor);
       else if (item.dataset.action === 'archive') setComicArchived(entry.id, !entry.archived);
@@ -14968,6 +14972,109 @@
       bodyEl.append(row, stop);
     }
     render();
+  }
+
+  // Earlier versions of the open text book, kept by the backend before a
+  // save changes it (cloud-sync-backend's keepBookVersions): each one
+  // lists the entries it has that the book doesn't now, each with Put
+  // back, and the whole version can open as a copy.
+  async function versionsApi(query) {
+    var res = await fetch(CLOUD_API_URL + '?' + query, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
+    if (res.status === 401) { handleExpiredCloudAuth(); throw new Error('signed out'); }
+    var out = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(out.error || 'http_' + res.status);
+    return out;
+  }
+  function openBookVersions() {
+    flushPendingSave();
+    var bookId = state.chapbookId, nouns = formNouns();
+    if (!bookId) return;
+    var d = makeDialog('snap-box', 'Earlier versions',
+      '<p style="margin-top:0;">Earlier versions of this book, kept with your account each time it changes (at most every ten minutes while you type, and always when ' + nouns.many + ' leave it).</p>' +
+      '<p class="scan-status" aria-live="polite">Loading…</p><div class="snap-list"></div><div class="snap-diff-wrap"></div>' +
+      '<div class="modal-actions"><button class="btn" type="button">Done</button></div>');
+    var listEl = d.box.querySelector('.snap-list'), detail = d.box.querySelector('.snap-diff-wrap'), status = d.box.querySelector('.scan-status');
+    d.box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    function inBookNow() {
+      var ids = {};
+      (state.poems || []).concat(state.archivedPoems || []).forEach(function (p) { if (p && p.id) ids[p.id] = true; });
+      return ids;
+    }
+    function putBack(p, version) {
+      if (inBookNow()[p.id]) return;
+      var copy = JSON.parse(JSON.stringify(p));
+      delete copy.archivedAt; delete copy.archiveGroup;
+      copy.editedAt = Date.now();
+      // After the nearest entry before it in that version that's in the book.
+      var vp = version.poems || [], at = vp.indexOf(p), placed = false;
+      for (var j = at - 1; j >= 0 && !placed; j--) {
+        for (var k = 0; k < state.poems.length; k++) if (vp[j] && state.poems[k].id === vp[j].id) { state.poems.splice(k + 1, 0, copy); placed = true; break; }
+      }
+      if (!placed) state.poems.push(copy);
+      state.deletedPoems = (state.deletedPoems || []).filter(function (x) { return !x || !x.poem || x.poem.id !== copy.id; });
+      if (state.gone) delete state.gone[copy.id];
+      state.isExample = false;
+      persist();
+      renderAll();
+    }
+    async function look(v, rowBtn) {
+      detail.innerHTML = '';
+      status.textContent = 'Opening the version from ' + fmtWhen(v.at) + '…';
+      try {
+        var entry = (await versionsApi('bookVersion=' + encodeURIComponent(bookId) + '&at=' + v.at)).entry;
+        var data = entry && entry.data;
+        if (!data) throw new Error('empty');
+        status.textContent = '';
+        var head = document.createElement('p');
+        head.className = 'snap-note';
+        var now = inBookNow();
+        var missing = (data.poems || []).concat(data.archivedPoems || []).filter(function (p) { return p && p.id && !isSection(p) && !now[p.id] && !bookEntryEmpty(p); });
+        head.textContent = 'From ' + fmtWhen(v.at) + ': ' + (missing.length
+          ? missing.length + ' ' + (missing.length === 1 ? nouns.one + ' that isn’t' : nouns.many + ' that aren’t') + ' in the book now.'
+          : 'every ' + nouns.one + ' in it is in the book now.');
+        detail.appendChild(head);
+        missing.forEach(function (p) {
+          var row = document.createElement('div');
+          row.className = 'snap-row';
+          row.innerHTML = '<div><div class="snap-row-name"></div><div class="snap-row-meta"></div></div><div class="snap-row-actions"><button class="btn btn-sm btn-primary" type="button">Put back</button></div>';
+          row.querySelector('.snap-row-name').textContent = entryLabel(p);
+          row.querySelector('.snap-row-meta').textContent = ((p.lines || []).filter(function (l) { return String(l).trim(); })[0] || '').slice(0, 80);
+          var b = row.querySelector('button');
+          b.addEventListener('click', function () { putBack(p, data); b.disabled = true; row.querySelector('.snap-row-meta').textContent = 'Back in the book.'; });
+          detail.appendChild(row);
+        });
+        var asCopy = document.createElement('button');
+        asCopy.type = 'button'; asCopy.className = 'btn btn-ghost btn-sm'; asCopy.style.marginTop = '10px';
+        asCopy.textContent = 'Open this version as a copy';
+        asCopy.addEventListener('click', function () {
+          var title = (entry.title || state.bookTitle || 'Untitled book') + ' (' + fmtWhen(v.at) + ')';
+          var copy = { id: makeChapbookId(), title: title, updatedAt: Date.now(), data: JSON.parse(JSON.stringify(data)) };
+          copy.data.chapbookId = copy.id;
+          copy.data.bookTitle = title;
+          delete copy.data.shareToken;
+          library.push(copy);
+          persistLibrary();
+          d.close();
+          loadChapbook(copy.id);
+          if (cloudAuthToken) syncLibraryToCloud();
+        });
+        detail.appendChild(asCopy);
+      } catch (e) { status.textContent = 'Couldn’t open that version (' + e.message + ').'; }
+    }
+    versionsApi('bookVersions=' + encodeURIComponent(bookId)).then(function (out) {
+      var vs = out.versions || [];
+      status.textContent = vs.length ? '' : 'No earlier versions yet: they’re kept from now on, each time the book changes.';
+      vs.forEach(function (v) {
+        var row = document.createElement('div');
+        row.className = 'snap-row';
+        row.innerHTML = '<div><div class="snap-row-name"></div><div class="snap-row-meta"></div></div><div class="snap-row-actions"><button class="btn btn-sm" type="button">Look</button></div>';
+        row.querySelector('.snap-row-name').textContent = fmtWhen(v.at);
+        row.querySelector('.snap-row-meta').textContent = v.entries + ' ' + (v.entries === 1 ? nouns.one : nouns.many) +
+          (v.removed && v.removed.length ? ' · the next save took out ' + v.removed.join(', ') : '');
+        row.querySelector('button').addEventListener('click', function () { look(v); });
+        listEl.appendChild(row);
+      });
+    }, function (e) { status.textContent = 'Couldn’t load earlier versions (' + e.message + ').'; });
   }
 
   // The open book's own ⋯ (beside its title). Only once it's in My

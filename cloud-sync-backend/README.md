@@ -55,6 +55,18 @@ bytes (binary, at most 390 KB; the page shrinks pictures to fit):
 - `GET ?image=<id>` returns `{ type, data }` (base64).
 - `PUT ?image=<id>` with `{ type, data }` stores one; `{ delete: true }` removes it.
 
+## Earlier versions of books
+
+Before a save changes a text book (poetry collection, novel, essays, script),
+the copy it replaces is kept in the images table: `bookver:<book>:<at>` (the
+whole library entry, gzipped) and a list in `bookvers:<book>`. One is kept at
+most every 10 minutes while a book is being typed in, but always when a save
+takes entries out of the book other than by Delete; the newest 80 are kept
+(`keepBookVersions`). The page's **Earlier versions…** (the open book's ⋯)
+reads them: `GET ?bookVersions=<book>` lists them, `GET ?bookVersion=<book>&at=<at>`
+returns one. The same `mergeBookData` as the page merges two copies of a
+text book entry by entry on every save. No new permissions are needed.
+
 The Lambda's role needs `dynamodb:GetItem`, `PutItem` and `DeleteItem` on
 that table (the `bookbug-images-access` inline policy). Set
 `IMAGE_TABLE_NAME` to use a different table.
