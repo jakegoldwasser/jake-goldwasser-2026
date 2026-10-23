@@ -874,8 +874,10 @@
   .lockmark.open { color: var(--pen); }
   .lockmark.shut { color: color-mix(in srgb, var(--muted) 70%, transparent); }
   .lockmark.bad { color: var(--tomato-deep); }
-  button.lockmark.lockbtn { background: none; border: 0; padding: 4px 0; border-radius: 8px; cursor: pointer; }
-  button.lockmark.lockbtn:hover { background: var(--hover); }
+  /* The padlock is the one per-student lock: a round button, outlined on hover. */
+  button.lockmark.lockbtn { background: none; border: 0; padding: 0; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; align-items: center; justify-content: center; }
+  .item.person button.lockmark.lockbtn { width: 36px; }
+  button.lockmark.lockbtn:hover, button.lockmark.lockbtn:focus-visible { background: var(--hover); box-shadow: inset 0 0 0 1.5px currentColor; outline: none; }
   /* Fixed slots, so the status tags and ⋯ buttons line up down the list. */
   .item.person .mainslot { flex: none; min-width: 112px; display: flex; justify-content: flex-end; }
   .item.person .status { flex: none; }
@@ -7026,7 +7028,8 @@
       lk = el('button', lk.className + ' lockbtn');
       lk.type = 'button';
       lk.innerHTML = f.canWrite ? LOCK_OPEN : LOCK_SHUT;
-      lk.title = (f.canWrite ? 'Can write · click to lock' : 'Can’t write · click to unlock');
+      var paused = !f.canWrite && s && !s.handedIn && !s.lockedOut && (s.pausedAt || room.pausedAt);
+      lk.title = f.canWrite ? 'Can write · click to lock and hand in' : paused ? 'Paused · click to resume' : 'Can’t write · click to unlock';
       lk.setAttribute('aria-label', (f.canWrite ? 'Lock ' : 'Unlock ') + p.name);
       lk.addEventListener('click', lockAct);
     }
@@ -7068,11 +7071,7 @@
     else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
     });
-    // Still writing: End their session hands in their paper now and locks them
-    // (alternative schedule or not), as End session does for everyone.
-    else if (f.canWrite && s && s.sub && state !== 'upcoming') main = button('End their session', 'btn small danger', async function () {
-      if (await ask({ title: 'End ' + p.name + '’s Session Now?', text: 'Their paper is handed in now, with what they’ve written, and they can’t write on unless you unlock them.' + (f.own ? ' Their alternative schedule ends here too.' : ''), ok: 'End their session', danger: true })) roomAction('handIn', [s.sub]);
-    });
+    // (Still writing: the padlock locks them, handing in their paper now; there's no separate button.)
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
     var slot = el('div', 'mainslot');
     if (main) slot.appendChild(main);
