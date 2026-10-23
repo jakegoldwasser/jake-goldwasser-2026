@@ -6716,7 +6716,11 @@
     // Every paper, as its bubble shows it (a student writing again still has their one document),
     // and the grading of writing so far: graded and shared are apart from handing in.
     var done = people.filter(function (p) { return p.x && p.x.stored; }).map(function (p) { return p.x; })
-      .concat(earlyGradings(room));
+      .concat(earlyGradings(room).filter(function (g) {
+        // (only those whose row shows a bubble: still able to write, or graded or shared already)
+        var q = people.filter(function (pp) { return pp.s && pp.s.sub === g.sub; })[0];
+        return q && (q.f.canWrite || g.marked || g.grade || g.returnedAt);
+      }));
     var toGrade = done.filter(function (x) { return paperStage(x) === 'tograde'; });
     var toHand = done.filter(function (x) { return paperStage(x) === 'graded'; });
     var ns = $('nextStep'), nb = $('nextStepBtn');
@@ -6726,7 +6730,7 @@
     if (toGrade.length) {
       ns.className = 'nextstep todo';
       nb.className = 'btn tograde';
-      $('nextStepText').textContent = plural(toGrade.length, 'paper', 'papers') + ' to grade.';
+      $('nextStepText').textContent = toGrade.length + ' to grade.';
       nb.textContent = toGrade.length === done.length ? 'Start grading' : 'Grade the next one';
       nb.onclick = function () { openMark(toGrade[0].id, function () { openRoom(teacherRoom.code); }, roomPaperIds, roomReturned); };
     } else if (toHand.length) {
@@ -7061,7 +7065,8 @@
     (room.submissions || []).forEach(function (x) { if (x.stored) has[x.sub] = 1; });
     return Object.keys(room.students || {}).map(function (sub) {
       var s = room.students[sub];
-      if (has[sub] || s.status !== 'admitted' || !(s.earlyMarked || s.earlyGrade || s.earlyShared)) return null;
+      // Everyone's writing so far who has no paper, graded or not, as their bubble shows it (Grade so far is to grade).
+      if (has[sub] || s.status !== 'admitted') return null;
       return { id: 'early:' + room.code + ':' + sub, sub: sub, early: true, stored: true, marked: s.earlyMarked || 0, grade: s.earlyGrade || '', returnedAt: s.earlyShared || null };
     }).filter(Boolean);
   }
