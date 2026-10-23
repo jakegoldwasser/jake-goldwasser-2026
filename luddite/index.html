@@ -6381,9 +6381,10 @@
     papers.forEach(function (x) { if (x.returnedAt) roomReturned[x.id] = true; });
     admitted.forEach(function (s) { if (s.earlyShared && !paperOf[s.sub]) roomReturned['early:' + room.code + ':' + s.sub] = true; });
     if (!$('markScreen').hidden && piece && markList.length < 2 && roomPaperIds.indexOf(piece.id) !== -1) { markList = roomPaperIds; drawPaperNav(piece.id); }
-    // Only papers of students whose status is Handed in (not writing again) count.
-    // Every paper, as its bubble shows it (a student writing again still has their one document).
-    var done = people.filter(function (p) { return p.x && p.x.stored; }).map(function (p) { return p.x; });
+    // Every paper, as its bubble shows it (a student writing again still has their one document),
+    // and the grading of writing so far: graded and shared are apart from handing in.
+    var done = people.filter(function (p) { return p.x && p.x.stored; }).map(function (p) { return p.x; })
+      .concat(earlyGradings(room));
     var toGrade = done.filter(function (x) { return paperStage(x) === 'tograde'; });
     var toHand = done.filter(function (x) { return paperStage(x) === 'graded'; });
     var ns = $('nextStep'), nb = $('nextStepBtn');
@@ -6666,6 +6667,17 @@
   });
 
   var roomPaperIds = [], roomReturned = {};
+  // Grading on students' writing so far (no paper yet), as papers for the
+  // session's next step and Share all grading: graded, or shared.
+  function earlyGradings(room) {
+    var has = {};
+    (room.submissions || []).forEach(function (x) { if (x.stored) has[x.sub] = 1; });
+    return Object.keys(room.students || {}).map(function (sub) {
+      var s = room.students[sub];
+      if (has[sub] || s.status !== 'admitted' || !(s.earlyMarked || s.earlyGrade || s.earlyShared)) return null;
+      return { id: 'early:' + room.code + ':' + sub, sub: sub, early: true, stored: true, marked: s.earlyMarked || 0, grade: s.earlyGrade || '', returnedAt: s.earlyShared || null };
+    }).filter(Boolean);
+  }
   function paperStage(x) {
     if (!x) return null;
     if (x.returnedAt) return 'back';
@@ -6812,7 +6824,8 @@
       row.appendChild(bub);
     } else if (f.canWrite && s && s.sub) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
-      var early = button(s.earlyShared ? STATUS.shared[0] : 'Grade so far', 'statusbub ' + (s.earlyShared ? STATUS.shared[1] : STATUS.grade[1]), function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
+      var est = s.earlyShared ? STATUS.shared : s.earlyMarked || s.earlyGrade ? STATUS.graded : ['Grade so far', STATUS.grade[1]];
+      var early = button(est[0], 'statusbub ' + est[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
       early.title = 'Comment and grade what they’ve written so far; it moves to their paper when they hand it in';
       row.appendChild(early);
     } else row.appendChild(el('span', 'statusbub none'));
@@ -7257,7 +7270,7 @@
   });
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
-    var due = latestPerStudent(teacherRoom.submissions).filter(function (x) { return x.stored && !x.returnedAt; });
+    var due = latestPerStudent(teacherRoom.submissions).concat(earlyGradings(teacherRoom)).filter(function (x) { return x.stored && !x.returnedAt; });
     if (!due.length) { tell('Nothing to Share', 'The grading of every paper in this session is shared already.'); return; }
     var unmarked = due.filter(function (x) { return !x.marked && !x.grade; }).length;
     if (!await ask({ title: 'Share the Grading of ' + plural(due.length, 'paper', 'papers') + '?',
@@ -7455,6 +7468,8 @@
     try {
       var done = await handBack([piece.id], back);
       if (done[0]) piece.returnedAt = done[0].returnedAt;
+      var es2 = piece.early && teacherRoom && teacherRoom.students && teacherRoom.students[piece.sub];
+      if (es2) es2.earlyShared = piece.returnedAt || null;
       markReturned[piece.id] = back;
       drawHandBack();
       // Handed back: on to the next student's paper.
@@ -8518,6 +8533,8 @@
       if (!p.early && teacherRoom && teacherRoom.submissions) teacherRoom.submissions.forEach(function (x) {
         if (x.id === p.id) { x.marked = (p.marks || []).length + ((p.endComment || '').trim() ? 1 : 0); x.grade = p.grade || ''; }
       });
+      var es = p.early && teacherRoom && teacherRoom.code === p.code && teacherRoom.students && teacherRoom.students[p.sub];
+      if (es) { es.earlyMarked = (p.marks || []).length + ((p.endComment || '').trim() ? 1 : 0); es.earlyGrade = p.grade || ''; }
     } catch (e) {
       if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
       if (e.message !== 'too_many_marks' && e.message !== 'signed_out') { clearTimeout(markSaveTimer); markSaveTimer = setTimeout(saveMarks, 4000); }

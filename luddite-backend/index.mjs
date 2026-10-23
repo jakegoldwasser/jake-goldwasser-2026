@@ -1444,6 +1444,10 @@ async function routeLuddite(event, method, path, info) {
       rubric, rubricScores: cleanScores(body.rubricScores || [], rubric), at: Date.now() };
     if (Buffer.byteLength(JSON.stringify(saved)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
     await mutate('luddite:early:' + room.code + ':' + sub, (x) => ({ ...saved, ...(x && !x.usedAt ? { returnedAt: x.returnedAt || null, view: x.view } : {}) }));
+    // The session's list shows it graded (or not), apart from whether they've handed in.
+    const earlyMarked = marks.length + (saved.endComment.trim() ? 1 : 0);
+    await mutate('luddite:room:' + room.code, (r) => (r && r.students[sub] && (r.students[sub].earlyMarked !== earlyMarked || (r.students[sub].earlyGrade || '') !== saved.grade)
+      ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], earlyMarked, earlyGrade: saved.grade } } } : undefined)).catch(() => {});
     return respond(200, { ok: true });
   }
 
