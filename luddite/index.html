@@ -349,6 +349,12 @@
   .pill.gradepill { background: var(--card); color: var(--pen); border: 1.5px solid var(--pen); font-weight: 700; }
   .gradewait b { font-family: var(--display); font-size: 20px; color: var(--pen); }
   #backList .item { cursor: pointer; text-align: left; }
+  .btn.toggle[aria-pressed="true"] { background: var(--mint-tint); color: var(--mint-deep); border-color: var(--mint); }
+  .livecol { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .livenotes { border-left: 0; padding: 10px 0 0; border-top: 1.5px solid var(--rule); max-height: 24vh; }
+  .markchat { margin-top: 18px; }
+  .markchat > b { display: block; margin-bottom: 8px; }
+  .markchat .chatlog { max-height: none; overflow: visible; }
   #markHandBack.on { background: var(--mint-tint); color: var(--mint-deep); border-color: var(--mint); }
   .pill.flag { background: var(--tomato-tint); color: var(--tomato-deep); font-weight: 700; }
   #readyScreen #submitNote { margin: 14px 0 4px; font-size: 15px; }
@@ -1736,6 +1742,7 @@
       </span>
       <label class="printopt"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
+      <label class="printopt"><input type="checkbox" data-opt="chat"> Live comments <span class="q" tabindex="0" data-tip="The live comments between you and the student while they wrote, after the end comment.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
       <span class="printopt sizeopt">Text size
         <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
@@ -1759,6 +1766,7 @@
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
+      <button class="btn small ghost toggle" id="markChatBtn" type="button" aria-pressed="true" hidden>Live comments</button>
       <button class="btn small ghost" id="markWlog" type="button" hidden>Writing log</button>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
@@ -1781,6 +1789,7 @@
           <button type="button" class="btn small ghost" id="stockEdit">Edit stock comments…</button>
         </details>
         <div class="endprint" id="endPrint"></div>
+        <div class="markchat" id="markChat" hidden><b>Live Comments</b><div class="chatlog" id="markChatLog"></div></div>
         <div class="reflectread" id="markReflect" hidden><b id="markReflectK">Reflection</b><div class="rtext" id="markReflectText"></div></div>
         <div class="rubricwrap" id="rubricWrap"></div>
         <div class="gradebox"><label for="markGrade">Grade</label><input id="markGrade" maxlength="40" autocomplete="off" spellcheck="false"></div>
@@ -1837,14 +1846,14 @@
   <div class="card">
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 id="liveName" style="margin:0"></h2><span class="fine" id="liveMeta" style="margin:0"></span></div>
     <div class="livegrid">
-      <div class="liveread" id="liveText"></div>
+      <div class="livecol"><div class="liveread" id="liveText"></div><div class="mgnotes livenotes" id="liveNotes" hidden></div></div>
       <div class="livechat">
         <h3>Live Comments</h3>
         <div class="chatlog" id="tChatLog"></div>
         <form class="chatsend wrap" id="tChatForm" autocomplete="off"><textarea class="field" id="tChatInput" rows="2" maxlength="1000" aria-label="Your live comment" placeholder="A live comment to this student"></textarea><button class="btn small" type="submit">Send</button></form>
       </div>
     </div>
-    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><span class="row" style="margin:0;gap:8px"><button class="btn tograde" id="liveGrade" type="button">Grade</button><button class="btn ghost" id="liveClose" type="button">Close</button></span></div>
+    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="livePrev" type="button">&larr; Previous</button><button class="btn small ghost" id="liveNext" type="button">Next &rarr;</button></span><span class="row" style="margin:0;gap:8px"><button class="btn small ghost toggle" id="liveMarksBtn" type="button" aria-pressed="true">My comments</button><button class="btn tograde" id="liveGrade" type="button">Grade</button><button class="btn ghost" id="liveClose" type="button">Close</button></span></div>
   </div>
 </div>
 
@@ -3821,7 +3830,19 @@
     if (txt.dataset.sig === sig) return;
     txt.dataset.sig = sig;
     txt.innerHTML = ''; notes.innerHTML = '';
-    var text = String(p.text || ''), n = text.length, marks = (p.marks || []).filter(function (m) { return !m.orphan; });
+    markedInto(txt, notes, p.text, p.marks);
+    if ((p.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, p.endComment)); }
+    if (p.gradeReady) { if (p.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, p.grade)); } }
+    else notes.appendChild(el('p', 'fine', 'Read the comments first. Your grade appears after five minutes with them.'));
+    if (!notes.firstChild) notes.appendChild(el('p', 'fine', 'No comments yet.'));
+    $('mgMeta').textContent = p.roomTitle || '';
+  }
+  // The writing with a teacher's marks in place (read-only): words commented
+  // on highlighted and numbered, cross-outs, words written in in green; the
+  // numbered comments (and any on deleted words) go into notes.
+  function markedInto(txt, notes, text, allMarks) {
+    text = String(text || '');
+    var n = text.length, marks = (allMarks || []).filter(function (m) { return !m.orphan; });
     var numbered = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
     var num = {};
     numbered.forEach(function (m, i) { num[m.id] = i + 1; });
@@ -3846,16 +3867,11 @@
       txt.appendChild(cls.trim() ? el('span', cls.trim(), words) : document.createTextNode(words));
     });
     numbered.forEach(function (m) { notes.appendChild(el('p', null, num[m.id] + '  ' + (m.note || ''))); });
-    var orphans = (p.marks || []).filter(function (m) { return m.orphan && m.type !== 'strike'; });
+    var orphans = (allMarks || []).filter(function (m) { return m.orphan && m.type !== 'strike'; });
     if (orphans.length) {
       notes.appendChild(el('h3', null, 'Comments on Deleted Words'));
       orphans.forEach(function (m) { notes.appendChild(el('p', null, '“' + m.orphan + '”  ' + (m.note || ''))); });
     }
-    if ((p.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, p.endComment)); }
-    if (p.gradeReady) { if (p.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, p.grade)); } }
-    else notes.appendChild(el('p', 'fine', 'Read the comments first. Your grade appears after five minutes with them.'));
-    if (!notes.firstChild) notes.appendChild(el('p', 'fine', 'No comments yet.'));
-    $('mgMeta').textContent = p.roomTitle || '';
   }
   function openMyGrading() {
     $('mgText').dataset.sig = '';
@@ -6610,16 +6626,49 @@
     $('liveName').textContent = who(s.name, s.email);
     var st = liveStatus(s);
     $('liveMeta').textContent = plural(d ? wordCount(d.text) : s.words || 0, 'word', 'words') + (d && d.at ? ' · as of ' + clock(d.at) : '') + (st ? ' · ' + st : '');
-    var box = $('liveText');
+    var box = $('liveText'), notes = $('liveNotes');
     var atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-    var sig = (d && d.at) + '|' + liveOpen;
+    // With My comments on: the teacher's marks on it (their paper's, else their writing so far's).
+    var lm = liveMarksOn && liveMk && liveMk.sub === liveOpen ? liveMk.piece : null;
+    if (liveMarksOn) liveMarksLoad(room, d);
+    var sig = (d && d.at) + '|' + liveOpen + '|' + (lm ? liveMk.at : 'plain');
     if (box.dataset.sig === sig) return;
     var fresh = (box.dataset.sig || '').split('|')[1] !== liveOpen;
     box.dataset.sig = sig;
-    box.innerHTML = '';
-    if (d && d.text) fmtInto(box, d.text); else box.appendChild(el('span', 'fine', 'Nothing written yet.'));
+    box.innerHTML = ''; notes.innerHTML = '';
+    if (lm && lm.text && ((lm.marks || []).length || (lm.endComment || '').trim())) {
+      markedInto(box, notes, lm.text, lm.marks);
+      if ((lm.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, lm.endComment)); }
+      if (lm.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, lm.grade)); }
+    } else if (d && d.text) fmtInto(box, d.text); else box.appendChild(el('span', 'fine', 'Nothing written yet.'));
+    notes.hidden = !notes.firstChild;
     if (atEnd || fresh) box.scrollTop = box.scrollHeight;
   }
+  // My comments in the live view (on unless turned off; remembered on the device).
+  var liveMarksOn = load('luddite.liveMarks') !== '0', liveMk = null, liveMkBusy = false;
+  function syncLiveMarksBtn() { $('liveMarksBtn').setAttribute('aria-pressed', liveMarksOn ? 'true' : 'false'); $('liveMarksBtn').title = liveMarksOn ? 'Hide your comments here' : 'Show your comments on their writing'; }
+  syncLiveMarksBtn();
+  // Fetched when another student is opened or their writing has changed (at most every 10 seconds).
+  async function liveMarksLoad(room, d) {
+    var sub = liveOpen, at = d ? d.at || 0 : 0;
+    if (liveMkBusy || !sub) return;
+    if (liveMk && liveMk.sub === sub && (liveMk.textAt === at || Date.now() - liveMk.at < 10000)) return;
+    liveMkBusy = true;
+    try {
+      var paper = latestPerStudent(room.submissions).filter(function (x) { return x.sub === sub && x.stored; })[0];
+      var got = paper ? (await api('/luddite/sub?id=' + encodeURIComponent(paper.id))).sub : (await api('/luddite/early?code=' + encodeURIComponent(room.code) + '&sub=' + encodeURIComponent(sub))).piece;
+      liveMk = { sub: sub, piece: got, at: Date.now(), textAt: at };
+    } catch (e) { liveMk = { sub: sub, piece: null, at: Date.now(), textAt: at }; }
+    liveMkBusy = false;
+    if (liveOpen === sub && teacherRoom) drawLiveOpen(teacherRoom);
+  }
+  $('liveMarksBtn').addEventListener('click', function () {
+    liveMarksOn = !liveMarksOn;
+    store('luddite.liveMarks', liveMarksOn ? null : '0');
+    syncLiveMarksBtn();
+    $('liveText').dataset.sig = '';
+    if (teacherRoom) drawLiveOpen(teacherRoom);
+  });
   $('liveClose').addEventListener('click', function () { $('liveBox').hidden = true; liveOpen = null; });
   // Grade, from the live view: this student's grading window (their paper if
   // they have one, with its comments; else their writing so far).
@@ -7489,6 +7538,8 @@
       ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = false;
     $('markWlog').hidden = reading || !piece.code || !piece.sub;
+    $('markChatBtn').hidden = reading || !piece.code || !piece.sub;
+    drawMarkChat();
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
     if (piece.link) $('markDrive').href = piece.link;
@@ -7521,6 +7572,29 @@
       var nx = back && nextToHandBack(piece.id);
       if (nx) goPaper(nx).then(function () { $('markSaved').textContent = 'Handed that one back ✓'; });
     } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
+  });
+  // Live comments in the grading window, under the end comment (on unless
+  // turned off; remembered on the device): the thread with this student, or
+  // the copy kept on the paper if it can't be loaded.
+  var markChatOn = load('luddite.markChat') !== '0', markChatFor = '';
+  async function drawMarkChat() {
+    var btn = $('markChatBtn'), box = $('markChat');
+    btn.setAttribute('aria-pressed', markChatOn ? 'true' : 'false');
+    btn.title = markChatOn ? 'Hide the live comments with this student' : 'Show the live comments with this student';
+    if (reading || !piece || !piece.code || !piece.sub || !markChatOn) { box.hidden = true; return; }
+    var p = piece, key = p.code + ':' + p.sub;
+    markChatFor = key;
+    var msgs = p.chat || [];
+    try { msgs = (await api('/luddite/chat?code=' + encodeURIComponent(p.code) + '&sub=' + encodeURIComponent(p.sub))).msgs || msgs; } catch (e) {}
+    if (markChatFor !== key || piece !== p || !markChatOn) return;
+    $('markChatLog').dataset.sig = '';
+    drawChat($('markChatLog'), msgs, 'teacher');
+    box.hidden = !msgs.length;
+  }
+  $('markChatBtn').addEventListener('click', function () {
+    markChatOn = !markChatOn;
+    store('luddite.markChat', markChatOn ? null : '0');
+    drawMarkChat();
   });
   $('markWlog').addEventListener('click', function () { if (piece) openWlog(piece.code, piece.sub, who(piece.name, piece.email)); });
 
@@ -8917,6 +8991,12 @@
       box.appendChild(on);
     }
     if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
+    if (printOpts.chat !== false && p.chat && p.chat.length) {
+      var lc = el('div', 'pnotes');
+      lc.appendChild(el('p', null, 'Live Comments'));
+      p.chat.forEach(function (m) { lc.appendChild(el('p', null, '[' + dayClock(m.at) + '] ' + (m.from === 'teacher' ? 'Teacher' + (m.all ? ' (to everyone)' : '') : who(p.name, p.email) + (m.hand ? ' (raised hand)' : '')) + ': ' + m.text)); });
+      box.appendChild(lc);
+    }
     return box;
   }
   // A guess at each paragraph's topic sentence: its first sentence, as
@@ -9153,7 +9233,8 @@
   var PRINT_OPTS_KEY = 'luddite.printOpts', printOpts = {};
   try { printOpts = JSON.parse(load(PRINT_OPTS_KEY) || '{}') || {}; } catch (e) { printOpts = {}; }
   function drawPrintOpts() {
-    each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' ? printOpts.duplex !== false : !!printOpts[c.dataset.opt]; });
+    // (two-sided and live comments are on unless turned off)
+    each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' || c.dataset.opt === 'chat' ? printOpts[c.dataset.opt] !== false : !!printOpts[c.dataset.opt]; });
     each('#printSize button', function (b) { b.classList.toggle('on', Number(b.dataset.size) === (printOpts.size || 11.5)); });
     // Lined margin: none, narrow (2.1in) or wide (4in, for long comments); true was narrow.
     var lined = printOpts.lined === 'wide' ? 'wide' : printOpts.lined ? 'narrow' : '';
