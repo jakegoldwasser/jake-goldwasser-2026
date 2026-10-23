@@ -428,7 +428,7 @@
   .handinbar { gap: 12px; flex-wrap: wrap; }
   /* At home, leaving full screen isn't a lock: said plainly, so nobody waits for the teacher. */
   #lockWait.homeback { background: var(--mint-tint); color: var(--ink); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
-  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn, .handinbar #draftsBtn { min-width: 0; padding: 16px 32px; }
+  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn, .handinbar #draftsBtn, .handinbar #homePrintW { min-width: 0; padding: 16px 32px; }
   .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
   .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
   .cwitem:hover { background: var(--hover); }
@@ -1165,6 +1165,14 @@
   .livechat h3 { margin: 0 0 8px; font-size: 14px; }
   .chatsend.wrap { align-items: flex-end; }
   .chatsend textarea.field { resize: none; overflow-y: auto; min-height: 66px; max-height: 40vh; line-height: 1.45; border-radius: 12px; padding: 10px 12px; }
+  /* At home, a student printing their writing: only it prints. */
+  @media print {
+    body.studentprinting > *:not(#studentPrint) { display: none !important; }
+    body.studentprinting #studentPrint { display: block !important; }
+  }
+  #studentPrint h1 { font: 600 20px var(--ui); margin: 0 0 4px; }
+  #studentPrint .spmeta { font: 400 12px var(--ui); color: #555; margin: 0 0 18px; }
+  #studentPrint .sptext { font: 12pt/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; }
   /* Drafts: the list (and Start a new draft), and one old draft read-only. */
   #draftsBox { z-index: 61; } #draftView { z-index: 62; }
   #draftView .card { max-width: 1120px !important; }
@@ -1429,7 +1437,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="draftsBtn" type="button" hidden>Drafts</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="draftsBtn" type="button" hidden>Drafts</button><button class="btn ghost" id="homePrintW" type="button" hidden>Print</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Live comments">
@@ -1662,6 +1670,7 @@
             <button type="button" id="rubricBtn">Rubric…</button>
             <button type="button" id="timeBtn">Change the start time</button>
             <button type="button" id="atHomeBtn">Let students work on this at home</button>
+            <button type="button" id="homePrintBtn" hidden>Let students print their writing</button>
             <button type="button" id="shareWorkBtn">Allow students to see each other’s work</button>
             <button type="button" id="reopenBtn">Open it again now</button>
             <div class="popsec">Papers</div>
@@ -1923,6 +1932,9 @@
     <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
   </div>
 </div>
+
+<!-- A student's writing as it prints, at home (Print beside Hand in) -->
+<div id="studentPrint" hidden></div>
 
 <!-- Drafts: a student's earlier drafts in a session, and (for the student) Start a new draft -->
 <div class="handin livebox" id="draftsBox" hidden>
@@ -3441,7 +3453,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -3884,6 +3896,7 @@
     var on = writing && mode === 'room' && !previewing && roomInfo && roomInfo.sharedId;
     $('myGradingBtn').hidden = !on;
     if (!on && !$('myGradingBox').hidden) closeMyGrading();
+    $('homePrintW').hidden = !(writing && mode === 'room' && !previewing && roomInfo && roomInfo.homePrint);
     var dOn = writing && mode === 'room' && !previewing && roomInfo;
     $('draftsBtn').hidden = !dOn;
     if (dOn) $('draftsBtn').textContent = (roomInfo.drafts || []).length ? 'Drafts · on Draft ' + ((roomInfo.drafts || []).length + 1) : 'Drafts';
@@ -4017,6 +4030,19 @@
     if (!notes.firstChild) notes.appendChild(el('p', 'fine', ctx.student ? 'Your teacher didn’t share comments on this draft.' : 'No comments on this draft.'));
     txt.scrollTop = 0;
   }
+  // At home (when the teacher allows it): print their writing as it is now.
+  // The print window isn't leaving the page, so it never counts as leaving.
+  $('homePrintW').addEventListener('click', function () {
+    var box = $('studentPrint');
+    box.innerHTML = '';
+    box.appendChild(el('h1', null, (roomInfo && roomInfo.title) || 'My writing'));
+    box.appendChild(el('p', 'spmeta', (me && (me.name || me.email) || '') + ' · ' + new Date().toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(wordCount(shadow), 'word', 'words')));
+    fmtInto(box.appendChild(el('div', 'sptext')), pad.value);
+    document.body.classList.add('studentprinting');
+    leavingOnPurpose = true;
+    try { window.print(); } catch (e) {}
+    setTimeout(function () { leavingOnPurpose = false; document.body.classList.remove('studentprinting'); if (writing && !locked) pad.focus(); }, 1500);
+  });
   $('draftsBtn').addEventListener('click', function () { openDrafts({ code: roomCode, student: true }); });
   $('dbClose').addEventListener('click', function () { $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
   $('dvClose').addEventListener('click', function () { $('draftView').hidden = true; $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
@@ -6524,6 +6550,8 @@
     $('reopenBtn').hidden = state !== 'ended';
     // Pause everyone, beside End session: no one can write and the clock stops, but the session stays current.
     $('pauseAllBtn').hidden = state !== 'running';
+    $('homePrintBtn').hidden = !room.atHome;
+    $('homePrintBtn').textContent = room.homePrint !== false ? 'Stop students printing their writing' : 'Let students print their writing';
     $('shareWorkBtn').textContent = room.shareWork ? 'Stop students seeing each other’s work' : 'Allow students to see each other’s work';
     $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
     $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
@@ -7166,6 +7194,10 @@
   $('shareWorkBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction('shareWork', [], { on: !teacherRoom.shareWork });
+  });
+  $('homePrintBtn').addEventListener('click', function () {
+    $('roomMenu').open = false;
+    roomAction('homePrint', [], { on: teacherRoom.homePrint === false });
   });
   $('atHomeBtn').addEventListener('click', async function () {
     $('roomMenu').open = false;

@@ -512,6 +512,7 @@ function studentView(room, sub, email, prefs) {
     teacherName: room.teacher.name || room.teacher.email,
     prompt: room.prompt || '', prefs: prefs || DEFAULT_PREFS,
     atHome: !!room.atHome,
+    homePrint: !!room.atHome && room.homePrint !== false,
     // The teacher lets everyone in it read each other's writing so far (see /luddite/classwork).
     shareWork: !!room.shareWork,
     // Grading the teacher has shared with them in this session (their paper's,
@@ -1833,6 +1834,8 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'rubricShown') return { ...r, rubricShown: !!body.on };
       // Switching it on lets back in anyone locked out.
       else if (body.action === 'shareWork') return { ...r, shareWork: !!body.on };
+      // At home, students may print their writing (on unless turned off).
+      else if (body.action === 'homePrint') return { ...r, homePrint: !!body.on };
       else if (body.action === 'atHome') {
         const on = !!body.on;
         const students = { ...r.students };
