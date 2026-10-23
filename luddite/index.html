@@ -714,6 +714,12 @@
   .topright { position: fixed; top: 12px; right: 12px; z-index: 40; display: flex; gap: 8px; }
   .topright button { font: 600 14px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--ink); border-radius: 999px; padding: 6px 16px; cursor: pointer; }
   .topright button:hover { background: var(--hover); }
+  /* Where the Horace Mann day is now (Eastern time): the period, or what's between them. */
+  .nowchip { display: inline-flex; align-items: center; gap: 8px; font: 400 14px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--rule); border-radius: 999px; padding: 6px 14px; white-space: nowrap; }
+  .nowchip b { font-weight: 600; }
+  .nowchip .t { color: var(--muted); }
+  .nowchip:empty { display: none; }
+  @media (max-width: 560px) { .nowchip .t { display: none; } }
   .acctswitch { position: fixed; left: 12px; bottom: 12px; z-index: 40; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 24px);
     background: var(--card); border: 1.5px solid var(--edge); border-radius: 999px; padding: 5px 6px 5px 14px; font: 600 12px var(--ui); color: var(--muted); }
   .acctswitch .k { letter-spacing: .06em; text-transform: uppercase; }
@@ -1871,6 +1877,7 @@
 
 <!-- Settings, top right on the teacher pages -->
 <div class="topright no-print" id="topRight" hidden>
+  <span class="nowchip" id="nowChip" aria-live="off"></span>
   <button id="prefsBtn" type="button">Settings</button>
 </div>
 
@@ -2401,6 +2408,34 @@
     }
     return out;
   })();
+  // Now on the Horace Mann day, in New York time wherever the computer is:
+  // the period (and minutes left), passing time, the break, or before / after school.
+  function hmNow() {
+    var parts = {};
+    try { new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date()).forEach(function (x) { parts[x.type] = x.value; }); }
+    catch (e) { var d = new Date(); parts = { weekday: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()], hour: String(d.getHours()), minute: String(d.getMinutes()) }; }
+    var min = (Number(parts.hour) % 24) * 60 + Number(parts.minute), school = !/Sat|Sun/.test(parts.weekday);
+    var out = { clock: hm(min, true), label: '', min: min };
+    if (!school) return out;
+    var first = PERIODS[0], last = PERIODS[PERIODS.length - 1];
+    if (min < first.start) { if (min >= first.start - 60) out.label = 'Before school · ' + first.letter + ' Period at ' + hm(first.start, true); return out; }
+    if (min >= last.end) { if (min < last.end + 60) out.label = 'After school'; return out; }
+    for (var i = 0; i < PERIODS.length; i++) {
+      var p = PERIODS[i];
+      if (min >= p.start && min < p.end) { out.period = p.letter; out.label = '<b>' + p.letter + ' Period</b> · ' + (p.end - min) + ' min left'; return out; }
+      var nx = PERIODS[i + 1];
+      if (nx && min >= p.end && min < nx.start) { out.label = (nx.start - p.end > DAY.passMin ? 'Break' : 'Passing') + ' · ' + nx.letter + ' Period at ' + hm(nx.start, true); return out; }
+    }
+    return out;
+  }
+  function drawNowChip() {
+    var n = hmNow(), c = $('nowChip');
+    if (!c) return;
+    c.innerHTML = (n.label ? n.label + ' ' : '') + '<span class="t">' + n.clock + '</span>';
+    c.title = 'Now at Horace Mann (Eastern time); periods run A to H in order, 8:25 to 3:15';
+  }
+  setTimeout(drawNowChip, 0);
+  setInterval(drawNowChip, 15000);
   function hm(min, ampm) {
     var h = Math.floor(min / 60), m = min % 60, h12 = h % 12 || 12;
     return h12 + ':' + ('0' + m).slice(-2) + (ampm ? (h < 12 ? ' AM' : ' PM') : '');
