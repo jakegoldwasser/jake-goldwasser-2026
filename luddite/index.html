@@ -6451,9 +6451,15 @@
   // if Home hasn't been drawn yet).
   var PICK_PAST = 8;
   function drawSiblings(room) {
-    if (!lastSessions.length && !drawSiblings.asked) {
+    // Opened straight from an address (a refresh), the session list and the
+    // classes (their squares, names and grades) aren't loaded yet: fetch them, then draw again.
+    if ((!lastSessions.length || !classes.length) && !drawSiblings.asked) {
       drawSiblings.asked = true;
-      api('/luddite/assignments').then(function (d) { lastSessions = d.assignments || []; if (teacherRoom && teacherRoom.code === room.code) drawSiblings(room); }).catch(function () {});
+      api('/luddite/assignments').then(function (d) {
+        lastSessions = d.assignments || [];
+        if (!classes.length && d.classes) classes = d.classes;
+        if (teacherRoom && teacherRoom.code === room.code) { lastDrawn = ''; loadRoom(); }
+      }).catch(function () {});
     }
     var key = String(room.title || '').trim().toLowerCase();
     var same = function (r) { return String(r.title || '').trim().toLowerCase() === key; };
