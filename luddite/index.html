@@ -428,7 +428,7 @@
   .handinbar { gap: 12px; flex-wrap: wrap; }
   /* At home, leaving full screen isn't a lock: said plainly, so nobody waits for the teacher. */
   #lockWait.homeback { background: var(--mint-tint); color: var(--ink); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
-  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn { min-width: 0; padding: 16px 32px; }
+  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn, .handinbar #draftsBtn { min-width: 0; padding: 16px 32px; }
   .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
   .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
   .cwitem:hover { background: var(--hover); }
@@ -1131,6 +1131,10 @@
   .livechat h3 { margin: 0 0 8px; font-size: 14px; }
   .chatsend.wrap { align-items: flex-end; }
   .chatsend textarea.field { resize: none; overflow-y: auto; min-height: 66px; max-height: 40vh; line-height: 1.45; border-radius: 12px; padding: 10px 12px; }
+  /* Drafts: the list (and Start a new draft), and one old draft read-only. */
+  #draftsBox { z-index: 61; } #draftView { z-index: 62; }
+  #draftView .card { max-width: 1120px !important; }
+  .dbnew { border-top: 1.5px solid var(--rule); margin-top: 14px; padding-top: 12px; }
   /* The writing log: figures, a minute-by-minute chart, and anything flagged. */
   #wlogBox { z-index: 60; }
   #wlogBox .card { max-width: 980px !important; max-height: 92vh; overflow-y: auto; }
@@ -1391,7 +1395,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="draftsBtn" type="button" hidden>Drafts</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Live comments">
@@ -1767,6 +1771,7 @@
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
       <button class="btn small ghost toggle" id="markChatBtn" type="button" aria-pressed="true" hidden>Live comments</button>
+      <button class="btn small ghost" id="markDrafts" type="button" hidden>Old drafts</button>
       <button class="btn small ghost" id="markWlog" type="button" hidden>Writing log</button>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
@@ -1873,6 +1878,26 @@
     <div class="cwlist" id="cwList"></div>
     <div class="liveread" id="cwText" hidden></div>
     <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
+  </div>
+</div>
+
+<!-- Drafts: a student's earlier drafts in a session, and (for the student) Start a new draft -->
+<div class="handin livebox" id="draftsBox" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0">Drafts</h2><span class="fine" id="dbMeta" style="margin:0"></span></div>
+    <div class="cwlist" id="dbList"></div>
+    <div class="dbnew" id="dbNew" hidden>
+      <p class="fine" id="dbNewText"></p>
+      <button class="btn" id="dbNewBtn" type="button">Start a new draft</button>
+    </div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="dbClose" type="button">Close</button></div>
+  </div>
+</div>
+<div class="handin livebox" id="draftView" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="dvTitle"></h2><span class="fine" id="dvMeta" style="margin:0"></span></div>
+    <div class="livegrid"><div class="liveread" id="dvText"></div><div class="mgnotes" id="dvNotes"></div></div>
+    <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn ghost" id="dvClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -3373,7 +3398,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -3715,6 +3740,7 @@
     locked = true;
     if (!$('classWorkBox').hidden) closeClassWork();
     if (!$('rubricView').hidden) closeRubricView();
+    if (!draftsCtx || draftsCtx.student) { $('draftsBox').hidden = true; $('draftView').hidden = true; }
     save();
     var n = Number(load(leavesKey()) || 0) + 1;
     if (!previewing) store(leavesKey(), String(n));
@@ -3815,6 +3841,9 @@
     var on = writing && mode === 'room' && !previewing && roomInfo && roomInfo.sharedId;
     $('myGradingBtn').hidden = !on;
     if (!on && !$('myGradingBox').hidden) closeMyGrading();
+    var dOn = writing && mode === 'room' && !previewing && roomInfo;
+    $('draftsBtn').hidden = !dOn;
+    if (dOn) $('draftsBtn').textContent = (roomInfo.drafts || []).length ? 'Drafts · on Draft ' + ((roomInfo.drafts || []).length + 1) : 'Drafts';
   }
   async function loadMyGrading(ping) {
     var id = roomInfo && roomInfo.sharedId;
@@ -3888,6 +3917,84 @@
     if (writing && !locked) pad.focus();
   }
   $('myGradingBtn').addEventListener('click', openMyGrading);
+
+  // ---------------------------------------------------------------------
+  // Drafts. A student starts a new draft (a copy of their writing, graded
+  // afresh); the old one is kept as it was, with the teacher's marks on it
+  // (/luddite/newdraft). Students reread theirs (the marks only if shared);
+  // teachers open any from the student's row or the grading window.
+  // ---------------------------------------------------------------------
+  var draftsCtx = null; // { code, sub (a teacher's view), name, student }
+  async function openDrafts(ctx) {
+    draftsCtx = ctx;
+    $('draftView').hidden = true;
+    $('draftsBox').hidden = false;
+    $('dbList').innerHTML = '';
+    $('dbList').appendChild(el('p', 'fine', 'Loading…'));
+    $('dbNew').hidden = true;
+    var data;
+    try { data = await api('/luddite/drafts?code=' + encodeURIComponent(ctx.code) + (ctx.sub ? '&sub=' + encodeURIComponent(ctx.sub) : '')); }
+    catch (e) { $('dbList').innerHTML = ''; $('dbList').appendChild(el('p', 'fine', 'Couldn’t load the drafts. Try again.')); return; }
+    if (draftsCtx !== ctx) return;
+    drawDrafts(data.drafts || []);
+  }
+  function drawDrafts(list) {
+    var ctx = draftsCtx, now = list.length + 1;
+    $('dbMeta').textContent = ctx.student ? 'You’re writing Draft ' + now : (ctx.name ? ctx.name + ' · ' : '') + 'writing Draft ' + now;
+    var box = $('dbList');
+    box.innerHTML = '';
+    if (!list.length) box.appendChild(el('p', 'fine', ctx.student ? 'This is your first draft.' : 'No earlier drafts.'));
+    list.slice().reverse().forEach(function (d) {
+      var b = el('button', 'cwitem');
+      b.type = 'button';
+      b.appendChild(el('b', null, 'Draft ' + d.n));
+      b.appendChild(el('span', null, plural(d.words || 0, 'word', 'words') + ' · kept ' + dayClock(d.at) + (d.shared ? ' · grading shared' : d.graded && !ctx.student ? ' · graded' : '')));
+      b.addEventListener('click', function () { openDraft(d.n); });
+      box.appendChild(b);
+    });
+    $('dbNew').hidden = !ctx.student;
+    $('dbNewText').textContent = 'Draft ' + now + ' is kept as it is now, with any comments your teacher made on it, and you can reread it here any time. ' +
+      'Draft ' + (now + 1) + ' starts as a copy of it, and your teacher grades it afresh.';
+  }
+  async function openDraft(n) {
+    var ctx = draftsCtx;
+    $('dvTitle').textContent = 'Draft ' + n;
+    $('dvMeta').textContent = '';
+    $('dvText').textContent = 'Loading…'; $('dvNotes').innerHTML = '';
+    $('draftView').hidden = false;
+    var data;
+    try { data = await api('/luddite/drafts?code=' + encodeURIComponent(ctx.code) + (ctx.sub ? '&sub=' + encodeURIComponent(ctx.sub) : '') + '&n=' + n); }
+    catch (e) { $('dvText').textContent = 'Couldn’t load this draft. Try again.'; return; }
+    var d = data.draft, txt = $('dvText'), notes = $('dvNotes');
+    $('dvMeta').textContent = (ctx.student ? '' : who(data.name, data.email) + ' · ') + plural(d.words || 0, 'word', 'words') + ' · kept ' + dayClock(d.at);
+    txt.innerHTML = ''; notes.innerHTML = '';
+    markedInto(txt, notes, d.text, d.marks);
+    if ((d.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, d.endComment)); }
+    if (d.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, d.grade)); }
+    if (!notes.firstChild) notes.appendChild(el('p', 'fine', ctx.student ? 'Your teacher didn’t share comments on this draft.' : 'No comments on this draft.'));
+    txt.scrollTop = 0;
+  }
+  $('draftsBtn').addEventListener('click', function () { openDrafts({ code: roomCode, student: true }); });
+  $('dbClose').addEventListener('click', function () { $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
+  $('dvClose').addEventListener('click', function () { $('draftView').hidden = true; $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
+  $('dvBack').addEventListener('click', function () { $('draftView').hidden = true; });
+  $('dbNewBtn').addEventListener('click', async function () {
+    var now = ((roomInfo && roomInfo.drafts) || []).length + 1;
+    if (!await ask({ title: 'Start Draft ' + (now + 1) + '?', text: 'Draft ' + now + ' is kept as it is now, with any comments on it, and you can reread it under Drafts. Draft ' + (now + 1) + ' starts as a copy, and your teacher grades it afresh.', ok: 'Start Draft ' + (now + 1) })) return;
+    var b = $('dbNewBtn');
+    b.disabled = true;
+    try {
+      await report('writing'); // the server has their writing as it is now
+      var d = await api('/luddite/newdraft', { code: roomCode });
+      if (roomInfo) { roomInfo.drafts = d.room.drafts; roomInfo.sharedId = d.room.sharedId; }
+      syncClassWork();
+      drawDrafts((roomInfo && roomInfo.drafts) || []);
+      $('dbMeta').textContent = 'You’re writing Draft ' + (now + 1) + ' now';
+    } catch (e) {
+      tell('Couldn’t Start a New Draft', e.message === 'nothing_yet' ? 'Write something first.' : e.message === 'cant_write' ? 'You can’t write in this session right now.' : e.message === 'too_many_drafts' ? 'That’s as many drafts as one session keeps.' : 'Check your connection and try again.');
+    }
+    b.disabled = false;
+  });
   $('mgClose').addEventListener('click', closeMyGrading);
   // The rubric: a button beside Hand in while the teacher shows it (roomInfo.rubric).
   var rubricWShown = '';
@@ -6891,6 +6998,7 @@
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
+    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · Draft ' + (s.drafts.length + 1)));
     // Words that came faster than anyone types (see the writing log).
     if (s && s.bursts) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
     w.appendChild(line);
@@ -6955,6 +7063,7 @@
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
     if (s && s.sub) item('Writing log', function () { openWlog(room.code, s.sub, p.name); });
+    if (s && s.sub && (s.drafts || []).length) item('Old drafts', function () { openDrafts({ code: room.code, sub: s.sub, name: p.name }); });
     if (s && s.sub && (s.chatS || s.chatT) && !chatUnread(s)) item('Mark live comments as unread', function () { markChatUnread(s.sub); });
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
     if (s) item('Remove from this session', async function () {
@@ -7556,6 +7665,7 @@
     $('markHandBack').hidden = false;
     $('markWlog').hidden = reading || !piece.code || !piece.sub;
     $('markChatBtn').hidden = reading || !piece.code || !piece.sub;
+    syncMarkDrafts();
     drawMarkChat();
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
@@ -7613,6 +7723,19 @@
     store('luddite.markChat', markChatOn ? null : '0');
     drawMarkChat();
   });
+  // Old drafts, from the grading window: shown when the student has any.
+  async function syncMarkDrafts() {
+    var b = $('markDrafts'), p = piece;
+    b.hidden = true;
+    if (reading || !p || !p.code || !p.sub) return;
+    var st = teacherRoom && teacherRoom.code === p.code && teacherRoom.students && teacherRoom.students[p.sub];
+    var n = st ? (st.drafts || []).length : 0;
+    if (!st) { try { n = ((await api('/luddite/drafts?code=' + encodeURIComponent(p.code) + '&sub=' + encodeURIComponent(p.sub))).drafts || []).length; } catch (e) { n = 0; } }
+    if (piece !== p) return;
+    b.hidden = !n;
+    b.textContent = n === 1 ? 'Old draft' : 'Old drafts (' + n + ')';
+  }
+  $('markDrafts').addEventListener('click', function () { if (piece) openDrafts({ code: piece.code, sub: piece.sub, name: who(piece.name, piece.email) }); });
   $('markWlog').addEventListener('click', function () { if (piece) openWlog(piece.code, piece.sub, who(piece.name, piece.email)); });
 
   // ---------------------------------------------------------------------

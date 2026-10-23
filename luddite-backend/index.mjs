@@ -539,7 +539,9 @@ function studentView(room, sub, email, prefs) {
     // ends, and when the next one starts (between days).
     sitting: win.sitting || 0, sittings: win.sittings || 0, sittingEnd: win.sittingEnd || null, nextAt: win.nextAt || null,
     // An alternative schedule in parts (not days).
-    parts: !!win.parts
+    parts: !!win.parts,
+    // Their earlier drafts in this session (see /luddite/newdraft): [{ n, at, words, graded, shared }].
+    drafts: (me && me.drafts) || []
   };
 }
 
@@ -1042,6 +1044,85 @@ async function routeLuddite(event, method, path, info) {
     // laptop or a cleared browser doesn't lose the work.
     if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') await saveDraft(code, me.sub, body.text, prevSeen);
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
+  }
+
+  // ---- Drafts: a student starts a new draft; the old one is kept ----
+  // PUT /luddite/newdraft { code } -- the student's writing as it is now, with
+  // every mark the teacher made on it (their paper's, else their writing so
+  // far's, moved onto it), becomes Draft n (luddite:olddraft:<code>:<sub>:<n>,
+  // listed in `drafts` on their entry). The writing goes on as a copy, and its
+  // grading starts over: no marks, end comment, grade or rubric scores, not
+  // shared. Old drafts are read-only, for the teacher and (their shared
+  // grading only) the student.
+  if (path === '/luddite/newdraft' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await getRoom(code);
+    const st = room.students[me.sub];
+    if (!st || st.status !== 'admitted') throw new HttpError(404, 'not_in_room');
+    if (st.handedIn || st.lockedOut) throw new HttpError(409, 'cant_write');
+    if ((st.drafts || []).length >= 30) throw new HttpError(409, 'too_many_drafts');
+    const { state: d } = await readItem('luddite:draft:' + code + ':' + me.sub);
+    const text = d ? String(d.text || '') : '';
+    if (!text.trim()) throw new HttpError(409, 'nothing_yet');
+    const paperSub = (room.submissions || []).find((x) => x.sub === me.sub && x.stored);
+    const paper = paperSub ? (await readItem('luddite:sub:' + paperSub.id)).state : null;
+    const { state: early } = await readItem('luddite:early:' + code + ':' + me.sub);
+    const e = early && !early.usedAt ? early : null;
+    let marks = [], endComment = '', grade = '', rubric = null, rubricScores = [], returnedAt = null;
+    if (paper) {
+      marks = reanchorMarks(paper.marks || [], paper.text, text);
+      ({ endComment, grade, rubric, rubricScores, returnedAt } = paper);
+      endComment = endComment || ''; grade = grade || ''; rubricScores = rubricScores || [];
+    }
+    if (e) {
+      marks = mergeMarks(marks, reanchorMarks(e.marks || [], e.base, text));
+      const ec = (e.endComment || '').trim();
+      if (ec && !endComment.includes(ec)) endComment = endComment ? endComment + '\n\n' + e.endComment : e.endComment;
+      grade = grade || e.grade || '';
+      if (!rubric && e.rubric) { rubric = e.rubric; rubricScores = e.rubricScores || []; }
+      returnedAt = returnedAt || e.returnedAt || null;
+    }
+    const n = (st.drafts || []).length + 1, at = Date.now();
+    const words = (text.trim().match(/\S+/g) || []).length;
+    const old = { code, sub: me.sub, n, text, words, marks, endComment: endComment || '', grade: grade || '', rubric: rubric || null, rubricScores: rubricScores || [],
+      returnedAt: returnedAt || null, startedAt: st.draftAt || 0, at, roomTitle: titleOf(room) };
+    if (Buffer.byteLength(JSON.stringify(old)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_long');
+    await mutate('luddite:olddraft:' + code + ':' + me.sub + ':' + n, () => old);
+    // The writing goes on, ungraded and not shared.
+    const ids = [];
+    if (paper) {
+      ids.push(paper.id);
+      await mutate('luddite:sub:' + paper.id, (x) => (x ? { ...x, marks: [], endComment: '', grade: '', rubricScores: [], returnedAt: null, markedAt: null, view: null, gathered: true } : undefined));
+    }
+    if (early) {
+      ids.push('early:' + code + ':' + me.sub);
+      await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, base: text, marks: [], endComment: '', grade: '', rubricScores: [], returnedAt: null, view: null } : undefined));
+    }
+    if (ids.length) await mutate('luddite:mine:' + lower(me.email), (m) => (m && (m.returned || []).some((x) => ids.includes(x)) ? { ...m, returned: m.returned.filter((x) => !ids.includes(x)) } : undefined)).catch(() => {});
+    const saved = await mutate('luddite:room:' + code, (r) => {
+      const x = r && r.students[me.sub];
+      if (!x) return undefined;
+      const submissions = (r.submissions || []).map((y) => (paper && y.id === paper.id ? { ...y, marked: 0, grade: '', returnedAt: null } : y));
+      const entry = { n, at, words, graded: !!(old.marks.length || old.endComment.trim() || old.grade), shared: !!old.returnedAt };
+      return { ...r, submissions, students: { ...r.students, [me.sub]: { ...x, drafts: [...(x.drafts || []), entry], draftAt: at, earlyMarked: 0, earlyGrade: '', earlyShared: null } } };
+    });
+    return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
+  }
+
+  // GET /luddite/drafts?code=&sub= -- a student's earlier drafts in a session
+  // (the teacher, with sub; a student, their own): the list, or with n= one of
+  // them (a student sees the teacher's marks on it only if they were shared).
+  if (path === '/luddite/drafts' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    const asTeacher = !!q.sub && ownsRoom(room, info, role);
+    const sub = asTeacher ? String(q.sub) : me.sub;
+    const st = room.students[sub];
+    if (!st) throw new HttpError(404, 'no_student');
+    if (!q.n) return respond(200, { drafts: st.drafts || [], now: (st.drafts || []).length + 1 });
+    const { state: dr } = await readItem('luddite:olddraft:' + room.code + ':' + sub + ':' + Math.floor(Number(q.n) || 0));
+    if (!dr) throw new HttpError(404, 'no_draft');
+    const shown = asTeacher || dr.returnedAt;
+    return respond(200, { draft: { ...dr, ...(shown ? {} : { marks: [], endComment: '', grade: '', rubricScores: [] }) }, name: st.name || '', email: st.email || '' });
   }
 
   // GET /luddite/classwork?code= -- while the teacher allows it (room.shareWork),
