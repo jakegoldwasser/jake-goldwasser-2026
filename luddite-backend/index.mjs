@@ -490,6 +490,15 @@ function roomSummary(room) {
   };
 }
 
+// The id of the grading shared with this student in this session: their
+// paper's if it's shared, else their writing so far's ('early:<code>:<sub>').
+function sharedGradingId(room, sub) {
+  const paper = (room.submissions || []).find((x) => x.sub === sub && x.stored);
+  if (paper) return paper.returnedAt ? paper.id : null;
+  const st = room.students[sub];
+  return st && st.earlyShared ? 'early:' + room.code + ':' + sub : null;
+}
+
 // An assignment as one student sees it: only their own place in it, and
 // their own window (which may differ from everyone else's).
 function studentView(room, sub, email, prefs) {
@@ -505,6 +514,9 @@ function studentView(room, sub, email, prefs) {
     atHome: !!room.atHome,
     // The teacher lets everyone in it read each other's writing so far (see /luddite/classwork).
     shareWork: !!room.shareWork,
+    // Grading the teacher has shared with them in this session (their paper's,
+    // else their writing so far's), which they can read while they write.
+    sharedId: sharedGradingId(room, sub),
     // The rubric, while the teacher lets students see it as they write.
     rubric: room.rubricShown && room.rubric && me && me.status === 'admitted' ? room.rubric : null,
     status: me ? me.status : 'none',
@@ -1057,8 +1069,9 @@ async function routeLuddite(event, method, path, info) {
   // GET /luddite/returned -- this student's handed-back papers, newest first.
   if (path === '/luddite/returned' && method === 'GET') {
     const { state: mine } = await readItem('luddite:mine:' + lower(me.email));
-    const items = await Promise.all(((mine && mine.returned) || []).map((id) => readItem('luddite:sub:' + id)));
-    const papers = items.map((x) => x.state).filter((x) => x && x.returnedAt && x.sub === me.sub)
+    const items = await Promise.all(((mine && mine.returned) || []).map((id) => myShared(id, me).catch(() => null)));
+    const seen = {};
+    const papers = items.filter((x) => x && x.returnedAt && x.sub === me.sub && !seen[x.id] && (seen[x.id] = 1))
       .map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS }))
       .sort((a, b) => b.returnedAt - a.returnedAt);
     return respond(200, { papers });
@@ -1067,16 +1080,16 @@ async function routeLuddite(event, method, path, info) {
   // GET /luddite/mypaper?id= -- one handed-back paper with its comments.
   // PUT /luddite/mypaper { id } -- "still reading": counts toward the grade.
   if (path === '/luddite/mypaper' && (method === 'GET' || method === 'PUT')) {
-    const id = String((method === 'GET' ? q.id : body.id) || '');
-    if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) throw new HttpError(404, 'no_sub');
-    let paper = (await readItem('luddite:sub:' + id)).state;
+    let paper = await myShared(String((method === 'GET' ? q.id : body.id) || ''), me);
     if (!paper || !paper.returnedAt || paper.sub !== me.sub) throw new HttpError(404, 'no_sub');
     if (method === 'PUT') {
-      paper = await mutate('luddite:sub:' + id, (x) => {
+      const ep = paper.early ? 'luddite:early:' + paper.code + ':' + paper.sub : null;
+      const counted = await mutate(ep || 'luddite:sub:' + paper.id, (x) => {
         const now = Date.now(), v = x.view || { ms: 0, last: 0 };
         const gap = now - (v.last || 0);
         return { ...x, view: { ms: (v.ms || 0) + (gap > 0 && gap <= VIEW_PING_MAX_MS ? gap : 0), last: now } };
       });
+      paper = { ...paper, view: counted.view };
     }
     return respond(200, { paper: studentPaper(paper) });
   }
@@ -1411,7 +1424,8 @@ async function routeLuddite(event, method, path, info) {
       piece: { id: 'early:' + room.code + ':' + sub, early: true, code: room.code, sub, name: st.name, email: st.email, roomTitle: titleOf(room),
         text, words: (text.trim().match(/\S+/g) || []).length, at: d ? d.at : Date.now(),
         marks: live ? reanchorMarks(live.marks, live.base, text) : [], endComment: live ? live.endComment || '' : '', grade: live ? live.grade || '' : '',
-        rubric: live ? live.rubric || null : null, rubricScores: live ? live.rubricScores || [] : [] },
+        rubric: live ? live.rubric || null : null, rubricScores: live ? live.rubricScores || [] : [],
+        returnedAt: live ? live.returnedAt || null : null, view: live ? live.view || null : null },
       roomRubric: room.rubric || null
     });
   }
@@ -1429,7 +1443,11 @@ async function routeLuddite(event, method, path, info) {
     const saved = { base, marks, endComment: String(body.endComment || '').slice(0, 8000), grade: String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40),
       rubric, rubricScores: cleanScores(body.rubricScores || [], rubric), at: Date.now() };
     if (Buffer.byteLength(JSON.stringify(saved)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
-    await mutate('luddite:early:' + room.code + ':' + sub, () => saved);
+    await mutate('luddite:early:' + room.code + ':' + sub, (x) => ({ ...saved, ...(x && !x.usedAt ? { returnedAt: x.returnedAt || null, view: x.view } : {}) }));
+    // The session's list shows it graded (or not), apart from whether they've handed in.
+    const earlyMarked = marks.length + (saved.endComment.trim() ? 1 : 0);
+    await mutate('luddite:room:' + room.code, (r) => (r && r.students[sub] && (r.students[sub].earlyMarked !== earlyMarked || (r.students[sub].earlyGrade || '') !== saved.grade)
+      ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], earlyMarked, earlyGrade: saved.grade } } } : undefined)).catch(() => {});
     return respond(200, { ok: true });
   }
 
@@ -1447,7 +1465,7 @@ async function routeLuddite(event, method, path, info) {
     const { state: early } = await readItem('luddite:early:' + piece.code + ':' + piece.sub);
     const olds = piece.gathered ? [] : await Promise.all((piece.replaces || []).slice(0, 10).map((id) => readItem('luddite:sub:' + id).then((x) => x.state).catch(() => null)));
     const sources = [...olds.filter((x) => x && Array.isArray(x.marks) && (x.marks.length || (x.endComment || '').trim() || x.grade)),
-      ...(early && !early.usedAt ? [{ text: early.base, marks: early.marks, endComment: early.endComment, grade: early.grade }] : [])];
+      ...(early && !early.usedAt ? [{ text: early.base, marks: early.marks, endComment: early.endComment, grade: early.grade, returnedAt: early.returnedAt }] : [])];
     if (sources.length || (!piece.gathered && (piece.replaces || []).length)) {
       piece = await mutate('luddite:sub:' + piece.id, (x) => {
         let next = { ...x, gathered: true };
@@ -1456,6 +1474,7 @@ async function routeLuddite(event, method, path, info) {
           const ec = (src.endComment || '').trim();
           if (ec && !(next.endComment || '').includes(ec)) next.endComment = next.endComment ? next.endComment + '\n\n' + src.endComment : src.endComment;
           if (!next.grade && src.grade) next.grade = src.grade;
+          if (!next.returnedAt && src.returnedAt) next.returnedAt = src.returnedAt;
         }
         return next;
       });
@@ -1466,9 +1485,10 @@ async function routeLuddite(event, method, path, info) {
         const i = (r.submissions || []).findIndex((x) => x.id === piece.id);
         if (i === -1) return undefined;
         const submissions = r.submissions.slice();
-        submissions[i] = { ...submissions[i], marked: count, grade: piece.grade || '' };
+        submissions[i] = { ...submissions[i], marked: count, grade: piece.grade || '', ...(piece.returnedAt ? { returnedAt: piece.returnedAt } : {}) };
         return { ...r, submissions };
       }).catch(() => {});
+      if (piece.returnedAt && early && early.returnedAt) await sharedNowPaper(piece.email, 'early:' + piece.code + ':' + piece.sub, piece.id);
     }
     // Writing again over it: the document is their writing now, every comment moved onto it.
     const st = room && room.students && room.students[piece.sub];
@@ -1528,6 +1548,27 @@ async function routeLuddite(event, method, path, info) {
     const back = body.back !== false;
     const done = [];
     await inBatches(ids, async (id) => {
+      // A student's writing so far ('early:<code>:<sub>'): shared the same
+      // way, so they can read it while they write; it goes with the marks
+      // onto their paper when they hand in.
+      const ep = /^early:([^:]+):(.+)$/.exec(String(id || ''));
+      if (ep) {
+        const room = await getRoom(cleanCode(ep[1]));
+        if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+        const sub = ep[2], st = room.students[sub];
+        if (!st) throw new HttpError(404, 'no_student');
+        const at = back ? Date.now() : null;
+        const { state: d } = await readItem('luddite:draft:' + room.code + ':' + sub);
+        await mutate('luddite:early:' + room.code + ':' + sub, (x) => (x && !x.usedAt ? { ...x, returnedAt: at }
+          : { base: d ? String(d.text || '') : '', marks: [], endComment: '', grade: '', rubric: null, rubricScores: [], at: Date.now(), returnedAt: at }));
+        await mutate('luddite:mine:' + lower(st.email), (m) => {
+          const list = ((m && m.returned) || []).filter((x) => x !== id);
+          return { ...(m || {}), returned: back ? [id, ...list].slice(0, 200) : list };
+        });
+        await mutate('luddite:room:' + room.code, (r) => (r && r.students[sub] ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], earlyShared: at } } } : undefined));
+        done.push({ id, returnedAt: at });
+        return;
+      }
       const piece = await ownSub(id, me, role);
       const at = back ? Date.now() : null;
       await mutate('luddite:sub:' + piece.id, (x) => ({ ...x, returnedAt: at }));
@@ -2254,6 +2295,16 @@ async function handInFromBackups(code, list, label) {
 // Hands one student's writing in: Drive (when connected), Luddite's own copy
 // to mark up, the teacher's student list, and the room. `auto` when Luddite
 // does it for them because the session ended while they were writing.
+// Shared writing so far became a paper: the student's list of shared
+// grading lists the paper in its place.
+async function sharedNowPaper(email, earlyId, paperId) {
+  await mutate('luddite:mine:' + lower(email), (m) => {
+    const list = (m && m.returned) || [];
+    if (!list.includes(earlyId)) return undefined;
+    return { ...m, returned: [paperId, ...list.filter((x) => x !== earlyId && x !== paperId)].slice(0, 200) };
+  }).catch(() => {});
+}
+
 async function handInFor(room, code, me, s, text, label, auto) {
   const words = (text.trim().match(/\S+/g) || []).length;
   const who = me.name || me.email;
@@ -2312,7 +2363,9 @@ async function handInFor(room, code, me, s, text, label, auto) {
     submission.marked = carried.marks.length + (carried.endComment.trim() ? 1 : 0);
     if (carried.grade) submission.grade = carried.grade;
     if (prev && prev.returnedAt) submission.returnedAt = prev.returnedAt;
+    else if (early1 && early1.returnedAt) Object.assign(carried, { returnedAt: early1.returnedAt, view: early1.view }), submission.returnedAt = early1.returnedAt;
     if (early1) await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
+    if (early1 && early1.returnedAt) await sharedNowPaper(me.email, 'early:' + code + ':' + me.sub, id);
     const paper = await mutate('luddite:sub:' + id, () => ({
       ...(prev || {}),
       ...(prev ? { gathered: prev.gathered || !(prev.replaces || []).length } : {}),
@@ -2428,6 +2481,27 @@ function reflectView(room, sub, paper) {
     reflection: { text: (paper.reflection && paper.reflection.text) || '', handedInAt: (paper.reflection && paper.reflection.handedInAt) || 0 },
     status: rf.status || 'new', lockedOut: !!rf.lockedOut, askedAt: rf.askedAt || 0, leaves: rf.leaves || 0
   };
+}
+
+// A shared paper as its student reads it: a paper ('luddite:sub:<id>'), or
+// their writing so far ('early:<code>:<sub>', which reads as the paper once
+// they've handed in), with the teacher's marks moved onto their writing now.
+async function myShared(id, me) {
+  const ep = /^early:([^:]+):(.+)$/.exec(id);
+  if (ep) {
+    const code = cleanCode(ep[1]), sub = ep[2];
+    if (sub !== me.sub) return null;
+    const { state: e } = await readItem('luddite:early:' + code + ':' + sub);
+    if (!e) return null;
+    if (e.usedAt) return e.paperId ? myShared(e.paperId, me) : null;
+    const [{ state: d }, { state: room }] = await Promise.all([readItem('luddite:draft:' + code + ':' + sub), readItem('luddite:room:' + code)]);
+    const text = d ? String(d.text || '') : e.base;
+    return { id, early: true, code, sub, email: me.email, name: me.name, roomTitle: room ? titleOf(room) : '', at: d ? d.at : e.at,
+      words: (text.trim().match(/\S+/g) || []).length, text, marks: reanchorMarks(e.marks || [], e.base, text),
+      endComment: e.endComment || '', grade: e.grade || '', rubric: e.rubric || null, rubricScores: e.rubricScores || [], returnedAt: e.returnedAt, view: e.view };
+  }
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) return null;
+  return (await readItem('luddite:sub:' + id)).state;
 }
 
 function studentPaper(x) {
