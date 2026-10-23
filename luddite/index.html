@@ -227,7 +227,7 @@
     background: color-mix(in srgb, var(--paper) 90%, transparent); }
   .overlay .box { background: var(--card); border-radius: 16px; padding: 24px 24px 22px; box-shadow: inset 0 0 0 2px var(--ink); width: 100%; max-width: 560px; text-align: left; }
   .overlay h2 { font: 400 24px Literata, Georgia, serif; margin: 0 0 4px; }
-  #askBox { z-index: 60; padding-top: 18vh; }
+  #askBox { z-index: 70; padding-top: 18vh; } /* above every window, grading, the writing log and drafts included */
   #askBox .box { max-width: 460px; }
   .asktext { margin: 8px 0 0; white-space: pre-wrap; color: var(--ink); line-height: 1.5; }
   .asktext:empty { display: none; }
@@ -428,7 +428,7 @@
   .handinbar { gap: 12px; flex-wrap: wrap; }
   /* At home, leaving full screen isn't a lock: said plainly, so nobody waits for the teacher. */
   #lockWait.homeback { background: var(--mint-tint); color: var(--ink); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
-  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn, .handinbar #draftsBtn, .handinbar #homePrintW { min-width: 0; padding: 16px 32px; }
+  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn, .handinbar #draftsLabel, .handinbar #homePrintW { min-width: 0; padding: 16px 32px; }
   .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
   .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
   .cwitem:hover { background: var(--hover); }
@@ -1168,6 +1168,13 @@
   #studentPrint h1 { font: 600 20px var(--ui); margin: 0 0 4px; }
   #studentPrint .spmeta { font: 400 12px var(--ui); color: #555; margin: 0 0 18px; }
   #studentPrint .sptext { font: 12pt/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; }
+  /* The writing page's Drafts dropdown, opening upward from the bar at the bottom. */
+  .handinbar .draftmenu { pointer-events: auto; position: relative; }
+  .handinbar .draftmenu > summary { list-style: none; }
+  .handinbar .draftmenu > summary::-webkit-details-marker { display: none; }
+  .handinbar .draftmenu .pop { top: auto; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 300px; max-height: 60vh; overflow-y: auto; }
+  .draftmenu .pop button.here { font-weight: 600; background: var(--mint-tint); cursor: default; }
+  .draftmenu .pop button .dm { color: var(--muted); font-size: 13px; margin-left: 6px; }
   /* Drafts: the list (and Start a new draft), and one old draft read-only. */
   #draftsBox { z-index: 61; } #draftView { z-index: 62; }
   #draftView .card { max-width: 1120px !important; }
@@ -1440,7 +1447,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="draftsBtn" type="button" hidden>Drafts</button><button class="btn ghost" id="homePrintW" type="button" hidden>Print</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><details class="menu draftmenu" id="draftsBtn" hidden><summary class="btn ghost" id="draftsLabel">Draft 1 ▴</summary><div class="pop" id="draftsPop"></div></details><button class="btn ghost" id="homePrintW" type="button" hidden>Print</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Live comments">
@@ -1958,7 +1965,7 @@
   <div class="card">
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="dvTitle"></h2><span class="fine" id="dvMeta" style="margin:0"></span></div>
     <div class="livegrid"><div class="liveread" id="dvText"></div><div class="mgnotes" id="dvNotes"></div></div>
-    <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn ghost" id="dvClose" type="button">Close</button></div>
+    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn small ghost" id="dvName" type="button" hidden>Name this draft…</button></span><button class="btn ghost" id="dvClose" type="button">Back to my writing</button></div>
   </div>
 </div>
 
@@ -3487,7 +3494,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.draftNames = d.room.draftNames; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -3933,10 +3940,10 @@
     $('homePrintW').hidden = !(writing && mode === 'room' && !previewing && roomInfo && roomInfo.homePrint);
     var nd = writing && mode === 'room' && !previewing && roomInfo ? (roomInfo.drafts || []).length : 0;
     $('draftTag').hidden = !nd;
-    if (nd) { $('draftTagN').textContent = 'Draft ' + (nd + 1); $('draftTagSub').textContent = 'Draft ' + nd + ' is kept as it was: reread it under Drafts'; }
+    if (nd) { $('draftTagN').textContent = draftLabel(nd + 1, roomInfo.draftNames); $('draftTagSub').textContent = 'Draft ' + nd + ' is kept as it was: open it from the drafts menu at the bottom'; }
     var dOn = writing && mode === 'room' && !previewing && roomInfo;
     $('draftsBtn').hidden = !dOn;
-    if (dOn) $('draftsBtn').textContent = (roomInfo.drafts || []).length ? 'Drafts · on Draft ' + ((roomInfo.drafts || []).length + 1) : 'Drafts';
+    if (dOn) drawDraftMenu(); else $('draftsBtn').open = false;
   }
   async function loadMyGrading(ping) {
     var id = roomInfo && roomInfo.sharedId;
@@ -4018,6 +4025,40 @@
   // teachers open any from the student's row or the grading window.
   // ---------------------------------------------------------------------
   var draftsCtx = null; // { code, sub (a teacher's view), name, student }
+  function draftLabel(n, names) { var nm = names && names[n]; return 'Draft ' + n + (nm ? ' · ' + nm : ''); }
+  // The writing page's Drafts dropdown: each earlier draft (opens it, read-only),
+  // the one they're writing, Name this draft…, and Start a new draft….
+  function drawDraftMenu() {
+    var list = (roomInfo && roomInfo.drafts) || [], names = (roomInfo && roomInfo.draftNames) || {}, now = list.length + 1;
+    $('draftsLabel').textContent = draftLabel(now, names) + ' ▴';
+    var pop = $('draftsPop');
+    pop.innerHTML = '';
+    pop.appendChild(el('div', 'popsec', 'Your Drafts'));
+    var item = function (text, sub, cls, fn) {
+      var b = el('button', cls || null, text);
+      b.type = 'button';
+      if (sub) b.appendChild(el('span', 'dm', sub));
+      b.addEventListener('click', function () { $('draftsBtn').open = false; if (fn) fn(); });
+      pop.appendChild(b);
+      return b;
+    };
+    list.forEach(function (d) { item(draftLabel(d.n, names), plural(d.words || 0, 'word', 'words') + (d.shared ? ' · comments shared' : ''), null, function () { draftsCtx = { code: roomCode, student: true }; openDraft(d.n); }); });
+    item(draftLabel(now, names), 'writing now', 'here', null);
+    pop.appendChild(el('div', 'popsec', 'This Draft'));
+    item(names[now] ? 'Rename this draft…' : 'Name this draft…', null, null, function () { nameDraft(now); });
+    item('Start a new draft…', null, null, startNewDraft);
+  }
+  async function nameDraft(n) {
+    var names = (roomInfo && roomInfo.draftNames) || {};
+    var name = await ask({ title: 'Name Draft ' + n, text: 'A few words to tell it apart, like “First try” or “After feedback”.', input: true, value: names[n] || '', ok: 'Save' });
+    if (name === false || name == null) return;
+    try {
+      var d = await api('/luddite/draftname', { code: roomCode, n: n, name: name });
+      if (roomInfo) roomInfo.draftNames = d.room.draftNames;
+      syncClassWork();
+      if (!$('draftView').hidden && draftsCtx && draftsCtx.student) $('dvTitle').textContent = draftLabel(n, roomInfo.draftNames);
+    } catch (e) { tell('Couldn’t Name It', 'Check your connection and try again.'); }
+  }
   async function openDrafts(ctx) {
     draftsCtx = ctx;
     $('draftView').hidden = true;
@@ -4029,18 +4070,19 @@
     try { data = await api('/luddite/drafts?code=' + encodeURIComponent(ctx.code) + (ctx.sub ? '&sub=' + encodeURIComponent(ctx.sub) : '')); }
     catch (e) { $('dbList').innerHTML = ''; $('dbList').appendChild(el('p', 'fine', 'Couldn’t load the drafts. Try again.')); return; }
     if (draftsCtx !== ctx) return;
+    draftsCtx.names = data.names || {};
     drawDrafts(data.drafts || []);
   }
   function drawDrafts(list) {
     var ctx = draftsCtx, now = list.length + 1;
-    $('dbMeta').textContent = ctx.student ? 'You’re writing Draft ' + now : (ctx.name ? ctx.name + ' · ' : '') + 'writing Draft ' + now;
+    $('dbMeta').textContent = ctx.student ? 'You’re writing ' + draftLabel(now, ctx.names) : (ctx.name ? ctx.name + ' · ' : '') + 'writing ' + draftLabel(now, ctx.names);
     var box = $('dbList');
     box.innerHTML = '';
     if (!list.length) box.appendChild(el('p', 'fine', ctx.student ? 'This is your first draft.' : 'No earlier drafts.'));
     list.slice().reverse().forEach(function (d) {
       var b = el('button', 'cwitem');
       b.type = 'button';
-      b.appendChild(el('b', null, 'Draft ' + d.n));
+      b.appendChild(el('b', null, draftLabel(d.n, ctx.names)));
       b.appendChild(el('span', null, plural(d.words || 0, 'word', 'words') + ' · kept ' + dayClock(d.at) + (d.shared ? ' · grading shared' : d.graded && !ctx.student ? ' · graded' : '')));
       b.addEventListener('click', function () { openDraft(d.n); });
       box.appendChild(b);
@@ -4051,7 +4093,12 @@
   }
   async function openDraft(n) {
     var ctx = draftsCtx;
-    $('dvTitle').textContent = 'Draft ' + n;
+    var dnames = ctx.student ? (roomInfo && roomInfo.draftNames) : ctx.names;
+    $('dvTitle').textContent = draftLabel(n, dnames);
+    $('dvName').hidden = !ctx.student;
+    $('dvName').onclick = function () { nameDraft(n); };
+    $('dvBack').hidden = !!ctx.student;
+    $('dvClose').textContent = ctx.student ? 'Back to my writing' : 'Close';
     $('dvMeta').textContent = '';
     $('dvText').textContent = 'Loading…'; $('dvNotes').innerHTML = '';
     $('draftView').hidden = false;
@@ -4080,11 +4127,12 @@
     try { window.print(); } catch (e) {}
     setTimeout(function () { leavingOnPurpose = false; document.body.classList.remove('studentprinting'); if (writing && !locked) pad.focus(); }, 1500);
   });
-  $('draftsBtn').addEventListener('click', function () { openDrafts({ code: roomCode, student: true }); });
+
   $('dbClose').addEventListener('click', function () { $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
   $('dvClose').addEventListener('click', function () { $('draftView').hidden = true; $('draftsBox').hidden = true; if (draftsCtx && draftsCtx.student && writing && !locked) pad.focus(); });
   $('dvBack').addEventListener('click', function () { $('draftView').hidden = true; });
-  $('dbNewBtn').addEventListener('click', async function () {
+  $('dbNewBtn').addEventListener('click', function () { startNewDraft(); });
+  async function startNewDraft() {
     var now = ((roomInfo && roomInfo.drafts) || []).length + 1;
     if (!await ask({ title: 'Start Draft ' + (now + 1) + '?', text: 'Draft ' + now + ' is kept as it is now, with any comments on it, and you can reread it under Drafts. Draft ' + (now + 1) + ' starts as a copy, and your teacher grades it afresh.', ok: 'Start Draft ' + (now + 1) })) return;
     var b = $('dbNewBtn');
@@ -4092,7 +4140,7 @@
     try {
       await report('writing'); // the server has their writing as it is now
       var d = await api('/luddite/newdraft', { code: roomCode });
-      if (roomInfo) { roomInfo.drafts = d.room.drafts; roomInfo.sharedId = d.room.sharedId; }
+      if (roomInfo) { roomInfo.drafts = d.room.drafts; roomInfo.sharedId = d.room.sharedId; roomInfo.draftNames = d.room.draftNames; }
       syncClassWork();
       drawDrafts((roomInfo && roomInfo.drafts) || []);
       $('dbMeta').textContent = 'You’re writing Draft ' + (now + 1) + ' now';
@@ -4100,7 +4148,8 @@
       tell('Couldn’t Start a New Draft', e.message === 'nothing_yet' ? 'Write something first.' : e.message === 'cant_write' ? 'You can’t write in this session right now.' : e.message === 'too_many_drafts' ? 'That’s as many drafts as one session keeps.' : 'Check your connection and try again.');
     }
     b.disabled = false;
-  });
+    if (writing && !locked) pad.focus();
+  }
   $('mgClose').addEventListener('click', closeMyGrading);
   // The rubric: a button beside Hand in while the teacher shows it (roomInfo.rubric).
   var rubricWShown = '';
@@ -7121,7 +7170,7 @@
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
-    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · Draft ' + (s.drafts.length + 1)));
+    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · ' + draftLabel(s.drafts.length + 1, s.draftNames)));
     // Words that came faster than anyone types (see the writing log).
     if (s && s.bursts) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
     w.appendChild(line);
@@ -7788,7 +7837,7 @@
     $('markWho').textContent = who(piece.name, piece.email);
     var dst = !reading && teacherRoom && teacherRoom.code === piece.code && teacherRoom.students && teacherRoom.students[piece.sub];
     var dn = dst ? (dst.drafts || []).length : 0;
-    if (dn) $('markWho').appendChild(el('span', 'draftpill', 'Draft ' + (dn + 1)));
+    if (dn) $('markWho').appendChild(el('span', 'draftpill', draftLabel(dn + 1, dst.draftNames)));
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
       ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = false;

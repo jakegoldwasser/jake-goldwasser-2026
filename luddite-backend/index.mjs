@@ -542,7 +542,9 @@ function studentView(room, sub, email, prefs) {
     // An alternative schedule in parts (not days).
     parts: !!win.parts,
     // Their earlier drafts in this session (see /luddite/newdraft): [{ n, at, words, graded, shared }].
-    drafts: (me && me.drafts) || []
+    drafts: (me && me.drafts) || [],
+    // The names they gave their drafts, by number (the one they're writing is drafts.length + 1).
+    draftNames: (me && me.draftNames) || {}
   };
 }
 
@@ -1110,6 +1112,26 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
   }
 
+  // PUT /luddite/draftname { code, n, name } -- a student names one of their drafts
+  // (the one they're writing, or an earlier one); an empty name takes it away.
+  if (path === '/luddite/draftname' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await getRoom(code);
+    const st = room.students[me.sub];
+    if (!st || st.status !== 'admitted') throw new HttpError(404, 'not_in_room');
+    const n = Math.floor(Number(body.n) || 0);
+    if (n < 1 || n > (st.drafts || []).length + 1) throw new HttpError(400, 'bad_draft');
+    const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const saved = await mutate('luddite:room:' + code, (r) => {
+      const x = r && r.students[me.sub];
+      if (!x) return undefined;
+      const names = { ...(x.draftNames || {}) };
+      if (name) names[n] = name; else delete names[n];
+      return { ...r, students: { ...r.students, [me.sub]: { ...x, draftNames: names } } };
+    });
+    return respond(200, { room: studentView(saved, me.sub, me.email, await prefsOf(saved.teacher.sub)) });
+  }
+
   // GET /luddite/drafts?code=&sub= -- a student's earlier drafts in a session
   // (the teacher, with sub; a student, their own): the list, or with n= one of
   // them (a student sees the teacher's marks on it only if they were shared).
@@ -1119,7 +1141,7 @@ async function routeLuddite(event, method, path, info) {
     const sub = asTeacher ? String(q.sub) : me.sub;
     const st = room.students[sub];
     if (!st) throw new HttpError(404, 'no_student');
-    if (!q.n) return respond(200, { drafts: st.drafts || [], now: (st.drafts || []).length + 1 });
+    if (!q.n) return respond(200, { drafts: st.drafts || [], now: (st.drafts || []).length + 1, names: st.draftNames || {} });
     const { state: dr } = await readItem('luddite:olddraft:' + room.code + ':' + sub + ':' + Math.floor(Number(q.n) || 0));
     if (!dr) throw new HttpError(404, 'no_draft');
     const shown = asTeacher || dr.returnedAt;
