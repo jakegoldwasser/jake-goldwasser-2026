@@ -1183,6 +1183,13 @@
   .wlchart svg { display: block; }
   .wlkey { font-size: 14px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
   .wlkey i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .wlversions { margin-top: 18px; border-top: 0; }
+  .wlvhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .wlvhead h3 { margin: 0; }
+  .wlvpick { width: auto; max-width: 280px; padding: 6px 10px; font-size: 14px; }
+  .wlvtext { max-height: 50vh; background: var(--card); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--rule); padding: 14px 18px; }
+  .wlvtext .vins { background: var(--pen-wash); color: var(--pen); text-decoration: none; }
+  .wlvtext .vdel { color: var(--tomato-deep); text-decoration: line-through; }
   .wlflag { border: 1.5px solid var(--tomato); background: var(--tomato-tint); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
   .wlflag.soft { border-color: var(--rule); background: transparent; }
   .wlflag q { display: block; font-family: Literata, Georgia, serif; margin-top: 4px; }
@@ -8009,6 +8016,8 @@
       f.appendChild(el('b', null, '⚑ ' + wlWhen(b.at) + ': ' + b.words + ' words appeared at once'));
       f.appendChild(document.createTextNode(' (about ' + b.wpm.toLocaleString() + ' words a minute; their typical pace is ' + median + ')'));
       if (b.quote) f.appendChild(el('q', null, b.quote + (b.quote.length >= 160 ? '…' : '')));
+      var bs = ((log.snaps || []).filter(function (x) { return x.burst && Math.abs(x.at - b.at) < 60000; })[0]);
+      if (bs) { var bb = button('See the text before and after', 'btn small ghost', function () { wlShowSnap(bs.k); var v = $('wlVersions'); if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); bb.style.marginTop = '8px'; f.appendChild(el('div')).appendChild(bb); }
       body.appendChild(f);
     });
     var fast = mins.filter(function (m) { return m.add >= WL_FAST && m.add >= 3 * median && !bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }); });
@@ -8068,6 +8077,110 @@
     });
     body.appendChild(key);
     body.appendChild(el('p', 'fine', 'Most students compose at about 5 to 30 words a minute, stopping and going back to change things. A flag isn’t proof: read the words it shows and talk with the student.'));
+    drawWlVersions(body, log);
+  }
+  // Versions: their whole text every few minutes, and just before and after
+  // each burst (GET /luddite/snap). One shows at a time, with what changed
+  // since the version before it: added words in green, deleted ones struck through.
+  var wlSnaps = [], wlSnapAt = -1, wlSnapCache = {}, wlShowChanges = true;
+  function drawWlVersions(body, log) {
+    wlSnaps = (log.snaps || []).slice();
+    wlSnapCache = {};
+    if (!wlSnaps.length) return;
+    var box = el('div', 'wlversions');
+    box.id = 'wlVersions';
+    var head = el('div', 'wlvhead');
+    head.appendChild(el('h3', null, 'Versions'));
+    var nav = el('div', 'row');
+    nav.style.margin = '0'; nav.style.gap = '8px';
+    nav.appendChild(button('‹ Earlier', 'btn small ghost', function () { if (wlSnapAt > 0) wlShowSnap(wlSnaps[wlSnapAt - 1].k); })).id = 'wlvPrev';
+    var pick = el('select', 'field wlvpick');
+    pick.id = 'wlvPick';
+    wlSnaps.forEach(function (x) { var o = el('option', null, wlWhen(x.at) + ' · ' + plural(x.words || 0, 'word', 'words') + (x.burst ? ' · ⚑ after a burst' : '')); o.value = x.k; pick.appendChild(o); });
+    pick.addEventListener('change', function () { wlShowSnap(Number(pick.value)); });
+    nav.appendChild(pick);
+    nav.appendChild(button('Later ›', 'btn small ghost', function () { if (wlSnapAt < wlSnaps.length - 1) wlShowSnap(wlSnaps[wlSnapAt + 1].k); })).id = 'wlvNext';
+    var ch = button('Show changes', 'btn small ghost toggle', function () { wlShowChanges = !wlShowChanges; ch.setAttribute('aria-pressed', wlShowChanges ? 'true' : 'false'); wlShowSnap(wlSnaps[wlSnapAt].k); });
+    ch.setAttribute('aria-pressed', wlShowChanges ? 'true' : 'false');
+    ch.title = 'Mark what changed since the version before: added words in green, deleted ones struck through';
+    nav.appendChild(ch);
+    head.appendChild(nav);
+    box.appendChild(head);
+    box.appendChild(el('p', 'fine', '')).id = 'wlvMeta';
+    var txt = el('div', 'liveread wlvtext');
+    txt.id = 'wlvText';
+    box.appendChild(txt);
+    body.appendChild(box);
+    wlShowSnap(wlSnaps[wlSnaps.length - 1].k);
+  }
+  async function wlSnapText(k) {
+    if (wlSnapCache[k] != null) return wlSnapCache[k];
+    var d = await api('/luddite/snap?code=' + encodeURIComponent(wlAt.code) + '&sub=' + encodeURIComponent(wlAt.sub) + '&k=' + k);
+    return (wlSnapCache[k] = plainOf(d.snap.text || ''));
+  }
+  async function wlShowSnap(k) {
+    var i = wlSnaps.map(function (x) { return x.k; }).indexOf(k);
+    if (i < 0) return;
+    wlSnapAt = i;
+    var at = wlAt, x = wlSnaps[i], prev = i > 0 ? wlSnaps[i - 1] : null;
+    $('wlvPick').value = String(k);
+    $('wlvPrev').disabled = i === 0; $('wlvNext').disabled = i === wlSnaps.length - 1;
+    var txt = $('wlvText');
+    txt.textContent = 'Loading…';
+    var now, before = null;
+    try { now = await wlSnapText(k); if (wlShowChanges && prev) before = await wlSnapText(prev.k); }
+    catch (e) { txt.textContent = 'Couldn’t load this version. Try again.'; return; }
+    if (wlAt !== at || wlSnapAt !== i) return;
+    $('wlvMeta').textContent = 'Version ' + (i + 1) + ' of ' + wlSnaps.length + ' · ' + wlWhen(x.at) + ' · ' + plural(x.words || 0, 'word', 'words') +
+      (prev ? ' (' + ((x.words || 0) - (prev.words || 0) >= 0 ? '+' : '−') + Math.abs((x.words || 0) - (prev.words || 0)) + ' since ' + wlWhen(prev.at) + ')' : ' · the first version kept') + (x.burst ? ' · just after a burst' : '');
+    txt.innerHTML = '';
+    if (before == null) { txt.textContent = now; return; }
+    wordDiff(before, now).forEach(function (op) {
+      txt.appendChild(op[0] === '=' ? document.createTextNode(op[1]) : el(op[0] === '+' ? 'ins' : 'del', op[0] === '+' ? 'vins' : 'vdel', op[1]));
+    });
+  }
+  // Word-by-word changes from a to b: [['=' | '+' | '-', text]] (Myers' diff; past
+  // a few thousand edits, the changed middle is shown as one deletion and one insertion).
+  function wordDiff(a, b) {
+    var A = a.match(/\s+|[^\s]+/g) || [], B = b.match(/\s+|[^\s]+/g) || [];
+    var p = 0;
+    while (p < A.length && p < B.length && A[p] === B[p]) p++;
+    var ea = A.length, eb = B.length;
+    while (ea > p && eb > p && A[ea - 1] === B[eb - 1]) { ea--; eb--; }
+    var out = [];
+    var push = function (t, s) { if (!s) return; var l = out[out.length - 1]; if (l && l[0] === t) l[1] += s; else out.push([t, s]); };
+    push('=', A.slice(0, p).join(''));
+    var X = A.slice(p, ea), Y = B.slice(p, eb), n = X.length, m = Y.length, max = Math.min(n + m, 3000);
+    var ops = null;
+    if (n && m) {
+      var off = max + 1, v = new Int32Array(2 * max + 3), trace = [], found = -1;
+      for (var d = 0; d <= max && found < 0; d++) {
+        trace.push(v.slice());
+        for (var k = -d; k <= d; k += 2) {
+          var x = (k === -d || (k !== d && v[k - 1 + off] < v[k + 1 + off])) ? v[k + 1 + off] : v[k - 1 + off] + 1, y = x - k;
+          while (x < n && y < m && X[x] === Y[y]) { x++; y++; }
+          v[k + off] = x;
+          if (x >= n && y >= m) { found = d; break; }
+        }
+      }
+      if (found >= 0) {
+        ops = []; var cx = n, cy = m;
+        for (var dd = found; dd > 0; dd--) {
+          var vv = trace[dd], kk = cx - cy;
+          var pk = (kk === -dd || (kk !== dd && vv[kk - 1 + off] < vv[kk + 1 + off])) ? kk + 1 : kk - 1;
+          var px = vv[pk + off], py = px - pk;
+          while (cx > px && cy > py) { cx--; cy--; ops.push(['=', X[cx]]); }
+          if (cx === px) ops.push(['+', Y[py]]); else ops.push(['-', X[px]]);
+          cx = px; cy = py;
+        }
+        while (cx > 0 && cy > 0) { cx--; cy--; ops.push(['=', X[cx]]); }
+        ops.reverse();
+      }
+    }
+    if (ops) ops.forEach(function (o) { push(o[0], o[1]); });
+    else { push('-', X.join('')); push('+', Y.join('')); }
+    push('=', A.slice(ea).join(''));
+    return out;
   }
   $('wlClose').addEventListener('click', function () { $('wlogBox').hidden = true; });
 

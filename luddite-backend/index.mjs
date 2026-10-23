@@ -1512,7 +1512,18 @@ async function routeLuddite(event, method, path, info) {
     const sub = String(q.sub || ''), st = room.students[sub];
     if (!st) throw new HttpError(404, 'no_student');
     const { state: log } = await readItem('luddite:wlog:' + room.code + ':' + sub);
-    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], first: log.first || 0 } : null, name: st.name || '', email: st.email || '' });
+    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], first: log.first || 0, snaps: log.snaps || [] } : null, name: st.name || '', email: st.email || '' });
+  }
+
+  // GET /luddite/snap?code=&sub=&k= -- one version of a student's text (see logWriting).
+  if (path === '/luddite/snap' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(q.sub || '');
+    if (!room.students[sub]) throw new HttpError(404, 'no_student');
+    const { state: snap } = await readItem('luddite:snap:' + room.code + ':' + sub + ':' + Math.floor(Number(q.k) || 0));
+    if (!snap) throw new HttpError(404, 'no_snap');
+    return respond(200, { snap: { k: snap.k, at: snap.at, words: snap.words, text: snap.text || '', burst: !!snap.burst } });
   }
 
   // ---- Grading a draft (see reanchorMarks) ----
@@ -2658,6 +2669,8 @@ async function saveDraft(code, sub, raw, prevSeen) {
 // own words moved, copied or put back. The room's student entry counts them
 // (`bursts`, `burstAt`) for the session page.
 const WLOG_MAX_MINS = 3000;
+const SNAP_EVERY_MS = 3 * 60 * 1000; // a version of their text at most this often while they write
+const SNAP_MAX = 400; // versions kept per student per session (bursts always get theirs)
 const BURST_WORDS = 25;
 const BURST_WPM = 150;
 const tokensOf = (t) => String(t || '').match(/\s+|[^\s]+/g) || [];
@@ -2728,8 +2741,9 @@ async function logWriting(code, sub, before, text, prevSeen, glitch) {
   const secs = prevSeen ? Math.max(10, (now - prevSeen) / 1000) : 0;
   const wpm = secs ? Math.round(big / (secs / 60)) : 0;
   const delRuns = runs.filter((r) => r.type === 'del' && r.toks.filter(isWord).length >= 5).map((r) => squash(r.toks.join('')).slice(0, 3000));
-  let burst = null;
+  let burst = null, snapsToWrite = [];
   await mutate('luddite:wlog:' + code + ':' + sub, (L) => {
+    snapsToWrite = [];
     const log = L || { mins: [], bursts: [], recent: [], first: now };
     const mins = log.mins.slice(), t = Math.floor(now / 60000) * 60000;
     const last = mins[mins.length - 1];
@@ -2744,8 +2758,24 @@ async function logWriting(code, sub, before, text, prevSeen, glitch) {
       if (!own) { burst = { at: now, words: big, wpm, quote: runText.slice(0, 160) }; bursts = [...bursts, burst].slice(-50); }
     }
     const recent = [...delRuns, ...(log.recent || [])].slice(0, 8);
-    return { ...log, mins: mins.slice(-WLOG_MAX_MINS), bursts, recent };
+    // Versions: their whole text every few minutes, and just before and just
+    // after a burst (the text itself in luddite:snap:<code>:<sub>:<k>, listed here).
+    const snaps = (log.snaps || []).slice();
+    let k = log.nextSnap || 1;
+    const lastSnap = snaps[snaps.length - 1];
+    const take = (txt, at, extra) => {
+      const entry = { k: k++, at, words: tokensOf(txt).filter(isWord).length, ...(extra || {}) };
+      snaps.push(entry); snapsToWrite.push({ ...entry, text: txt });
+    };
+    if ((!lastSnap || burst) && before.trim() && (!lastSnap || lastSnap.at < (prevSeen || now) - 1000)) take(before, Math.min(prevSeen || now - 10000, now - 1000));
+    if (burst) take(text, now, { burst: true });
+    else if ((!lastSnap || now - lastSnap.at >= SNAP_EVERY_MS) && snaps.length < SNAP_MAX) take(text, now);
+    return { ...log, mins: mins.slice(-WLOG_MAX_MINS), bursts, recent, snaps, nextSnap: k };
   });
+  for (const x of snapsToWrite) {
+    const { k, ...rest } = x;
+    await mutate('luddite:snap:' + code + ':' + sub + ':' + k, () => ({ ...rest, k })).catch((e) => console.warn('snapshot failed', e.message));
+  }
   if (burst) await mutate('luddite:room:' + code, (r) => (r && r.students[sub]
     ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], bursts: (r.students[sub].bursts || 0) + 1, burstAt: burst.at } } } : undefined)).catch(() => {});
 }
