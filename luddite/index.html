@@ -1087,22 +1087,8 @@
   /* × alone at the top right; the grading controls below start at the paper's left edge. */
   .markclosebar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 0 0 6px; }
   /* Grading or Viewing (one window), the × and the bar stay put at the top while the paper scrolls. */
-  /* Grade | Monitor: a sliding switch, centered above everything else in the window. */
-  #markScreen .markclosebar { display: grid; grid-template-columns: 1fr auto 1fr; }
-  #markScreen .markclosebar .markclose { justify-self: end; grid-column: 3; }
-  .markmode { grid-column: 2; position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; width: 360px; padding: 5px;
-    background: var(--card); border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--ink); }
-  .markmode .knob { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px); border-radius: 999px; background: var(--ink); transition: transform .25s ease; }
-  .markmode.view .knob { transform: translateX(100%); }
-  .markmode button { position: relative; z-index: 1; border: 0; background: none; font: 600 19px var(--ui); padding: 11px 0; cursor: pointer; color: var(--ink); border-radius: 999px; transition: color .25s; }
-  .markmode button.on { color: var(--card); }
-  @media (max-width: 640px) { .markmode { width: 260px; } .markmode button { font-size: 16px; } }
-  /* Monitor: just Previous / Next, My comments and the writing log; live comments at the right. */
-  body.markview #markScreen .markbar > :not(#paperNav):not(#markMarksBtn):not(#markWlog):not(.grow) { display: none !important; }
-  body.markview #markScreen .markbar .grow .q { display: none; }
   body.markfloat #markScreen .marktop { position: sticky; top: -14px; z-index: 6; background: #E1EADB; padding-top: 14px; margin-top: -14px; }
   body.markfloat #markScreen .marktop .markbar { margin-bottom: 0; padding-bottom: 12px; }
-  body.reading .markmode { display: none; }
   .markbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
   .markbody.side { grid-template-columns: minmax(0, 1fr) 330px; }
   .markside { position: sticky; top: 118px; display: flex; flex-direction: column; gap: 10px; background: var(--card); border-radius: 14px;
@@ -1110,10 +1096,6 @@
   .markside .chatlog { flex: 1; min-height: 60px; max-height: none; }
   .msidehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   @media (max-width: 1000px) { .markbody.side { grid-template-columns: minmax(0, 1fr); } .markside { position: static; max-height: 60vh; } }
-  /* Viewing: read-only, refreshed as they write. */
-  body.markview #paper, body.markview #margin, body.markview .arrowsvg { pointer-events: none; }
-  body.markview #paper { caret-color: transparent; cursor: default; }
-  body.markview #fmtB, body.markview #fmtI { display: none; }
   #sheet.noend .endwrap { display: none; }
   #sheet.nomarks #margin, #sheet.nomarks .arrowsvg, #sheet.nomarks .mnum, #sheet.nomarks .ins, #sheet.nomarks #orphanBox { display: none !important; }
   #sheet.nomarks .paper .hl { background: none; border-bottom: 0; }
@@ -1805,7 +1787,7 @@
 <section class="screen page" id="markScreen" hidden>
   <div class="card">
     <div class="marktop">
-    <div class="markclosebar"><span class="markmode" id="markMode" role="group" aria-label="Grade or monitor"><span class="knob" aria-hidden="true"></span><button type="button" data-mode="grade">Grade</button><button type="button" data-mode="view">Monitor</button></span><button type="button" class="iconbtn markclose" id="markClose" aria-label="Close" title="Close">&times;</button></div>
+    <div class="markclosebar"><button type="button" class="iconbtn markclose" id="markClose" aria-label="Close" title="Close">&times;</button></div>
     <div class="markbar">
       <button class="linkish" id="markBack">&larr; Back</button>
       <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
@@ -1814,6 +1796,8 @@
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
+      <button class="btn small ghost toggle" id="markChatBtn" type="button" aria-pressed="false" hidden>Live comments</button>
+      <button class="btn small ghost toggle" id="markEndBtn" type="button" aria-pressed="true" hidden>End comment</button>
       <button class="btn small ghost toggle" id="markMarksBtn" type="button" aria-pressed="true" hidden>My comments</button>
       <button class="btn small ghost" id="markDrafts" type="button" hidden>Old drafts</button>
       <button class="btn small ghost" id="markWlog" type="button" hidden>Writing log</button>
@@ -7692,7 +7676,7 @@
     piece.marks = piece.marks || [];
     resetUndo();
     // A new opening starts in its mode with that mode's toggles; Previous / Next keep them.
-    if (mode !== 'keep') { markMode = mode === 'view' ? 'view' : 'grade'; markShow = { marks: true }; }
+    if (mode === 'view' && !markShow.chat) { markShow.chat = true; keepMarkShow(); }
     showPieceHead();
     loadSideChat();
     drawGradePick();
@@ -7783,52 +7767,54 @@
     } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
   });
   // ---------------------------------------------------------------------
-  // One window, two modes (Jake, 2026-10-23): Grade (mark it up; the end
-  // comment and stock comments showing, live comments hidden) and Monitor
-  // (read-only, refreshed as they write; live comments showing, the end
-  // comment hidden). Each toggle can be flipped in either mode; switching
-  // modes (or opening the window) puts them back to that mode's defaults.
+  // One window for grading and watching a student write (Jake, 2026-10-23):
+  // no modes; Live comments (a panel at the right), End comment (with stock
+  // comments, rubric and grade) and My comments each open or close, and stay
+  // as left on this device (luddite.markShow). Opening a writing student
+  // from their row or the Live comments widget opens Live comments too.
+  // While they're writing, their writing refreshes every 8 seconds, but only
+  // when you're not in the middle of a comment (nothing unsaved, nothing open).
   // ---------------------------------------------------------------------
-  var markMode = 'grade', markShow = { marks: true }, markTimer = null;
-  function setMarkMode(m) {
-    markMode = m === 'view' ? 'view' : 'grade';
-    markShow = { marks: true };
-    syncMarkPanels();
-    if (markMode === 'view') refreshMarkView();
-    loadSideChat();
-  }
+  var markShow = { chat: false, end: true, marks: true }, markTimer = null;
+  try { var ms0 = JSON.parse(load('luddite.markShow') || 'null'); if (ms0) markShow = { chat: !!ms0.chat, end: ms0.end !== false, marks: ms0.marks !== false }; } catch (e) {}
+  function keepMarkShow() { store('luddite.markShow', JSON.stringify(markShow)); }
   function syncMarkPanels() {
-    var view = markMode === 'view' && !reading;
-    document.body.classList.toggle('markview', view);
-    $('markMode').classList.toggle('view', markMode === 'view');
-    each('#markMode button', function (b) { b.classList.toggle('on', b.dataset.mode === markMode); b.setAttribute('aria-pressed', b.dataset.mode === markMode ? 'true' : 'false'); });
     var who = !reading && piece && piece.code && piece.sub;
-    if (!reading) $('paper').contentEditable = view ? 'false' : 'true';
+    // With your comments hidden there's nothing to mark up on, so the paper is read-only.
+    if (!reading) $('paper').contentEditable = markShow.marks ? 'true' : 'false';
     var tg = function (id, on, shown) { var b = $(id); b.hidden = !shown; b.setAttribute('aria-pressed', on ? 'true' : 'false'); };
-    tg('markMarksBtn', markShow.marks, view);
-    // Live comments only in Monitor; the end comment, stock comments, rubric and grade only in Grade.
-    $('markSide').hidden = !(who && view);
+    tg('markChatBtn', markShow.chat, who);
+    tg('markEndBtn', markShow.end, !reading);
+    tg('markMarksBtn', markShow.marks, !reading);
+    $('markSide').hidden = !(who && markShow.chat);
     $('markBody').classList.toggle('side', !$('markSide').hidden);
-    $('sheet').classList.toggle('noend', view);
-    $('sheet').classList.toggle('nomarks', view && !markShow.marks);
+    $('sheet').classList.toggle('noend', !reading && !markShow.end);
+    $('sheet').classList.toggle('nomarks', !reading && !markShow.marks);
     clearInterval(markTimer); markTimer = null;
-    if (who && view) markTimer = setInterval(markTick, 8000);
+    if (who && (markShow.chat || piece.early || piece.live)) markTimer = setInterval(markTick, 8000);
   }
   function markTick() {
     if ($('markScreen').hidden || !piece) { clearInterval(markTimer); markTimer = null; return; }
     if (document.hidden) return;
-    if (markMode === 'view' && !reading) refreshMarkView(); else loadSideChat();
+    if (!reading && (piece.early || piece.live)) refreshMarkView(); else loadSideChat();
   }
-  // Monitor: their writing as it is now, with every comment on it.
+  // Their writing as it is now, with every comment on it -- never while a comment is being made or saved.
   var markViewBusy = false;
+  function markingNow() {
+    var a = document.activeElement, sel = window.getSelection();
+    var typing = a && $('sheet').contains(a) && a !== $('paper'); // a comment, the end comment, the grade
+    var selecting = sel && !sel.isCollapsed && $('paper').contains(sel.anchorNode);
+    return !!(markSaveTimer || marksInFlight || !$('markPop').hidden || !$('markTools').hidden || typing || selecting);
+  }
   async function refreshMarkView() {
     var p = piece;
-    if (markViewBusy || !p || reading || markMode !== 'view') return;
+    if (markViewBusy || !p || reading) return;
+    if (markingNow()) { loadSideChat(); return; }
     markViewBusy = true;
     try {
       var ep = /^early:([^:]+):(.+)$/.exec(p.id);
       var got = ep ? (await api('/luddite/early?code=' + encodeURIComponent(ep[1]) + '&sub=' + encodeURIComponent(ep[2]))).piece : (await api('/luddite/sub?id=' + encodeURIComponent(p.id))).sub;
-      if (piece === p && markMode === 'view' && got && (got.text !== p.text || JSON.stringify(got.marks) !== JSON.stringify(p.marks) || got.endComment !== p.endComment || got.grade !== p.grade)) {
+      if (piece === p && !markingNow() && got && (got.text !== p.text || JSON.stringify(got.marks) !== JSON.stringify(p.marks) || got.endComment !== p.endComment || got.grade !== p.grade)) {
         got.marks = got.marks || [];
         piece = got;
         resetUndo();
@@ -7842,23 +7828,22 @@
     } catch (e) {}
     markViewBusy = false;
   }
-  each('#markMode button', function (b) { b.addEventListener('click', function () {
-    if (b.dataset.mode === markMode) return;
-    flushMarks(); hideTools(); closePop();
-    setMarkMode(b.dataset.mode);
-  }); });
-  $('markMarksBtn').addEventListener('click', function () { markShow.marks = !markShow.marks; syncMarkPanels(); });
+  var markToggle = function (id, k) { $(id).addEventListener('click', function () {
+    if (k === 'marks') { flushMarks(); hideTools(); closePop(); }
+    markShow[k] = !markShow[k]; keepMarkShow(); syncMarkPanels(); if (k === 'chat') loadSideChat();
+  }); };
+  markToggle('markChatBtn', 'chat'); markToggle('markEndBtn', 'end'); markToggle('markMarksBtn', 'marks');
   // The live comments panel: the thread with this student (reading it marks it read).
   var sideChatFor = '';
   async function loadSideChat() {
     var p = piece;
-    if (!p || reading || !p.code || !p.sub || markMode !== 'view') return;
+    if (!p || reading || !p.code || !p.sub || !markShow.chat) return;
     var key = p.code + ':' + p.sub;
     if (sideChatFor !== key) { sideChatFor = key; $('sideChatLog').dataset.sig = ''; $('sideChatLog').innerHTML = ''; $('sideChatInput').value = ''; }
     var msgs;
     try { msgs = (await api('/luddite/chat?code=' + encodeURIComponent(p.code) + '&sub=' + encodeURIComponent(p.sub))).msgs || []; }
     catch (e) { msgs = p.chat || []; }
-    if (piece !== p || markMode !== 'view') return;
+    if (piece !== p || !markShow.chat) return;
     drawChat($('sideChatLog'), msgs, 'teacher');
     $('sideChatNone').hidden = !!msgs.length;
     var st = teacherRoom && teacherRoom.code === p.code && teacherRoom.students[p.sub];
@@ -8036,7 +8021,7 @@
     hideTools(); closePop();
     $('markScreen').hidden = true;
     $('markShade').hidden = true;
-    document.body.classList.remove('markfloat', 'markview');
+    document.body.classList.remove('markfloat');
     clearInterval(markTimer); markTimer = null;
     // (the page under it is redrawn once the last comments are saved, so it shows them)
     Promise.resolve(saving).then(function () {
