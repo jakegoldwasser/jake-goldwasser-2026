@@ -733,6 +733,11 @@
   .menu .pop button.danger { color: var(--tomato-deep); border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
   .menu .pop button.danger:hover { background: var(--tomato-tint); }
   /* The prompt stays pinned above the writing, however far they scroll. */
+  /* Past their first draft, the writing page says which draft this is, at the very top. */
+  .drafttag { flex: none; display: flex; align-items: baseline; justify-content: center; gap: 12px; padding: 10px 18px; background: var(--mint-tint); border-bottom: 1.5px solid var(--mint); color: var(--mint-deep); }
+  .drafttag b { font: 600 25px var(--ui); }
+  .drafttag span { font: 400 14px var(--ui); }
+  .sheethead .draftpill { display: inline-block; margin-left: 10px; padding: 2px 12px; border-radius: 999px; background: var(--mint-tint); color: var(--mint-deep); font: 600 14px var(--ui); vertical-align: middle; }
   #promptBar { flex: none; max-height: 34vh; overflow-y: auto; display: flex; gap: 14px; align-items: flex-start; padding: 12px 18px; background: var(--sun-tint); color: var(--ink); border-bottom: 1.5px solid var(--edge); }
   /* A prompt longer than the bar says so, pinned at the bar's foot, until it's read to the end. */
   #promptBar .pmore { position: sticky; bottom: 0; display: block; margin: 8px auto 0; padding: 7px 16px; border: 0; border-radius: 999px; cursor: pointer;
@@ -1402,6 +1407,7 @@
 
 <!-- Writing -->
 <section id="writeScreen" hidden>
+  <div class="drafttag" id="draftTag" hidden><b id="draftTagN"></b><span id="draftTagSub"></span></div>
   <div id="promptBar" hidden>
     <div class="ptext"><span class="pk">Prompt</span><span id="promptText"></span><button type="button" class="pmore" id="promptMore" hidden>&darr; More of the prompt below: scroll to read it all</button></div>
     <button type="button" id="promptClose" aria-label="Close the prompt" title="Close the prompt">&times;</button>
@@ -1831,7 +1837,7 @@
       </div>
     </div>
     <aside class="markside no-print" id="markSide" hidden>
-      <div class="msidehead"><b>Live Comments</b><button class="btn small ghost" id="sideUnread" type="button" title="Show this student’s live comments as new again, and close">Mark as unread</button></div>
+      <div class="msidehead"><b>Live Comments</b><span class="row" style="margin:0;gap:6px"><button class="btn small ghost" id="sideUnread" type="button" title="Show this student’s live comments as new again, and close">Mark as unread</button><button type="button" class="iconbtn" id="sideMin" aria-label="Minimize live comments" title="Minimize (Live comments in the bar brings it back)">&minus;</button></span></div>
       <div class="chatlog" id="sideChatLog"></div>
       <p class="fine" id="sideChatNone" hidden>No live comments yet.</p>
       <form class="chatsend wrap" id="sideChatForm" autocomplete="off"><textarea class="field" id="sideChatInput" rows="2" maxlength="1000" aria-label="Your live comment" placeholder="A live comment to this student"></textarea><button class="btn small" type="submit">Send</button></form>
@@ -3881,6 +3887,9 @@
     $('myGradingBtn').hidden = !on;
     if (!on && !$('myGradingBox').hidden) closeMyGrading();
     $('homePrintW').hidden = !(writing && mode === 'room' && !previewing && roomInfo && roomInfo.homePrint);
+    var nd = writing && mode === 'room' && !previewing && roomInfo ? (roomInfo.drafts || []).length : 0;
+    $('draftTag').hidden = !nd;
+    if (nd) { $('draftTagN').textContent = 'Draft ' + (nd + 1); $('draftTagSub').textContent = 'Draft ' + nd + ' is kept as it was: reread it under Drafts'; }
     var dOn = writing && mode === 'room' && !previewing && roomInfo;
     $('draftsBtn').hidden = !dOn;
     if (dOn) $('draftsBtn').textContent = (roomInfo.drafts || []).length ? 'Drafts · on Draft ' + ((roomInfo.drafts || []).length + 1) : 'Drafts';
@@ -7733,6 +7742,9 @@
   }
   function showPieceHead() {
     $('markWho').textContent = who(piece.name, piece.email);
+    var dst = !reading && teacherRoom && teacherRoom.code === piece.code && teacherRoom.students && teacherRoom.students[piece.sub];
+    var dn = dst ? (dst.drafts || []).length : 0;
+    if (dn) $('markWho').appendChild(el('span', 'draftpill', 'Draft ' + (dn + 1)));
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
       ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = false;
@@ -7838,6 +7850,7 @@
     if (k === 'marks') { flushMarks(); hideTools(); closePop(); }
     markShow[k] = !markShow[k]; keepMarkShow(); syncMarkPanels(); if (k === 'chat') loadSideChat();
   }); };
+  $('sideMin').addEventListener('click', function () { markShow.chat = false; keepMarkShow(); syncMarkPanels(); });
   markToggle('markChatBtn', 'chat'); markToggle('markEndBtn', 'end'); markToggle('markMarksBtn', 'marks');
   // The live comments panel: the thread with this student (reading it marks it read).
   var sideChatFor = '';
