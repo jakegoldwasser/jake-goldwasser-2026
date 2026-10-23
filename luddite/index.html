@@ -1796,6 +1796,10 @@
     <div class="printopts">
       <label class="printopt" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="duplex"> Two-sided: each paper on its own sheets <span class="q" tabindex="0" data-tip="Adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></label>
+      <span class="printopt sizeopt" id="printDraftsRow" hidden>Drafts
+        <span class="segctl" id="printDrafts"><button type="button" data-drafts="final">Final only</button><button type="button" data-drafts="all">All drafts</button></span>
+        <span class="q" tabindex="0" data-tip="Final only: each student's draft marked final (else the one they're writing). All drafts: every draft, oldest first, each with your comments on it.">?</span>
+      </span>
       <span class="printopt sizeopt">Lined margin
         <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
       </span>
@@ -1967,7 +1971,7 @@
   <div class="card">
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="dvTitle"></h2><span class="fine" id="dvMeta" style="margin:0"></span></div>
     <div class="livegrid"><div class="liveread" id="dvText"></div><div class="mgnotes" id="dvNotes"></div></div>
-    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn small ghost" id="dvName" type="button" hidden>Name this draft…</button></span><button class="btn ghost" id="dvClose" type="button">Back to my writing</button></div>
+    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn small ghost" id="dvName" type="button" hidden>Name this draft…</button><button class="btn small ghost" id="dvFinal" type="button" hidden>Mark as final</button></span><button class="btn ghost" id="dvClose" type="button">Back to my writing</button></div>
   </div>
 </div>
 
@@ -3496,7 +3500,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.draftNames = d.room.draftNames; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.draftNames = d.room.draftNames; roomInfo.finalDraft = d.room.finalDraft; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -3943,7 +3947,7 @@
     $('homePrintW').hidden = !(writing && mode === 'room' && !previewing && roomInfo && roomInfo.homePrint);
     var nd = writing && mode === 'room' && !previewing && roomInfo ? (roomInfo.drafts || []).length : 0;
     $('draftTag').hidden = !nd;
-    if (nd) { $('draftTagN').textContent = draftLabel(nd + 1, roomInfo.draftNames); $('draftTagSub').textContent = 'Draft ' + nd + ' is kept as it was: open it from the drafts menu at the bottom'; }
+    if (nd) { $('draftTagN').textContent = draftLabel(nd + 1, roomInfo.draftNames, roomInfo.finalDraft); $('draftTagSub').textContent = 'Draft ' + nd + ' is kept as it was: open it from the drafts menu at the bottom'; }
     var dOn = writing && mode === 'room' && !previewing && roomInfo;
     $('draftsBtn').hidden = !dOn;
     if (dOn) drawDraftMenu(); else $('draftsBtn').open = false;
@@ -4027,13 +4031,23 @@
   // (/luddite/newdraft). Students reread theirs (the marks only if shared);
   // teachers open any from the student's row or the grading window.
   // ---------------------------------------------------------------------
-  var draftsCtx = null; // { code, sub (a teacher's view), name, student }
-  function draftLabel(n, names) { var nm = names && names[n]; return 'Draft ' + n + (nm ? ' · ' + nm : ''); }
+  var draftsCtx = null, dvShowing = 0; // { code, sub (a teacher's view), name, student }
+  function draftLabel(n, names, final) { var nm = names && names[n]; return 'Draft ' + n + (nm ? ' · ' + nm : '') + (final && final === n ? ' · Final' : ''); }
+  // A student marks one draft as final (n = 0 takes the mark away).
+  async function markFinal(n) {
+    try {
+      var d = await api('/luddite/draftfinal', { code: roomCode, n: n });
+      if (roomInfo) roomInfo.finalDraft = d.room.finalDraft;
+      syncClassWork();
+      if (!$('draftView').hidden && draftsCtx && draftsCtx.student && dvShowing) openDraft(dvShowing);
+    } catch (e) { tell('Couldn’t Mark It', 'Check your connection and try again.'); }
+  }
   // The writing page's Drafts dropdown: each earlier draft (opens it, read-only),
   // the one they're writing, Name this draft…, and Start a new draft….
   function drawDraftMenu() {
     var list = (roomInfo && roomInfo.drafts) || [], names = (roomInfo && roomInfo.draftNames) || {}, now = list.length + 1;
-    $('draftsLabel').textContent = draftLabel(now, names) + ' ▴';
+    var fin = (roomInfo && roomInfo.finalDraft) || 0;
+    $('draftsLabel').textContent = draftLabel(now, names, fin) + ' ▴';
     var pop = $('draftsPop');
     pop.innerHTML = '';
     pop.appendChild(el('div', 'popsec', 'Your Drafts'));
@@ -4045,10 +4059,11 @@
       pop.appendChild(b);
       return b;
     };
-    list.forEach(function (d) { item(draftLabel(d.n, names), plural(d.words || 0, 'word', 'words') + (d.shared ? ' · comments shared' : ''), null, function () { draftsCtx = { code: roomCode, student: true }; openDraft(d.n); }); });
-    item(draftLabel(now, names), 'writing now', 'here', null);
+    list.forEach(function (d) { item(draftLabel(d.n, names, fin), plural(d.words || 0, 'word', 'words') + (d.shared ? ' · comments shared' : ''), null, function () { draftsCtx = { code: roomCode, student: true }; openDraft(d.n); }); });
+    item(draftLabel(now, names, fin), 'writing now', 'here', null);
     pop.appendChild(el('div', 'popsec', 'This Draft'));
     item(names[now] ? 'Rename this draft…' : 'Name this draft…', null, null, function () { nameDraft(now); });
+    item(fin === now ? 'Unmark as final' : 'Mark this draft as final', null, null, function () { markFinal(fin === now ? 0 : now); });
     item('Start a new draft…', null, null, startNewDraft);
   }
   async function nameDraft(n) {
@@ -4059,7 +4074,7 @@
       var d = await api('/luddite/draftname', { code: roomCode, n: n, name: name });
       if (roomInfo) roomInfo.draftNames = d.room.draftNames;
       syncClassWork();
-      if (!$('draftView').hidden && draftsCtx && draftsCtx.student) $('dvTitle').textContent = draftLabel(n, roomInfo.draftNames);
+      if (!$('draftView').hidden && draftsCtx && draftsCtx.student) $('dvTitle').textContent = draftLabel(n, roomInfo.draftNames, roomInfo.finalDraft);
     } catch (e) { tell('Couldn’t Name It', 'Check your connection and try again.'); }
   }
   async function openDrafts(ctx) {
@@ -4074,18 +4089,19 @@
     catch (e) { $('dbList').innerHTML = ''; $('dbList').appendChild(el('p', 'fine', 'Couldn’t load the drafts. Try again.')); return; }
     if (draftsCtx !== ctx) return;
     draftsCtx.names = data.names || {};
+    draftsCtx.final = data.final || 0;
     drawDrafts(data.drafts || []);
   }
   function drawDrafts(list) {
     var ctx = draftsCtx, now = list.length + 1;
-    $('dbMeta').textContent = ctx.student ? 'You’re writing ' + draftLabel(now, ctx.names) : (ctx.name ? ctx.name + ' · ' : '') + 'writing ' + draftLabel(now, ctx.names);
+    $('dbMeta').textContent = ctx.student ? 'You’re writing ' + draftLabel(now, ctx.names, ctx.final) : (ctx.name ? ctx.name + ' · ' : '') + 'writing ' + draftLabel(now, ctx.names, ctx.final);
     var box = $('dbList');
     box.innerHTML = '';
     if (!list.length) box.appendChild(el('p', 'fine', ctx.student ? 'This is your first draft.' : 'No earlier drafts.'));
     list.slice().reverse().forEach(function (d) {
       var b = el('button', 'cwitem');
       b.type = 'button';
-      b.appendChild(el('b', null, draftLabel(d.n, ctx.names)));
+      b.appendChild(el('b', null, draftLabel(d.n, ctx.names, ctx.final)));
       b.appendChild(el('span', null, plural(d.words || 0, 'word', 'words') + ' · kept ' + dayClock(d.at) + (d.shared ? ' · grading shared' : d.graded && !ctx.student ? ' · graded' : '')));
       b.addEventListener('click', function () { openDraft(d.n); });
       box.appendChild(b);
@@ -4097,9 +4113,14 @@
   async function openDraft(n) {
     var ctx = draftsCtx;
     var dnames = ctx.student ? (roomInfo && roomInfo.draftNames) : ctx.names;
-    $('dvTitle').textContent = draftLabel(n, dnames);
+    var dfin = ctx.student ? (roomInfo && roomInfo.finalDraft) : ctx.final;
+    dvShowing = n;
+    $('dvTitle').textContent = draftLabel(n, dnames, dfin);
     $('dvName').hidden = !ctx.student;
     $('dvName').onclick = function () { nameDraft(n); };
+    $('dvFinal').hidden = !ctx.student;
+    $('dvFinal').textContent = dfin === n ? 'Unmark as final' : 'Mark as final';
+    $('dvFinal').onclick = function () { markFinal(dfin === n ? 0 : n); };
     $('dvBack').hidden = !!ctx.student;
     $('dvClose').textContent = ctx.student ? 'Back to my writing' : 'Close';
     $('dvMeta').textContent = '';
@@ -7178,7 +7199,7 @@
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
-    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · ' + draftLabel(s.drafts.length + 1, s.draftNames)));
+    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · ' + draftLabel(s.drafts.length + 1, s.draftNames, s.finalDraft) + (s.finalDraft && s.finalDraft !== s.drafts.length + 1 ? ' · Final: ' + draftLabel(s.finalDraft, s.draftNames) : '')));
     // Words that came faster than anyone types (see the writing log).
     if (s && s.bursts) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
     w.appendChild(line);
@@ -7853,7 +7874,8 @@
     $('markWho').textContent = who(piece.name, piece.email);
     var dst = !reading && teacherRoom && teacherRoom.code === piece.code && teacherRoom.students && teacherRoom.students[piece.sub];
     var dn = dst ? (dst.drafts || []).length : 0;
-    if (dn) $('markWho').appendChild(el('span', 'draftpill', draftLabel(dn + 1, dst.draftNames)));
+    if (dn) $('markWho').appendChild(el('span', 'draftpill', draftLabel(dn + 1, dst.draftNames, dst.finalDraft)));
+    if (dn && dst.finalDraft && dst.finalDraft !== dn + 1) $('markWho').appendChild(el('span', 'draftpill', 'Final: ' + draftLabel(dst.finalDraft, dst.draftNames)));
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
       ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = false;
@@ -9502,7 +9524,7 @@
     var box = el('div', 'pp');
     var head = el('div', 'pphead');
     head.appendChild(el('b', null, who(p.name, p.email)));
-    head.appendChild(el('span', null, (p.roomTitle || '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
+    head.appendChild(el('span', null, (p.roomTitle || '') + (p.draftLabel ? ' · ' + p.draftLabel : '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
     box.appendChild(head);
     if (p.grade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
     var text = p.text, orphans = (p.marks || []).filter(function (m) { return m.orphan; }), marks = (p.marks || []).filter(function (m) { return !m.orphan; });
@@ -9609,6 +9631,45 @@
   }
   var PRINT_RUBRICS_KEY = 'luddite.printRubrics';
   var printDrawn = [], printMissing = 0, printDrawSeq = 0;
+  // Drafts on the print page: each paper's student's drafts (GET /luddite/drafts),
+  // fetched once. Final only (the default) prints the draft they marked final,
+  // else the paper; All drafts prints every earlier draft, then the paper.
+  var printDraftInfo = {}, printDraftCache = {};
+  async function printDraftsOf(p) {
+    var key = p.code + ':' + p.sub;
+    if (!p.code || !p.sub) return null;
+    if (printDraftInfo[key] === undefined) {
+      try { printDraftInfo[key] = await api('/luddite/drafts?code=' + encodeURIComponent(p.code) + '&sub=' + encodeURIComponent(p.sub)); }
+      catch (e) { printDraftInfo[key] = null; }
+    }
+    return printDraftInfo[key];
+  }
+  async function printOldDraft(p, n, info) {
+    var key = p.code + ':' + p.sub + ':' + n;
+    if (!printDraftCache[key]) {
+      var d = (await api('/luddite/drafts?code=' + encodeURIComponent(p.code) + '&sub=' + encodeURIComponent(p.sub) + '&n=' + n)).draft;
+      printDraftCache[key] = { id: p.id + ':d' + n, code: p.code, sub: p.sub, name: p.name, email: p.email, roomTitle: p.roomTitle, at: d.at, words: d.words, text: d.text || '',
+        marks: d.marks || [], endComment: d.endComment || '', grade: d.grade || '', rubric: d.rubric || null, rubricScores: d.rubricScores || [], roomRubric: p.roomRubric,
+        draftLabel: draftLabel(n, info.names, info.final) };
+    }
+    return printDraftCache[key];
+  }
+  async function printPapers() {
+    var all = printOpts.drafts === 'all', out = [];
+    var infos = await Promise.all(printDrawn.map(printDraftsOf));
+    $('printDraftsRow').hidden = !infos.some(function (x) { return x && (x.drafts || []).length; });
+    for (var i = 0; i < printDrawn.length; i++) {
+      var p = printDrawn[i], info = infos[i], olds = (info && info.drafts) || [];
+      if (!olds.length) { out.push(p); continue; }
+      var now = olds.length + 1, cur = Object.assign({}, p, { draftLabel: draftLabel(now, info.names, info.final) });
+      try {
+        if (all) { for (var j = 0; j < olds.length; j++) out.push(await printOldDraft(p, olds[j].n, info)); out.push(cur); }
+        else if (info.final && info.final < now) out.push(await printOldDraft(p, info.final, info));
+        else out.push(cur);
+      } catch (e) { out.push(cur); }
+    }
+    return out;
+  }
   async function drawPrintBody() {
     var seq = ++printDrawSeq, body = $('printBody');
     var withRubrics = $('printRubrics').checked && !$('printRubricsRow').hidden;
@@ -9616,7 +9677,9 @@
     body.classList.toggle('double', !!printOpts.double);
     body.style.setProperty('--pp-size', (printOpts.size || 11.5) + 'pt');
     var waits = [];
-    printDrawn.forEach(function (p) {
+    var papers = await printPapers();
+    if (seq !== printDrawSeq) return;
+    papers.forEach(function (p) {
       var paperBox = staticPaper(p);
       body.appendChild(paperBox);
       if (withRubrics && paperRubric(p)) {
@@ -9625,7 +9688,7 @@
         waits.push(r.ready);
       }
     });
-    var status = plural(printDrawn.length, 'paper', 'papers') + (printMissing ? ' (' + printMissing + ' couldn’t be loaded)' : '');
+    var status = plural(printDrawn.length, 'paper', 'papers') + (papers.length !== printDrawn.length ? ' · ' + plural(papers.length, 'draft', 'drafts') : '') + (printMissing ? ' (' + printMissing + ' couldn’t be loaded)' : '');
     if (waits.length) {
       $('printGo').disabled = true;
       $('printStatus').textContent = 'Getting the rubrics ready…';
@@ -9802,6 +9865,7 @@
     // Lined margin: none, narrow (2.1in) or wide (4in, for long comments); true was narrow.
     var lined = printOpts.lined === 'wide' ? 'wide' : printOpts.lined ? 'narrow' : '';
     each('#printLined button', function (b) { b.classList.toggle('on', b.dataset.lined === lined); });
+    each('#printDrafts button', function (b) { b.classList.toggle('on', b.dataset.drafts === (printOpts.drafts === 'all' ? 'all' : 'final')); });
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
@@ -9812,6 +9876,7 @@
   each('#printScreen [data-opt]', function (c) { c.addEventListener('change', function () { setPrintOpt(c.dataset.opt, c.checked); }); });
   each('#printSize button', function (b) { b.addEventListener('click', function () { setPrintOpt('size', Number(b.dataset.size)); }); });
   each('#printLined button', function (b) { b.addEventListener('click', function () { setPrintOpt('lined', b.dataset.lined || false); }); });
+  each('#printDrafts button', function (b) { b.addEventListener('click', function () { setPrintOpt('drafts', b.dataset.drafts); }); });
   drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
     store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
@@ -9828,7 +9893,7 @@
     $('printRubricsRow').hidden = true;
     $('printGo').disabled = $('printPdf').disabled = true;
     drawPrintOpts();
-    printDrawn = []; printDrawSeq++;
+    printDrawn = []; printDrawSeq++; printDraftInfo = {}; printDraftCache = {};
     $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
     if (!ids.length) { $('printPreview').appendChild(el('div', 'empty', 'There are no papers to print yet.')); return; }
     var done = 0, drawn = [];
