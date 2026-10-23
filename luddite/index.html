@@ -420,7 +420,7 @@
   /* The one big button at the foot of the writing page: impossible to miss. */
   .handinbar { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
   .handinbar { gap: 12px; flex-wrap: wrap; }
-  .handinbar #leaveNowBtn, .handinbar #classWorkBtn { min-width: 0; padding: 16px 32px; }
+  .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn { min-width: 0; padding: 16px 32px; }
   .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
   .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
   .cwitem:hover { background: var(--hover); }
@@ -1123,6 +1123,15 @@
   .livechat h3 { margin: 0 0 8px; font-size: 14px; }
   .chatsend.wrap { align-items: flex-end; }
   .chatsend textarea.field { resize: none; overflow-y: auto; min-height: 66px; max-height: 40vh; line-height: 1.45; border-radius: 12px; padding: 10px 12px; }
+  /* Shared grading, read on the writing page: the writing marked up, the numbered comments beside it. */
+  #myGradingBox .card { max-width: 1120px !important; }
+  .mgmark { background: var(--pen-wash); box-shadow: inset 0 -2px 0 var(--pen); }
+  .mgstrike { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; }
+  .mgins { color: var(--pen); text-decoration: none; }
+  .mgnum { color: var(--pen); font: 600 12px var(--ui); vertical-align: super; line-height: 0; }
+  .mgnotes { max-height: 66vh; overflow-y: auto; padding-left: 18px; border-left: 1.5px solid var(--rule); }
+  .mgnotes p { color: var(--pen); margin: 0 0 12px; white-space: pre-wrap; }
+  .mgnotes h3 { margin: 14px 0 6px; font-size: 14px; }
   @media (max-width: 820px) { .livegrid { grid-template-columns: 1fr; } .livegrid .livechat { border-left: 0; padding: 12px 0 0; border-top: 1.5px solid var(--rule); } .livegrid .liveread { max-height: 44vh; } }
   /* Live comments, bottom right of a session's page while it runs. */
   .livedock { position: fixed; right: 16px; bottom: 16px; z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: var(--card); border: 1.5px solid var(--edge); border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.14); }
@@ -1360,7 +1369,7 @@
       <span id="leaves"></span>
     </div>
   </div>
-  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
+  <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
   <!-- Messages with the teacher: a window in the right margin; hidden, it
        shrinks to a tab that shows a bubble when the teacher writes -->
   <aside class="msgside" id="msgSide" hidden aria-label="Live comments">
@@ -1838,6 +1847,15 @@
     <div class="cwlist" id="cwList"></div>
     <div class="liveread" id="cwText" hidden></div>
     <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
+  </div>
+</div>
+
+<!-- Grading the teacher has shared, read on the writing page without leaving it -->
+<div class="handin livebox" id="myGradingBox" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0">Your Teacher’s Comments</h2><span class="fine" id="mgMeta" style="margin:0"></span></div>
+    <div class="livegrid"><div class="liveread" id="mgText"></div><div class="mgnotes" id="mgNotes"></div></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="mgClose" type="button">Back to my writing</button></div>
   </div>
 </div>
 
@@ -3320,7 +3338,7 @@
       if (body.text !== undefined) lastBackedUp = body.text;
       noteNow(d.room.now);
       chatNote(d.room);
-      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; if (writing) { drawPrompt(); syncClassWork(); } }
+      if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; if (writing) { drawPrompt(); syncClassWork(); } }
       // Paused by the teacher or a proctor: out of the writing until they resume it.
       if (roomInfo && writing && d.room.paused && !timeUpBusy) { finishWriting(showReady); return d.room; }
       // The teacher ended the session (or closed this paper): hand in now, with
@@ -3736,7 +3754,84 @@
     $('classWorkBtn').hidden = !on;
     if (!on && !$('classWorkBox').hidden) closeClassWork();
     syncRubricW();
+    syncMyGrading();
   }
+  // Grading the teacher has shared with them (roomInfo.sharedId: their paper,
+  // or their writing so far), readable while they write: the writing as the
+  // teacher marked it, the comments beside it, the grade after five minutes
+  // with them (counted by /luddite/mypaper, as on their own page).
+  var mgTimer = null, mgPaper = null;
+  function syncMyGrading() {
+    var on = writing && mode === 'room' && !previewing && roomInfo && roomInfo.sharedId;
+    $('myGradingBtn').hidden = !on;
+    if (!on && !$('myGradingBox').hidden) closeMyGrading();
+  }
+  async function loadMyGrading(ping) {
+    var id = roomInfo && roomInfo.sharedId;
+    if (!id) return;
+    try { mgPaper = (ping ? await api('/luddite/mypaper', { id: id }) : await api('/luddite/mypaper?id=' + encodeURIComponent(id))).paper; }
+    catch (e) { if (!mgPaper) $('mgText').textContent = 'Couldn’t load the comments. Try again.'; return; }
+    drawMyGrading();
+  }
+  function drawMyGrading() {
+    var p = mgPaper, txt = $('mgText'), notes = $('mgNotes');
+    if (!p) return;
+    var sig = JSON.stringify([p.text, p.marks, p.endComment, p.grade, p.gradeReady]);
+    if (txt.dataset.sig === sig) return;
+    txt.dataset.sig = sig;
+    txt.innerHTML = ''; notes.innerHTML = '';
+    var text = String(p.text || ''), n = text.length, marks = (p.marks || []).filter(function (m) { return !m.orphan; });
+    var numbered = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    var num = {};
+    numbered.forEach(function (m, i) { num[m.id] = i + 1; });
+    var cuts = {}; cuts[0] = 1; cuts[n] = 1;
+    var sc = fmtCuts(text, cuts);
+    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    var pts = Object.keys(cuts).map(Number).filter(function (x) { return x >= 0 && x <= n; }).sort(function (a, b) { return a - b; });
+    pts.forEach(function (a, k) {
+      // At this point: the numbers of comments ending here and arrows' ends, then words written in.
+      marks.forEach(function (m) {
+        if ((m.type === 'margin' && m.end === a) || (m.type === 'arrow' && (m.start === a || m.end === a))) txt.appendChild(el('span', 'mgnum', (m.type === 'arrow' ? '↳' : '') + num[m.id]));
+        if (m.type === 'insert' && m.start === a) txt.appendChild(el('ins', 'mgins', m.note));
+      });
+      var b = pts[k + 1];
+      if (b === undefined) return;
+      var words = '';
+      for (var i = a; i < b; i++) if (!sc.hide[i]) words += text.charAt(i);
+      if (!words) return;
+      var cls = FMT_CLS[sc.f[a]] || '';
+      if (marks.some(function (m) { return m.type === 'margin' && m.start <= a && m.end >= b; })) cls += ' mgmark';
+      if (marks.some(function (m) { return m.type === 'strike' && m.start <= a && m.end >= b; })) cls += ' mgstrike';
+      txt.appendChild(cls.trim() ? el('span', cls.trim(), words) : document.createTextNode(words));
+    });
+    numbered.forEach(function (m) { notes.appendChild(el('p', null, num[m.id] + '  ' + (m.note || ''))); });
+    var orphans = (p.marks || []).filter(function (m) { return m.orphan && m.type !== 'strike'; });
+    if (orphans.length) {
+      notes.appendChild(el('h3', null, 'Comments on Deleted Words'));
+      orphans.forEach(function (m) { notes.appendChild(el('p', null, '“' + m.orphan + '”  ' + (m.note || ''))); });
+    }
+    if ((p.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, p.endComment)); }
+    if (p.gradeReady) { if (p.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, p.grade)); } }
+    else notes.appendChild(el('p', 'fine', 'Read the comments first. Your grade appears after five minutes with them.'));
+    if (!notes.firstChild) notes.appendChild(el('p', 'fine', 'No comments yet.'));
+    $('mgMeta').textContent = p.roomTitle || '';
+  }
+  function openMyGrading() {
+    $('mgText').dataset.sig = '';
+    $('mgText').textContent = 'Loading…'; $('mgNotes').innerHTML = '';
+    mgPaper = null;
+    $('myGradingBox').hidden = false;
+    loadMyGrading(false);
+    clearInterval(mgTimer);
+    mgTimer = setInterval(function () { if (!document.hidden) loadMyGrading(true); }, 15000);
+  }
+  function closeMyGrading() {
+    clearInterval(mgTimer); mgTimer = null;
+    $('myGradingBox').hidden = true;
+    if (writing && !locked) pad.focus();
+  }
+  $('myGradingBtn').addEventListener('click', openMyGrading);
+  $('mgClose').addEventListener('click', closeMyGrading);
   // The rubric: a button beside Hand in while the teacher shows it (roomInfo.rubric).
   var rubricWShown = '';
   function syncRubricW() {
@@ -6284,6 +6379,7 @@
     }).filter(Boolean);
     roomReturned = {};
     papers.forEach(function (x) { if (x.returnedAt) roomReturned[x.id] = true; });
+    admitted.forEach(function (s) { if (s.earlyShared && !paperOf[s.sub]) roomReturned['early:' + room.code + ':' + s.sub] = true; });
     if (!$('markScreen').hidden && piece && markList.length < 2 && roomPaperIds.indexOf(piece.id) !== -1) { markList = roomPaperIds; drawPaperNav(piece.id); }
     // Only papers of students whose status is Handed in (not writing again) count.
     // Every paper, as its bubble shows it (a student writing again still has their one document).
@@ -6716,7 +6812,7 @@
       row.appendChild(bub);
     } else if (f.canWrite && s && s.sub) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
-      var early = button('Grade so far', 'statusbub ' + STATUS.grade[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
+      var early = button(s.earlyShared ? STATUS.shared[0] : 'Grade so far', 'statusbub ' + (s.earlyShared ? STATUS.shared[1] : STATUS.grade[1]), function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
       early.title = 'Comment and grade what they’ve written so far; it moves to their paper when they hand it in';
       row.appendChild(early);
     } else row.appendChild(el('span', 'statusbub none'));
@@ -7333,8 +7429,8 @@
   function showPieceHead() {
     $('markWho').textContent = who(piece.name, piece.email);
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
-      ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
-    $('markHandBack').hidden = !!piece.early;
+      ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
+    $('markHandBack').hidden = false;
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
     if (piece.link) $('markDrive').href = piece.link;
