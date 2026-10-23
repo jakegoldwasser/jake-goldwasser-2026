@@ -1017,9 +1017,11 @@ async function routeLuddite(event, method, path, info) {
   // -- live status for the teacher: leaving the page, and word counts.
   if (path === '/luddite/event' && method === 'PUT') {
     const code = cleanCode(body.code);
+    let prevSeen = 0;
     const room = await mutate('luddite:room:' + code, (r) => {
       const s = r && r.students[me.sub];
       if (!s || s.status !== 'admitted') return undefined;
+      prevSeen = s.lastSeen || 0;
       const next = { ...s, lastSeen: Date.now() };
       // `away` means off the page right now. `lockedOut` keeps them off it
       // until the teacher lets them back in (the room's 'unlock' action).
@@ -1038,7 +1040,7 @@ async function routeLuddite(event, method, path, info) {
     if (!room) throw new HttpError(404, 'no_room');
     // A backup of the writing so far (sent when it has changed), so a lost
     // laptop or a cleared browser doesn't lose the work.
-    if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') await saveDraft(code, me.sub, body.text);
+    if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') await saveDraft(code, me.sub, body.text, prevSeen);
     return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
@@ -1405,6 +1407,16 @@ async function routeLuddite(event, method, path, info) {
     const drafts = {};
     subs.forEach((sub, i) => { const d = got[i].state; drafts[sub] = d ? { text: d.text, at: d.at } : null; });
     return respond(200, { drafts });
+  }
+
+  // GET /luddite/wlog?code=&sub= -- a student's writing log in a session (see logWriting).
+  if (path === '/luddite/wlog' && method === 'GET') {
+    const room = await getRoom(cleanCode(q.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(q.sub || ''), st = room.students[sub];
+    if (!st) throw new HttpError(404, 'no_student');
+    const { state: log } = await readItem('luddite:wlog:' + room.code + ':' + sub);
+    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], first: log.first || 0 } : null, name: st.name || '', email: st.email || '' });
   }
 
   // ---- Grading a draft (see reanchorMarks) ----
@@ -2326,6 +2338,8 @@ async function handInFor(room, code, me, s, text, label, auto) {
     if (!(e instanceof HttpError)) throw e;
     driveError = e.message;
   }
+  // What they typed since the last backup goes in the writing log too.
+  await saveDraft(code, me.sub, text, s.lastSeen || 0).catch(() => {});
   const stored = text.length <= MAX_STORED_CHARS;
   if (!file && !stored) throw new HttpError(409, driveError);
   const at = Date.now();
@@ -2518,16 +2532,124 @@ function studentPaper(x) {
 // The latest backup of a student's writing in one session. If the writing
 // suddenly shrinks by more than half (a glitch, or a wiped page), the copy
 // before it is kept too, as `prev`.
-async function saveDraft(code, sub, raw) {
+async function saveDraft(code, sub, raw, prevSeen) {
   const text = String(raw).slice(0, MAX_STORED_CHARS);
+  let before = null, glitch = '';
   await mutate('luddite:draft:' + code + ':' + sub, (d) => {
-    if (d && d.text === text) return undefined;
+    before = d ? String(d.text || '') : '';
+    glitch = d && d.prev ? String(d.prev.text || '') : '';
+    if (d && d.text === text) { before = null; return undefined; }
     const at = Date.now();
     const shrank = d && d.text && text.length < d.text.length / 2;
     const prev = shrank ? { text: d.text, at: d.at } : d && d.prev;
     const keepPrev = prev && prev.text.length + text.length < 350000;
     return { code, sub, text, at, ...(keepPrev ? { prev } : {}) };
   });
+  if (before !== null) await logWriting(code, sub, before, text, prevSeen, glitch).catch((e) => console.warn('writing log failed', e.message));
+}
+
+// ---- The writing log (GET /luddite/wlog) ----
+// Each backup of a student's writing (every few seconds while it changes) is
+// compared word by word with the one before, and the change is added to
+// luddite:wlog:<code>:<sub> { mins: [{ t, add, del, mid, words, big }],
+// bursts: [{ at, words, wpm, quote }], recent: [deleted runs], first }:
+// per minute, the words added, the words deleted, the words changed earlier
+// in the text (revision, not just writing on at the end), the total, and the
+// biggest single run added. A burst is 25 or more words arriving at once
+// faster than anyone types (150+ words a minute), that weren't the student's
+// own words moved, copied or put back. The room's student entry counts them
+// (`bursts`, `burstAt`) for the session page.
+const WLOG_MAX_MINS = 3000;
+const BURST_WORDS = 25;
+const BURST_WPM = 150;
+const tokensOf = (t) => String(t || '').match(/\s+|[^\s]+/g) || [];
+const isWord = (t) => !/^\s/.test(t);
+// The insert and delete runs turning token list a into b (Myers' diff, after
+// the common start and end; past maxD edits, the middle is one delete and one insert).
+function tokenEdits(a, b, maxD = 400) {
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let sa = a.length, sb = b.length;
+  while (sa > p && sb > p && a[sa - 1] === b[sb - 1]) { sa--; sb--; }
+  const A = a.slice(p, sa), B = b.slice(p, sb), n = A.length, m = B.length;
+  const whole = () => [...(n ? [{ type: 'del', at: p, toks: A }] : []), ...(m ? [{ type: 'ins', at: p, toks: B }] : [])];
+  if (!n || !m) return whole();
+  const max = Math.min(n + m, maxD), off = max + 1, v = new Int32Array(2 * max + 3), trace = [];
+  let found = -1;
+  for (let d = 0; d <= max && found < 0; d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x = (k === -d || (k !== d && v[k - 1 + off] < v[k + 1 + off])) ? v[k + 1 + off] : v[k - 1 + off] + 1;
+      let y = x - k;
+      while (x < n && y < m && A[x] === B[y]) { x++; y++; }
+      v[k + off] = x;
+      if (x >= n && y >= m) { found = d; break; }
+    }
+  }
+  if (found < 0) return whole();
+  const ops = [];
+  let x = n, y = m;
+  for (let d = found; d > 0; d--) {
+    const vv = trace[d], k = x - y;
+    const pk = (k === -d || (k !== d && vv[k - 1 + off] < vv[k + 1 + off])) ? k + 1 : k - 1;
+    const px = vv[pk + off], py = px - pk;
+    while (x > px && y > py) { x--; y--; }
+    if (x === px) ops.push({ type: 'ins', ai: x, bi: py, tok: B[py] });
+    else ops.push({ type: 'del', ai: px, bi: y, tok: A[px] });
+    x = px; y = py;
+  }
+  ops.reverse();
+  const runs = [];
+  for (const o of ops) {
+    const last = runs[runs.length - 1];
+    const idx = o.type === 'ins' ? o.bi : o.ai;
+    if (last && last.type === o.type && last.next === idx) { last.toks.push(o.tok); last.next++; }
+    else runs.push({ type: o.type, at: p + idx, toks: [o.tok], next: idx + 1 });
+  }
+  return runs;
+}
+const squash = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+async function logWriting(code, sub, before, text, prevSeen, glitch) {
+  const now = Date.now();
+  const a = tokensOf(before), b = tokensOf(text);
+  const runs = tokenEdits(a, b);
+  // The end of the text: past the last word (trailing spaces don't count).
+  let endAt = b.length;
+  while (endAt > 0 && !isWord(b[endAt - 1])) endAt--;
+  let add = 0, del = 0, mid = 0, big = 0, bigRun = null;
+  for (const r of runs) {
+    const w = r.toks.filter(isWord).length;
+    if (r.type === 'del') { del += w; mid += w; continue; }
+    add += w;
+    if (r.at + r.toks.length < endAt) mid += w;
+    if (w > big) { big = w; bigRun = r; }
+  }
+  if (!add && !del) return;
+  const words = b.filter(isWord).length;
+  // How long since the page last checked in: the time these words could have taken.
+  const secs = prevSeen ? Math.max(10, (now - prevSeen) / 1000) : 0;
+  const wpm = secs ? Math.round(big / (secs / 60)) : 0;
+  const delRuns = runs.filter((r) => r.type === 'del' && r.toks.filter(isWord).length >= 5).map((r) => squash(r.toks.join('')).slice(0, 3000));
+  let burst = null;
+  await mutate('luddite:wlog:' + code + ':' + sub, (L) => {
+    const log = L || { mins: [], bursts: [], recent: [], first: now };
+    const mins = log.mins.slice(), t = Math.floor(now / 60000) * 60000;
+    const last = mins[mins.length - 1];
+    if (last && last.t === t) mins[mins.length - 1] = { ...last, add: last.add + add, del: last.del + del, mid: last.mid + mid, words, big: Math.max(last.big || 0, big) };
+    else mins.push({ t, add, del, mid, words, big });
+    let bursts = log.bursts || [];
+    if (bigRun && big >= BURST_WORDS && wpm >= BURST_WPM) {
+      const runText = squash(bigRun.toks.join(''));
+      // Their own words: moved or copied within the paper, put back after a
+      // delete (or an undo), or restored after a glitch.
+      const own = squash(before).includes(runText) || (log.recent || []).concat(delRuns).some((x) => x.includes(runText) || runText.includes(x) && x.length > runText.length * 0.8) || (glitch && squash(glitch).includes(runText));
+      if (!own) { burst = { at: now, words: big, wpm, quote: runText.slice(0, 160) }; bursts = [...bursts, burst].slice(-50); }
+    }
+    const recent = [...delRuns, ...(log.recent || [])].slice(0, 8);
+    return { ...log, mins: mins.slice(-WLOG_MAX_MINS), bursts, recent };
+  });
+  if (burst) await mutate('luddite:room:' + code, (r) => (r && r.students[sub]
+    ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], bursts: (r.students[sub].bursts || 0) + 1, burstAt: burst.at } } } : undefined)).catch(() => {});
 }
 
 async function rosterOf(room) {

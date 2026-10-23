@@ -1125,6 +1125,20 @@
   .livechat h3 { margin: 0 0 8px; font-size: 14px; }
   .chatsend.wrap { align-items: flex-end; }
   .chatsend textarea.field { resize: none; overflow-y: auto; min-height: 66px; max-height: 40vh; line-height: 1.45; border-radius: 12px; padding: 10px 12px; }
+  /* The writing log: figures, a minute-by-minute chart, and anything flagged. */
+  #wlogBox { z-index: 60; }
+  #wlogBox .card { max-width: 980px !important; max-height: 92vh; overflow-y: auto; }
+  .wlstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
+  .wlstats div { border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 12px; }
+  .wlstats b { display: block; font-size: 25px; font-weight: 600; }
+  .wlstats span { font-size: 14px; color: var(--muted); }
+  .wlchart { width: 100%; overflow-x: auto; margin: 6px 0 4px; }
+  .wlchart svg { display: block; }
+  .wlkey { font-size: 14px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .wlkey i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .wlflag { border: 1.5px solid var(--tomato); background: var(--tomato-tint); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+  .wlflag.soft { border-color: var(--rule); background: transparent; }
+  .wlflag q { display: block; font-family: Literata, Georgia, serif; margin-top: 4px; }
   /* Shared grading, read on the writing page: the writing marked up, the numbered comments beside it. */
   #myGradingBox .card { max-width: 1120px !important; }
   .mgmark { background: var(--pen-wash); box-shadow: inset 0 -2px 0 var(--pen); }
@@ -1745,6 +1759,7 @@
       <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
+      <button class="btn small ghost" id="markWlog" type="button" hidden>Writing log</button>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
       <button class="btn small ghost" id="markPrint">Print</button>
@@ -1849,6 +1864,15 @@
     <div class="cwlist" id="cwList"></div>
     <div class="liveread" id="cwText" hidden></div>
     <div class="row" style="justify-content:space-between"><button class="btn small ghost" id="cwBack" type="button" hidden>&larr; Everyone</button><button class="btn ghost" id="cwClose" type="button">Back to my writing</button></div>
+  </div>
+</div>
+
+<!-- A student's writing log: how their words came, minute by minute (GET /luddite/wlog) -->
+<div class="handin livebox" id="wlogBox" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="wlTitle">Writing Log</h2><span class="fine" id="wlMeta" style="margin:0"></span></div>
+    <div id="wlBody"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="wlClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -6802,6 +6826,8 @@
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
+    // Words that came faster than anyone types (see the writing log).
+    if (s && s.bursts) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
     w.appendChild(line);
     row.appendChild(w);
 
@@ -6863,6 +6889,7 @@
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
+    if (s && s.sub) item('Writing log', function () { openWlog(room.code, s.sub, p.name); });
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
     if (s) item('Remove from this session', async function () {
       if (await ask({ title: 'Take ' + p.name + ' Out of This Writing Session?', ok: 'Remove', danger: true })) roomAction('remove', [s.sub]);
@@ -7461,6 +7488,7 @@
     $('markMeta').textContent = piece.roomTitle + ' · ' + new Date(piece.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) +
       ' · ' + plural(piece.words, 'word', 'words') + (piece.early ? ' · Still being written: your marks move to the paper when they hand it in' + (piece.returnedAt ? ', and they can read them as they write' : '') : piece.live ? ' · They’re writing again: this is their writing now, with every comment on it' : '');
     $('markHandBack').hidden = false;
+    $('markWlog').hidden = reading || !piece.code || !piece.sub;
     // The Drive copy has the student's name on it, so it's not offered while names are hidden.
     $('markDrive').hidden = !piece.link || anonOn();
     if (piece.link) $('markDrive').href = piece.link;
@@ -7494,6 +7522,121 @@
       if (nx) goPaper(nx).then(function () { $('markSaved').textContent = 'Handed that one back ✓'; });
     } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
   });
+  $('markWlog').addEventListener('click', function () { if (piece) openWlog(piece.code, piece.sub, who(piece.name, piece.email)); });
+
+  // ---------------------------------------------------------------------
+  // The writing log: how a student's words came, minute by minute, from the
+  // backups their page sends while they write (logWriting in the backend).
+  // A burst (flagged by the server) is 25+ words arriving at once, faster
+  // than anyone types, that weren't their own words moved or put back.
+  // ---------------------------------------------------------------------
+  var WL_FAST = 60; // words in a minute that's unusually fast for composing
+  async function openWlog(code, sub, name) {
+    $('wlTitle').textContent = 'Writing Log';
+    $('wlMeta').textContent = name || '';
+    $('wlBody').innerHTML = '';
+    $('wlBody').appendChild(el('p', 'fine', 'Loading…'));
+    $('wlogBox').hidden = false;
+    var data;
+    try { data = await api('/luddite/wlog?code=' + encodeURIComponent(code) + '&sub=' + encodeURIComponent(sub)); }
+    catch (e) { $('wlBody').innerHTML = ''; $('wlBody').appendChild(el('p', 'fine', 'Couldn’t load the writing log. Try again.')); return; }
+    drawWlog(data.log);
+  }
+  function wlWhen(t) {
+    var d = new Date(t);
+    return d.toDateString() === new Date().toDateString() ? clock(t) : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+  function drawWlog(log) {
+    var body = $('wlBody');
+    body.innerHTML = '';
+    var mins = (log && log.mins) || [];
+    if (!mins.length) {
+      body.appendChild(el('p', 'fine', 'Nothing logged yet. Luddite keeps a writing log from October 23, 2026, while a student writes in a session.'));
+      return;
+    }
+    var sum = function (k) { return mins.reduce(function (a, m) { return a + (m[k] || 0); }, 0); };
+    var add = sum('add'), del = sum('del'), mid = sum('mid'), now = mins[mins.length - 1].words;
+    var paces = mins.map(function (m) { return m.add; }).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
+    var median = paces.length ? paces[Math.floor(paces.length / 2)] : 0;
+    var fastest = mins.reduce(function (a, m) { return m.add > a.add ? m : a; }, mins[0]);
+    var stats = el('div', 'wlstats');
+    var stat = function (big, small, tip) { var d = el('div'); d.appendChild(el('b', null, big)); d.appendChild(el('span', null, small)); if (tip) d.title = tip; stats.appendChild(d); };
+    stat(String(mins.length), mins.length === 1 ? 'minute writing' : 'minutes writing', 'Minutes in which their writing changed, ' + wlWhen(mins[0].t) + ' to ' + wlWhen(mins[mins.length - 1].t));
+    stat(String(now), 'words now');
+    stat(String(add), 'words typed', 'Every word they added, including ones they later deleted');
+    stat(String(del), 'words deleted');
+    stat((add + del ? Math.round(100 * mid / (add + del)) : 0) + '%', 'revision', 'Of all their changes, the share that went back into earlier text (deleting, or adding words before the end) rather than writing on at the end');
+    stat(median + ' / min', 'typical pace', 'The middle of their words-a-minute in the minutes they wrote; fastest: ' + fastest.add + ' at ' + wlWhen(fastest.t));
+    body.appendChild(stats);
+
+    var bursts = (log.bursts || []);
+    bursts.forEach(function (b) {
+      var f = el('div', 'wlflag');
+      f.appendChild(el('b', null, '⚑ ' + wlWhen(b.at) + ': ' + b.words + ' words appeared at once'));
+      f.appendChild(document.createTextNode(' (about ' + b.wpm.toLocaleString() + ' words a minute; their typical pace is ' + median + ')'));
+      if (b.quote) f.appendChild(el('q', null, b.quote + (b.quote.length >= 160 ? '…' : '')));
+      body.appendChild(f);
+    });
+    var fast = mins.filter(function (m) { return m.add >= WL_FAST && m.add >= 3 * median && !bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }); });
+    if (fast.length) {
+      var f2 = el('div', 'wlflag soft');
+      f2.appendChild(el('b', null, 'Unusually fast: '));
+      f2.appendChild(document.createTextNode(fast.slice(0, 8).map(function (m) { return m.add + ' words in the minute at ' + wlWhen(m.t); }).join('; ') + (fast.length > 8 ? '; and ' + (fast.length - 8) + ' more' : '') + '.'));
+      body.appendChild(f2);
+    }
+
+    // The chart: a bar per minute they wrote (up: words added, red if flagged
+    // or unusually fast; down: words deleted), and the total as a line. A gap
+    // of more than five minutes shows as a break, labeled with the time.
+    var wrap = el('div', 'wlchart');
+    body.appendChild(wrap);
+    var W = Math.max(wrap.clientWidth || 880, 300), H = 200, top = 16, mid0 = 130, bot = H - 22;
+    var slots = [], gaps = [];
+    mins.forEach(function (m, i) {
+      if (i && m.t - mins[i - 1].t > 5 * 60000) { gaps.push(slots.length); slots.push(null); }
+      slots.push(m);
+    });
+    var bw = Math.max(3, Math.min(18, (W - 40) / slots.length)), cw = Math.max(W, bw * slots.length + 40);
+    var maxUp = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.add); }, 0));
+    var maxDn = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.del); }, 0));
+    var maxWords = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.words); }, 0));
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', cw); svg.setAttribute('height', H);
+    var mk = function (tag, at, text) { var n = document.createElementNS(NS, tag); for (var k in at) n.setAttribute(k, at[k]); if (text != null) n.textContent = text; svg.appendChild(n); return n; };
+    var css = getComputedStyle(document.documentElement), col = function (v) { return css.getPropertyValue(v).trim(); };
+    mk('line', { x1: 0, x2: cw, y1: mid0, y2: mid0, stroke: col('--rule'), 'stroke-width': 1.5 });
+    var pts = [];
+    slots.forEach(function (m, i) {
+      var x = 20 + i * bw;
+      if (!m) { mk('line', { x1: x + bw / 2, x2: x + bw / 2, y1: top, y2: bot, stroke: col('--rule'), 'stroke-dasharray': '3 3' }); return; }
+      var flagged = bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }) || fast.indexOf(m) !== -1;
+      var hUp = (mid0 - top) * m.add / maxUp, hDn = (bot - 8 - mid0) * m.del / maxDn;
+      if (m.add) mk('rect', { x: x + 0.5, y: mid0 - hUp, width: Math.max(1, bw - 1.5), height: hUp, rx: 1.5, fill: flagged ? col('--tomato') : col('--mint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': +' + m.add + ' words' + (m.del ? ', −' + m.del : '') + ' · ' + m.words + ' in all';
+      if (m.del) mk('rect', { x: x + 0.5, y: mid0, width: Math.max(1, bw - 1.5), height: hDn, rx: 1.5, fill: col('--tomato-tint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': −' + m.del + ' words';
+      pts.push((x + bw / 2) + ',' + (mid0 - (mid0 - top) * m.words / maxWords));
+    });
+    if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.5, opacity: 0.55 });
+    // Time labels: the start, after each break, and the end.
+    var labelAt = [0].concat(gaps.map(function (g) { return g + 1; }));
+    var lastX = -999;
+    labelAt.forEach(function (i) {
+      var m = slots[i]; if (!m) return;
+      var x = 20 + i * bw;
+      if (x - lastX < 70) return;
+      lastX = x;
+      mk('text', { x: x, y: H - 6, 'font-size': 12, fill: col('--muted'), 'font-family': 'inherit' }, wlWhen(m.t));
+    });
+    wrap.appendChild(svg);
+    var key = el('div', 'wlkey');
+    [['--mint', 'words added in a minute'], ['--tomato-tint', 'words deleted'], ['--tomato', 'flagged or unusually fast'], ['--ink', 'words in all (line)']].forEach(function (k) {
+      var sp = el('span'); var sw = el('i'); sw.style.background = col(k[0]); if (k[0] === '--ink') sw.style.opacity = 0.55; sp.appendChild(sw); sp.appendChild(document.createTextNode(k[1])); key.appendChild(sp);
+    });
+    body.appendChild(key);
+    body.appendChild(el('p', 'fine', 'Most students compose at about 5 to 30 words a minute, stopping and going back to change things. A flag isn’t proof: read the words it shows and talk with the student.'));
+  }
+  $('wlClose').addEventListener('click', function () { $('wlogBox').hidden = true; });
+
   // Closing the grading window: the page under it is redrawn with what changed.
   function closeMarking() {
     var saving = flushMarks();
