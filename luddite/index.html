@@ -7664,7 +7664,15 @@
   });
   // Hand back every paper in the session that hasn't been yet (the newest from each student).
   $('handBackAllBtn').addEventListener('click', async function () {
-    var due = latestPerStudent(teacherRoom.submissions).concat(earlyGradings(teacherRoom)).filter(function (x) { return x.stored && !x.returnedAt; });
+    // Every paper, and everyone's writing so far who has no paper yet, graded or not
+    // (the same for both, so a student is never left out for having no paper).
+    var withPaper = {};
+    (teacherRoom.submissions || []).forEach(function (x) { if (x.stored) withPaper[x.sub] = 1; });
+    var writers = Object.keys(teacherRoom.students || {}).filter(function (sub) { var st = teacherRoom.students[sub]; return st.status === 'admitted' && !withPaper[sub]; }).map(function (sub) {
+      var st = teacherRoom.students[sub];
+      return { id: 'early:' + teacherRoom.code + ':' + sub, sub: sub, stored: true, marked: st.earlyMarked || 0, grade: st.earlyGrade || '', returnedAt: st.earlyShared || null };
+    });
+    var due = latestPerStudent(teacherRoom.submissions).concat(writers).filter(function (x) { return x.stored && !x.returnedAt; });
     if (!due.length) { tell('Nothing to Share', 'The grading of every paper in this session is shared already.'); return; }
     var unmarked = due.filter(function (x) { return !x.marked && !x.grade; }).length;
     if (!await ask({ title: 'Share the Grading of ' + plural(due.length, 'paper', 'papers') + '?',
