@@ -802,6 +802,8 @@
   .sheet, .piece { border-radius: 14px; }
   .sheet { border: 1.5px solid var(--edge); box-shadow: none; }
   .piece { border: 1.5px solid var(--rule); padding: 14px 16px; margin-top: 10px; background: var(--card); }
+  .piece.click { cursor: pointer; }
+  .piece.click:hover, .piece.click:focus-visible { border-color: var(--ink); outline: none; }
   .marktools, .markpop { border: 1.5px solid var(--ink); box-shadow: none; }
   .preview-bar { border: 1.5px solid var(--ink); box-shadow: none; }
   .timeleft { font-weight: 600; }
@@ -9206,7 +9208,19 @@
       h.appendChild(el('div', 'meta', new Date(p.at).toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' }) +
         (p.words ? ' · ' + plural(p.words, 'word', 'words') : '') + (p.grade ? ' · Grade: ' + p.grade : '')));
       head.appendChild(h);
-      if (!p.missing) head.appendChild(button('Grade', 'btn small ghost no-print', function () { openMark(p.id, function () { openStudent(studentShown, studentBackTo); }, studentShownIds, studentReturned); }));
+      // The whole card opens the paper (grading, live comments and all); its one button prints it.
+      if (!p.missing) {
+        var go = function () { openMark(p.id, function () { openStudent(studentShown, studentBackTo); }, studentShownIds, studentReturned); };
+        head.appendChild(button('Print', 'btn small ghost no-print', function (e) {
+          if (e) e.stopPropagation();
+          openPrintAll([p.id], $('studentName').textContent + ': ' + (p.roomTitle || 'paper'), function () { openStudent(studentShown, studentBackTo); }, true);
+        }));
+        box.classList.add('click');
+        box.tabIndex = 0;
+        box.setAttribute('role', 'button');
+        box.addEventListener('click', function (e) { if (!e.target.closest('button, a')) go(); });
+        box.addEventListener('keydown', function (e) { if (e.target === box && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(); } });
+      }
       box.appendChild(head);
       if (p.endComment) box.appendChild(el('p', 'endc', p.endComment));
       if (p.marks.length) {
