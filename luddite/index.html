@@ -1168,6 +1168,7 @@
   #studentPrint h1 { font: 600 20px var(--ui); margin: 0 0 4px; }
   #studentPrint .spmeta { font: 400 12px var(--ui); color: #555; margin: 0 0 18px; }
   #studentPrint .sptext { font: 12pt/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; }
+  .homeok { color: var(--mint-deep); background: var(--mint-tint); border-radius: 999px; padding: 2px 12px; font-weight: 600; }
   /* The writing page's Drafts dropdown, opening upward from the bar at the bottom. */
   .handinbar .draftmenu { pointer-events: auto; position: relative; }
   .handinbar .draftmenu > summary { list-style: none; }
@@ -1445,6 +1446,7 @@
       <span id="startedAt" class="clock"></span>
       <span id="timeLeft" class="timeleft clock"></span>
       <span id="leaves"></span>
+      <span id="homeOk" class="homeok" hidden>At home: you can switch tabs or leave this page any time. You won’t be locked out.</span>
     </div>
   </div>
   <div class="handinbar"><button class="btn ghost" id="rubricWBtn" type="button" hidden>Rubric</button><button class="btn ghost" id="classWorkBtn" type="button" hidden>Classmates’ work</button><button class="btn ghost" id="myGradingBtn" type="button" hidden>Your teacher’s comments</button><details class="menu draftmenu" id="draftsBtn" hidden><summary class="btn ghost" id="draftsLabel">Draft 1 ▴</summary><div class="pop" id="draftsPop"></div></details><button class="btn ghost" id="homePrintW" type="button" hidden>Print</button><button class="btn ghost" id="leaveNowBtn" type="button" hidden>Leave for now</button><button class="btn" id="doneBtn">Hand in</button></div>
@@ -3794,6 +3796,7 @@
       locked = false;
       $('doneBtn').textContent = mode === 'room' && !previewing ? 'Hand in' : 'Done';
       $('leaveNowBtn').hidden = !(mode === 'room' && !previewing && roomInfo && roomInfo.atHome);
+      $('homeOk').hidden = $('leaveNowBtn').hidden;
       syncClassWork();
       pad.spellcheck = P().spellcheck !== 'off';
       $('count').hidden = !P().showCount;
@@ -8053,7 +8056,8 @@
     var stat = function (big, small, tip) { var d = el('div'); d.appendChild(el('b', null, big)); d.appendChild(el('span', null, small)); if (tip) d.title = tip; stats.appendChild(d); };
     stat(String(mins.length), mins.length === 1 ? 'minute writing' : 'minutes writing', 'Minutes in which their writing changed, ' + wlWhen(mins[0].t) + ' to ' + wlWhen(mins[mins.length - 1].t));
     stat(String(now), 'words now');
-    stat(String(add), 'words typed', 'Every word they added, including ones they later deleted');
+    var own = sum('own');
+    stat(String(add), 'words typed', 'Every new word they added, including ones they later deleted' + (own ? '; not counted: ' + own + ' of their own words moved, copied or put back' : ''));
     stat(String(del), 'words deleted');
     stat((add + del ? Math.round(100 * mid / (add + del)) : 0) + '%', 'revision', 'Of all their changes, the share that went back into earlier text (deleting, or adding words before the end) rather than writing on at the end');
     stat(median + ' / min', 'typical pace', 'The middle of their words-a-minute in the minutes they wrote; fastest: ' + fastest.add + ' at ' + wlWhen(fastest.t));
@@ -8069,6 +8073,15 @@
       if (bs) { var bb = button('See the text before and after', 'btn small ghost', function () { wlShowSnap(bs.k); var v = $('wlVersions'); if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); bb.style.marginTop = '8px'; f.appendChild(el('div')).appendChild(bb); }
       body.appendChild(f);
     });
+    // Their own words coming back at once (moved, copied within the paper, put back after deleting, restored): not typing, and not flagged.
+    var WHY = { moved: 'moved within the paper', copied: 'copied from elsewhere in the paper', restored: 'put back after being deleted (or an Undo)', glitch: 'restored after a glitch' };
+    var restores = log.restores || [];
+    if (restores.length) {
+      var f3 = el('div', 'wlflag soft');
+      f3.appendChild(el('b', null, 'Their own words, back at once (not typing, not flagged): '));
+      f3.appendChild(document.createTextNode(restores.slice(-8).map(function (r) { return r.words + ' words at ' + wlWhen(r.at) + ', ' + (WHY[r.why] || 'already theirs'); }).join('; ') + '.'));
+      body.appendChild(f3);
+    }
     var fast = mins.filter(function (m) { return m.add >= WL_FAST && m.add >= 3 * median && !bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }); });
     if (fast.length) {
       var f2 = el('div', 'wlflag soft');
@@ -8089,7 +8102,7 @@
       slots.push(m);
     });
     var bw = Math.max(3, Math.min(18, (W - 40) / slots.length)), cw = Math.max(W, bw * slots.length + 40);
-    var maxUp = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.add); }, 0));
+    var maxUp = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.add + (m.own || 0)); }, 0));
     var maxDn = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.del); }, 0));
     var maxWords = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.words); }, 0));
     var NS = 'http://www.w3.org/2000/svg';
@@ -8103,7 +8116,9 @@
       var x = 20 + i * bw;
       if (!m) { mk('line', { x1: x + bw / 2, x2: x + bw / 2, y1: top, y2: bot, stroke: col('--rule'), 'stroke-dasharray': '3 3' }); return; }
       var flagged = bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }) || fast.indexOf(m) !== -1;
-      var hUp = (mid0 - top) * m.add / maxUp, hDn = (bot - 8 - mid0) * m.del / maxDn;
+      var hUp = (mid0 - top) * m.add / maxUp, hDn = (bot - 8 - mid0) * m.del / maxDn, hOwn = (mid0 - top) * (m.own || 0) / maxUp;
+      // Their own words back at once, in gray on top of what they typed.
+      if (m.own) mk('rect', { x: x + 0.5, y: mid0 - hUp - hOwn, width: Math.max(1, bw - 1.5), height: hOwn, rx: 1.5, fill: col('--rule') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': ' + m.own + ' of their own words back at once (moved, copied or put back)';
       if (m.add) mk('rect', { x: x + 0.5, y: mid0 - hUp, width: Math.max(1, bw - 1.5), height: hUp, rx: 1.5, fill: flagged ? col('--tomato') : col('--mint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': +' + m.add + ' words' + (m.del ? ', −' + m.del : '') + ' · ' + m.words + ' in all';
       if (m.del) mk('rect', { x: x + 0.5, y: mid0, width: Math.max(1, bw - 1.5), height: hDn, rx: 1.5, fill: col('--tomato-tint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': −' + m.del + ' words';
       pts.push((x + bw / 2) + ',' + (mid0 - (mid0 - top) * m.words / maxWords));
@@ -8121,7 +8136,7 @@
     });
     wrap.appendChild(svg);
     var key = el('div', 'wlkey');
-    [['--mint', 'words added in a minute'], ['--tomato-tint', 'words deleted'], ['--tomato', 'flagged or unusually fast'], ['--ink', 'words in all (line)']].forEach(function (k) {
+    [['--mint', 'words typed in a minute'], ['--rule', 'their own words back at once'], ['--tomato-tint', 'words deleted'], ['--tomato', 'flagged or unusually fast'], ['--ink', 'words in all (line)']].forEach(function (k) {
       var sp = el('span'); var sw = el('i'); sw.style.background = col(k[0]); if (k[0] === '--ink') sw.style.opacity = 0.55; sp.appendChild(sw); sp.appendChild(document.createTextNode(k[1])); key.appendChild(sp);
     });
     body.appendChild(key);

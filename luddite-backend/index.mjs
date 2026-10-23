@@ -1534,7 +1534,7 @@ async function routeLuddite(event, method, path, info) {
     const sub = String(q.sub || ''), st = room.students[sub];
     if (!st) throw new HttpError(404, 'no_student');
     const { state: log } = await readItem('luddite:wlog:' + room.code + ':' + sub);
-    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], first: log.first || 0, snaps: log.snaps || [] } : null, name: st.name || '', email: st.email || '' });
+    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], restores: log.restores || [], first: log.first || 0, snaps: log.snaps || [] } : null, name: st.name || '', email: st.email || '' });
   }
 
   // GET /luddite/snap?code=&sub=&k= -- one version of a student's text (see logWriting).
@@ -2749,36 +2749,51 @@ async function logWriting(code, sub, before, text, prevSeen, glitch) {
   // The end of the text: past the last word (trailing spaces don't count).
   let endAt = b.length;
   while (endAt > 0 && !isWord(b[endAt - 1])) endAt--;
-  let add = 0, del = 0, mid = 0, big = 0, bigRun = null;
-  for (const r of runs) {
-    const w = r.toks.filter(isWord).length;
-    if (r.type === 'del') { del += w; mid += w; continue; }
-    add += w;
-    if (r.at + r.toks.length < endAt) mid += w;
-    if (w > big) { big = w; bigRun = r; }
-  }
-  if (!add && !del) return;
-  const words = b.filter(isWord).length;
+  const delRuns = runs.filter((r) => r.type === 'del' && r.toks.filter(isWord).length >= 5).map((r) => squash(r.toks.join('')).slice(0, 3000));
+  const sBefore = squash(before), sGlitch = glitch ? squash(glitch) : '';
   // How long since the page last checked in: the time these words could have taken.
   const secs = prevSeen ? Math.max(10, (now - prevSeen) / 1000) : 0;
-  const wpm = secs ? Math.round(big / (secs / 60)) : 0;
-  const delRuns = runs.filter((r) => r.type === 'del' && r.toks.filter(isWord).length >= 5).map((r) => squash(r.toks.join('')).slice(0, 3000));
   let burst = null, snapsToWrite = [];
   await mutate('luddite:wlog:' + code + ':' + sub, (L) => {
-    snapsToWrite = [];
+    snapsToWrite = []; burst = null;
     const log = L || { mins: [], bursts: [], recent: [], first: now };
+    // A block of 10+ words that came in at once and was already theirs isn't
+    // typing: moved or copied within the paper, put back after being deleted
+    // (or an Undo), or restored after a glitch. It's counted as `own`, apart
+    // from words added, and big ones are listed (`restores`) with the reason.
+    const ownWhy = (r) => {
+      const t = squash(r.toks.join(''));
+      if (!t || r.toks.filter(isWord).length < 10) return '';
+      if (delRuns.some((x) => x.includes(t) || (t.includes(x) && x.length > t.length * 0.8))) return 'moved';
+      if (sBefore.includes(t)) return 'copied';
+      if ((log.recent || []).some((x) => x.includes(t) || (t.includes(x) && x.length > t.length * 0.8))) return 'restored';
+      if (sGlitch && sGlitch.includes(t)) return 'glitch';
+      return '';
+    };
+    let add = 0, del = 0, mid = 0, own = 0, big = 0, bigRun = null;
+    const restoresNow = [];
+    for (const r of runs) {
+      const w = r.toks.filter(isWord).length;
+      if (r.type === 'del') { del += w; mid += w; continue; }
+      const why = ownWhy(r);
+      if (why) { own += w; if (w >= BURST_WORDS) restoresNow.push({ at: now, words: w, why }); continue; }
+      add += w;
+      if (r.at + r.toks.length < endAt) mid += w;
+      if (w > big) { big = w; bigRun = r; }
+    }
+    if (!add && !del && !own) return undefined;
+    const words = b.filter(isWord).length;
+    const wpm = secs ? Math.round(big / (secs / 60)) : 0;
     const mins = log.mins.slice(), t = Math.floor(now / 60000) * 60000;
     const last = mins[mins.length - 1];
-    if (last && last.t === t) mins[mins.length - 1] = { ...last, add: last.add + add, del: last.del + del, mid: last.mid + mid, words, big: Math.max(last.big || 0, big) };
-    else mins.push({ t, add, del, mid, words, big });
+    if (last && last.t === t) mins[mins.length - 1] = { ...last, add: last.add + add, del: last.del + del, mid: last.mid + mid, own: (last.own || 0) + own, words, big: Math.max(last.big || 0, big) };
+    else mins.push({ t, add, del, mid, own, words, big });
     let bursts = log.bursts || [];
     if (bigRun && big >= BURST_WORDS && wpm >= BURST_WPM) {
-      const runText = squash(bigRun.toks.join(''));
-      // Their own words: moved or copied within the paper, put back after a
-      // delete (or an undo), or restored after a glitch.
-      const own = squash(before).includes(runText) || (log.recent || []).concat(delRuns).some((x) => x.includes(runText) || runText.includes(x) && x.length > runText.length * 0.8) || (glitch && squash(glitch).includes(runText));
-      if (!own) { burst = { at: now, words: big, wpm, quote: runText.slice(0, 160) }; bursts = [...bursts, burst].slice(-50); }
+      burst = { at: now, words: big, wpm, quote: squash(bigRun.toks.join('')).slice(0, 160) };
+      bursts = [...bursts, burst].slice(-50);
     }
+    const restores = [...(log.restores || []), ...restoresNow].slice(-50);
     const recent = [...delRuns, ...(log.recent || [])].slice(0, 8);
     // Versions: their whole text every few minutes, and just before and just
     // after a burst (the text itself in luddite:snap:<code>:<sub>:<k>, listed here).
@@ -2792,7 +2807,7 @@ async function logWriting(code, sub, before, text, prevSeen, glitch) {
     if ((!lastSnap || burst) && before.trim() && (!lastSnap || lastSnap.at < (prevSeen || now) - 1000)) take(before, Math.min(prevSeen || now - 10000, now - 1000));
     if (burst) take(text, now, { burst: true });
     else if ((!lastSnap || now - lastSnap.at >= SNAP_EVERY_MS) && snaps.length < SNAP_MAX) take(text, now);
-    return { ...log, mins: mins.slice(-WLOG_MAX_MINS), bursts, recent, snaps, nextSnap: k };
+    return { ...log, mins: mins.slice(-WLOG_MAX_MINS), bursts, restores, recent, snaps, nextSnap: k };
   });
   for (const x of snapsToWrite) {
     const { k, ...rest } = x;
