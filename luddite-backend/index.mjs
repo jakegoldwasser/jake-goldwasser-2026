@@ -1207,14 +1207,28 @@ async function routeLuddite(event, method, path, info) {
     const msgs = (state && state.msgs) || [];
     const last = msgs.length ? msgs[msgs.length - 1].at : 0;
     const seenKey = asTeacher ? 'seenT' : 'seenS';
-    if (last && (s[seenKey] || 0) < last) {
+    // Reading it: seen, and no longer marked unread (unreadT, the teacher's Mark as unread).
+    if ((last && (s[seenKey] || 0) < last) || (asTeacher && s.unreadT)) {
       await mutate('luddite:room:' + code, (r) => {
         const x = r && r.students[sub];
-        if (!x || (x[seenKey] || 0) >= last) return undefined;
-        return { ...r, students: { ...r.students, [sub]: { ...x, [seenKey]: last } } };
+        if (!x || ((x[seenKey] || 0) >= last && !(asTeacher && x.unreadT))) return undefined;
+        const { unreadT, ...rest } = x;
+        return { ...r, students: { ...r.students, [sub]: { ...(asTeacher ? rest : x), [seenKey]: Math.max(x[seenKey] || 0, last) } } };
       });
     }
     return respond(200, { msgs });
+  }
+
+  // PUT /luddite/chat/unread { code, sub } -- the teacher marks a student's
+  // live comments unread (unreadT on their entry) until they're opened again.
+  if (path === '/luddite/chat/unread' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await getRoom(code);
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(body.sub || '');
+    if (!room.students[sub]) throw new HttpError(404, 'not_in_room');
+    await mutate('luddite:room:' + code, (r) => (r && r.students[sub] ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], unreadT: Date.now() } } } : undefined));
+    return respond(200, { ok: true });
   }
 
   // PUT /luddite/chat { code, text, to?, hand? } -- send a message. The teacher sends
