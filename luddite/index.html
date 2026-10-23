@@ -420,6 +420,8 @@
   /* The one big button at the foot of the writing page: impossible to miss. */
   .handinbar { position: fixed; left: 0; right: 0; bottom: 34px; display: flex; justify-content: center; pointer-events: none; z-index: 5; }
   .handinbar { gap: 12px; flex-wrap: wrap; }
+  /* At home, leaving full screen isn't a lock: said plainly, so nobody waits for the teacher. */
+  #lockWait.homeback { background: var(--mint-tint); color: var(--ink); border-radius: 12px; padding: 12px 16px; font-weight: 600; }
   .handinbar #leaveNowBtn, .handinbar #classWorkBtn, .handinbar #myGradingBtn { min-width: 0; padding: 16px 32px; }
   .cwlist { max-height: 56vh; overflow-y: auto; margin-top: 8px; }
   .cwitem { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 10px 4px; cursor: pointer; font: inherit; color: inherit; }
@@ -1408,7 +1410,7 @@
 <!-- Locked -->
 <section class="screen" id="lockScreen" hidden>
   <div class="card">
-    <h2>Locked</h2>
+    <h2 id="lockTitle">Locked</h2>
     <p class="sub" id="lockWhy"></p>
     <p class="sub" id="lockWait" hidden></p>
     <button class="btn ghost" id="lockAskBtn" type="button" hidden>Ask your teacher to let you back in</button>
@@ -3697,6 +3699,7 @@
     $('lockAskBtn').textContent = 'Ask your teacher to let you back in';
     $('lockErr').hidden = true;
     $('lockWait').textContent = 'Ask your teacher to let you back in. This page opens again by itself when they do.';
+    homeLockText();
     show('lockScreen');
     report('left').then(function (room) {
       if (!locked) return;
@@ -3717,6 +3720,20 @@
     $('lockWait').textContent = mode === 'room' && !previewing && !isTester(me.email) && !(roomInfo && roomInfo.atHome) ? 'Your teacher let you back in.' : '';
     $('lockWait').hidden = !$('lockWait').textContent;
     $('resumeBtn').hidden = false;
+    homeLockText();
+  }
+  // At home nothing is locked: one click goes back to full screen, and the
+  // page says so plainly (some students waited for the teacher to unlock them).
+  function homeLockText() {
+    var home = mode === 'room' && !previewing && roomInfo && roomInfo.atHome;
+    $('lockTitle').textContent = home ? 'You Left Full Screen' : 'Locked';
+    $('resumeBtn').textContent = home ? 'Go back to full screen and keep writing' : 'Go back to full screen';
+    $('lockWait').classList.toggle('homeback', !!home);
+    if (home) {
+      $('lockWait').textContent = 'You’re not locked out, and your teacher doesn’t need to do anything. Click the button below to go back to full screen and keep writing.';
+      $('lockWait').hidden = false;
+      $('resumeBtn').hidden = false;
+    }
   }
   async function pollUnlock() {
     var data = await api('/luddite/assignment?as=student&code=' + encodeURIComponent(roomCode));
