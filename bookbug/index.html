@@ -1065,6 +1065,8 @@
   .add-entry-top { display: flex; margin: 0 0 4px; }
   .add-entry-top[hidden] { display: none; }
   .add-entry-top .add-poem-btn { margin-top: 0; }
+  /* Jump to end sits at the far right so it never crowds Add entry. */
+  .add-entry-top .jump-end-btn { margin-left: auto; }
   /* In a poetry collection both Add poem buttons (above and below the
      list) are the same quiet ghost button. */
   .add-poem-btn.is-subtle { font-size: 13px; color: var(--ink-faint); padding: 4px 8px; }
@@ -1118,7 +1120,7 @@
   .section-move-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .section-move-btn:disabled { opacity: 0.35; cursor: default; }
   .section-block-entries { margin: 2px 0 10px 32px; display: flex; flex-direction: column; gap: 4px; }
-  .section-block-empty { font-size: 12.5px; color: var(--ink-faint); padding: 4px 8px; }
+  .section-block-add { align-self: flex-start; margin-top: 0; }
   .section-lead-row {
     border: 1px dashed var(--line-strong); border-radius: 8px; padding: 8px 12px; margin-bottom: 4px;
     font-size: 12.5px; color: var(--ink-soft);
@@ -3528,9 +3530,10 @@
              same as the one below it (see renderPoems). -->
         <div class="add-entry-top" id="addPoemTopRow" hidden>
           <button class="btn btn-ghost add-poem-btn is-subtle" id="addPoemTopBtn" type="button">+ Add entry</button>
+          <button class="btn btn-ghost add-poem-btn is-subtle jump-end-btn" id="jumpEndBtn" type="button">↓ Jump to end</button>
         </div>
         <div id="poemList"></div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center;" id="poemListFoot">
           <button class="btn add-poem-btn" id="addPoemBtn">+ Add entry</button>
           <button class="btn btn-ghost add-poem-btn" id="addSectionBtn">+ Add section</button>
         </div>
@@ -12597,12 +12600,23 @@
           var idx = start + 1 + j;
           wrap.appendChild(makeCompactRow(poem, idx, plan, entryNumAt[idx]));
         });
-        if (block.length === 1) {
-          var none = document.createElement('div');
-          none.className = 'section-block-empty';
-          none.textContent = 'No ' + formNouns().many + ' in this ' + formNouns().section + ' yet.';
-          wrap.appendChild(none);
-        }
+        // Add an entry right here, at the end of this section, opened
+        // with its title ready to type.
+        var addHere = document.createElement('button');
+        addHere.type = 'button';
+        addHere.className = 'btn btn-ghost add-poem-btn is-subtle section-block-add';
+        addHere.textContent = '+ Add ' + formNouns().one;
+        addHere.addEventListener('click', function () {
+          var poem = { id: makeId(), title: '', lines: [''] };
+          state.poems.splice(start + block.length, 0, poem);
+          state.isExample = false;
+          expandedCompactIds[poem.id] = true;
+          persist();
+          renderAll();
+          var t = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-title');
+          if (t && !writerMQ.matches) t.focus();
+        });
+        wrap.appendChild(addHere);
         poemList.appendChild(wrap);
         blockUnits[k].end = wrap;
         wrap.addEventListener('dragover', function (e) { blockDragOver(e, k); });
@@ -13521,7 +13535,9 @@
     }
     // Poetry gets Add poem above the list too, once there's a list to be
     // above (an empty book has just the one below).
-    document.getElementById('addPoemTopRow').hidden = bookFormOf(state) !== 'collection' || !state.poems.length;
+    // Every book with a list gets Jump to end in that row.
+    document.getElementById('addPoemTopRow').hidden = !state.poems.length;
+    document.getElementById('addPoemTopBtn').hidden = bookFormOf(state) !== 'collection';
     var hasSections = state.poems.some(isSection);
     if (!hasSections) sectionsOnly = false;
     updateEntriesViewSeg(hasSections);
@@ -14437,6 +14453,9 @@
     renderAll();
     var title = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-title');
     if (title && !writerMQ.matches) title.focus();
+  });
+  document.getElementById('jumpEndBtn').addEventListener('click', function () {
+    document.getElementById('poemListFoot').scrollIntoView({ block: 'center', behavior: 'smooth' });
   });
   document.getElementById('addSectionBtn').addEventListener('click', function () {
     var section = makeSection('');
