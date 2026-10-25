@@ -1514,14 +1514,20 @@
   }
   .prompt-input:focus { border-color: var(--accent); }
 
-  .home-view { display: flex; flex-direction: column; gap: 18px; }
+  /* One book size for all of Home (New book, Recent, every shelf,
+     Archived): three across a half-width shelf, so every page on Home
+     matches. Measured against Home's width (cqi), less the gap between
+     two shelves, a shelf's side padding and two gaps between books. */
+  .home-view { display: flex; flex-direction: column; gap: 18px; container-type: inline-size; --card-w: min(168px, calc((50cqi - 15px - 60px - 41px) / 3)); }
+  @media (max-width: 700px) { .home-view { --card-w: calc((100cqi - 44px - 25px) / 3); } }
   .home-view[hidden] { display: none; }
   body.view-home .chapbook-header, body.view-home #intakePanel,
   body.view-home #intakeCollapsedBar, body.view-home .workspace { display: none !important; }
   @media (min-width: 701px) { .masthead h1.appname { cursor: pointer; } }
-  .home-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .home-head { display: flex; align-items: center; gap: 12px; }
   .home-title, .home-recent-title, .home-shelf-title { font-family: "Zilla Slab", ui-serif, serif; font-weight: 600; font-size: 22px; line-height: 1.2; margin: 0; text-wrap: balance; }
-  .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px 20px; }
+  .home-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--card-w)); gap: 24px 20px; }
+  @media (max-width: 700px) { .home-grid { gap: 18px 12px; } }
   .home-card {
     position: relative; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: left;
     background: none; border: none; padding: 0; font: inherit; color: inherit; outline: none;
@@ -1543,15 +1549,29 @@
   .home-cover-title { font-family: Futura, "Futura PT", Jost, "Century Gothic", ui-sans-serif, sans-serif; font-size: clamp(17px, 14cqi, 30px); font-weight: 500; color: #241A1F; line-height: 1.12; overflow-wrap: break-word; hyphens: auto; }
   .home-cover-title.is-long { font-size: clamp(15px, 11.5cqi, 24px); }
   .home-cover-title.is-very-long { font-size: clamp(13px, 9cqi, 19px); }
+  /* A phone's covers are a third of a shelf: less padding, and the
+     title may shrink below the desktop minimum to still fit. */
+  @media (max-width: 700px) {
+    .home-cover { padding: 8px 6px; border-left-width: 6px; }
+    .home-cover-title { font-size: clamp(12px, 14cqi, 30px); }
+    .home-cover-title.is-long { font-size: clamp(11px, 11.5cqi, 24px); }
+    .home-cover-title.is-very-long { font-size: clamp(10px, 9cqi, 19px); }
+    .home-card-meta { font-size: 10.5px; }
+    /* Always showing on a touch screen, so kept small and in the corner,
+       clear of the title on a cover this size. */
+    .home-card-more { top: 3px; right: 3px; width: 22px; height: 22px; }
+  }
   .home-card-new .home-cover { background: var(--surface); border-style: dashed; border-left-width: 1px; }
   .home-new-plus { font-size: 44px; font-weight: 300; color: var(--accent); line-height: 1; }
-  /* New book: a big blank white page at the top left, Docs style. */
+  /* New book: a blank white page at the top left, Docs style, the same
+     square as every book, under its own heading. */
+  .home-new-col { flex: none; display: flex; flex-direction: column; gap: 10px; }
   .home-new {
-    align-self: flex-start; display: flex; flex-direction: column; gap: 8px; width: 168px; padding: 0; border: none;
+    align-self: flex-start; display: flex; flex-direction: column; width: var(--card-w); padding: 0; border: none;
     background: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left;
   }
   .home-new-page {
-    aspect-ratio: 5.5 / 8.5; width: 100%; display: flex; align-items: center; justify-content: center;
+    aspect-ratio: 1 / 1; width: 100%; display: flex; align-items: center; justify-content: center;
     background: #FFFFFF; border: 1px solid var(--line-strong); border-radius: 4px; color: var(--accent);
     box-shadow: 0 1px 3px var(--shadow); transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   }
@@ -1559,22 +1579,22 @@
     box-shadow: 0 6px 18px var(--shadow); transform: translateY(-2px); border-color: var(--book-accent, var(--accent));
   }
   .home-new:focus-visible { outline: none; }
-  .home-new-label { font-size: 14px; font-weight: 600; }
-  @media (max-width: 700px) { .home-new { width: 128px; } }
-  /* Recent sits beside New book: its label takes the line above, so New
-     book drops by the same amount and the two rows of pages share a top.
-     Columns are New book's own width, so every page in the row matches. */
-  .home-top { --top-w: 168px; display: flex; align-items: flex-start; gap: 28px; }
-  .home-top .home-new { width: var(--top-w); }
-  .home-top:has(.home-recent:not([hidden])) .home-new { margin-top: 36px; }
+  /* Recent sits beside New book, each under a heading of the same fixed
+     height, so the two rows of pages share a top. */
+  .home-top { display: flex; align-items: flex-start; gap: 28px; }
   .home-recent { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-  .home-recent[hidden] { display: none; }
-  /* A fixed height so New book's drop (above) always matches it. */
-  .home-recent-title { height: 26px; line-height: 26px; color: var(--ink); }
-  .home-recent-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--top-w)); gap: 24px 20px; }
+  .home-recent[hidden], .home-top[hidden] { display: none; }
+  .home-top .home-title, .home-recent-title { height: 26px; line-height: 26px; color: var(--ink); white-space: nowrap; }
+  .home-recent-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--card-w)); gap: 24px 20px; }
   /* One row only (fitHomeRecent marks the rest). */
   .home-recent-grid > .is-over { display: none; }
-  @media (max-width: 700px) { .home-top { --top-w: 128px; gap: 18px; } }
+  @media (max-width: 700px) { .home-top { gap: 12px; } .home-recent-grid { gap: 18px 12px; } }
+  /* Search: finds books by title or by any words inside them. */
+  .home-head .entry-search { flex: 0 1 420px; margin: 0; }
+  .home-head .entry-search input[type="search"] { font-size: 16px; }
+  .home-results { display: flex; flex-direction: column; gap: 12px; }
+  .home-results[hidden] { display: none; }
+  .home-archived.is-searching { display: none; }
   .home-card-meta { font-size: 11.5px; color: var(--ink-faint); }
   .home-card-more {
     position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%;
@@ -1785,9 +1805,17 @@
     --shadow: rgba(28, 41, 52, 0.14);
   }
 
-  #homeShelves { display: flex; flex-direction: column; gap: 30px; }
+  /* Two shelves to a row, each three books wide; a shelf of only one or
+     two books comes last and is only as wide as its books, so the small
+     ones share the bottom row (and fill out an odd shelf's row). */
+  #homeShelves { display: flex; flex-wrap: wrap; align-items: stretch; gap: 30px; }
+  #homeShelves > .home-empty { flex-basis: 100%; }
+  #homeShelves[hidden] { display: none; }
   .home-intro + .home-start { margin-top: -16px; }
-  .home-shelf { display: flex; flex-direction: column; gap: 12px; }
+  .home-shelf { display: flex; flex-direction: column; gap: 12px; flex: 1 1 calc(50% - 15px); min-width: 0; }
+  .home-shelf.is-small { flex: 1 1 auto; }
+  .home-shelf.is-small .home-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: var(--card-w); justify-content: start; }
+  @media (max-width: 700px) { #homeShelves { gap: 16px; } .home-shelf, .home-shelf.is-small { flex-basis: 100%; } }
   .home-shelf-head { display: flex; align-items: flex-end; gap: 8px; border-bottom: 3px solid var(--ink); padding-bottom: 4px; }
   .home-shelf-title { flex: 1; }
   .home-shelf-head .dots-btn { padding: 0 8px 4px; }
@@ -1799,7 +1827,7 @@
   .home-shelf-grip[hidden] { display: none; }
   .home-shelf:hover .home-shelf-grip, .home-shelf-grip:focus-visible { opacity: 1; }
   .home-shelf-grip:hover { background: rgba(255, 255, 255, 0.5); }
-  .home-shelf.is-dragging { position: relative; z-index: 5; box-shadow: 0 12px 32px var(--shadow); }
+  .home-shelf.is-dragging { position: relative; z-index: 5; box-shadow: 8px 8px 0 var(--shelf-accent, var(--ink)); }
   .home-shelf.is-dragging .home-shelf-grip { cursor: grabbing; opacity: 1; }
   @media (hover: none) { .home-shelf-grip { opacity: 1; } }
   /* New book dialog: a name, then the kinds as small cards to pick from. */
@@ -1856,8 +1884,12 @@
      and looked like a miss. The grip hangs out to the left of the title. */
   .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px 42px; border-top: 5px solid var(--shelf-accent); }
   .home-shelf .home-shelf-grip { margin-left: -30px; }
+  @media (max-width: 700px) {
+    .home-shelf { padding: 12px 14px 16px 30px; }
+    .home-shelf .home-shelf-grip { margin-left: -24px; }
+  }
   .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; align-items: center; }
-  /* One row until "See all" (fitHomeShelves marks the books past it). */
+  /* The three most recent until Expand (fitHomeShelves marks the rest). */
   .home-shelf:not(.is-open) .home-grid > .is-over { display: none; }
   .home-see-all { font-size: 12px; font-weight: 600; color: var(--shelf-accent); text-decoration: underline; text-underline-offset: 3px; }
   .home-see-all[hidden] { display: none; }
@@ -2802,17 +2834,25 @@
        to; phones open straight into the last book instead. -->
   <div class="home-view" id="homeView" hidden>
     <div class="home-head">
-      <h2 class="home-title">Home</h2>
-      <div class="home-head-actions">
+      <div class="entry-search">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
+        <input type="search" id="homeSearch" placeholder="Search your books" autocomplete="off" spellcheck="false" aria-label="Search your books">
       </div>
     </div>
+    <!-- While searching: the matching books, in place of everything below. -->
+    <section class="home-results" id="homeResults" aria-labelledby="homeResultsTitle" hidden>
+      <h2 class="home-shelf-title" id="homeResultsTitle"></h2>
+      <div class="home-grid" id="homeResultsGrid"></div>
+    </section>
     <!-- One way to start anything, first thing on the page, the way Docs
          starts with a blank page: name it, then pick what kind. -->
-    <div class="home-top">
-      <button class="home-new" id="newBookBtn" type="button" aria-haspopup="dialog">
-        <span class="home-new-page" aria-hidden="true"><svg width="46" height="46" viewBox="0 0 46 46"><path d="M23 6v34M6 23h34" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span>
-        <span class="home-new-label">New book</span>
-      </button>
+    <div class="home-top" id="homeTop">
+      <div class="home-new-col">
+        <h2 class="home-title">New book</h2>
+        <button class="home-new" id="newBookBtn" type="button" aria-haspopup="dialog" aria-label="New book">
+          <span class="home-new-page" aria-hidden="true"><svg width="46" height="46" viewBox="0 0 46 46"><path d="M23 6v34M6 23h34" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span>
+        </button>
+      </div>
       <!-- The latest books of every type, newest first, as many as fit. -->
       <section class="home-recent" id="homeRecent" aria-labelledby="homeRecentTitle" hidden>
         <h3 class="home-recent-title" id="homeRecentTitle">Recent</h3>
@@ -14751,10 +14791,16 @@
             grid.appendChild(makeHomeCard(entry));
           });
       }
+      shelf.classList.toggle('is-small', grid.children.length <= HOME_SMALL_SHELF);
       shelves.appendChild(shelf);
     });
+    // Shelves of only one or two books go last, together, in the
+    // person's order among themselves.
+    Array.prototype.filter.call(shelves.children, function (sh) { return sh.classList.contains('is-small'); })
+      .forEach(function (sh) { shelves.appendChild(sh); });
     fitHomeShelves();
     renderHomeRecent();
+    renderHomeResults();
 
     // Archived books of every type share one shelf.
     var archived = archivedBooks().concat(archivedPictureBooks(), archivedCartoonBooks(), archivedComics());
@@ -14782,14 +14828,18 @@
       archivedGrid.appendChild(pbEntry(entry.id) === entry ? makePictureBookCard(entry) : cbEntry(entry.id) === entry ? makeCartoonCard(entry) : cmEntry(entry.id) === entry ? makeComicCard(entry) : makeHomeCard(entry));
     });
   }
+  // Every unarchived book of every type, each with its card maker.
+  function allActiveHomeBooks() {
+    return activeBooks().map(function (e) { return { entry: e, make: makeHomeCard }; })
+      .concat(activePictureBooks().map(function (e) { return { entry: e, make: makePictureBookCard }; }),
+        activeCartoonBooks().map(function (e) { return { entry: e, make: makeCartoonCard }; }),
+        activeComics().map(function (e) { return { entry: e, make: makeComicCard }; }));
+  }
   // Recent: the books edited last, whatever their type, newest first.
   // Hidden until there are two, when it would only repeat the one shelf.
   var HOME_RECENT_MAX = 8;
   function renderHomeRecent() {
-    var books = activeBooks().map(function (e) { return { entry: e, make: makeHomeCard }; })
-      .concat(activePictureBooks().map(function (e) { return { entry: e, make: makePictureBookCard }; }),
-        activeCartoonBooks().map(function (e) { return { entry: e, make: makeCartoonCard }; }),
-        activeComics().map(function (e) { return { entry: e, make: makeComicCard }; }))
+    var books = allActiveHomeBooks()
       .sort(function (a, b) { return b.entry.updatedAt - a.entry.updatedAt; })
       .slice(0, HOME_RECENT_MAX);
     var grid = document.getElementById('homeRecentGrid');
@@ -14798,6 +14848,54 @@
     books.forEach(function (b) { grid.appendChild(b.make(b.entry)); });
     fitHomeRecent();
   }
+  // Home search: every word must appear in the book's title or anywhere
+  // in its writing (entries, captions, text boxes); books whose title
+  // matches come first, then the rest, newest first. While there's a
+  // query the results take the place of New book, Recent and the shelves.
+  function homeBookText(data) {
+    var out = [];
+    (function walk(v, key) {
+      if (typeof v === 'string') {
+        if (v.length < 20000 && !/^(data:|blob:|https?:)/.test(v) && !/(^|_)(id|src|url|image|img|font|color|colour)$/i.test(key || '')) out.push(v);
+      } else if (Array.isArray(v)) v.forEach(function (x) { walk(x, key); });
+      else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { if (k !== 'images' && k !== 'gone') walk(v[k], k); });
+    })(data, '');
+    return foldText(out.join('\n'));
+  }
+  function homeSearchMatches(entry, words) {
+    var hay = homeBookText(entry.data || {});
+    var title = foldText(entry.title || '');
+    var inTitle = words.every(function (w) { return title.indexOf(w) >= 0; });
+    if (inTitle) return 2;
+    return words.every(function (w) { return title.indexOf(w) >= 0 || hay.indexOf(w) >= 0; }) ? 1 : 0;
+  }
+  function renderHomeResults() {
+    var q = document.getElementById('homeSearch').value.trim(), searching = !!q;
+    var results = document.getElementById('homeResults');
+    results.hidden = !searching;
+    document.getElementById('homeTop').hidden = searching;
+    document.getElementById('homeShelves').hidden = searching;
+    document.getElementById('homeDeleted').classList.toggle('is-searching', searching);
+    document.getElementById('homeArchived').classList.toggle('is-searching', searching);
+    if (!searching) return;
+    var words = foldText(q).split(/\s+/).filter(Boolean);
+    var hits = allActiveHomeBooks().map(function (b) { b.score = homeSearchMatches(b.entry, words); return b; })
+      .filter(function (b) { return b.score; })
+      .sort(function (a, b) { return (b.score - a.score) || (b.entry.updatedAt - a.entry.updatedAt); });
+    var grid = document.getElementById('homeResultsGrid');
+    grid.innerHTML = '';
+    document.getElementById('homeResultsTitle').textContent = hits.length
+      ? hits.length + (hits.length === 1 ? ' book' : ' books') + ' with \u201c' + q + '\u201d'
+      : 'No books with \u201c' + q + '\u201d';
+    hits.forEach(function (b) { grid.appendChild(b.make(b.entry)); });
+  }
+  var homeSearchInput = document.getElementById('homeSearch');
+  homeSearchInput.addEventListener('input', function () { closeBookMenu(); renderHomeResults(); });
+  homeSearchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && homeSearchInput.value) { e.preventDefault(); homeSearchInput.value = ''; renderHomeResults(); }
+    // Enter opens the first match.
+    if (e.key === 'Enter') { var first = document.querySelector('#homeResultsGrid .home-card'); if (first) first.click(); }
+  });
   function fitHomeRecent() {
     var grid = document.getElementById('homeRecentGrid');
     var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
@@ -14811,11 +14909,15 @@
     renderChapbooksList();
   }
   function wireShelfDrag(shelf, grip) {
-    var box = document.getElementById('homeShelves'), dragging = false, startY = 0, moved = false;
+    var box = document.getElementById('homeShelves'), dragging = false, startX = 0, startY = 0, moved = false;
+    // A shelf moves only among shelves of its own size: the small ones
+    // always come last (renderHome), so it couldn't stay anywhere else.
+    function sameGroup(sh) { return sh.classList.contains('home-shelf') && sh.classList.contains('is-small') === shelf.classList.contains('is-small'); }
+    function nudge(e) { shelf.style.transform = 'translate(' + (e.clientX - startX) + 'px, ' + (e.clientY - startY) + 'px)'; }
     grip.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
       e.preventDefault();
-      dragging = true; moved = false; startY = e.clientY;
+      dragging = true; moved = false; startX = e.clientX; startY = e.clientY;
       shelf.classList.add('is-dragging');
       // On the window, not the grip: moving the shelf in the page drops
       // any pointer capture the grip held.
@@ -14825,23 +14927,30 @@
     });
     function move(e) {
       if (!dragging) return;
-      shelf.style.transform = 'translateY(' + (e.clientY - startY) + 'px)';
-      var others = Array.prototype.filter.call(box.querySelectorAll('.home-shelf'), function (sh) { return sh !== shelf; });
+      nudge(e);
+      var others = Array.prototype.filter.call(box.querySelectorAll('.home-shelf'), function (sh) { return sh !== shelf && sameGroup(sh); });
+      // Shelves sit two to a row: it goes before the first shelf in a
+      // later row, or before one in the pointer's row whose middle is
+      // to the right of the pointer.
       var before = null;
       for (var i = 0; i < others.length; i++) {
         var r = others[i].getBoundingClientRect();
-        if (e.clientY < r.top + r.height / 2) { before = others[i]; break; }
+        if (e.clientY < r.top || (e.clientY <= r.bottom && e.clientX < r.left + r.width / 2)) { before = others[i]; break; }
       }
+      // Past the last big shelf is still ahead of the small ones.
+      if (!before && !shelf.classList.contains('is-small')) before = box.querySelector('.home-shelf.is-small');
       var next = shelf.nextElementSibling;
       while (next && !next.classList.contains('home-shelf')) next = next.nextElementSibling;
       if (before === next) return;
       // Move it, keeping it under the pointer.
-      var oldTop = shelf.getBoundingClientRect().top;
+      var old = shelf.getBoundingClientRect();
       if (before) box.insertBefore(shelf, before);
       else box.appendChild(shelf);
       shelf.style.transform = 'none';
-      startY += shelf.getBoundingClientRect().top - oldTop;
-      shelf.style.transform = 'translateY(' + (e.clientY - startY) + 'px)';
+      var now = shelf.getBoundingClientRect();
+      startX += now.left - old.left;
+      startY += now.top - old.top;
+      nudge(e);
       moved = true;
     }
     function end() {
@@ -14858,32 +14967,30 @@
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
       e.preventDefault();
       var sib = e.key === 'ArrowUp' ? shelf.previousElementSibling : shelf.nextElementSibling;
-      if (!sib || !sib.classList.contains('home-shelf')) return;
+      if (!sib || !sameGroup(sib)) return;
       if (e.key === 'ArrowUp') box.insertBefore(shelf, sib); else box.insertBefore(sib, shelf);
       grip.focus();
       saveShelfOrder();
     });
   }
-  // Each shelf shows one row -- the most recent books
-  // that fit -- with "See all" when there are more (a row's worth is
-  // however many columns the window has room for).
+  // Each shelf shows its three most recent books, with Expand when there
+  // are more.
   var homeShelfOpen = {};
+  var HOME_SHELF_SHOWN = 3, HOME_SMALL_SHELF = 2;
   function fitHomeShelves() {
     document.querySelectorAll('#homeShelves .home-shelf').forEach(function (shelf) {
       var grid = shelf.querySelector('.home-grid'), btn = shelf.querySelector('.home-see-all');
-      var cols = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
-      var books = grid.children.length;
-      var hidden = grid.children.length - cols;
-      Array.prototype.forEach.call(grid.children, function (c, i) { c.classList.toggle('is-over', i >= cols); });
-      btn.hidden = hidden <= 0 && !shelf.classList.contains('is-open');
-      btn.textContent = shelf.classList.contains('is-open') ? 'Show fewer' : 'See all ' + books;
+      Array.prototype.forEach.call(grid.children, function (c, i) { c.classList.toggle('is-over', i >= HOME_SHELF_SHOWN); });
+      btn.hidden = grid.children.length <= HOME_SHELF_SHOWN;
+      btn.textContent = shelf.classList.contains('is-open') ? 'Collapse' : 'Expand';
+      btn.setAttribute('aria-expanded', shelf.classList.contains('is-open') ? 'true' : 'false');
     });
   }
   var homeFitTimer = null;
   window.addEventListener('resize', function () {
     if (!isHomeShown()) return;
     clearTimeout(homeFitTimer);
-    homeFitTimer = setTimeout(function () { fitHomeShelves(); fitHomeRecent(); }, 100);
+    homeFitTimer = setTimeout(fitHomeRecent, 100);
   });
   document.getElementById('homeDeletedBtn').addEventListener('click', function () {
     homeDeletedOpen = !homeDeletedOpen;
