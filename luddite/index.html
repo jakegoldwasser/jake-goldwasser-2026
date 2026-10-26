@@ -723,6 +723,10 @@
   .nowchip .t { color: var(--muted); }
   .nowchip:empty { display: none; }
   @media (max-width: 560px) { .nowchip .t { display: none; } }
+  /* Offline: a quiet note at the top, over every screen. */
+  .offlinenote { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 90; max-width: calc(100vw - 32px); pointer-events: none;
+    font: 400 14px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--rule); border-radius: 999px; padding: 6px 14px; box-shadow: 0 2px 8px rgba(43, 33, 24, .12); }
+  .offlinenote[hidden] { display: none; }
   .acctswitch { position: fixed; left: 12px; bottom: 12px; z-index: 40; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 24px);
     background: var(--card); border: 1.5px solid var(--edge); border-radius: 999px; padding: 5px 6px 5px 14px; font: 600 12px var(--ui); color: var(--muted); }
   .acctswitch .k { letter-spacing: .06em; text-transform: uppercase; }
@@ -2046,6 +2050,7 @@
 </div>
 
 <!-- Jake's own test accounts: one click to switch between them (only shown to those accounts) -->
+<div class="offlinenote no-print" id="offlineNote" role="status" hidden>Offline. Your work is saved on this computer and goes to the server when it’s back online.</div>
 <div class="acctswitch no-print" id="acctSwitch" hidden><span class="k">Testing as</span><span id="acctList"></span></div>
 
 <!-- Teacher: settings (saved as you change them) -->
@@ -2677,7 +2682,10 @@
   async function api(path, body) {
     var headers = { Authorization: 'Bearer ' + authToken };
     if (body) headers['Content-Type'] = 'application/json';
-    var res = await fetch(API + path, { method: body ? 'PUT' : 'GET', headers: headers, body: body ? JSON.stringify(body) : undefined });
+    var res;
+    try { res = await fetch(API + path, { method: body ? 'PUT' : 'GET', headers: headers, body: body ? JSON.stringify(body) : undefined }); }
+    catch (e) { setNetDown(true); var off = new Error('offline'); off.offline = true; throw off; }
+    setNetDown(false);
     var data = await res.json().catch(function () { return {}; });
     if (res.status === 401) { signOut(); throw new Error('signed_out'); }
     if (!res.ok) { var err = new Error(data.error || 'failed'); err.status = res.status; throw err; }
@@ -2698,6 +2706,7 @@
       data = await api('/luddite/status');
     } catch (e) {
       if (e.message === 'signed_out') return;
+      if (e.offline && startOffline()) return;
       $('signInNote').textContent = 'Couldn’t reach the server. Check your connection and try again.';
       show('signInScreen');
       return;
@@ -2708,6 +2717,9 @@
     isTeacher = me.role === 'owner' || me.role === 'teacher';
     if (isTester(me.email)) { var tt = testTokens(); tt[me.email.toLowerCase()] = authToken; store(TEST_KEY, JSON.stringify(tt)); }
     each('.who-email', function (n) { n.textContent = me.email; });
+    offlineBoot = false;
+    store(ME_KEY, JSON.stringify(me));
+    setTimeout(catchUp, 0);
 
     var linked = new URLSearchParams(location.search).get('room') || '';
     if (linked) history.replaceState(null, '', location.pathname);
@@ -3127,8 +3139,10 @@
   // Routes a student to the screen their place in the room calls for.
   function onRoomUpdate(room) {
     roomInfo = room;
+    keepRoomInfo();
     if (room.status === 'admitted') {
-      if (writing || !$('readyScreen').hidden) return; // already in
+      if (writing || (!$('readyScreen').hidden && !redrawReady)) return; // already in
+      redrawReady = false;
       showReady();
       return;
     }
@@ -3198,6 +3212,7 @@
     }).catch(function () {});
   }
   function showReady() {
+    keepRoomInfo();
     var text = previewing ? '' : load(textKey()) || '';
     // Always ask the server: this computer's copy may be older than writing done elsewhere
     // (Jake, 2026-10-26: two students lost work when an old copy was picked up and sent).
@@ -3235,7 +3250,7 @@
     $('submitBtn').hidden = !inRoom;
     $('submitBtn').disabled = !has || previewing;
     $('newPageWrap').hidden = !has;
-    $('dashWrap').hidden = !isTeacher || previewing;
+    $('dashWrap').hidden = !isTeacher || previewing || offlineBoot;
     $('leaveWrap').hidden = !inRoom || previewing;
     var fsOk = canFs() || fsExempt() || !P().lockOnLeave;
     $('noFullscreen').hidden = fsOk;
@@ -3250,7 +3265,8 @@
     // In a room, the writing page's button hands the piece in; on your own it's just Done.
     $('doneBtn').textContent = inRoom && !previewing ? 'Hand in' : 'Done';
     // Handing in is final: no more writing until the teacher lets them back in.
-    var handedIn = inRoom && roomInfo && roomInfo.handedIn && !previewing;
+    var waitingHandIn = inRoom && !previewing && pendingOf('HandIn', roomCode);
+    var handedIn = inRoom && roomInfo && (roomInfo.handedIn || !!waitingHandIn) && !previewing;
     // Handed in: nothing but the note, a way to ask to be unlocked, and Home.
     ['readyRoom', 'readyWindow', 'readyPrompt', 'readyRules', 'lastSession', 'noFullscreen', 'readyWho', 'dashWrap'].forEach(function (id) { if (handedIn) $(id).hidden = true; });
     $('readyWho').hidden = handedIn;
@@ -3262,12 +3278,14 @@
       $('submitNote').hidden = false;
       $('submitNote').className = 'fine good';
       $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. If you need to keep working on it, ask your teacher to unlock it; this page opens again by itself.';
+      if (waitingHandIn) $('submitNote').textContent = 'You’re offline. You handed this in at ' + clock(waitingHandIn.at) + ', and it’s saved on this computer: it goes to your teacher as soon as this computer is back online with Luddite open.';
     } else {
       $('startBtn').hidden = false;
     }
     $('leaveBigBtn').hidden = !handedIn;
     // Left the page last time: no writing until the teacher lets them back in.
-    var lockedOut = inRoom && !handedIn && roomInfo && roomInfo.lockedOut && !previewing && !isTester(me.email);
+    // (a lockout this computer couldn't tell the server about yet counts too)
+    var lockedOut = inRoom && !handedIn && roomInfo && (roomInfo.lockedOut || (!roomInfo.atHome && !!pendingOf('Left', roomCode))) && !previewing && !isTester(me.email);
     if (lockedOut) {
       $('startBtn').disabled = true;
       $('submitNote').hidden = false;
@@ -3283,7 +3301,7 @@
       $('submitNote').textContent = pausedText();
     }
     // Asking flags this student on the teacher's page.
-    var canAsk = handedIn || lockedOut;
+    var canAsk = (handedIn || lockedOut) && !waitingHandIn;
     $('askUnlockBtn').hidden = !canAsk;
     $('askUnlockBtn').disabled = !!(roomInfo && roomInfo.askedAt);
     $('askUnlockBtn').textContent = roomInfo && roomInfo.askedAt ? 'Asked — your teacher has been told'
@@ -3356,10 +3374,20 @@
         : 'Couldn’t hand it in. Your writing is safe here; try again.';
   }
   async function handIn(text) {
-    var data = await api('/luddite/submit', {
+    var body = {
       code: roomCode, text: text, words: wordCount(text),
       label: new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    });
+    };
+    var data;
+    try { data = await api('/luddite/submit', body); }
+    catch (e) {
+      // Offline: handed in on this computer, sent the moment it's back online (catchUp).
+      if (!e.offline || !roomCode) throw e;
+      setPending('HandIn', roomCode, Object.assign({ at: nowMs() }, body));
+      if (roomInfo) { roomInfo.submittedAt = nowMs(); keepRoomInfo(); }
+      return;
+    }
+    setPending('HandIn', roomCode, null);
     noteNow(data.room.now);
     roomInfo = data.room;
   }
@@ -3589,6 +3617,7 @@
     var sending = writing && !draftConflictOpen ? shadow : null;
     if (sending !== null && sending !== lastBackedUp && (sending.trim() || lastBackedUp !== null)) { body.text = sending; body.baseAt = Number(load(textKey() + '.base') || 0); }
     return api('/luddite/event', body).then(function (d) {
+      if (type === 'left') setPending('Left', body.code, null);
       if (d.conflict) onDraftConflict(d.conflict);
       else if (body.text !== undefined) { lastBackedUp = body.text; if (d.draftAt) store(textKey() + '.base', String(d.draftAt)); }
       noteNow(d.room.now);
@@ -3603,8 +3632,12 @@
         roomInfo.handedIn = d.room.handedIn; roomInfo.autoHandedIn = d.room.autoHandedIn;
         timeUp();
       }
+      keepRoomInfo();
       return d.room;
-    }).catch(function () { return null; });
+    }).catch(function (e) {
+      if (e && e.offline && type === 'left') setPending('Left', body.code, { at: nowMs(), words: body.words });
+      return null;
+    });
   }
 
   // The prompt is pinned above the writing until the student closes it (it
@@ -3958,6 +3991,12 @@
     show('lockScreen');
     report('left').then(function (room) {
       if (!locked) return;
+      // Offline in class: still locked; the teacher hears of it once it's back online.
+      if (!room && netDown && held) {
+        $('lockAskBtn').hidden = true;
+        $('lockWait').textContent = 'You’re offline, so your teacher can’t let you back in yet. Your writing is saved on this computer. Once it’s back online, ask your teacher to let you back in.';
+        return;
+      }
       if (room && room.lockedOut) poll(pollUnlock, POLL_WAITING_MS);
       else letBackIn();
     });
@@ -8253,8 +8292,15 @@
       piece = ep ? got.piece : got.sub;
       roomRubric = got.roomRubric || null;
     } catch (e) {
-      $('paper').textContent = e.message === 'no_sub' ? 'This paper was handed in before Luddite kept copies. Open it in Drive instead.' : 'Couldn’t load this paper.';
+      $('paper').textContent = e.message === 'no_sub' ? 'This paper was handed in before Luddite kept copies. Open it in Drive instead.' : e.offline ? 'You’re offline. Papers open again once this computer is back online.' : 'Couldn’t load this paper.';
       return;
+    }
+    // Comments made offline that haven't reached the server yet go back on, and are saved.
+    var keptMarks = pendingMarks()[piece.id];
+    if (keptMarks) {
+      ['text', 'marks', 'endComment', 'grade', 'rubric', 'rubricScores'].forEach(function (k) { if (k in keptMarks.body) piece[k] = keptMarks.body[k]; });
+      clearTimeout(markSaveTimer);
+      markSaveTimer = setTimeout(saveMarks, 700);
     }
     piece.marks = piece.marks || [];
     resetUndo();
@@ -9809,9 +9855,11 @@
     markSaveTimer = null;
     if (!piece) return;
     var p = piece;
+    var path = p.early ? '/luddite/early' : '/luddite/marks';
+    var body = Object.assign(p.early ? { code: p.code, sub: p.sub } : { id: p.id }, { text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
     try {
-      if (p.early) await api('/luddite/early', { code: p.code, sub: p.sub, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
-      else await api('/luddite/marks', { id: p.id, text: p.text, marks: p.marks, endComment: p.endComment || '', grade: p.grade || '', rubric: p.rubric || null, rubricScores: p.rubricScores || [] });
+      await api(path, body);
+      dropPendingMarks(p.id);
       if (p === piece) $('markSaved').textContent = 'Saved';
       // The session's list counts it graded at once (its bubble, the next step).
       if (!p.early && teacherRoom && teacherRoom.submissions) teacherRoom.submissions.forEach(function (x) {
@@ -9820,7 +9868,8 @@
       var es = p.early && teacherRoom && teacherRoom.code === p.code && teacherRoom.students && teacherRoom.students[p.sub];
       if (es) { es.earlyMarked = (p.marks || []).length + ((p.endComment || '').trim() ? 1 : 0); es.earlyGrade = p.grade || ''; }
     } catch (e) {
-      if (p === piece) $('markSaved').textContent = e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
+      if (e.offline) keepPendingMarks(p.id, path, body);
+      if (p === piece) $('markSaved').textContent = e.offline ? 'Offline · saved on this computer' : e.message === 'too_many_marks' ? 'Too many comments to save' : 'Couldn’t save — retrying';
       if (e.message !== 'too_many_marks' && e.message !== 'signed_out') { clearTimeout(markSaveTimer); markSaveTimer = setTimeout(saveMarks, 4000); }
     }
   }
@@ -10406,6 +10455,143 @@
     var ids = latestPerStudent(room.submissions).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });
     openPrintAll(ids, room.title + ': ' + plural(ids.length, 'paper', 'papers'), function () { openRoom(room.code); });
   });
+
+  // ---------------------------------------------------------------------
+  // Offline
+  // ---------------------------------------------------------------------
+  // sw.js keeps a copy of the page, so Luddite opens with no connection.
+  // Writing is saved on this computer as it's typed (textKey), so it goes on
+  // offline; what needs the server waits here until it's back: the writing's
+  // backup (the next heartbeat), a lockout ('left', so leaving the page offline
+  // still locks a student out), a hand-in, and a teacher's comments.
+  var ME_KEY = 'luddite.me.v1';
+  var netDown = false;      // the last call to the server couldn't get through
+  var offlineBoot = false;  // opened offline, from what this computer has
+  var redrawReady = false;  // back online: the ready screen shows the server's word
+  function setNetDown(down) {
+    if (down === netDown) return;
+    netDown = down;
+    $('offlineNote').hidden = !down;
+    if (!down) setTimeout(catchUp, 0);
+  }
+  window.addEventListener('offline', function () { if (authToken) setNetDown(true); });
+  window.addEventListener('online', tryOnline);
+  setInterval(function () { if (netDown && navigator.onLine !== false) tryOnline(); }, 15000);
+  // Back online: opened offline, the page starts properly (unless they're
+  // writing, which just carries on); otherwise the waiting things are sent.
+  function tryOnline() {
+    if (!authToken) return;
+    api('/luddite/status').then(function (d) {
+      if (d.session) { authToken = d.session; store(AUTH_KEY, authToken); }
+      if (offlineBoot && !writing && !locked) { redrawReady = true; start(); }
+    }).catch(function () {});
+  }
+
+  // What waits for the server, per student and writing session:
+  // 'HandIn' (the hand-in's body) and 'Left' (a lockout).
+  function pendingKey(kind, code) { return 'luddite.pending' + kind + '.' + me.email + '.' + code; }
+  function pendingOf(kind, code) { try { return code ? JSON.parse(load(pendingKey(kind, code)) || 'null') : null; } catch (e) { return null; } }
+  function setPending(kind, code, v) { if (code) store(pendingKey(kind, code), v ? JSON.stringify(v) : null); }
+  function pendingCodes(kind) {
+    var pre = pendingKey(kind, ''), out = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0) out.push(k.slice(pre.length)); } } catch (e) {}
+    return out;
+  }
+  // A teacher's comments not yet saved, by paper id.
+  var MARKS_KEY = 'luddite.pendingMarks';
+  function pendingMarks() { try { return JSON.parse(load(MARKS_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function keepPendingMarks(id, path, body) { var m = pendingMarks(); m[id] = { path: path, body: body, at: Date.now() }; store(MARKS_KEY, JSON.stringify(m)); }
+  function dropPendingMarks(id) { var m = pendingMarks(); if (!m[id]) return; delete m[id]; store(MARKS_KEY, Object.keys(m).length ? JSON.stringify(m) : null); }
+
+  // The student's room as last heard from the server.
+  function roomInfoKey(code) { return 'luddite.roomInfo.' + me.email + '.' + code; }
+  function keepRoomInfo() { if (mode === 'room' && !previewing && roomCode && roomInfo && me.email) store(roomInfoKey(roomCode), JSON.stringify(roomInfo)); }
+
+  // Opened with no connection: who was signed in here, and (a student) the
+  // writing session they were in, as this computer last heard of it; a
+  // teacher can write on their own. False if this computer has nothing.
+  function startOffline() {
+    var m = null;
+    try { m = JSON.parse(load(ME_KEY) || 'null'); } catch (e) {}
+    var tokenEmail = (decodeJwtPayload(authToken).email || '').toLowerCase();
+    if (!m || !m.email || (tokenEmail && tokenEmail !== m.email.toLowerCase())) return false;
+    me = m;
+    isTeacher = me.role === 'owner' || me.role === 'teacher';
+    offlineBoot = true;
+    setNetDown(true);
+    each('.who-email', function (n) { n.textContent = me.email; });
+    previewing = false;
+    if (isTeacher) { mode = 'solo'; showReady(); return true; }
+    mode = 'room';
+    var code = load(roomKey()) || '', ri = null;
+    try { ri = code ? JSON.parse(load(roomInfoKey(code)) || 'null') : null; } catch (e) {}
+    if (ri && ri.status === 'admitted') { roomCode = code; roomInfo = ri; showReady(); return true; }
+    showJoin('You’re offline. Your writing sessions show here again once this computer is back online.');
+    return true;
+  }
+
+  // Back online: send what waited.
+  var catchingUp = false;
+  async function catchUp() {
+    if (catchingUp || !authToken || !me.email) return;
+    catchingUp = true;
+    try {
+      // Lockouts first, so the teacher knows before anything else arrives.
+      for (var code of pendingCodes('Left')) {
+        if (code === roomCode) {
+          var room = await report('left');
+          if (!room) break;
+          if (locked && room.lockedOut) {
+            $('lockAskBtn').hidden = false;
+            $('lockWait').textContent = 'Ask your teacher to let you back in. This page opens again by itself when they do.';
+            poll(pollUnlock, POLL_WAITING_MS);
+          } else if (locked) letBackIn();
+          else if (!$('readyScreen').hidden) showReady();
+        } else {
+          var lp = pendingOf('Left', code);
+          await api('/luddite/event', { code: code, type: 'left', words: (lp && lp.words) || 0 }).catch(function (e) { if (!e.offline) return null; throw e; });
+          setPending('Left', code, null);
+        }
+      }
+      for (var hc of pendingCodes('HandIn')) {
+        var body = pendingOf('HandIn', hc);
+        if (!body) { setPending('HandIn', hc, null); continue; }
+        var send = Object.assign({}, body);
+        delete send.at;
+        try {
+          var d = await api('/luddite/submit', send);
+          setPending('HandIn', hc, null);
+          if (hc === roomCode) { noteNow(d.room.now); roomInfo = d.room; if (!$('readyScreen').hidden) showReady(); }
+        } catch (e) {
+          if (e.offline) break;
+          setPending('HandIn', hc, null);
+          if (hc === roomCode && !$('readyScreen').hidden) {
+            showReady();
+            $('submitNote').hidden = false;
+            $('submitNote').className = 'fine warn';
+            $('submitNote').textContent = handInError(e);
+          }
+        }
+      }
+      var marks = pendingMarks();
+      for (var id of Object.keys(marks)) {
+        // (the paper open now saves itself, with these on it)
+        if (piece && piece.id === id && !$('markScreen').hidden) continue;
+        try { await api(marks[id].path, marks[id].body); dropPendingMarks(id); }
+        catch (e) { if (e.offline) break; if (!(e.status >= 500)) dropPendingMarks(id); }
+      }
+      // The writing's backup, now rather than at the next heartbeat.
+      if (writing && !locked && !netDown) report('writing');
+    } catch (e) {}
+    catchingUp = false;
+  }
+
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; }).then(function (reg) {
+      // (what this visit loaded, kept for opening offline: see sw.js)
+      if (reg.active) reg.active.postMessage({ keep: performance.getEntriesByType('resource').map(function (r) { return r.name; }) });
+    }).catch(function () {}); });
+  }
 
   // ---------------------------------------------------------------------
   // Start

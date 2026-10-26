@@ -206,6 +206,9 @@
     animation: statusBadgePulse 1.8s ease-in-out infinite;
   }
   .status-badge.needs-reauth::before { background: var(--warning); }
+  /* No connection: everything is still saved on this device. */
+  .status-badge.is-offline { color: var(--ink-soft); border-color: var(--line-strong); background: var(--surface-2); }
+  .status-badge.is-offline::before { background: var(--ink-soft); }
   @keyframes statusBadgePulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(156, 107, 18, 0); }
     50% { box-shadow: 0 0 0 4px rgba(156, 107, 18, 0.22); }
@@ -5720,6 +5723,15 @@
     el.classList.toggle('error', kind === 'error');
     el.classList.toggle('is-synced', kind === 'synced');
     el.classList.toggle('needs-reauth', kind === 'needs-reauth');
+    el.classList.toggle('is-offline', kind === 'offline');
+  }
+  // A cloud call that couldn't get through: offline says so quietly (the
+  // books are saved here and go up when the connection is back), anything
+  // else is the red error.
+  var OFFLINE_STATUS = 'Offline — saved on this device';
+  function cloudFailed(msg) {
+    if (navigator.onLine === false) setAccountStatus(OFFLINE_STATUS, 'offline');
+    else { setAccountStatus(msg, 'error'); scheduleCloudRetry(); }
   }
 
   function closeAccountMenu() {
@@ -5876,7 +5888,7 @@
     try {
       var res = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
-      if (!res.ok) { finishInitialLoad(); setAccountStatus('Signed in — couldn’t reach the cloud', 'error'); return; }
+      if (!res.ok) { finishInitialLoad(); cloudFailed('Signed in — couldn’t reach the cloud'); return; }
       var data = await res.json();
       if (data.session) {
         cloudAuthToken = data.session;
@@ -5931,7 +5943,7 @@
       else setAccountStatus('Signed in', 'synced');
     } catch (e) {
       finishInitialLoad();
-      setAccountStatus('Signed in — couldn’t reach the cloud', 'error');
+      cloudFailed('Signed in — couldn’t reach the cloud');
     }
   }
 
@@ -6190,11 +6202,48 @@
         } })
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
-      if (!res.ok) { setAccountStatus('Signed in — couldn’t save to the cloud', 'error'); return; }
+      if (!res.ok) { cloudFailed('Signed in — couldn’t save to the cloud'); return; }
       setAccountStatus('Signed in', 'synced');
     } catch (e) {
-      setAccountStatus('Signed in — couldn’t save to the cloud', 'error');
+      cloudFailed('Signed in — couldn’t save to the cloud');
     }
+  }
+
+  // ---- Offline ----
+  // Everything is saved on this device as it's typed, so writing goes on
+  // with no connection (and sw.js keeps a copy of the page, so it opens
+  // without one too). When the connection is back, the books are merged
+  // with the account's (mergeLibraries, as on any load) and saved up, and
+  // waiting pictures are sent.
+  function catchUpWithCloud() {
+    clearTimeout(cloudRetryTimer);
+    // Opened offline, Google's sign-in script never loaded: load it now.
+    if (!window.BOOKBUG_READ_TOKEN && !(window.google && google.accounts && google.accounts.id)) {
+      var gsi = document.createElement('script');
+      gsi.src = 'https://accounts.google.com/gsi/client';
+      gsi.async = true;
+      document.head.appendChild(gsi);
+      waitForGoogleIdentity(50);
+    }
+    if (!cloudAuthToken) { if (getLastGoogleUser() && navigator.onLine !== false) setAccountStatus('Signed out — sign in again to keep saving', 'needs-reauth'); return; }
+    if (signedInThisLoad) syncLibraryToCloud();
+    else pullLibraryFromCloud().then(function () { if (signedInThisLoad) syncLibraryToCloud(); });
+    pbFlushImageQueue();
+  }
+  // A save that failed on a connection that's up but flaky tries again.
+  var cloudRetryTimer = null;
+  function scheduleCloudRetry() {
+    clearTimeout(cloudRetryTimer);
+    if (cloudAuthToken) cloudRetryTimer = setTimeout(catchUpWithCloud, 30000);
+  }
+  window.addEventListener('online', catchUpWithCloud);
+  if (navigator.onLine === false && getLastGoogleUser()) setAccountStatus(OFFLINE_STATUS, 'offline');
+  window.addEventListener('offline', function () { if (cloudAuthToken || getLastGoogleUser()) setAccountStatus(OFFLINE_STATUS, 'offline'); });
+  if (!window.BOOKBUG_READ_TOKEN && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; }).then(function (reg) {
+      // (what this visit loaded, kept for opening offline: see sw.js)
+      if (reg.active) reg.active.postMessage({ keep: performance.getEntriesByType('resource').map(function (r) { return r.name; }) });
+    }).catch(function () {}); });
   }
 
   function waitForGoogleIdentity(retriesLeft) {
