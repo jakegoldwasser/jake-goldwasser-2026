@@ -7348,6 +7348,342 @@
   }
   function button(text, cls, fn) { var b = el('button', cls, text); b.addEventListener('click', fn); return b; }
 
+  // ---- Hover explanations: every button says exactly what a click does ----
+  // Looked up when the pointer (or keyboard focus) arrives, so a button whose
+  // label changes (Pause everyone / Resume everyone) always says the right
+  // thing. A title the page set itself (a padlock, a bubble) is kept.
+  // By id first, then by label, then by where the button is.
+  var TIP_ID = {
+    proctorHomeBtn: 'Opens the writing sessions you proctor',
+    leaveRoomBtn: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
+    leaveRoomBtn2: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
+    leaveBigBtn: 'Leaves this writing session and goes back to the first page. Your writing is kept',
+    dashLink: 'Goes back to Home',
+    backToDash: 'Goes back to Home',
+    classBack: 'Goes back to Home',
+    studentBack: 'Goes back to Home',
+    workHome: 'Goes back to Home',
+    startBtn: function (b) { return /keep/i.test(b.textContent) ? 'Opens your writing full screen, where you left off' : 'Opens the writing page full screen so you can start'; },
+    submitBtn: 'Hands in your writing to your teacher, after asking you to confirm. Then you can’t write more unless your teacher unlocks you',
+    askUnlockBtn: 'Tells your teacher you’d like to be unlocked so you can write again',
+    newPageBtn: 'Erases everything on this page, after asking you to confirm. It can’t be undone',
+    rfHandIn: 'Hands in your reflection to your teacher, after asking you to confirm. Then you can’t change it unless your teacher lets you',
+    rfAskBtn: 'Tells your teacher you’d like to be let back in to your reflection',
+    rfBackBtn: 'Goes back to full screen so you can keep writing your reflection',
+    promptMore: 'Scrolls the prompt down so you can read the rest of it',
+    promptClose: 'Hides the prompt so the writing has more room. Show the prompt brings it back',
+    promptShow: 'Shows the prompt above your writing again',
+    rubricWBtn: 'Opens the rubric for this writing session. Your writing stays where it is',
+    classWorkBtn: 'Opens what your classmates have written so far, to read only',
+    myGradingBtn: 'Opens your teacher’s comments on your writing',
+    homePrintW: 'Prints your writing. It doesn’t count as leaving the page',
+    leaveNowBtn: 'Saves your writing and leaves the page for now. You won’t be locked out; come back to keep writing',
+    lockLeaveBtn: 'Saves your writing and leaves the page for now. You won’t be locked out; come back to keep writing',
+    doneBtn: function (b) { return /hand in/i.test(b.textContent) ? 'Asks you to confirm, then hands in your writing to your teacher' : 'Leaves the writing page. What you wrote stays on this computer'; },
+    msgHide: 'Hides the live comments to a tab at the right edge of the page',
+    msgShow: 'Opens your live comments with your teacher',
+    handBtn: 'Opens a box to ask your teacher a question or tell them something',
+    handBtn2: 'Opens a box to ask your teacher a question or tell them something',
+    handCancel: 'Closes this without sending anything',
+    handGo: 'Sends this to your teacher as a raised hand',
+    handinCancel: 'Closes this and goes back to your writing. Nothing is handed in',
+    handinGo: 'Hands in your writing now. Then you can’t write more unless your teacher unlocks you',
+    lockAskBtn: 'Tells your teacher you’d like to be let back in',
+    resumeBtn: 'Goes back to full screen so you can keep writing',
+    proctorWriteBtn: 'Goes to the page where you type an Entry Phrase to write in a writing session yourself',
+    proctorBack: 'Goes back to the list of writing sessions you proctor',
+    pxStartBtn: 'Starts this writing session now for everyone in it',
+    pxPauseAllBtn: function (b) { return /resume/i.test(b.textContent) ? 'Lets everyone write again and starts their clocks again' : 'Stops everyone writing and stops their clocks until you resume'; },
+    newBtn: 'Opens the form to make a new writing session',
+    newRoomClose: 'Folds the new writing session form away. What you’ve filled in is kept',
+    newRoomAddDay: 'Adds another day to this writing session’s schedule',
+    newClassToggle: function (b) { return /cancel/i.test(b.textContent) ? 'Closes the new class form without making a class' : 'Opens the form to make a new class from a list of email addresses'; },
+    studentAll: function (b) { return /hide/i.test(b.textContent) ? 'Folds the list of students away' : 'Shows everyone who has handed in work'; },
+    roomClass: 'Opens this class’s page',
+    pauseAllBtn: function (b) { return /resume/i.test(b.textContent) ? 'Lets everyone write again and starts their clocks again' : 'Stops everyone writing and stops their clocks until you resume. The session stays open'; },
+    openCloseBtn: function (b) {
+      var t = b.textContent;
+      return /end/i.test(t) ? 'Asks you to confirm, then hands in everyone still writing, with what they’ve written, and locks them out. Students on an alternative schedule keep going'
+        : /start/i.test(t) ? 'Starts this writing session now, so students can come in and write'
+        : 'Opens this writing session again, so students can come back in and write';
+    },
+    phraseBtn: 'Shows the Entry Phrase and a link students can use to join',
+    anonBtn: function (b) { return /show/i.test(b.textContent) ? 'Shows students’ real names again on this session’s pages' : 'Swaps every student’s name for an alias like “Student K7Q” on this session’s pages, its grading and its printing'; },
+    anonKeyBtn: 'Lists the aliases on this page and the names behind them, with Print',
+    addProctorRoomBtn: 'Asks for an email address, then makes that person a proctor of this session: they can let students in, unlock, and pause, but never see writing',
+    previewBtn: 'Opens the writing page exactly as a student sees it, with the prompt. Nothing you type is handed in',
+    renameBtn: 'Asks for a new name for this writing session',
+    promptBtn: 'Opens the prompt to edit. You can also make the same change in your other classes’ sessions of the same name',
+    rubricBtn: 'Opens the list of your rubrics to choose one for this session, or make a new one',
+    timeBtn: 'Opens the times to change when this writing session starts',
+    atHomeBtn: function (b) { return /back to class/i.test(b.textContent) ? 'Goes back to class rules: full screen, and leaving the page locks a student out' : 'Lets students work at home: leaving the page never locks them out, and there’s no time limit until you end the session. Anyone locked out is let back in'; },
+    homePrintBtn: function (b) { return /stop/i.test(b.textContent) ? 'Takes away the Print button students have for their writing' : 'Gives students a Print button for their own writing'; },
+    shareWorkBtn: function (b) { return /stop/i.test(b.textContent) ? 'Takes away the Classmates’ work button, so students see only their own writing' : 'Gives students a Classmates’ work button to read everyone else’s writing so far'; },
+    reopenBtn: 'Opens this writing session again now, so students can come back in and write',
+    reflectBtn: function (b) { return /ask for/i.test(b.textContent) ? 'Opens a box to ask students who handed in to reread their paper and write a reflection, with an optional prompt' : 'Opens this session’s reflection prompt and settings to change them'; },
+    reflectOffBtn: 'Stops asking for reflections. Reflections already written are kept',
+    printAllRoom: 'Opens the print page with every paper handed in to this session, each marked up',
+    handBackAllBtn: 'Asks you to confirm, then lets every student read your comments (and their grade after five minutes), papers and writing so far alike',
+    deleteRoomBtn: 'Asks you to confirm, then deletes this writing session',
+    roomPromptMore: function (b) { return b.textContent.trim() === '+' ? 'Shows the whole prompt again' : 'Folds the prompt to its first lines'; },
+    roomPromptCancel: 'Stops editing the prompt without saving',
+    roomPromptSave: 'Saves the prompt as you’ve edited it',
+    roomReflectEdit: 'Opens the reflection prompt and settings to change them',
+    roomReflectWatch: 'Opens students’ reflections, one at a time, with Previous and Next',
+    admitAllBtn: 'Lets everyone in the waiting room into this writing session',
+    unlockAllBtn: 'Asks you to confirm, then unlocks everyone locked out or handed in, so they can write again',
+    classRenameBtn: 'Asks for a new name for this class',
+    classDeleteBtn: 'Asks you to confirm, then deletes this class. Writing sessions given to it are kept',
+    printBack: 'Goes back to the page you came from',
+    printPdf: 'Opens the print window; choose Save as PDF there',
+    printGo: 'Opens the print window to print these pages',
+    markClose: 'Closes grading (after the last save) and goes back to the page under it',
+    markBack: 'Goes back',
+    markPrev: 'Opens the paper before this one',
+    markNext: 'Opens the next paper',
+    fmtB: 'Makes what you write into the text bold (or Cmd/Ctrl+B)',
+    fmtI: 'Makes what you write into the text italic (or Cmd/Ctrl+I)',
+    markChatBtn: 'Shows or hides your live comments with this student, at the right',
+    markEndBtn: 'Shows or hides the end comment, stock comments, rubric and grade',
+    markMarksBtn: 'Shows or hides your comments, cross-outs and write-ins. Hidden, the paper is read-only',
+    markDrafts: 'Opens this student’s earlier drafts, read-only',
+    markWlog: 'Opens this student’s writing log: how and when the writing came, minute by minute, with earlier versions',
+    markDrive: 'Opens this paper’s copy in Google Drive, in a new tab',
+    markHandBack: function (b) { return /stop/i.test(b.textContent) ? 'Stops sharing: the student can no longer read your comments or grade' : 'Lets the student read your comments (and the grade after five minutes with them), then opens the next paper not yet shared'; },
+    markPrint: 'Prints this paper with your comments in the margin',
+    stockEdit: 'Opens your stock comments as text to change, add or remove them (saved on this computer)',
+    sideUnread: 'Shows this student’s live comments as new again, and closes them',
+    sideMin: 'Minimizes the live comments. Live comments in the bar brings them back',
+    studentPrint: 'Prints this page: just your comments on this student’s papers',
+    studentPrintAll: 'Opens the print page with everything this student has handed in, each marked up',
+    prefsBtn: 'Opens Settings: what students get while writing, rubrics, and your account',
+    anonKeyPrint: 'Prints the names key',
+    anonKeyClose: 'Closes the names key',
+    livePrev: 'Opens the student before this one in the Students list',
+    liveNext: 'Opens the next student in the Students list',
+    liveUnread: 'Shows this student’s live comments as new again, and closes this',
+    liveMarksBtn: 'Shows or hides your comments on their writing',
+    liveGrade: 'Opens this student’s grading: their paper, or their writing so far',
+    liveClose: 'Closes this student’s writing',
+    rvClose: function (b) { return /back/i.test(b.textContent) ? 'Closes the rubric and goes back to your writing' : 'Closes the rubric'; },
+    cwBack: 'Goes back to the list of classmates',
+    cwClose: 'Closes classmates’ work and goes back to your writing',
+    dbNewBtn: 'Asks you to confirm, then keeps your writing as it is now as a draft and starts a new one from a copy of it',
+    dbClose: 'Closes the drafts list',
+    dvBack: 'Goes back to the list of drafts',
+    dvName: 'Asks for a name for this draft, like “After feedback”',
+    dvFinal: function (b) { return /unmark/i.test(b.textContent) ? 'Takes away this draft’s Final mark' : 'Marks this draft as your final one'; },
+    dvClose: function (b) { return /back/i.test(b.textContent) ? 'Closes this draft and goes back to your writing' : 'Closes this draft'; },
+    wlPrev: 'Opens the writing log of the student before this one',
+    wlNext: 'Opens the writing log of the next student',
+    wlClose: 'Closes the writing log',
+    mgClose: 'Closes your teacher’s comments and goes back to your writing',
+    liveDockToggle: 'Folds or unfolds the list of live comments',
+    chatAllBtn: 'Opens a box to send one live comment to everyone in this session',
+    liveDockMin: 'Shrinks live comments to an icon in the corner',
+    liveDockIcon: 'Opens the list of live comments',
+    comingPrint: 'Prints this list of times you’re needed',
+    comingClose: 'Closes this list',
+    chatAllCancel: 'Closes this without sending anything',
+    chatAllGo: 'Sends this to every student in the session',
+    newRubricBtn: 'Opens a new rubric to make',
+    teacherClassBtn: 'Makes a class of everyone on this list, plus you',
+    addPermProctorBtn: 'Asks for an email address, then makes that person a proctor of every student on an alternative schedule, in every session',
+    changeNameBtn: 'Asks for the name students see you as',
+    soloBtn: 'Opens a page to write on your own, not in a writing session',
+    prefsClose: 'Closes Settings. Changes are already saved',
+    popDelete: function (b) { return /cross-out/i.test(b.textContent) ? 'Takes the cross-out off these words' : /arrow/i.test(b.textContent) ? 'Deletes this arrow and its comment' : 'Deletes this comment'; },
+    popCancel: 'Closes this without saving',
+    popSave: 'Saves this (or Cmd/Ctrl+Enter)',
+    rfViewPrev: 'Opens the reflection before this one',
+    rfViewNext: 'Opens the next reflection',
+    rfViewClose: 'Closes the reflections',
+    askNo: 'Closes this without doing anything',
+    askYes: function (b) { var h = document.querySelector('#askBox h2'); return h && h.textContent.trim() ? 'Goes ahead: ' + h.textContent.trim().replace(/\?$/, '') : 'Goes ahead'; },
+    reAddRow: 'Adds a skill (a row) to the rubric',
+    reAddLevel: 'Adds a level (a column) to the rubric',
+    rePdfBtn: 'Opens your files to pick a PDF of the rubric',
+    reGdocBtn: 'Opens Google’s file picker to choose the Google Doc with the rubric',
+    reGdocAgain: 'Brings in the Google Doc again as it is now',
+    reCancel: 'Closes this rubric without saving',
+    reSave: 'Saves this rubric',
+    copyLinkBtn: 'Copies the link students can use to join',
+    phraseCancel: 'Takes this casual session back: it’s deleted before anyone uses it',
+    phraseClose: 'Closes this',
+    tbRemove: 'Takes away this student’s alternative schedule: they go back to the session’s own times',
+    tbCancel: 'Closes this without saving',
+    tbSave: 'Saves this schedule',
+    exitPreviewBtn: 'Goes back to the writing session’s page'
+  };
+  var TIP_TEXT = {
+    'join': 'Joins the writing session with this Entry Phrase',
+    'sign out': 'Signs you out of Luddite on this computer',
+    'coming up': 'Opens every time you’re needed as a proctor from now on, by day, with Print',
+    'overview': 'Shows Home’s writing sessions',
+    'students': 'Shows your students and classes',
+    'sessions': 'Shows the writing session you opened last',
+    'right now': 'Starts the writing session as soon as you make it',
+    'at a set time': 'Picks a day and time for the writing session to start',
+    'a new paper each day': 'Makes a separate writing session, with its own paper, for each day',
+    'one paper over all the days': 'Makes one writing session that students write over all the days, paused between them',
+    'create the writing session': 'Makes the writing session as filled in above',
+    'make the class': 'Makes the class from the name and email addresses above',
+    'final only': 'Prints only the draft marked final (else the one they’re writing)',
+    'all drafts': 'Prints every draft, oldest first, each with its comments',
+    'none': 'Prints with no lined margin',
+    'narrow': 'Prints with a narrow ruled margin beside the text for writing by hand',
+    'wide': 'Prints with a wide ruled margin beside the text for writing by hand',
+    'small': 'Prints the papers in small type',
+    'normal': 'Prints the papers in normal type',
+    'large': 'Prints the papers in large type',
+    'larger': 'Prints the papers in the largest type',
+    'comment': 'Opens a box to write a comment on these words, in the margin',
+    'cross out': 'Crosses out these words',
+    'remove the cross-out': 'Takes the cross-out off these words',
+    'write here': 'Opens a box to write words into the text here',
+    'make a grid': 'Makes the rubric a grid of skills and levels, scored on the marking page',
+    'paste it in': 'Makes the rubric from text or a table you paste in',
+    'upload a pdf': 'Makes the rubric from a PDF on your computer',
+    'from google docs': 'Makes the rubric from one of your Google Docs',
+    'same start as everyone': 'Gives this student the session’s own start time',
+    'a different time': 'Gives this student their own start time',
+    'in parts': 'Splits this student’s time into parts, in any periods',
+    'waiting room': 'Shows what a student sees while waiting to be let in',
+    'let in (ready to write)': 'Shows what a student sees once let in, before they start writing',
+    'send': 'Sends this live comment',
+    'add': 'Adds these email addresses',
+    'remove': 'Removes them from this list',
+    'let in': 'Lets this student into the writing session',
+    'let them back in': 'Lets this student back in to keep writing',
+    'let back in': 'Lets this student back in to keep writing',
+    'unlock': 'Unlocks this student so they can write again',
+    'resume': 'Lets this student write again and starts their clock again',
+    'pause': 'Stops this student writing and stops their clock until you resume',
+    'hand in now': 'Asks you to confirm, then hands in this student’s writing now and ends their time',
+    'begin now': 'Asks you to confirm, then starts this student’s time now',
+    'begin the next part now': 'Asks you to confirm, then starts this student’s next part now',
+    'set alternative schedule': 'Opens this student’s own schedule: a different start, extra time, or in parts',
+    'change alternative schedule': 'Opens this student’s alternative schedule to change it',
+    'grade': 'Opens this paper’s grading',
+    'shared': 'The student can see your grading. Opens it',
+    'start grading': 'Opens the first paper to grade',
+    'grade the next one': 'Opens the next paper to grade',
+    'share grading': 'Lets the student read your comments (and their grade after five minutes)',
+    'grade!': 'Opens this paper to grade',
+    'grade so far': 'Opens what they’ve written so far to comment on and grade; it moves to their paper when they hand it in',
+    'graded': 'Opens this paper’s grading (graded, not yet shared)',
+    'grading shared': 'Opens this paper’s grading (the student can read it)',
+    'nothing handed in': 'Nothing was handed in',
+    'their work': 'Opens everything this student has handed in',
+    'read the comments': 'Opens this paper with your teacher’s comments',
+    'reflect': 'Opens your paper full screen to write a reflection on it',
+    'go on': 'Opens your reflection full screen to keep writing it',
+    'enter': 'Goes into this writing session',
+    'open': 'Opens this writing session to read your paper',
+    'print': 'Prints just this paper, marked up',
+    'edit': 'Opens this rubric to change it',
+    'delete': 'Asks you to confirm, then deletes this',
+    'change': 'Opens your rubrics to choose a different one for this session',
+    'use a rubric': 'Opens your rubrics to choose one for this session',
+    'open the rubric': 'Opens this session’s rubric',
+    'show changes': 'Shows words added since the version before in green and deleted ones struck through',
+    'earlier': 'Shows the version before this one',
+    'later': 'Shows the version after this one',
+    'restore this version': 'Asks you to confirm, then makes this version the student’s writing again. What they have now is kept as a version',
+    'see the text before and after': 'Shows their whole text just before and just after this burst of words',
+    'another part': 'Adds another part to this student’s time',
+    'show': 'Shows past writing sessions',
+    'hide': 'Hides past writing sessions',
+    'show fewer': 'Shows only the latest past sessions',
+    'connect google drive': 'Lets Luddite keep a copy of each paper in your Google Drive',
+    'use a different account': 'Signs in with a different Google account',
+    'share without a grade': 'Lets the student read your comments now, with no grade',
+    'open in drive': 'Opens this paper’s copy in Google Drive, in a new tab',
+    'unlock so they can write again': 'Unlocks this student so they can write again on the same paper',
+    'pause their time': 'Stops this student writing and stops their clock until you resume',
+    'writing log': 'Opens this student’s writing log: how and when the writing came, minute by minute',
+    'old drafts': 'Opens this student’s earlier drafts, read-only',
+    'mark live comments as unread': 'Shows this student’s live comments as new again',
+    'let them change their reflection': 'Lets this student change their handed-in reflection',
+    'remove from this session': 'Asks you to confirm, then takes this student out of this writing session',
+    'name this draft': 'Asks for a name for the draft you’re writing',
+    'rename this draft': 'Asks for a new name for the draft you’re writing',
+    'mark this draft as final': 'Marks the draft you’re writing as your final one',
+    'unmark as final': 'Takes away this draft’s Final mark',
+    'start a new draft': 'Asks you to confirm, then keeps your writing as it is now as a draft and starts a new one from a copy of it',
+    'type in email addresses': 'Lets you type or paste the students’ email addresses',
+    'on': 'Turns this on',
+    'off': 'Turns this off',
+    'underline only': 'Underlines misspelled words, and students can right-click one to pick a spelling; nothing is corrected for them',
+    'cancel': 'Closes this without saving',
+    'close': 'Closes this',
+    'done': 'Closes this',
+    'save': 'Saves this',
+    'ok': 'Goes ahead'
+  };
+  function tipKey(t) { return String(t || '').replace(/[‘’]/g, '’').replace(/\s+/g, ' ').trim().toLowerCase().replace(/^[\s←‹›↓+–−×?]+|[\s→›….?▾▴▸]+$/g, '').replace(/\s*\?$/, ''); }
+  function tipFor(b) {
+    var id = b.id, t = id && TIP_ID[id];
+    if (t) return typeof t === 'function' ? t(b) : t;
+    var k = tipKey(b.textContent);
+    // Settings' On / Off rows say which setting they set, for every session you run.
+    var sw = b.closest('.switchrow');
+    if (sw && b.closest('.segctl')) {
+      var nm = sw.querySelector('.nm'), name = nm ? nm.childNodes[0].textContent.trim() : '';
+      return 'Sets “' + name + '” to ' + b.textContent.trim() + ' for every writing session you run, including ones going now';
+    }
+    if (b.matches('.sqbtn')) return 'Opens this writing session for ' + (b.getAttribute('aria-label') || '').replace(/^Open [^:]*: /, '');
+    if (b.matches('.pbtn')) return 'Picks this period (click again to unpick it)';
+    if (b.matches('.cwitem')) return 'Opens this writing, to read only';
+    if (b.matches('.ldrow')) return 'Opens this student’s writing with your live comments';
+    if (b.matches('.classcaret')) return 'Shows or hides this class’s students right here';
+    if (b.matches('.odel')) return 'Deletes this comment on deleted words';
+    if (b.matches('.fold')) return k === '+' || b.textContent.trim() === '+' ? 'Shows this comment in full again' : 'Minimizes this comment (it’s still there)';
+    if (b.closest('#newRoomClasses')) return /type in/.test(k) ? TIP_TEXT['type in email addresses'] : 'Picks this class for the writing session (click again to unpick it). Several classes make one session each';
+    if (b.closest('#classColorSeg')) return 'Gives this class this color';
+    if (b.closest('#classPeriodSeg, #newClassPeriod')) return 'Sets this class’s period to ' + b.textContent.trim();
+    if (b.closest('#classGradeSeg, #newClassGrade')) return 'Sets this class’s grade level to ' + b.textContent.trim();
+    if (k === 'remove') {
+      if (b.closest('#permProctorList')) return 'Asks you to confirm, then stops this person proctoring every session';
+      if (b.closest('#teacherList')) return 'Takes this teacher off the list of who can make writing sessions';
+      if (b.closest('#proctorsList')) return 'Stops this person proctoring this session';
+      if (b.closest('#waitingList')) return 'Removes this student from the waiting room';
+      if (b.closest('#timeBox')) return 'Removes this part';
+      if (b.closest('#classScreen')) return 'Asks you to confirm, then takes this student off the class list';
+    }
+    if (k === 'send' && b.closest('#markSide, #liveBox, #sideChatForm')) return 'Sends this live comment to the student';
+    if (k === 'send') return 'Sends this live comment to your teacher';
+    if (k === 'add' && b.closest('#addTeacherForm')) return 'Adds these addresses to the teachers who can make writing sessions';
+    if (k === 'add' && b.closest('#classScreen')) return 'Adds these email addresses to the class';
+    if (TIP_TEXT[k]) return TIP_TEXT[k];
+    if (/^rubric: /.test(k)) return 'Opens this session’s rubric';
+    if (/^share all \d/.test(k)) return 'Asks you to confirm, then lets every student read your comments (and their grade after five minutes)';
+    if (/^show all \d+ (past|student)/.test(k)) return /past/.test(k) ? 'Shows every past writing session' : 'Shows everyone who has handed in work';
+    if (b.closest('.sibmenu .pop, #gradePick .pop')) return b.classList.contains('here') ? 'The writing session you’re on' : 'Opens this writing session';
+    if (b.closest('.draftmenu .pop') && b.classList.contains('here')) return 'The draft you’re writing now';
+    if (b.closest('.draftmenu .pop')) return 'Opens this draft, read-only';
+        return '';
+  }
+  function explainButton(e) {
+    var b = e.target && e.target.closest && e.target.closest('button, summary, a.btn');
+    if (!b) return;
+    if (b.title && !b.dataset.autotip) return; // the page's own explanation
+    if (b.tagName === 'SUMMARY') {
+      var sk = tipKey(b.textContent), st = /^session options/.test(sk) ? 'Opens this writing session’s options'
+        : b.closest('.rowmenu') ? 'Opens more for this student' : b.closest('.sibmenu') ? 'Switches to another writing session'
+        : b.closest('.draftmenu') ? 'Opens your drafts: earlier ones, naming, final, and a new draft'
+        : b.id === 'gradePickLabel' ? 'Switches to another writing session’s papers'
+        : /stock comments/.test(sk) ? 'Shows or hides the stock comments' : '';
+      if (st) { b.title = st; b.dataset.autotip = '1'; }
+      return;
+    }
+    var t = tipFor(b);
+    if (t) { b.title = t.replace(/\s*$/, '') + (/[.!?]$/.test(t) ? '' : '.'); b.dataset.autotip = '1'; }
+    else if (b.dataset.autotip) { b.removeAttribute('title'); delete b.dataset.autotip; }
+  }
+  document.addEventListener('mouseover', explainButton);
+  document.addEventListener('focusin', explainButton);
+
   $('admitAllBtn').addEventListener('click', function () { roomAction('admitAll'); });
   var unlockAllSubs = { out: [], handed: [] };
   $('unlockAllBtn').addEventListener('click', async function () {
