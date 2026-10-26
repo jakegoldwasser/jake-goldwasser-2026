@@ -1533,8 +1533,17 @@
      Archived): three across a half-width shelf, so every page on Home
      matches. Measured against Home's width (cqi), less the gap between
      two shelves, a shelf's side padding and two gaps between books. */
-  .home-view { display: flex; flex-direction: column; gap: 18px; container-type: inline-size; --card-w: min(168px, calc((50cqi - 15px - 60px - 41px) / 3)); }
-  @media (max-width: 700px) { .home-view { --card-w: calc((100cqi - 44px - 25px) / 3); } }
+  .home-view {
+    display: flex; flex-direction: column; gap: 18px; container-type: inline-size;
+    /* Home is one grid of six book columns (New book and Recent, then
+       every shelf), so books line up from row to row. A shelf's colored
+       box reaches --home-pad past its books on each side; the gap
+       between two columns is that twice over plus the gap between two
+       shelves. */
+    --home-pad: 16px; --home-shelf-gap: 20px; --home-col-gap: calc(2 * var(--home-pad) + var(--home-shelf-gap));
+    --card-w: min(168px, calc((100cqi - 2 * var(--home-pad) - 5 * var(--home-col-gap)) / 6));
+  }
+  @media (max-width: 700px) { .home-view { --home-pad: 14px; --home-col-gap: 12px; --card-w: calc((100cqi - 2 * var(--home-pad) - 2 * var(--home-col-gap)) / 3); } }
   .home-view[hidden] { display: none; }
   body.view-home .chapbook-header, body.view-home #intakePanel,
   body.view-home #intakeCollapsedBar, body.view-home .workspace { display: none !important; }
@@ -1596,14 +1605,14 @@
   .home-new:focus-visible { outline: none; }
   /* Recent sits beside New book, each under a heading of the same fixed
      height, so the two rows of pages share a top. */
-  .home-top { display: flex; align-items: flex-start; gap: 28px; }
+  .home-top { display: grid; grid-template-columns: var(--card-w) minmax(0, 1fr); align-items: start; column-gap: var(--home-col-gap); padding: 0 var(--home-pad); }
   .home-recent { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
   .home-recent[hidden], .home-top[hidden] { display: none; }
   .home-top .home-title, .home-recent-title { height: 26px; line-height: 26px; color: var(--ink); white-space: nowrap; }
-  .home-recent-grid { display: grid; grid-template-columns: repeat(auto-fill, var(--card-w)); gap: 24px 20px; }
+  .home-recent-grid { display: grid; grid-template-columns: repeat(5, var(--card-w)); gap: 24px var(--home-col-gap); }
   /* One row only (fitHomeRecent marks the rest). */
   .home-recent-grid > .is-over { display: none; }
-  @media (max-width: 700px) { .home-top { gap: 12px; } .home-recent-grid { gap: 18px 12px; } }
+  @media (max-width: 700px) { .home-recent-grid { grid-template-columns: repeat(2, var(--card-w)); gap: 18px var(--home-col-gap); } }
   /* Search: finds books by title or by any words inside them. */
   .home-head .entry-search { flex: 0 1 420px; margin: 0; }
   .home-head .entry-search input[type="search"] { font-size: 16px; }
@@ -1825,17 +1834,27 @@
     --shadow: rgba(28, 41, 52, 0.14);
   }
 
-  /* Two shelves to a row, each three books wide; a shelf of only one or
-     two books comes last and is only as wide as its books, so the small
-     ones share the bottom row (and fill out an odd shelf's row). */
-  #homeShelves { display: flex; flex-wrap: wrap; align-items: stretch; gap: 30px; }
-  #homeShelves > .home-empty { flex-basis: 100%; }
+  /* Shelves on Home's six columns: each is as many columns wide as the
+     books it shows (three at most, --span, set by renderHome), so two
+     full shelves make a row. Shelves of one or two books come last and
+     drop into any gap a row above leaves (dense), so a lone small shelf
+     sits in a gap, one book wide, instead of stretching across a row. */
+  #homeShelves {
+    display: grid; grid-template-columns: repeat(6, var(--card-w)); grid-auto-flow: row dense;
+    column-gap: var(--home-col-gap); row-gap: 30px; align-items: stretch; padding: 0 var(--home-pad);
+  }
+  #homeShelves > .home-empty { grid-column: 1 / -1; }
   #homeShelves[hidden] { display: none; }
   .home-intro + .home-start { margin-top: -16px; }
-  .home-shelf { display: flex; flex-direction: column; gap: 12px; flex: 1 1 calc(50% - 15px); min-width: 0; }
-  .home-shelf.is-small { flex: 1 1 auto; }
-  .home-shelf.is-small .home-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: var(--card-w); justify-content: start; }
-  @media (max-width: 700px) { #homeShelves { gap: 16px; } .home-shelf, .home-shelf.is-small { flex-basis: 100%; } }
+  .home-shelf { --span: 3; grid-column: span var(--span); display: flex; flex-direction: column; gap: 12px; min-width: 0; margin: 0 calc(-1 * var(--home-pad)); }
+  .home-shelf .home-grid { grid-template-columns: repeat(var(--span), var(--card-w)); column-gap: var(--home-col-gap); }
+  .home-shelf[data-span="1"] .home-shelf-title { font-size: 18px; }
+  @media (max-width: 700px) {
+    #homeShelves { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
+    .home-shelf { grid-column: 1 / -1; }
+    .home-shelf .home-grid { grid-template-columns: repeat(3, var(--card-w)); }
+    .home-shelf[data-span="1"] .home-shelf-title { font-size: 22px; }
+  }
   .home-shelf-head { display: flex; align-items: flex-end; gap: 8px; border-bottom: 3px solid var(--ink); padding-bottom: 4px; }
   .home-shelf-title { flex: 1; }
   .home-shelf-head .dots-btn { padding: 0 8px 4px; }
@@ -1901,15 +1920,12 @@
   .home-shelf[data-form="novel"] { --shelf-paper: #F1C7AA; --shelf-accent: #B0532A; --shelf-ink: #2E1A12; }
   .home-shelf[data-form="essays"] { --shelf-paper: #E4D5EC; --shelf-accent: #6E4A7E; --shelf-ink: #24182A; }
   .home-shelf[data-form="picture"] { --shelf-paper: #CFDAE8; --shelf-accent: #4F6E88; --shelf-ink: #1C2934; }
-  /* The books and the shelf's title share one left edge, a clear indent
-     in from New book above -- at 18px in they nearly lined up with it
-     and looked like a miss. The grip hangs out to the left of the title. */
-  .home-shelf { background: var(--shelf-paper); padding: 14px 18px 20px 42px; border-top: 5px solid var(--shelf-accent); }
-  .home-shelf .home-shelf-grip { margin-left: -30px; }
-  @media (max-width: 700px) {
-    .home-shelf { padding: 12px 14px 16px 30px; }
-    .home-shelf .home-shelf-grip { margin-left: -24px; }
-  }
+  /* The books and the shelf's title share one left edge, the same
+     column as New book's and Recent's above (Home's grid). The grip sits
+     at the head's right end. */
+  .home-shelf { background: var(--shelf-paper); padding: 14px var(--home-pad) 20px; border-top: 5px solid var(--shelf-accent); }
+  .home-shelf .home-shelf-grip { order: 3; margin: 0 -6px 0 0; }
+  @media (max-width: 700px) { .home-shelf { padding: 12px var(--home-pad) 16px; } }
   .home-shelf .home-shelf-head { border-bottom: none; padding-bottom: 0; align-items: center; }
   /* The three most recent until Expand (fitHomeShelves marks the rest). */
   .home-shelf:not(.is-open) .home-grid > .is-over { display: none; }
@@ -15137,6 +15153,10 @@
           });
       }
       shelf.classList.toggle('is-small', grid.children.length <= HOME_SMALL_SHELF);
+      // As many of Home's columns as the books it shows.
+      var span = Math.max(1, Math.min(HOME_SHELF_SHOWN, grid.children.length));
+      shelf.style.setProperty('--span', span);
+      shelf.dataset.span = span;
       shelves.appendChild(shelf);
     });
     // Shelves of only one or two books go last, together, in the
@@ -15144,6 +15164,7 @@
     Array.prototype.filter.call(shelves.children, function (sh) { return sh.classList.contains('is-small'); })
       .forEach(function (sh) { shelves.appendChild(sh); });
     fitHomeShelves();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (isHomeShown()) fitHomeShelves(); });
     renderHomeRecent();
     renderHomeResults();
 
@@ -15306,7 +15327,7 @@
       dragging = false;
       shelf.classList.remove('is-dragging');
       shelf.style.transform = '';
-      if (moved) saveShelfOrder();
+      if (moved) { saveShelfOrder(); fitHomeShelves(); }
     }
     grip.addEventListener('keydown', function (e) {
       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -15330,12 +15351,22 @@
       btn.textContent = shelf.classList.contains('is-open') ? 'Collapse' : 'Expand';
       btn.setAttribute('aria-expanded', shelf.classList.contains('is-open') ? 'true' : 'false');
     });
+    // Shelves side by side start their books at one height, however many
+    // lines a narrow shelf's title takes.
+    var heads = Array.prototype.slice.call(document.querySelectorAll('#homeShelves .home-shelf-head'));
+    heads.forEach(function (h) { h.style.minHeight = ''; });
+    var rows = {};
+    heads.forEach(function (h) { var top = h.parentNode.offsetTop; (rows[top] = rows[top] || []).push(h); });
+    Object.keys(rows).forEach(function (top) {
+      var tallest = Math.max.apply(null, rows[top].map(function (h) { return h.offsetHeight; }));
+      rows[top].forEach(function (h) { if (h.offsetHeight < tallest) h.style.minHeight = tallest + 'px'; });
+    });
   }
   var homeFitTimer = null;
   window.addEventListener('resize', function () {
     if (!isHomeShown()) return;
     clearTimeout(homeFitTimer);
-    homeFitTimer = setTimeout(fitHomeRecent, 100);
+    homeFitTimer = setTimeout(function () { fitHomeRecent(); fitHomeShelves(); }, 100);
   });
   document.getElementById('homeDeletedBtn').addEventListener('click', function () {
     homeDeletedOpen = !homeDeletedOpen;
