@@ -1237,6 +1237,47 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { sessions });
   }
 
+  // ---- Rereading: a student reading their own paper, nothing else ----
+  // While the teacher allows it (room.reread), a student can read what they
+  // handed in (else their writing so far), read-only: the text alone, never
+  // comments, grades or anyone else's writing.
+  // GET /luddite/reread -- the sessions they can reread; ?code= -- one's text.
+  if (path === '/luddite/reread' && method === 'GET') {
+    const textOf = async (r) => {
+      const st = r.students[me.sub];
+      if (!st || st.status !== 'admitted') return null;
+      const paperSub = (r.submissions || []).filter((x) => x.sub === me.sub && x.stored).pop();
+      const paper = paperSub ? (await readItem('luddite:sub:' + paperSub.id)).state : null;
+      if (paper && String(paper.text || '').trim()) return { text: String(paper.text), at: paper.at || st.submittedAt || 0, handedIn: true };
+      const { state: cur } = await readItem('luddite:draft:' + r.code + ':' + me.sub);
+      if (cur && String(cur.text || '').trim()) return { text: String(cur.text), at: cur.at || 0, handedIn: false };
+      return null;
+    };
+    if (q.code) {
+      const room = await getRoom(cleanCode(q.code));
+      if (room.deletedAt || !room.reread) throw new HttpError(403, 'not_shared');
+      const t = await textOf(room);
+      if (!t) throw new HttpError(404, 'no_writing');
+      return respond(200, { code: room.code, title: titleOf(room), teacherName: room.teacher.name || room.teacher.email, ...t,
+        words: (t.text.trim().match(/\S+/g) || []).length });
+    }
+    const em = lower(me.email);
+    const { state: mine } = await readItem('luddite:mine:' + em);
+    const codes = new Set([...((mine && mine.handed) || []), ...((mine && mine.rooms) || []), ...((mine && mine.own) || [])]);
+    const classes = await Promise.all(((mine && mine.classes) || []).map((id) => readItem('luddite:class:' + id)));
+    classes.forEach(({ state: c }) => { if (c && !c.deletedAt && c.emails.includes(em)) (c.assignments || []).forEach((code) => codes.add(code)); });
+    const rooms = await Promise.all([...codes].slice(0, 400).map((c) => readItem('luddite:room:' + c)));
+    const list = [];
+    rooms.forEach(({ state: r }) => {
+      const s = r && !r.deletedAt && r.reread && r.students[me.sub];
+      if (!s || s.status !== 'admitted' || !(s.handedIn || s.words)) return;
+      list.push({ code: r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email, handedIn: !!s.handedIn,
+        at: Math.max(s.submittedAt || 0, s.draftAt || 0, r.startAt || 0, r.createdAt || 0) });
+    });
+    list.sort((a, b) => b.at - a.at);
+    return respond(200, { papers: list });
+  }
+
   // ---- Handed back: a student reading their teacher's comments ----
 
   // GET /luddite/returned -- this student's handed-back papers, newest first.
@@ -1967,6 +2008,8 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'shareWork') return { ...r, shareWork: !!body.on };
       // At home, students may print their writing (on unless turned off).
       else if (body.action === 'homePrint') return { ...r, homePrint: !!body.on };
+      // Students may reread their own papers, read-only, with no comments or grade (/luddite/reread).
+      else if (body.action === 'reread') return { ...r, reread: !!body.on };
       else if (body.action === 'atHome') {
         const on = !!body.on;
         const students = { ...r.students };
