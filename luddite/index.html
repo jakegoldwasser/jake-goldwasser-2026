@@ -1156,6 +1156,8 @@
   .livetile.away { border-color: var(--tomato); }
   .liveread { font: 18px/1.7 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; max-height: 44vh; overflow-y: auto; text-align: left; margin-top: 10px; }
   .livebox { z-index: 45; }
+  .rrtext { font: 17px/1.75 Literata, Georgia, serif; white-space: pre-wrap; overflow-wrap: break-word; max-height: 64vh; overflow-y: auto;
+    padding: 18px 22px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--rule); background: #fff; }
   #rubricView { z-index: 58; } /* over the floating grading window (49) */
   .livebox .card { max-width: 760px !important; width: 100%; text-align: left; }
   .livetile.newmsg { border-color: var(--pen); box-shadow: inset 0 0 0 1px var(--pen); }
@@ -1363,6 +1365,10 @@
     <div id="backBox" hidden style="margin-bottom:26px">
       <label class="joinlbl">Grading Shared with You</label>
       <div id="backList"></div>
+    </div>
+    <div id="rereadBox" hidden style="margin-bottom:26px">
+      <label class="joinlbl">Your Papers</label>
+      <div id="rereadList"></div>
     </div>
     <p class="sub">Type the Entry Phrase your teacher gave you: two words, like <i>Starry whale</i>.</p>
     <label class="joinlbl" for="joinCode">Entry Phrase</label>
@@ -1698,6 +1704,7 @@
             <button type="button" id="reflectBtn">Ask for a reflection…</button>
             <button type="button" id="reflectOffBtn" hidden>Stop asking for reflections</button>
             <button type="button" id="printAllRoom">Print all papers</button>
+            <button type="button" id="rereadBtn">Let students reread their papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
             <button type="button" id="deleteRoomBtn" class="danger">Delete this writing session</button>
           </div>
@@ -1943,6 +1950,15 @@
 </div>
 
 <!-- A rubric to read: a student's while they write (when the teacher shows it), or a teacher's from a session -->
+<!-- A student rereading their own paper: the text alone, read-only (no comments or grade) -->
+<div class="handin livebox" id="rereadView" hidden>
+  <div class="card">
+    <h2 id="rrTitle" style="margin:0">Your Paper</h2>
+    <p class="fine" id="rrMeta" style="margin:4px 0 12px"></p>
+    <div class="rrtext" id="rrText"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="rrClose" type="button">Close</button></div>
+  </div>
+</div>
 <div class="handin livebox" id="rubricView" hidden>
   <div class="card">
     <h2 id="rvTitle" style="margin:0">Rubric</h2>
@@ -2802,6 +2818,7 @@
     show('joinScreen');
     drawMine();
     loadReturned();
+    loadReread();
     loadReflections();
     // Check back while something is coming (the screen's own polling stops when it changes).
     if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000);
@@ -2944,6 +2961,39 @@
   });
   window.addEventListener('beforeunload', function (e) { if (reflecting) { rfSave(); e.preventDefault(); e.returnValue = ''; } });
 
+  // Papers the teacher lets them reread: their own text, read-only, nothing more.
+  async function loadReread() {
+    var data;
+    try { data = await api('/luddite/reread'); } catch (e) { $('rereadBox').hidden = true; return; }
+    var list = $('rereadList'), papers = data.papers || [];
+    list.innerHTML = '';
+    $('rereadBox').hidden = !papers.length;
+    papers.forEach(function (p) {
+      var row = el('div', 'item click');
+      row.tabIndex = 0;
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, p.title || 'Writing'));
+      w.appendChild(el('span', null, p.teacherName + (p.handedIn ? '' : ' · not handed in yet')));
+      row.appendChild(w);
+      row.appendChild(button('Read it', 'btn small', function () { openReread(p.code); }));
+      row.addEventListener('click', function (e) { if (!e.target.closest('button')) openReread(p.code); });
+      row.addEventListener('keydown', function (e) { if (e.target === row && e.key === 'Enter') openReread(p.code); });
+      list.appendChild(row);
+    });
+  }
+  async function openReread(code) {
+    var d;
+    try { d = await api('/luddite/reread?code=' + encodeURIComponent(code)); }
+    catch (e) { tell('Couldn’t Open It', e.message === 'not_shared' ? 'Your teacher isn’t sharing it right now.' : 'Check your connection and try again.'); loadReread(); return; }
+    $('rrTitle').textContent = d.title || 'Your Paper';
+    $('rrMeta').textContent = (d.handedIn ? 'Handed in ' + dayClock(d.at) : 'Your writing so far') + ' · ' + plural(d.words || 0, 'word', 'words');
+    $('rrText').innerHTML = '';
+    fmtInto($('rrText'), d.text || '');
+    $('rereadView').hidden = false;
+    $('rrText').scrollTop = 0;
+  }
+  $('rrClose').addEventListener('click', function () { $('rereadView').hidden = true; });
+  $('rereadView').addEventListener('click', function (e) { if (e.target === $('rereadView')) $('rereadView').hidden = true; });
   async function loadReturned() {
     var data;
     try { data = await api('/luddite/returned'); } catch (e) { return; }
@@ -6711,6 +6761,7 @@
     // Pause everyone, beside End session: no one can write and the clock stops, but the session stays current.
     $('pauseAllBtn').hidden = state !== 'running';
     $('homePrintBtn').hidden = !room.atHome;
+    $('rereadBtn').textContent = room.reread ? 'Stop students rereading their papers' : 'Let students reread their papers';
     $('homePrintBtn').textContent = room.homePrint !== false ? 'Stop students printing their writing' : 'Let students print their writing';
     $('shareWorkBtn').textContent = room.shareWork ? 'Stop students seeing each other’s work' : 'Allow students to see each other’s work';
     $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
@@ -7417,6 +7468,8 @@
     rubricBtn: 'Opens the list of your rubrics to choose one for this session, or make a new one',
     timeBtn: 'Opens the times to change when this writing session starts',
     atHomeBtn: function (b) { return /back to class/i.test(b.textContent) ? 'Goes back to class rules: full screen, and leaving the page locks a student out' : 'Lets students work at home: leaving the page never locks them out, and there’s no time limit until you end the session. Anyone locked out is let back in'; },
+    rereadBtn: function (b) { return /stop/i.test(b.textContent) ? 'Takes away students’ Your Papers list for this session' : 'Lets each student reread their own paper (or writing so far) from their page, read-only: no comments, no grade, no changes'; },
+    rrClose: 'Closes your paper',
     homePrintBtn: function (b) { return /stop/i.test(b.textContent) ? 'Takes away the Print button students have for their writing' : 'Gives students a Print button for their own writing'; },
     shareWorkBtn: function (b) { return /stop/i.test(b.textContent) ? 'Takes away the Classmates’ work button, so students see only their own writing' : 'Gives students a Classmates’ work button to read everyone else’s writing so far'; },
     reopenBtn: 'Opens this writing session again now, so students can come back in and write',
@@ -7575,6 +7628,7 @@
     'nothing handed in': 'Nothing was handed in',
     'their work': 'Opens everything this student has handed in',
     'read the comments': 'Opens this paper with your teacher’s comments',
+    'read it': 'Opens your paper to read. You can’t change it, and there are no comments or grade',
     'reflect': 'Opens your paper full screen to write a reflection on it',
     'go on': 'Opens your reflection full screen to keep writing it',
     'enter': 'Goes into this writing session',
@@ -7695,6 +7749,10 @@
   $('shareWorkBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
     roomAction('shareWork', [], { on: !teacherRoom.shareWork });
+  });
+  $('rereadBtn').addEventListener('click', function () {
+    $('roomMenu').open = false;
+    roomAction('reread', [], { on: !teacherRoom.reread });
   });
   $('homePrintBtn').addEventListener('click', function () {
     $('roomMenu').open = false;
