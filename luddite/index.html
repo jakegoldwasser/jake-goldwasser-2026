@@ -7449,7 +7449,6 @@
     markDrafts: 'Opens this student’s earlier drafts, read-only',
     markWlog: 'Opens this student’s writing log: how and when the writing came, minute by minute, with earlier versions',
     markDrive: 'Opens this paper’s copy in Google Drive, in a new tab',
-    markHandBack: function (b) { return /stop/i.test(b.textContent) ? 'Stops sharing: the student can no longer read your comments or grade' : 'Lets the student read your comments (and the grade after five minutes with them), then opens the next paper not yet shared'; },
     markPrint: 'Prints this paper with your comments in the margin',
     stockEdit: 'Opens your stock comments as text to change, add or remove them (saved on this computer)',
     sideUnread: 'Shows this student’s live comments as new again, and closes them',
@@ -7667,7 +7666,8 @@
   function explainButton(e) {
     var b = e.target && e.target.closest && e.target.closest('button, summary, a.btn');
     if (!b) return;
-    if (b.title && !b.dataset.autotip) return; // the page's own explanation
+    // The page's own title stays, unless there's a fuller one here (by id, or a paper's bubble).
+    if (b.title && !b.dataset.autotip && !(b.id && TIP_ID[b.id]) && !b.matches('.statusbub')) return;
     if (b.tagName === 'SUMMARY') {
       var sk = tipKey(b.textContent), st = /^session options/.test(sk) ? 'Opens this writing session’s options'
         : b.closest('.rowmenu') ? 'Opens more for this student' : b.closest('.sibmenu') ? 'Switches to another writing session'
