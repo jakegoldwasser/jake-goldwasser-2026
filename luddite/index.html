@@ -551,8 +551,7 @@
   .stockitem { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; font-size: 14px; line-height: 1.4; cursor: pointer; }
   .endwrap label.stockitem { font: 400 14px/1.4 var(--ui); letter-spacing: 0; text-transform: none; color: var(--ink); }
   .stockitem input { margin-top: 3px; flex: none; accent-color: var(--pen); }
-  .stockitem .nx { display: block; color: var(--muted); }
-  .stockitem.on .nx { color: var(--pen); }
+  .endwrap label.stockitem.on { color: var(--pen); }
   .stockbox > .btn { margin: 10px 0 4px; }
   body.reading .stockbox { display: none; }
   @media print { .stockbox { display: none !important; } }
@@ -995,15 +994,20 @@
     #markScreen .card, #studentScreen .card, #printScreen .card { max-width: none; }
     .pp { break-after: page; break-inside: auto; border: 0 !important; padding: 0 !important; }
     .pp:last-child { break-after: auto; }
-    .sheet { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; width: 6.95in; }
+    /* As wide as the page's margins leave, whatever they're set to in the
+       print window (a fixed width was cut off at wider margins); the
+       columns keep .printing's proportions, so the notes still line up. */
+    .sheet, .sheet.printing { grid-template-columns: minmax(0, 1fr) 30.2%; gap: .3in; padding: 0; box-shadow: none; border: 0; width: auto; max-width: 100%; }
+    #markScreen .markbody, #markScreen .markbody.side { display: block; }
+    body.markfloat { overflow: visible; }
     .paper { font-size: 11.5pt; line-height: 1.7; }
     .printdoc .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
     #printScreen .card > .head { display: none; }
     /* A PDF rubric's pages come trimmed of their own white margins
        (cropMargins) and fill ours. Nothing may be laid out wider than the
        text (6.9in): Chrome would shrink the whole printout to fit. */
-    .pp.prub.pdfrub img.rpage { width: 6.9in; height: 9.4in; max-width: none; max-height: none; object-fit: contain; object-position: top center; display: block; margin: 0; }
-    #printBody { width: 6.9in; }
+    .pp.prub.pdfrub img.rpage { width: 100%; height: 9.4in; max-width: none; max-height: none; object-fit: contain; object-position: top center; display: block; margin: 0; }
+    #printBody { width: auto; max-width: 100%; }
     #printBody .pp { margin: 0; orphans: 1; widows: 1; }
     .pblank { display: block; height: 1px; break-before: page; break-after: page; }
     .printdoc.double .pp:not(.prub) .paper { line-height: 2.3; }
@@ -9166,8 +9170,7 @@
         var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
         cb.addEventListener('change', function () { setStockGoal(it[2], k[0], cb.checked); });
         var tx = el('span');
-        tx.appendChild(document.createTextNode(it[1]));
-        tx.appendChild(el('span', 'nx', '→ ' + it[2]));
+        tx.appendChild(document.createTextNode(it[2]));
         row.appendChild(cb); row.appendChild(tx);
         box.appendChild(row);
       });
@@ -9189,7 +9192,8 @@
   }
   // Editing the list as plain text: "## Keep Up the Good Work" and "## Room
   // for Improvement" start the two kinds, "# Thesis" a category, then a line
-  // per comment, "comment => goal for the next essay".
+  // per comment: what the student reads (an older "comment => goal" line
+  // keeps the goal).
   $('stockEdit').addEventListener('click', async function () {
     var lines = [], list = stockList();
     STOCK_KINDS.forEach(function (k) {
@@ -9197,10 +9201,10 @@
       lines.push((lines.length ? '\n' : '') + '## ' + k[1]);
       list.filter(function (it) { return stockKind(it) === k[0]; }).forEach(function (it) {
         if (it[0] !== cat) { cat = it[0]; lines.push('\n# ' + cat); }
-        lines.push(it[1] + ' => ' + it[2]);
+        lines.push(it[2]);
       });
     });
-    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each comment is “the comment => the goal for the next essay.” Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each line under it one comment, as the student will read it. Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
     if (t === null) return;
     var out = [], c = 'Comments', kind = '';
     t.split('\n').forEach(function (l) {
@@ -9208,9 +9212,8 @@
       if (!l) return;
       if (/^##/.test(l)) { kind = /good/i.test(l) ? 'good' : ''; return; }
       if (l.charAt(0) === '#') { c = l.replace(/^#+\s*/, '') || 'Comments'; return; }
-      var parts = l.split('=>');
-      var say = parts[0].trim(), next = (parts.slice(1).join('=>').trim() || say);
-      out.push(kind ? [c, say, next, kind] : [c, say, next]);
+      var parts = l.split('=>'), say = (parts.length > 1 ? parts.slice(1).join('=>') : l).trim();
+      if (say) out.push(kind ? [c, say, say, kind] : [c, say, say]);
     });
     store(stockKey(), out.length ? JSON.stringify(out) : null);
     drawStock();
