@@ -815,6 +815,21 @@
   .poem-compact-row:hover .tier-pill.is-empty, .poem-card:hover .tier-pill.is-empty,
   .tier-pill.is-empty:focus-visible, .tier-pill.is-empty[aria-expanded="true"] { opacity: 1; }
   @media (hover: none) { .tier-pill.is-empty { opacity: 0.6; } }
+  /* A hybrid book's piece: its genre, in that genre's own book color. */
+  .genre-pill {
+    appearance: none; display: inline-flex; align-items: center; flex: 0 0 auto;
+    font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; white-space: nowrap;
+    padding: 4px 8px; border-radius: 999px; cursor: pointer;
+    --genre: #5E7A2E; color: var(--genre); background: var(--surface); border: 1px solid var(--genre);
+  }
+  .genre-pill::after { content: ' ▾'; white-space: pre; opacity: 0.7; }
+  .genre-pill[data-genre="chapter"] { --genre: #B0532A; }
+  .genre-pill[data-genre="essay"] { --genre: #6E4A7E; }
+  .genre-pill[data-genre="scene"] { --genre: #2E6B66; }
+  .genre-pill[data-genre="cartoon"] { --genre: #7A4E2B; }
+  .poem-compact-row .genre-pill { margin-left: auto; }
+  .poem-compact-row .genre-pill + .dots-btn, .poem-compact-row .tier-pill + .genre-pill { margin-left: 0; }
+  .cartoon-draw-btn { align-self: center; margin: 6px 0 2px; }
   .poem-compact-row .tier-pill { margin-left: auto; }
   .poem-compact-row .tier-pill + .dots-btn { margin-left: 0; }
   /* An opened poem's title field only spans its text, so without this
@@ -1748,6 +1763,11 @@
     --paper: #E7DFEA; --surface: #F8F5F9; --surface-2: #EEE7F0; --ink: #24182A; --ink-soft: #5B4865; --ink-faint: #9A89A3;
     --line: #DCD0E0; --line-strong: #B9A6C1; --accent: #6E4A7E; --accent-soft: #E6D9EC; --shadow: rgba(36, 24, 42, 0.14);
   }
+  /* A hybrid book: dusty rose, one color for the mix of genres. */
+  body.form-hybrid:not(.view-home):not(.view-pb):not(.view-cb):not(.view-cm) {
+    --paper: #EEDCE1; --surface: #FBF5F7; --surface-2: #F3E6EA; --ink: #2E141C; --ink-soft: #6A4351; --ink-faint: #A6838E;
+    --line: #E5CDD4; --line-strong: #CCA2AF; --accent: #A23E5C; --accent-soft: #F0D3DC; --shadow: rgba(46, 20, 28, 0.14);
+  }
   /* ---- Scripts: the editor sets each line where it goes on the page.
      Courier's characters are all 1/10 in at 12 pt, so ch units place
      the columns exactly as SCRIPT_SPECS does (22ch = 2.2 in). ---- */
@@ -1876,6 +1896,8 @@
      since several of those (screenplay gold, comic cream, newsprint)
      all but vanished against Home's tan paper. */
   .home-shelf { --shelf-paper: #D3E5B9; --shelf-accent: #5E7A2E; --shelf-ink: #1E2616; }
+  .home-shelf[data-form="hybrid"] { --shelf-paper: #EFC9D3; --shelf-accent: #A23E5C; --shelf-ink: #2E141C; }
+  .home-start-card[data-form="hybrid"]::before { background: #A23E5C; }
   .home-shelf[data-form="novel"] { --shelf-paper: #F1C7AA; --shelf-accent: #B0532A; --shelf-ink: #2E1A12; }
   .home-shelf[data-form="essays"] { --shelf-paper: #E4D5EC; --shelf-accent: #6E4A7E; --shelf-ink: #24182A; }
   .home-shelf[data-form="picture"] { --shelf-paper: #CFDAE8; --shelf-accent: #4F6E88; --shelf-ink: #1C2934; }
@@ -1905,6 +1927,7 @@
   .home-card[data-form="play"] { --book-accent: #2E6B66; }
   .home-card[data-form="cartoon"] { --book-accent: #7A4E2B; }
   .home-card[data-form="comic"] { --book-accent: #B3262B; }
+  .home-card[data-form="hybrid"] { --book-accent: #A23E5C; }
 
   .pb-view { display: flex; flex-direction: column; gap: 26px; }
   .pb-view[hidden] { display: none; }
@@ -3275,6 +3298,11 @@
             <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
               <button class="btn btn-primary" id="cbExportBtn" type="button" style="width:100%; justify-content:center;">Export PDF</button>
               <p class="pb-export-note">Landscape, one cartoon to a page, the drawing fitted and centered with its caption beneath.</p>
+              <button class="btn" id="cbExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two cartoons to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
+              <div class="checkline export-check">
+                <input type="checkbox" id="cbCutLinesCheck" checked>
+                <label for="cbCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+              </div>
               <div class="export-status" id="cbExportStatus"></div>
             </div>
           </div>
@@ -3443,6 +3471,11 @@
             <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
               <button class="btn" id="cmReadBtn" type="button" style="width:100%; justify-content:center;">Read full screen</button>
               <button class="btn btn-primary" id="cmExportBtn" type="button" style="width:100%; justify-content:center;">Export PDF</button>
+              <button class="btn" id="cmExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two pages to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
+              <div class="checkline export-check">
+                <input type="checkbox" id="cmCutLinesCheck" checked>
+                <label for="cmCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+              </div>
               <div class="export-status" id="cmExportStatus"></div>
             </div>
           </div>
@@ -4396,8 +4429,45 @@
     screenplay: { one: 'scene', many: 'scenes', section: 'act',
       defaults: SCRIPT_DEFAULTS({ titleAlignment: 'left' }) },
     play: { one: 'scene', many: 'scenes', section: 'act',
-      defaults: SCRIPT_DEFAULTS({ titleAlignment: 'center' }) }
+      defaults: SCRIPT_DEFAULTS({ titleAlignment: 'center' }) },
+    // A hybrid book mixes genres: each piece is a poem, chapter, essay,
+    // scene or cartoon (its `genre`, HYBRID_GENRES) and is set the way a
+    // book of that genre sets it, all in the book's one page and type.
+    hybrid: { one: 'piece', many: 'pieces', section: 'section',
+      defaults: { trimKey: 'digest', bodyFontChoice: 'garamond', titleFontChoice: 'garamond',
+        paragraphs: 'indent', includeToc: true, pageNumberStyle: 'corners' } }
   };
+  // A hybrid book's genres: each names the book type whose rules set it
+  // (a scene as in a stage play, but in the book's own type and page).
+  var HYBRID_GENRES = {
+    poem: { label: 'Poem', form: 'collection' },
+    chapter: { label: 'Chapter', form: 'novel' },
+    essay: { label: 'Essay', form: 'essays' },
+    scene: { label: 'Scene', form: 'play' },
+    cartoon: { label: 'Cartoon', form: 'cartoon' }
+  };
+  var HYBRID_GENRE_KEYS = Object.keys(HYBRID_GENRES);
+  // The genre an entry from a book of each type takes in a hybrid book.
+  var GENRE_FOR_FORM = { collection: 'poem', novel: 'chapter', essays: 'essay', screenplay: 'scene', play: 'scene' };
+  function isHybrid(st) { return bookFormOf(st || state) === 'hybrid'; }
+  function genreOf(poem) { return poem && HYBRID_GENRES[poem.genre] ? poem.genre : 'poem'; }
+  // The book type an entry is set as: the book's own, or in a hybrid
+  // book the entry's genre's ('cartoon' for a cartoon).
+  function entryFormOf(poem, st) {
+    var f = bookFormOf(st || state);
+    if (f !== 'hybrid' || !poem || isSection(poem)) return f;
+    return HYBRID_GENRES[genreOf(poem)].form;
+  }
+  // The book's settings as an entry is set by them: in a hybrid book, a
+  // copy with the entry's genre's book type in place of 'hybrid'.
+  function entrySettings(poem, st) {
+    st = st || state;
+    return isHybrid(st) && poem && !isSection(poem) ? Object.assign({}, st, { form: entryFormOf(poem, st), hybridPiece: true }) : st;
+  }
+  // The word for one entry: its genre's in a hybrid book.
+  function entryNoun(poem, st) {
+    return isHybrid(st) && poem && !isSection(poem) ? HYBRID_GENRES[genreOf(poem)].label.toLowerCase() : formNouns(st).one;
+  }
   function SCRIPT_DEFAULTS(extra) {
     return Object.assign({ trimKey: 'letter', bodyFontChoice: 'courierprime', titleFontChoice: 'courierprime',
       bodyAlignment: 'left', bodySizePt: 12, paragraphs: 'space', includeToc: false, pageNumberStyle: 'topright',
@@ -4658,7 +4728,8 @@
     play: { shelf: 'Plays', add: 'Stage play', plural: 'Plays', about: 'Acts and scenes, set in standard stage play format.', newLabel: 'New play', cover: 'courierprime' },
     picture: { shelf: 'Picture books', add: 'Picture book', plural: 'Picture books', about: 'Laid out spread by spread, with words and illustrations.', newLabel: 'New picture book', cover: 'poppins' },
     cartoon: { shelf: 'Cartoon batches', add: 'Cartoon batch', plural: 'Cartoon batches', about: 'Drawings with captions, one to a page, set the New Yorker way.', newLabel: 'New cartoon batch', cover: 'caslon' },
-    comic: { shelf: 'Comics', add: 'Comic', plural: 'Comics', about: 'Pages of panels, with speech balloons, captions and sound effects.', newLabel: 'New comic', cover: 'bangers' }
+    comic: { shelf: 'Comics', add: 'Comic', plural: 'Comics', about: 'Pages of panels, with speech balloons, captions and sound effects.', newLabel: 'New comic', cover: 'bangers' },
+    hybrid: { shelf: 'Hybrid books', add: 'Hybrid book', plural: 'Hybrid books', about: 'Poems, chapters, essays, scenes and cartoons, mixed in one book.', newLabel: 'New hybrid book', cover: 'garamond' }
   };
   var HOME_FORMS_KEY = 'bookbug.homeForms.v1';
   function storedHomeForms() {
@@ -5495,7 +5566,8 @@
     st = st || state;
     if ((poem.title || '').trim()) return poem.title;
     var form = bookFormOf(st);
-    if (isSection(poem) || (form !== 'novel' && form !== 'play')) return '';
+    // A hybrid book's pieces have no numbered stand-ins.
+    if (isSection(poem) || st.hybridPiece || (form !== 'novel' && form !== 'play')) return '';
     var n = 0, list = st.poems || [];
     for (var i = 0; i < list.length; i++) {
       if (isSection(list[i])) { if (form === 'play') n = 0; continue; }
@@ -5524,7 +5596,7 @@
     return word + ' ' + numberWord(n);
   }
   function entryLabel(poem, st) {
-    return entryTitle(poem, st) || (bookFormOf(st || state) === 'novel' ? 'Untitled chapter' : 'Untitled');
+    return entryTitle(poem, st) || (bookFormOf(st || state) === 'novel' ? 'Untitled chapter' : isHybrid(st) && !isSection(poem) ? 'Untitled ' + entryNoun(poem, st) : 'Untitled');
   }
   // Nothing in it at all: no title, no words, no pictures.
   function entryIsEmpty(p) {
@@ -6367,7 +6439,7 @@
   // a marker ("I.", "II", "3", "Part Two") standing at the top of the
   // poem or after a blank line. The parts stay plain lines of the poem.
   function isSeriesOn(poem, st) {
-    return !!(poem && poem.series && !isSection(poem) && bookFormOf(st || state) === 'collection');
+    return !!(poem && poem.series && !isSection(poem) && entryFormOf(poem, st) === 'collection');
   }
   // Indexes of the lines that start parts: markers standing alone (top
   // of the poem or after a blank line) that count 1, 2, 3… in order, so a
@@ -7167,7 +7239,7 @@
   // Verse, for setting it: only a poetry collection's entries can be --
   // a novel's or essay's short paragraphs are still prose (the
   // typesetter, the editors and the Word export all ask this).
-  function isVerseEntry(poem, st) { return bookFormOf(st || state) === 'collection' && isLineated(poem); }
+  function isVerseEntry(poem, st) { return entryFormOf(poem, st) === 'collection' && isLineated(poem); }
   function isLineated(poem) {
     var lines = (poem.lines || []).filter(function (l) { return l && l.trim() !== '' && !IMAGE_LINE_RE.test(l); });
     if (!lines.length) return true;
@@ -7526,7 +7598,10 @@
   // Sets one element into rendered lines ({ text, indent, center }).
   function setScriptElement(type, text, form, sizePt, font, contentWidthPt) {
     var spec = SCRIPT_SPECS[form][type] || SCRIPT_SPECS[form].action;
-    var x = Math.min(spec.x * 72, contentWidthPt * 0.6), w = Math.min(spec.w * 72, contentWidthPt - x);
+    // On a page narrower than a script's 6 in column (a hybrid book's
+    // scene), the columns shrink with it.
+    var k = Math.min(1, contentWidthPt / 432);
+    var x = Math.min(spec.x * 72 * k, contentWidthPt * 0.6), w = Math.min(spec.w * 72 * k, contentWidthPt - x);
     if (spec.caps) text = scriptCaps(text);
     return wrapFormatted(text, w, sizePt, font, 0).map(function (piece) {
       var t = spec.italic && stripFormatMarkers(piece.text).trim() ? '*' + piece.text + '*' : piece.text;
@@ -7538,7 +7613,8 @@
   // its parentheticals and dialogue) stays together or breaks with
   // (MORE) and (CONT'D); a heading or cue keeps with what follows it; an
   // action paragraph may break between lines.
-  function scriptUnits(lines, form, sizePt, font, contentWidthPt, state) {
+  function scriptUnits(lines, form, sizePt, font, contentWidthPt, state, lineHeight) {
+    var lh = lineHeight || sizePt;
     var els = scriptElements(lines || [], form), units = [];
     function set(e) { return setScriptElement(e.type, e.text, form, sizePt, font, contentWidthPt); }
     for (var i = 0; i < els.length; i++) {
@@ -7550,7 +7626,7 @@
         if (!key) continue;
         var im = state.images[key], iw = Math.min(contentWidthPt, im.w * 72 / 150), ih = iw * im.h / im.w, maxH = sizePt * 30;
         if (ih > maxH) { ih = maxH; iw = ih * im.w / im.h; }
-        units.push({ type: 'image', lines: [{ image: key, place: 'top', w: iw, h: ih, rows: Math.ceil((ih + sizePt * 0.5) / sizePt) }] });
+        units.push({ type: 'image', lines: [{ image: key, place: 'top', w: iw, h: ih, rows: Math.ceil((ih + lh * 0.5) / lh) }] });
         continue;
       }
       if (e.type === 'character') {
@@ -7687,6 +7763,82 @@
     flushRun();
     return layouts;
   }
+  // ---------------------------------------------------------------------
+  // A hybrid book's pieces, each set by its genre: poems, chapters and
+  // essays as their own books set them (layoutPoem with the genre's book
+  // type), a scene in stage play form but in the book's type and leading,
+  // and a cartoon as its drawing centered on the page, its caption in
+  // italic under it.
+  // ---------------------------------------------------------------------
+  function layoutHybridEntry(poem, sizePt, contentWidthPt, contentHeightPt, st) {
+    var g = genreOf(poem);
+    if (g === 'scene') return layoutHybridScene(poem, sizePt, contentWidthPt, contentHeightPt, st);
+    if (g === 'cartoon') return layoutCartoonEntry(poem, sizePt, contentWidthPt, contentHeightPt, st);
+    return layoutPoem(poem, sizePt, contentWidthPt, contentHeightPt, entrySettings(poem, st));
+  }
+  function hybridTitle(poem, contentWidthPt, st) {
+    var titleSizePt = evenSizePt(resolveTitleSizePt(st), st.titleFontChoice);
+    var t = entryTitle(poem, st);
+    var lines = t ? wrapLine(t, contentWidthPt, titleSizePt, st.titleFontChoice, 600).slice(0, 2) : [];
+    return { lines: lines, sizePt: titleSizePt, h: lines.length ? lines.length * (titleSizePt * 1.28) + 26 : 10 };
+  }
+  function layoutHybridScene(poem, sizePt, contentWidthPt, contentHeightPt, st) {
+    var lineHeight = sizePt * bodyLeading(st.bodyFontChoice, st.lineSpacing), title = hybridTitle(poem, contentWidthPt, st);
+    var units = scriptUnits(poem.lines, 'play', sizePt, st.bodyFontChoice, contentWidthPt, st, lineHeight);
+    var flow = flowScript(units, Math.max(1, Math.floor((contentHeightPt - title.h) / lineHeight)), Math.max(1, Math.floor(contentHeightPt / lineHeight)));
+    return { pages: flow.pages, titleLines: title.lines, titleH: title.h, sizePt: sizePt, lineHeight: lineHeight, titleSizePt: title.sizePt,
+      wasWrapped: false, isVerse: false, script: 'play' };
+  }
+  // Each drawing starts a page; the lines after it, to the next drawing,
+  // are its caption.
+  function cartoonUnits(poem, st) {
+    var units = [], cur = null;
+    (poem.lines || []).forEach(function (line) {
+      var key = imageKeyForLine(line, st);
+      if (key) { cur = { image: key, words: [] }; units.push(cur); return; }
+      if (!line || !line.trim() || IMAGE_LINE_RE.test(line)) return;
+      if (!cur) { cur = { image: null, words: [] }; units.push(cur); }
+      cur.words.push(line.trim().replace(/^\t+/, ''));
+    });
+    return units.length ? units : [{ image: null, words: [] }];
+  }
+  function layoutCartoonEntry(poem, sizePt, contentWidthPt, contentHeightPt, st) {
+    var font = st.bodyFontChoice, lineHeight = sizePt * bodyLeading(font, st.lineSpacing), title = hybridTitle(poem, contentWidthPt, st);
+    var capW = contentWidthPt * 0.9, pages = [];
+    cartoonUnits(poem, st).forEach(function (u, ui) {
+      var cap = Math.max(1, Math.floor((contentHeightPt - (ui ? 0 : title.h)) / lineHeight));
+      var words = [];
+      u.words.forEach(function (w) {
+        // Set in italic, unless the caption carries its own styling.
+        var t = /[*_+\\]/.test(w) ? w : '*' + w + '*';
+        wrapFormatted(t, capW, sizePt, font, 0).forEach(function (piece) { words.push({ blank: false, text: piece.text, indent: 0, center: true }); });
+      });
+      var pg = [], used = 0;
+      if (u.image) {
+        var im = st.images[u.image];
+        var gap = words.length ? 1 : 0;
+        var maxH = (cap - words.length - gap) * lineHeight - lineHeight * 0.5;
+        var w = contentWidthPt, h = w * im.h / im.w;
+        if (h > maxH) { h = Math.max(lineHeight, maxH); w = h * im.w / im.h; }
+        var rows = Math.min(cap, Math.ceil((h + lineHeight * 0.5) / lineHeight));
+        var total = rows + gap + words.length;
+        // Centered on the page (the title, on the first, counts).
+        var spacer = Math.max(0, Math.min(cap - total, (contentHeightPt / lineHeight - total) / 2 - (ui ? 0 : title.h / lineHeight)));
+        if (spacer > 0.05) { pg.push({ blank: true, spacer: true, rows: spacer }); used += spacer; }
+        pg.push({ image: u.image, place: 'top', w: w, h: h, rows: rows });
+        if (gap) pg.push({ blank: true });
+        used += rows + gap;
+      }
+      words.forEach(function (rl) {
+        if (used + 1 > cap + 0.01 && pg.length) { pages.push(pg); pg = []; used = 0; cap = Math.max(1, Math.floor(contentHeightPt / lineHeight)); }
+        pg.push(rl); used += 1;
+      });
+      pages.push(pg);
+    });
+    return { pages: pages, titleLines: title.lines, titleH: title.h, sizePt: sizePt, lineHeight: lineHeight, titleSizePt: title.sizePt,
+      wasWrapped: false, isVerse: false, cartoon: true };
+  }
+
   // A screenplay scene's length the way schedules count it: in eighths
   // of a page (never less than 1/8).
   function eighthsLabel(rows, perPage) {
@@ -8094,6 +8246,7 @@
     }
     var layouts = script ? layoutScript(state, script, globalSize, contentWidth, contentHeight, sectionLayout) : state.poems.map(function (poem) {
       if (isSection(poem)) return sectionLayout(poem);
+      if (isHybrid(state)) return layoutHybridEntry(poem, globalSize, contentWidth, contentHeight, state);
       return layoutPoem(poem, globalSize, contentWidth, contentHeight, state);
     });
 
@@ -9030,13 +9183,20 @@
   // through Google's own Picker UI, then read it with the Docs API
   // directly from the browser. No backend involved.
   // ---------------------------------------------------------------------
+  // Pieces brought into a hybrid book: lineated ones come in as poems,
+  // the rest as essays (each can be changed by its genre pill).
+  function withImportedGenres(poems) {
+    if (!isHybrid()) return poems;
+    poems.forEach(function (p) { if (!isSection(p) && !HYBRID_GENRES[p.genre]) p.genre = isLineated(p) ? 'poem' : 'essay'; });
+    return poems;
+  }
   function addImportedPoems(poems, title, setStatus) {
     setStatus = setStatus || setDriveStatus;
     var entryCount = countEntries(poems);
     if (!entryCount) { setStatus('Couldn’t find any ' + formNouns().many + ' in that document.', true); return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
-    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
+    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(withImportedGenres(poems));
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     intakeOpen = false;
@@ -9709,7 +9869,7 @@
     if (!entryCount) { pasteStatus.textContent = 'Couldn’t find any ' + formNouns().many + ' — check the ### title markers.'; return; }
     var sectionCount = poems.length - entryCount;
     var wasExample = state.isExample;
-    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(poems);
+    state.poems = wasExample ? poems : withoutStarterContent(state.poems).concat(withImportedGenres(poems));
     if (wasExample && state.author === 'Emily Dickinson') state.author = '';
     state.isExample = false;
     intakeOpen = false;
@@ -10126,8 +10286,14 @@
   // In a script, each line of the editor is marked with the element it
   // is (data-sel), so it sits in the editor where it will on the page:
   // cues in capitals, dialogue in its narrower column, and so on.
+  // The entry an editor holds.
+  function editorPoem(ed) {
+    if (ed && ed.bookbugPoem) return ed.bookbugPoem;
+    var card = ed && ed.closest('[data-poem-id]'), id = card && card.dataset.poemId;
+    return id ? state.poems.filter(function (p) { return p.id === id; })[0] || null : null;
+  }
   function tagScriptLines(ed) {
-    var form = bookFormOf(state), script = isScriptForm();
+    var form = entryFormOf(editorPoem(ed)), script = SCRIPT_FORM_KEYS.indexOf(form) !== -1;
     ed.classList.toggle('is-script', script);
     ed.classList.toggle('script-screenplay', form === 'screenplay');
     ed.classList.toggle('script-play', form === 'play');
@@ -10160,7 +10326,7 @@
   // fills in whoever most likely speaks now. Enter after a name puts it
   // in capitals and starts the speech. Returns true if it took the key.
   function playEnter(ed, e) {
-    if (bookFormOf(state) !== 'play' || e.shiftKey || e.isComposing) return false;
+    if (entryFormOf(editorPoem(ed)) !== 'play' || e.shiftKey || e.isComposing) return false;
     var sel = window.getSelection();
     if (!sel.rangeCount || !sel.isCollapsed) return false;
     var row = sel.anchorNode;
@@ -10267,7 +10433,7 @@
     ed.querySelectorAll('[data-suggest]').forEach(function (r) { delete r.dataset.suggest; delete r.dataset.suggestFull; });
   }
   function updateNameSuggest(ed) {
-    var form = bookFormOf(state);
+    var form = entryFormOf(editorPoem(ed));
     clearNameSuggest(ed);
     if (form !== 'play' && form !== 'screenplay') return;
     var row = caretRowAtEnd(ed);
@@ -10318,8 +10484,8 @@
   // paragraph's first line in by the half-inch indent, except the first
   // paragraph and the one after a scene break (a centered *** or #).
   function tagProseLines(ed, poem, indentPx) {
-    var verse = bookFormOf(state) === 'collection' && isLineated(poem);
-    var on = !isScriptForm() && !verse && state.paragraphs === 'indent';
+    var ef = entryFormOf(poem), verse = ef === 'collection' && isLineated(poem);
+    var on = SCRIPT_FORM_KEYS.indexOf(ef) === -1 && ef !== 'cartoon' && !verse && state.paragraphs === 'indent';
     ed.classList.toggle('is-para-indent', on);
     ed.style.setProperty('--para-indent', indentPx + 'px');
     var fullOut = true;
@@ -10767,6 +10933,8 @@
     if (!poem || !target || !target.data) return;
     var data = target.data, copy = JSON.parse(JSON.stringify(poem));
     delete copy.sample; delete copy.sampleTitle;
+    // Into a hybrid book, a piece keeps being what its own book made it.
+    if (bookFormOf(data) === 'hybrid' && !isHybrid() && !isSection(copy)) copy.genre = GENRE_FOR_FORM[bookFormOf(state)] || 'poem';
     if (keep) copy.id = makeId();
     data.poems = data.poems || [];
     data.images = data.images || {};
@@ -11019,7 +11187,7 @@
     entryMenu.querySelector('[data-action="snapshots"]').hidden = !poem || isSection(poem);
     entryMenu.querySelector('[data-action="subs"]').hidden = !poem || isSection(poem);
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
-    seriesBtn.hidden = !poem || isSection(poem) || bookFormOf(state) !== 'collection';
+    seriesBtn.hidden = !poem || isSection(poem) || entryFormOf(poem) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
     // Send to top / bottom of the book or of its section, each shown only
     // where it would actually move the entry. Entries before the first
@@ -11346,6 +11514,126 @@
     partMenu.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px';
     partMenu.style.top = Math.max(8, Math.min(y, innerHeight - h - 8)) + 'px';
   }
+  // ---- A hybrid book's genres ----
+  // Each piece's pill (beside its ⋯) says its genre and changes it; the
+  // Add buttons ask which genre to add. One menu serves both.
+  var genreMenu = document.createElement('div');
+  genreMenu.className = 'entry-menu';
+  genreMenu.setAttribute('role', 'menu');
+  genreMenu.hidden = true;
+  document.body.appendChild(genreMenu);
+  var genreMenuFor = null;
+  function closeGenreMenu() {
+    if (genreMenu.hidden) return;
+    genreMenu.hidden = true;
+    if (genreMenuFor) genreMenuFor.setAttribute('aria-expanded', 'false');
+    genreMenuFor = null;
+  }
+  // `current`: the genre to mark as chosen (a pill's), or null (an Add button's).
+  function openGenreMenu(anchor, current, onPick) {
+    var reopening = genreMenuFor === anchor;
+    closeGenreMenu();
+    closeEntryMenu();
+    closeTierMenu();
+    if (reopening) return;
+    genreMenuFor = anchor;
+    anchor.setAttribute('aria-expanded', 'true');
+    genreMenu.innerHTML = '';
+    HYBRID_GENRE_KEYS.forEach(function (g) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      if (g === current) b.classList.add('is-current');
+      var word = HYBRID_GENRES[g].label.toLowerCase();
+      b.textContent = current ? HYBRID_GENRES[g].label : 'Add ' + (/^[aeiou]/.test(word) ? 'an ' : 'a ') + word;
+      b.addEventListener('click', function (e) { e.stopPropagation(); closeGenreMenu(); onPick(g); });
+      genreMenu.appendChild(b);
+    });
+    genreMenu.hidden = false;
+    var r = anchor.getBoundingClientRect();
+    var mw = genreMenu.offsetWidth, mh = genreMenu.offsetHeight;
+    genreMenu.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, current ? r.right - mw : r.left)) + 'px';
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    genreMenu.style.top = top + 'px';
+  }
+  document.addEventListener('click', function (e) { if (!genreMenu.contains(e.target) && e.target !== genreMenuFor) closeGenreMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeGenreMenu(); });
+  window.addEventListener('scroll', closeGenreMenu, true);
+  window.addEventListener('resize', closeGenreMenu);
+  function makeGenrePill(poem) {
+    var pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'genre-pill';
+    pill.dataset.genre = genreOf(poem);
+    pill.draggable = false;
+    pill.setAttribute('aria-haspopup', 'menu');
+    pill.setAttribute('aria-expanded', 'false');
+    pill.title = 'What this piece is, which sets how it’s laid out on the page. Click to change it.';
+    pill.textContent = HYBRID_GENRES[genreOf(poem)].label;
+    pill.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    pill.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openGenreMenu(pill, genreOf(poem), function (g) {
+        if (g === genreOf(poem)) return;
+        flushPendingSave();
+        poem.genre = g;
+        state.isExample = false;
+        persist();
+        renderAll();
+      });
+    });
+    return pill;
+  }
+  // Adds a piece of genre `g` at `index` (the end if null), opened ready
+  // to type; a cartoon first asks for its drawing (each drawing brought
+  // in becomes a cartoon of its own).
+  function addHybridPiece(g, index) {
+    var at = index == null ? state.poems.length : index;
+    if (g === 'cartoon') { importHybridCartoons(at, null); return; }
+    var poem = { id: makeId(), title: '', lines: [''], genre: g };
+    state.poems.splice(at, 0, poem);
+    state.isExample = false;
+    if (poemsViewMode === 'compact') expandedCompactIds[poem.id] = true;
+    persist();
+    renderAll();
+    var title = poemList.querySelector('.poem-card[data-poem-id="' + poem.id + '"] textarea.poem-title');
+    if (title && !writerMQ.matches) title.focus();
+  }
+  // The cartoon importer (photos, a PDF or the camera, cleaned up like a
+  // scan); each drawing becomes a cartoon at `at`, or goes into the
+  // cartoon `into` if that has none yet.
+  function importHybridCartoons(at, into) {
+    var tokens = [];
+    openCartoonImport(undefined, null, {
+      title: into ? 'Add the drawing' : 'Add cartoons', one: 'cartoon', many: 'cartoons', mode: 'gray', digitalArt: true,
+      hint: 'Photos or a PDF of your drawings, cleaned up like a scan. Each drawing becomes a cartoon, ready for its caption.',
+      store: function (enc) {
+        return loadImageUrl(enc.canvas.toDataURL('image/png')).then(function (img) { tokens.push('[image ' + addImageToState(img) + ']'); });
+      },
+      done: function () {
+        if (!tokens.length) return;
+        flushPendingSave();
+        var first = null;
+        tokens.forEach(function (tok, i) {
+          if (i === 0 && into) { into.lines = [tok].concat((into.lines || []).filter(function (l) { return !IMAGE_LINE_RE.test(l); })); if (into.lines.length < 2) into.lines.push(''); first = into; return; }
+          var poem = { id: makeId(), title: '', lines: [tok, ''], genre: 'cartoon' };
+          state.poems.splice(at++, 0, poem);
+          if (poemsViewMode === 'compact') expandedCompactIds[poem.id] = true;
+          if (!first) first = poem;
+        });
+        state.isExample = false;
+        persist();
+        renderAll();
+        if (first) scrollToEntry(first.id);
+      }
+    });
+  }
+  function scrollToEntry(id) {
+    var card = poemList.querySelector('[data-poem-id="' + id + '"]');
+    if (card) card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
   function makeTierPill(poem) {
     var pill = document.createElement('button');
     pill.type = 'button';
@@ -11514,10 +11802,11 @@
     gap.className = 'poem-gap';
     gap.innerHTML = '<div class="poem-gap-line"></div>' +
       '<div class="poem-gap-actions">' +
-      '<button class="poem-gap-btn" type="button" title="Add ' + TEXT_FORMS[bookFormOf(state)].one + ' here">+</button>' +
+      '<button class="poem-gap-btn" type="button" title="Add ' + TEXT_FORMS[bookFormOf(state)].one + ' here"' + (isHybrid() ? ' aria-haspopup="menu" aria-expanded="false"' : '') + '>+</button>' +
       '<button class="poem-gap-btn poem-gap-btn-section" type="button" title="Add a section here">§+</button>' +
       '</div>';
-    gap.querySelectorAll('.poem-gap-btn')[0].addEventListener('click', function () {
+    gap.querySelectorAll('.poem-gap-btn')[0].addEventListener('click', function (e) {
+      if (isHybrid()) { e.stopPropagation(); openGenreMenu(this, null, function (g) { addHybridPiece(g, index); }); return; }
       state.poems.splice(index, 0, { id: makeId(), title: '', lines: [''] });
       state.isExample = false;
       persist();
@@ -11731,7 +12020,8 @@
   // justified book's verse stays ranged left (as it prints).
   function editorAlign(poem) {
     var a = poem.bodyAlign || state.bodyAlignment;
-    return a === 'justify' && bookFormOf(state) === 'collection' && isLineated(poem) ? 'left' : a;
+    if (entryFormOf(poem) === 'cartoon') return 'center';
+    return a === 'justify' && isVerseEntry(poem) ? 'left' : a;
   }
   function makeBodyAlignControl(poem, editor, onChange) {
     return makeAlignControl('Body', function () { return poem.bodyAlign; }, function (v) {
@@ -11791,6 +12081,7 @@
     var seriesTagEl = isSeriesOn(poem) ? makeSeriesTag(poem) : null;
     if (seriesTagEl) titleRow.appendChild(seriesTagEl);
     if (tiersShown()) titleRow.appendChild(makeTierPill(poem));
+    if (isHybrid()) titleRow.appendChild(makeGenrePill(poem));
     titleRow.appendChild(makeDotsBtn(index));
 
     var editor = document.createElement('div');
@@ -11799,9 +12090,10 @@
     editor.spellcheck = prefs.spellcheck;
     editor.setAttribute('role', 'textbox');
     // A poem's lines start lowercase unless the poet capitalizes them.
-    editor.setAttribute('autocapitalize', state.form === 'collection' ? 'off' : 'sentences');
+    editor.bookbugPoem = poem;
+    editor.setAttribute('autocapitalize', entryFormOf(poem) === 'collection' ? 'off' : 'sentences');
     editor.setAttribute('aria-multiline', 'true');
-    editor.setAttribute('aria-label', Cap(formNouns().one) + ' text');
+    editor.setAttribute('aria-label', Cap(entryNoun(poem)) + ' text');
     renderEditor(editor, poem.lines);
     tagScriptLines(editor);
     var cardLayout = initialPlan && initialPlan.layouts ? initialPlan.layouts[index] : null;
@@ -11814,7 +12106,8 @@
       if (seriesTagEl) seriesTagEl.textContent = makeSeriesTag(poem).textContent;
     }
     tagProse();
-    editor.style.textAlign = isScriptForm() ? 'left' : editorAlign(poem);
+    var setAsScript = SCRIPT_FORM_KEYS.indexOf(entryFormOf(poem)) !== -1;
+    editor.style.textAlign = setAsScript ? 'left' : editorAlign(poem);
     editor.style.fontFamily = displayStackFor(state.bodyFontChoice);
     editor.style.lineHeight = editorLineHeight();
     if (initialPlan) editor.style.fontSize = (initialPlan.globalSize * editorPxPerPt()).toFixed(2) + 'px';
@@ -11824,6 +12117,7 @@
       syncNotes(editor, notesEl);
       poem.lines = serializeEditor(editor);
       if (poem.comments && poem.comments.length) { markCommentLines(poem, editor); renderComments(poem, editor, commentsEl); }
+      if (drawBtn) drawBtn.hidden = poem.lines.some(function (l) { return imageKeyForLine(l, state); });
       state.isExample = false;
       tagScriptLines(editor);
       tagProse();
@@ -11986,6 +12280,16 @@
     body.appendChild(titleRow);
     var seriesBar = isSeriesOn(poem) ? makeSeriesBar(poem, editor, function () { editor.dispatchEvent(new Event('input', { bubbles: true })); }) : null;
     if (seriesBar) body.appendChild(seriesBar);
+    // A cartoon without its drawing yet: a button to bring it in.
+    if (entryFormOf(poem) === 'cartoon' && !(poem.lines || []).some(function (l) { return imageKeyForLine(l, state); })) {
+      var drawBtn = document.createElement('button');
+      drawBtn.type = 'button';
+      drawBtn.className = 'btn btn-sm cartoon-draw-btn';
+      drawBtn.textContent = '+ Add the drawing…';
+      drawBtn.title = 'A photo, PDF or camera shot of the drawing, cleaned up like a scan; type its caption under it';
+      drawBtn.addEventListener('click', function () { importHybridCartoons(index + 1, poem); });
+      body.appendChild(drawBtn);
+    }
     body.appendChild(editor);
     if (seriesBar) body.appendChild(seriesBar.addBelow);
     body.appendChild(notesEl);
@@ -12006,7 +12310,8 @@
     // A script's alignment is set by its format, not chosen.
     if (!isScriptForm()) {
       aligns.appendChild(makeTitleAlignControl(poem, titleInput));
-      aligns.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
+      // A hybrid book's scene and cartoon are set by their genre.
+      if (!setAsScript && entryFormOf(poem) !== 'cartoon') aligns.appendChild(makeBodyAlignControl(poem, editor, updateVerseClass));
     }
     formatRow.appendChild(aligns);
     body.appendChild(formatRow);
@@ -12193,6 +12498,7 @@
     var subTag = makeSubsTag(poem);
     if (subTag) row.appendChild(subTag);
     if (tiersShown()) row.appendChild(makeTierPill(poem));
+    if (isHybrid()) row.appendChild(makeGenrePill(poem));
     row.appendChild(makeDotsBtn(index));
 
     row.addEventListener('dragstart', function (e) {
@@ -14220,7 +14526,7 @@
     renderPreviewPage(document.getElementById('previewPage'), document.getElementById('previewCaption'), stageMode ? stagePageWidth() : SIDEBAR_PREVIEW_WIDTH_PX, items[previewIndex]);
     if (stageMode) updateStageTitle(items[previewIndex]);
     // Script pages mix elements (and, in a screenplay, scenes), so they're edited in the list, not on the page.
-    var editable = stageMode === 'format' && items[previewIndex] && items[previewIndex].type === 'poem' && !isScriptForm();
+    var editable = stageMode === 'format' && items[previewIndex] && items[previewIndex].type === 'poem' && !isScriptForm() && stageEditable(items[previewIndex]);
     document.getElementById('previewPage').style.cursor = stageMode ? (editable ? 'text' : 'default') : '';
     syncStageTextSeg(items[previewIndex]);
     document.getElementById('previewFirstBtn').disabled = atStart;
@@ -14343,7 +14649,7 @@
       var pageNote = layout.pages.length > 1 ? ', page ' + (pageIndex + 1) + ' of ' + layout.pages.length : '';
       if (bm) { caption.textContent = bm.label + pageNote; return; }
       var entryNo = countEntries(state.poems.slice(0, item.index + 1));
-      caption.textContent = Cap(formNouns().one) + ' ' + entryNo + ' of ' + countEntries(state.poems) + pageNote;
+      caption.textContent = (isHybrid() ? Cap(entryNoun(poem)) + ', piece ' : Cap(formNouns().one) + ' ') + entryNo + ' of ' + countEntries(state.poems) + pageNote;
     }
 
   }
@@ -14404,7 +14710,7 @@
     if (stageEdit) return;
     var item = buildPreviewItems(state)[previewIndex];
     // Extra pages are written in Front and Back Matter, not on the page.
-    if (item && item.type === 'poem' && item.matter == null && !isScriptForm()) startStageEdit(item, e);
+    if (item && item.type === 'poem' && item.matter == null && !isScriptForm() && stageEditable(item)) startStageEdit(item, e);
   });
 
   // ---- Editing on the page (large Formatting view) ----
@@ -14412,6 +14718,13 @@
   // size, alignment and margins; clicking away (or Esc, or turning the
   // page) saves and shows the typeset page again.
   var stageEdit = null;
+  // A hybrid book's scenes and cartoons are laid out by their genre, so
+  // they're edited in the list, not on the page.
+  function stageEditable(item) {
+    var poem = item && item.index != null ? state.poems[item.index] : null;
+    var f = poem ? entryFormOf(poem) : '';
+    return f !== 'play' && f !== 'cartoon';
+  }
   function startStageEdit(item, e) {
     var box = document.getElementById('previewPage');
     var plan = planBooklet(state);
@@ -14464,7 +14777,7 @@
     // Hyphenated prose breaks where the typesetter would: soft hyphens
     // at its syllables (the browser's own dictionary differs). Typing
     // drops them from what's saved (serializeEditor).
-    if (state.hyphenate && window.bookbugHyphenator && !(bookFormOf(state) === 'collection' && isLineated(poem))) {
+    if (state.hyphenate && window.bookbugHyphenator && !isVerseEntry(poem)) {
       var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT), tn;
       while ((tn = walker.nextNode())) tn.data = tn.data.replace(/[A-Za-z]{5,}/g, function (w) { return window.bookbugHyphenator.hyphenate(w).join('\u00ad'); });
     }
@@ -14473,7 +14786,7 @@
     // puts the capital's foot on the second baseline; its bottom margin
     // makes the float exactly two lines tall, so it narrows just those).
     applyOpener(body, layout.opener, scale, layout.lineHeight * scale);
-    function syncVerse() { body.classList.toggle('is-verse', bookFormOf(state) === 'collection' && isLineated(poem) && editorAlign(poem) === 'left'); }
+    function syncVerse() { body.classList.toggle('is-verse', isVerseEntry(poem) && editorAlign(poem) === 'left'); }
     syncVerse();
     body.addEventListener('input', function () { syncNotes(body, null); poem.lines = serializeEditor(body); state.isExample = false; tagProseLines(body, poem, TAB_STOP_PT * scale); syncVerse(); persist(); });
     body.addEventListener('keydown', function (ev) {
@@ -14563,7 +14876,8 @@
     renderPreview();
   });
 
-  document.getElementById('addPoemBtn').addEventListener('click', function () {
+  document.getElementById('addPoemBtn').addEventListener('click', function (e) {
+    if (isHybrid()) { e.stopPropagation(); openGenreMenu(this, null, function (g) { addHybridPiece(g, null); }); return; }
     state.poems.push({ id: makeId(), title: '', lines: [''] });
     state.isExample = false;
     persist();
@@ -14571,7 +14885,8 @@
   });
   // Poetry: a new poem at the very top of the book, opened with its
   // title ready to type.
-  document.getElementById('addPoemTopBtn').addEventListener('click', function () {
+  document.getElementById('addPoemTopBtn').addEventListener('click', function (e) {
+    if (isHybrid()) { e.stopPropagation(); openGenreMenu(this, null, function (g) { addHybridPiece(g, 0); }); return; }
     var poem = { id: makeId(), title: '', lines: [''] };
     state.poems.unshift(poem);
     state.isExample = false;
@@ -15442,7 +15757,7 @@
     previewIndex = 0;
     // A play opens on Act One; its blank title reads "ACT ONE" by position.
     if (form === 'play') state.poems.push(makeSection(''));
-    if (form !== 'collection') state.poems.push(makeSampleEntry(form));
+    if (form !== 'collection' && form !== 'hybrid') state.poems.push(makeSampleEntry(form));
     if (googleUserName) state.author = googleUserName;
     saveStateCache();
     renderAll();
@@ -16176,17 +16491,15 @@
     document.getElementById('paragraphField').hidden = script;
     document.getElementById('proseTypeField').hidden = script;
     // A first-paragraph opener is for the prose books.
-    document.getElementById('openerField').hidden = !(bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays');
+    document.getElementById('openerField').hidden = !(bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays' || bookFormOf(state) === 'hybrid');
     document.getElementById('notesField').hidden = script;
     document.getElementById('runningHeadsField').hidden = script;
     document.getElementById('titleAlignSeg').closest('.field').hidden = script;
     document.getElementById('bodyAlignSeg').closest('.field').hidden = script;
     document.getElementById('lineSpacingSelect').closest('.field').hidden = script;
-    // Scripts print one-sided and are bound with brads, never folded.
-    document.getElementById('exportPrintBtn').hidden = script;
+    // A script's own manuscript is its PDF; it can still fold into a
+    // printable booklet like any book.
     document.getElementById('exportManuscriptBtn').hidden = script;
-    document.getElementById('cutLinesCheck').closest('.checkline').hidden = script;
-    document.getElementById('selectEntriesPrintBtn').hidden = script;
   }
 
   function updateStats() {
@@ -16410,8 +16723,9 @@
   // essays; sections or parts), and puts the page in its colorway.
   function applyFormWording() {
     var form = bookFormOf(state), f = TEXT_FORMS[form];
-    document.getElementById('addPoemBtn').textContent = '+ Add ' + f.one;
-    document.getElementById('addPoemTopBtn').textContent = '+ Add ' + f.one;
+    // A hybrid book's Add asks which genre (see openGenreMenu).
+    document.getElementById('addPoemBtn').textContent = '+ Add ' + f.one + (form === 'hybrid' ? ' ▾' : '');
+    document.getElementById('addPoemTopBtn').textContent = '+ Add ' + f.one + (form === 'hybrid' ? ' ▾' : '');
     document.getElementById('addSectionBtn').textContent = '+ Add ' + f.section;
     // Poetry: the Add poem below the list matches the one above it.
     var poetry = form === 'collection';
@@ -16887,25 +17201,26 @@
       }
       var noteSet = extractNotes((poem.lines || []).filter(function (l) { return !IMAGE_LINE_RE.test(l || ''); }));
       var lines = noteSet.lines;
+      var verse = poetry || (isHybrid(st) && entryFormOf(poem, st) === 'collection');
       var head = escapeXml(entryLabel(poem, st));
       // A poem (or a later chapter) starts a new page; the first one
       // follows the title on page one.
-      var brk = poetry || !firstEntry ? '<w:pageBreakBefore/>' : '';
-      body += p('<w:r>' + (poetry ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + head + '</w:t></w:r>', brk + (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="' + (poetry ? 'left' : 'center') + '"/>', true);
-      if (poetry) body += p('', SINGLE);
+      var brk = verse || !firstEntry ? '<w:pageBreakBefore/>' : '';
+      body += p('<w:r>' + (verse ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + head + '</w:t></w:r>', brk + (verse ? SINGLE : DOUBLE) + '<w:jc w:val="' + (verse ? 'left' : 'center') + '"/>', true);
+      if (verse) body += p('', SINGLE);
       firstEntry = false;
       var newPara = true;
       lines.forEach(function (line) {
-        if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) { body += p('#', (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>'); newPara = true; return; }
-        if (poetry) { body += p(line.replace(/^\t+/, ''), SINGLE + (/^\t/.test(line) ? '<w:ind w:left="720"/>' : '')); return; }
+        if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) { body += p('#', (verse ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>'); newPara = true; return; }
+        if (verse) { body += p(line.replace(/^\t+/, ''), SINGLE + (/^\t/.test(line) ? '<w:ind w:left="720"/>' : '')); return; }
         if (!line.trim()) return;
         body += p(line.replace(/^\t+/, ''), DOUBLE + '<w:ind w:firstLine="720"/>');
         newPara = false;
       });
       // A manuscript's notes follow the piece they belong to.
       if (noteSet.notes.length) {
-        body += p('Notes', (poetry ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>');
-        noteSet.notes.forEach(function (t, k) { body += p((k + 1) + '. ' + t, poetry ? SINGLE : DOUBLE); });
+        body += p('Notes', (verse ? SINGLE : DOUBLE) + '<w:jc w:val="center"/>');
+        noteSet.notes.forEach(function (t, k) { body += p((k + 1) + '. ' + t, verse ? SINGLE : DOUBLE); });
       }
     });
     if (!poetry) body += p('END', DOUBLE + '<w:jc w:val="center"/>');
@@ -21829,6 +22144,60 @@
     return pbWritePdf(out, (pbState.title || 'Untitled picture book') + ' - Printable Dummy');
   }
 
+  // A printable booklet of any book drawn page by page on a canvas (a
+  // cartoon batch, a comic): the same saddle-stitch imposition as the
+  // printable dummy above, two pages to each side of a landscape Letter
+  // sheet. `drawPage(i, wPx, hPx)` resolves to page i's canvas at that
+  // size; pages past `n` (padding to a multiple of 4) are left blank.
+  async function buildCanvasBookletPdf(n, pageW, pageH, drawPage, title, cutLines) {
+    var DPI = 200, total = Math.max(4, Math.ceil(n / 4) * 4), sheets = total / 4;
+    var SW = 11 * DPI, SH = 8.5 * DPI, margin = 0.5 * DPI;
+    var scale = Math.min((SW - 2 * margin) / (2 * pageW * DPI), (SH - 2 * margin - 0.3 * DPI) / (pageH * DPI), 1);
+    var pw = Math.round(pageW * DPI * scale), ph = Math.round(pageH * DPI * scale);
+    var x0 = Math.round((SW - 2 * pw) / 2), y0 = Math.round((SH - ph) / 2 - 0.1 * DPI);
+    var dim = (pageW * scale).toFixed(2) + '" × ' + (pageH * scale).toFixed(2) + '" per page';
+    var out = [];
+    for (var i = 1; i <= sheets; i++) {
+      var faces = [[total - 2 * i + 2, 2 * i - 1, 'Front'], [2 * i, total - 2 * i + 1, 'Back']];
+      for (var f = 0; f < 2; f++) {
+        var face = faces[f];
+        var c = document.createElement('canvas');
+        c.width = SW; c.height = SH;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, SW, SH);
+        for (var k = 0; k < 2; k++) {
+          if (face[k] > n) continue;
+          ctx.drawImage(await drawPage(face[k] - 1, pw, ph), x0 + k * pw, y0, pw, ph);
+        }
+        if (cutLines) {
+          ctx.save();
+          ctx.strokeStyle = '#999999'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]);
+          ctx.strokeRect(x0, y0, 2 * pw, ph);
+          ctx.beginPath(); ctx.moveTo(x0 + pw, y0); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
+          ctx.restore();
+          var lp = Math.round(DPI * 0.11);
+          [face[0], face[1]].forEach(function (p, k) {
+            pbLabel(ctx, p > n ? 'blank' : 'p. ' + p, x0 + pw * k + pw / 2, y0 + ph + lp * 1.8, lp, null, 'center');
+          });
+          pbLabel(ctx, 'Sheet ' + i + ' of ' + sheets + ' — ' + face[2] + ' · pp. ' + face[0] + ', ' + face[1] + ' · ' + dim, margin, SH - margin * 0.5, Math.round(DPI * 0.09));
+        }
+        out.push({ wPt: 792, hPt: 612, wPx: SW, hPx: SH, jpeg: await pbJpeg(c), rotate: f === 1 });
+      }
+    }
+    return pbWritePdf(out, title + ' - Printable Booklet');
+  }
+  // Whether to show cut and fold lines on a cartoon batch's or comic's
+  // booklet (this device's choice).
+  var CANVAS_CUT_KEY = 'bookbug.bookletCutLines.v1';
+  function canvasCutLines() { try { return localStorage.getItem(CANVAS_CUT_KEY) !== '0'; } catch (e) { return true; } }
+  function setCanvasCutLines(on) { try { localStorage.setItem(CANVAS_CUT_KEY, on ? '1' : '0'); } catch (e) {} }
+  async function saveExportedPdf(filename, bytes, status, note) {
+    var dl = null;
+    try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+    if (dl) { await dl.save({ filename: filename, data: bytes }); status.textContent = 'Saved ' + filename + '.' + (note || ''); }
+    else { downloadBlob(filename, bytes, 'application/pdf'); status.textContent = 'Downloaded ' + filename + '.' + (note || ''); }
+  }
+
   // PowerPoint: one slide per spread at the spread's size. The pictures
   // are one flattened image behind; each text box is a real, editable
   // text box in its place, at its angle, in its type.
@@ -24035,6 +24404,35 @@
     btn.disabled = false;
   });
 
+  // ---- Export: a printable booklet, two cartoons to a side ----
+  cbFmt('cbCutLinesCheck').checked = canvasCutLines();
+  cbFmt('cbCutLinesCheck').addEventListener('change', function () { setCanvasCutLines(this.checked); if (cmFmt('cmCutLinesCheck')) cmFmt('cmCutLinesCheck').checked = this.checked; });
+  cbFmt('cbExportPrintBtn').addEventListener('click', async function () {
+    cbFlushPending();
+    var btn = cbFmt('cbExportPrintBtn'), status = cbFmt('cbExportStatus');
+    var pages = cbPages();
+    if (!pages.some(function (p) { return p.kind === 'cartoon'; })) { status.textContent = 'Add a cartoon first.'; return; }
+    btn.disabled = true;
+    status.textContent = 'Building booklet…';
+    try {
+      await Promise.all(['400 16px ', 'italic 400 16px '].map(function (w) { return document.fonts.load(w + '"EB Garamond"').catch(function () {}); }));
+      if (document.fonts && document.fonts.load) await document.fonts.load(cbCaptionCss(cbState, 20), 'Aa').catch(function () {});
+      await Promise.all(Object.keys(cbState.images).filter(function (id) { return !cbState.images[id].page; }).map(pbLoadImage));
+      var ps = cbPageSize();
+      var bytes = await buildCanvasBookletPdf(pages.length, ps.w, ps.h, function (i, w) {
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = Math.round(w * ps.h / ps.w);
+        cbDrawPage(cv.getContext('2d'), cv.width, pages[i], false);
+        return cv;
+      }, cbState.title || 'Cartoons', cbFmt('cbCutLinesCheck').checked);
+      var slug = (cbState.title || 'cartoons').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'cartoons';
+      await saveExportedPdf(slug + '-printable.pdf', bytes, status);
+    } catch (err) {
+      status.textContent = err && err.code === 'declined' ? '' : 'Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.';
+    }
+    btn.disabled = false;
+  });
+
   // ---------------------------------------------------------------------
   // Comics: the editor. One page at a time, drawn as SVG at its printed
   // proportions: panels from a grid, a template or drawn by hand, art
@@ -26049,6 +26447,36 @@
       try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
       if (dl) { await dl.save({ filename: filename, data: bytes }); status.textContent = 'Saved ' + filename + '.' + note; }
       else { downloadBlob(filename, bytes, 'application/pdf'); status.textContent = 'Downloaded ' + filename + '.' + note; }
+    } catch (err) {
+      status.textContent = err && err.code === 'declined' ? '' : 'Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.';
+    }
+    btn.disabled = false;
+  });
+
+  // ---- Export: a printable booklet, two pages to a side ----
+  cmFmt('cmCutLinesCheck').checked = canvasCutLines();
+  cmFmt('cmCutLinesCheck').addEventListener('change', function () { setCanvasCutLines(this.checked); cbFmt('cbCutLinesCheck').checked = this.checked; });
+  cmFmt('cmExportPrintBtn').addEventListener('click', async function () {
+    cmFlushPending();
+    var btn = cmFmt('cmExportPrintBtn'), status = cmFmt('cmExportStatus');
+    btn.disabled = true;
+    status.textContent = 'Building booklet…';
+    try {
+      if (document.fonts && document.fonts.load) {
+        await Promise.all([cmFontCss(cmState, 'speech', 16), '400 16px ' + CM_SFX_STACK, '400 16px Jost'].map(function (f) { return document.fonts.load(f).catch(function () {}); }));
+      }
+      await Promise.all(Object.keys(cmState.images).map(pbLoadImage));
+      var F = cmFrame(cmState), missing = false;
+      var bytes = await buildCanvasBookletPdf(cmState.pages.length, F.PW / 72, F.PH / 72, function (i, w) {
+        var pg = cmState.pages[i];
+        if (pg.panels.some(function (p) { return p.img && !pbImgEls[p.img]; })) missing = true;
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = Math.round(w * F.PH / F.PW);
+        cmDrawPage(cv.getContext('2d'), w / F.PW, pg, cmState);
+        return cv;
+      }, cmState.title || 'Comic', cmFmt('cmCutLinesCheck').checked);
+      var slug = (cmState.title || 'comic').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'comic';
+      await saveExportedPdf(slug + '-printable.pdf', bytes, status, missing ? ' Some art isn’t on this device yet, so it’s left out.' : '');
     } catch (err) {
       status.textContent = err && err.code === 'declined' ? '' : 'Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.';
     }
