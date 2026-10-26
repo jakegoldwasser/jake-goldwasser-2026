@@ -8881,6 +8881,14 @@
   });
   $('paper').addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'b' || e.key === 'i')) { e.preventDefault(); toggleFmt(e.key); }
+    // Tab in the paper suggests an indent there (written in, like typing),
+    // instead of moving on to the next field.
+    if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && piece && !reading) {
+      e.preventDefault();
+      hideTools();
+      var s = selectionInPaper();
+      if (s) typeText('\t', { start: s.start, end: s.start, collapsed: true });
+    }
   });
   function typeText(txt, s) {
     if (!s.collapsed) strikeRange(s); // typing over a selection: cross it out, write after it
