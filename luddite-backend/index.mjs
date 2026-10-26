@@ -1186,6 +1186,57 @@ async function routeLuddite(event, method, path, info) {
     return respond(200, { draft: state ? { text: state.text, at: state.at } : null });
   }
 
+  // ---- My work: a student's own writing, for Bookbug HM's "From Luddite HM" import ----
+  // Luddite HM only (the Origin header, which a page can't fake, must be
+  // HM_ORIGIN): the one place Luddite is tied to Bookbug, at Jake's request
+  // (2026-10-26). A student sees only their own writing, never comments.
+  // GET /luddite/mywork -- every writing session they've written in, newest first.
+  // GET /luddite/mywork?code= -- one session's drafts, oldest first, with their
+  // text, names and which is final (the last is the writing as it is now).
+  if (path === '/luddite/mywork' && method === 'GET') {
+    const origin = event.headers?.origin || event.headers?.Origin || '';
+    if (origin !== HM_ORIGIN) return respond(404, { error: 'Not found' });
+    const wordCount = (t) => (String(t || '').trim().match(/\S+/g) || []).length;
+    if (q.code) {
+      const room = await getRoom(cleanCode(q.code));
+      const st = room.students[me.sub];
+      if (room.deletedAt || !st || st.status === 'removed') throw new HttpError(404, 'no_student');
+      const older = await Promise.all((st.drafts || []).map((d) => readItem('luddite:olddraft:' + room.code + ':' + me.sub + ':' + d.n)));
+      const { state: cur } = await readItem('luddite:draft:' + room.code + ':' + me.sub);
+      let nowText = cur ? String(cur.text || '') : '';
+      if (!nowText.trim()) {
+        const paperSub = (room.submissions || []).find((x) => x.sub === me.sub && x.stored);
+        const paper = paperSub ? (await readItem('luddite:sub:' + paperSub.id)).state : null;
+        if (paper) nowText = String(paper.text || '');
+      }
+      const names = st.draftNames || {};
+      const drafts = (st.drafts || []).map((d, i) => {
+        const text = older[i].state ? String(older[i].state.text || '') : '';
+        return { n: d.n, name: names[d.n] || '', text, words: wordCount(text), at: d.at || 0 };
+      });
+      const n = drafts.length + 1;
+      drafts.push({ n, name: names[n] || '', text: nowText, words: wordCount(nowText), at: (cur && cur.at) || st.submittedAt || 0 });
+      return respond(200, { code: room.code, title: titleOf(room), teacherName: room.teacher.name || room.teacher.email, final: st.finalDraft || 0, drafts });
+    }
+    const em = lower(me.email);
+    const { state: mine } = await readItem('luddite:mine:' + em);
+    const codes = new Set([...((mine && mine.handed) || []), ...((mine && mine.rooms) || []), ...((mine && mine.own) || [])]);
+    const classes = await Promise.all(((mine && mine.classes) || []).map((id) => readItem('luddite:class:' + id)));
+    classes.forEach(({ state: c }) => { if (c && !c.deletedAt && c.emails.includes(em)) (c.assignments || []).forEach((code) => codes.add(code)); });
+    const rooms = await Promise.all([...codes].slice(0, 400).map((c) => readItem('luddite:room:' + c)));
+    const sessions = [];
+    rooms.forEach(({ state: r }) => {
+      const s = r && !r.deletedAt && r.students[me.sub];
+      if (!s || s.status !== 'admitted') return;
+      if (!s.words && !s.handedIn && !(s.drafts || []).length) return;
+      sessions.push({ code: r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email,
+        at: Math.max(s.submittedAt || 0, s.draftAt || 0, r.startAt || 0, r.createdAt || 0),
+        words: s.words || 0, drafts: (s.drafts || []).length + 1, final: s.finalDraft || 0, handedIn: !!s.handedIn });
+    });
+    sessions.sort((a, b) => b.at - a.at);
+    return respond(200, { sessions });
+  }
+
   // ---- Handed back: a student reading their teacher's comments ----
 
   // GET /luddite/returned -- this student's handed-back papers, newest first.
