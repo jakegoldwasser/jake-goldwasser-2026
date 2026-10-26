@@ -8860,14 +8860,44 @@
   // ---------------------------------------------------------------------
   // UI: intake tabs
   // ---------------------------------------------------------------------
-  document.querySelectorAll('.tab').forEach(function (tab) {
+  function bindIntakeTab(tab) {
     tab.addEventListener('click', function () {
       document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
       document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.remove('active'); });
       tab.classList.add('active');
       document.querySelector('.tabpane[data-pane="' + tab.dataset.tab + '"]').classList.add('active');
     });
-  });
+  }
+  document.querySelectorAll('.tab').forEach(bindIntakeTab);
+
+  // Another source for the Bring in panel, added by a page built on this one
+  // (Bookbug HM's hm-luddite.js adds "From Luddite HM"); Bookbug itself adds
+  // none. window.bookbugImportTab({ id, label, build(pane, tools) }) puts a tab
+  // after Paste text and calls build once with its empty pane and `tools`:
+  // importText(text, title, setStatus) brings in text written the way the
+  // Paste text tab takes it (### titles), nouns() is the open book's words for
+  // its parts (formNouns), email() the signed-in Google address. A source
+  // added before this script ran waits in window.bookbugImportTabs.
+  function addImportTab(src) {
+    if (!src || !src.id || document.querySelector('#intakePanel .tab[data-tab="' + src.id + '"]')) return;
+    var tab = document.createElement('button');
+    tab.className = 'tab';
+    tab.dataset.tab = src.id;
+    tab.textContent = src.label;
+    document.querySelector('#intakePanel .tabs').appendChild(tab);
+    var pane = document.createElement('div');
+    pane.className = 'tabpane';
+    pane.dataset.pane = src.id;
+    document.getElementById('intakePanel').appendChild(pane);
+    bindIntakeTab(tab);
+    src.build(pane, {
+      importText: async function (text, title, setStatus) { addImportedPoems(await parseDocWithImages(text), title, setStatus); },
+      nouns: function () { return formNouns(); },
+      email: function () { return googleUserEmail; }
+    });
+  }
+  window.bookbugImportTab = addImportTab;
+  (window.bookbugImportTabs || []).forEach(addImportTab);
 
   function escQ(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
   function relTime(iso) {
