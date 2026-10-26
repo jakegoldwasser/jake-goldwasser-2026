@@ -3130,6 +3130,8 @@
       if (!d.draft || !d.draft.text || writing) return;
       // The server's copy wins when it's newer than this device's (written on another computer).
       var local = (load(key) || '');
+      // (this device has now seen the server's copy, so its next backup may replace it: see baseAt)
+      store(key + '.base', String(d.draft.at || 0));
       if (local.trim() && (local === d.draft.text || !(d.draft.at > Number(load(key + '.at') || 0) + 5000))) return;
       store(key, d.draft.text);
       lastBackedUp = d.draft.text;
@@ -3138,7 +3140,9 @@
   }
   function showReady() {
     var text = previewing ? '' : load(textKey()) || '';
-    if (!text.trim()) restoreDraft();
+    // Always ask the server: this computer's copy may be older than writing done elsewhere
+    // (Jake, 2026-10-26: two students lost work when an old copy was picked up and sent).
+    restoreDraft();
     var has = text.trim().length > 0;
     var inRoom = mode === 'room';
     $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
@@ -3491,13 +3495,43 @@
   // Each report also carries the writing itself when it has changed since
   // the last one, so the server keeps a backup (see /luddite/draft).
   var lastBackedUp = null;
+  // The server has newer writing than this computer's (from another computer, or
+  // restored by the teacher): it wasn't replaced. Restored writing is taken at once;
+  // otherwise the student chooses, and the other copy is kept on the server either way.
+  var draftConflictOpen = false;
+  function adoptServerDraft(c) {
+    pad.value = c.text;
+    shadow = pad.value;
+    lastBackedUp = c.text;
+    store(textKey(), c.text);
+    store(textKey() + '.at', String(nowMs()));
+    store(textKey() + '.base', String(c.at));
+    updateCount();
+  }
+  function onDraftConflict(c) {
+    if (draftConflictOpen || !writing) return;
+    draftConflictOpen = true;
+    if (c.restored) {
+      adoptServerDraft(c);
+      draftConflictOpen = false;
+      tell('Your Teacher Restored Your Writing', 'Your teacher put back an earlier version of your writing. What you had is saved too.');
+      return;
+    }
+    ask({ title: 'Newer Writing Found', text: 'There’s newer writing of yours, saved at ' + dayClock(c.at) + ' (' + plural(c.words || 0, 'word', 'words') + '), probably from another computer. This computer has ' + plural(wordCount(shadow), 'word', 'words') + '. Which do you want to keep? The other is saved too, so your teacher can get it back.', ok: 'Use the newer writing', cancel: 'Keep this computer’s' })
+      .then(function (useNew) {
+        if (useNew) adoptServerDraft(c); else store(textKey() + '.base', String(c.at));
+        draftConflictOpen = false;
+        if (writing && !locked) pad.focus();
+      });
+  }
   function report(type) {
     if (mode !== 'room' || previewing || !roomCode) return Promise.resolve(null);
     var body = { code: roomCode, type: type, words: wordCount(shadow) };
-    var sending = writing ? shadow : null;
-    if (sending !== null && sending !== lastBackedUp && (sending.trim() || lastBackedUp !== null)) body.text = sending;
+    var sending = writing && !draftConflictOpen ? shadow : null;
+    if (sending !== null && sending !== lastBackedUp && (sending.trim() || lastBackedUp !== null)) { body.text = sending; body.baseAt = Number(load(textKey() + '.base') || 0); }
     return api('/luddite/event', body).then(function (d) {
-      if (body.text !== undefined) lastBackedUp = body.text;
+      if (d.conflict) onDraftConflict(d.conflict);
+      else if (body.text !== undefined) { lastBackedUp = body.text; if (d.draftAt) store(textKey() + '.base', String(d.draftAt)); }
       noteNow(d.room.now);
       chatNote(d.room);
       if (roomInfo) { roomInfo.sittingEnd = d.room.sittingEnd; roomInfo.nextAt = d.room.nextAt; roomInfo.sitting = d.room.sitting; roomInfo.sittings = d.room.sittings; roomInfo.parts = d.room.parts; roomInfo.endAt = d.room.endAt; roomInfo.prompt = d.room.prompt; roomInfo.prefs = d.room.prefs; roomInfo.lockedOut = d.room.lockedOut; roomInfo.paused = d.room.paused; roomInfo.shareWork = d.room.shareWork; roomInfo.rubric = d.room.rubric; roomInfo.sharedId = d.room.sharedId; roomInfo.drafts = d.room.drafts; roomInfo.draftNames = d.room.draftNames; roomInfo.finalDraft = d.room.finalDraft; roomInfo.homePrint = d.room.homePrint; if (writing) { drawPrompt(); syncClassWork(); } }
@@ -4460,7 +4494,7 @@
     if (!writing || mode !== 'room' || previewing || !roomCode || shadow === lastBackedUp) return;
     try {
       fetch(API + '/luddite/event', { method: 'PUT', keepalive: true, headers: { Authorization: 'Bearer ' + authToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: roomCode, type: 'idle', words: wordCount(shadow), text: shadow }) });
+        body: JSON.stringify({ code: roomCode, type: 'idle', words: wordCount(shadow), text: shadow, baseAt: Number(load(textKey() + '.base') || 0) }) });
     } catch (e) {}
   });
   window.addEventListener('beforeunload', function (e) {
@@ -8053,7 +8087,7 @@
     try { data = await api('/luddite/wlog?code=' + encodeURIComponent(code) + '&sub=' + encodeURIComponent(sub)); }
     catch (e) { $('wlBody').innerHTML = ''; $('wlBody').appendChild(el('p', 'fine', 'Couldn’t load the writing log. Try again.')); return; }
     if (!wlAt || wlAt.sub !== sub) return;
-    drawWlog(data.log);
+    drawWlog(data.log, data.prev);
   }
   // Previous / Next student (or the arrow keys): through the session's Students list.
   function wlList() { return wlAt && teacherRoom && teacherRoom.code === wlAt.code ? roomSubs : []; }
@@ -8075,12 +8109,13 @@
     var d = new Date(t);
     return d.toDateString() === new Date().toDateString() ? clock(t) : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
-  function drawWlog(log) {
+  function drawWlog(log, prevCopy) {
     var body = $('wlBody');
     body.innerHTML = '';
     var mins = (log && log.mins) || [];
     if (!mins.length) {
       body.appendChild(el('p', 'fine', 'Nothing logged yet. Luddite keeps a writing log from October 23, 2026, while a student writes in a session.'));
+      drawWlVersions(body, log || {}, prevCopy);
       return;
     }
     var sum = function (k) { return mins.reduce(function (a, m) { return a + (m[k] || 0); }, 0); };
@@ -8177,14 +8212,18 @@
     });
     body.appendChild(key);
     body.appendChild(el('p', 'fine', 'Most students compose at about 5 to 30 words a minute, stopping and going back to change things. A flag isn’t proof: read the words it shows and talk with the student.'));
-    drawWlVersions(body, log);
+    drawWlVersions(body, log, prevCopy);
   }
   // Versions: their whole text every few minutes, and just before and after
   // each burst (GET /luddite/snap). One shows at a time, with what changed
   // since the version before it: added words in green, deleted ones struck through.
   var wlSnaps = [], wlSnapAt = -1, wlSnapCache = {}, wlShowChanges = true;
-  function drawWlVersions(body, log) {
+  var WLV_NOTE = { 'from another computer': 'from another computer, not kept', 'before restoring': 'what they had before a restore', restored: 'restored' };
+  function drawWlVersions(body, log, prevCopy) {
     wlSnaps = (log.snaps || []).slice();
+    // The copy kept when their writing suddenly shrank by more than half.
+    if (prevCopy) wlSnaps.push({ k: 'prev', at: prevCopy.at, words: prevCopy.words, note: 'kept when the writing shrank' });
+    wlSnaps.sort(function (a, b) { return a.at - b.at; });
     wlSnapCache = {};
     if (!wlSnaps.length) return;
     var box = el('div', 'wlversions');
@@ -8196,14 +8235,25 @@
     nav.appendChild(button('‹ Earlier', 'btn small ghost', function () { if (wlSnapAt > 0) wlShowSnap(wlSnaps[wlSnapAt - 1].k); })).id = 'wlvPrev';
     var pick = el('select', 'field wlvpick');
     pick.id = 'wlvPick';
-    wlSnaps.forEach(function (x) { var o = el('option', null, wlWhen(x.at) + ' · ' + plural(x.words || 0, 'word', 'words') + (x.burst ? ' · ⚑ after a burst' : '')); o.value = x.k; pick.appendChild(o); });
-    pick.addEventListener('change', function () { wlShowSnap(Number(pick.value)); });
+    wlSnaps.forEach(function (x) { var o = el('option', null, wlWhen(x.at) + ' · ' + plural(x.words || 0, 'word', 'words') + (x.burst ? ' · ⚑ after a burst' : '') + (x.note ? ' · ' + (WLV_NOTE[x.note] || x.note) : '')); o.value = x.k; pick.appendChild(o); });
+    pick.addEventListener('change', function () { wlShowSnap(pick.value === 'prev' ? 'prev' : Number(pick.value)); });
     nav.appendChild(pick);
     nav.appendChild(button('Later ›', 'btn small ghost', function () { if (wlSnapAt < wlSnaps.length - 1) wlShowSnap(wlSnaps[wlSnapAt + 1].k); })).id = 'wlvNext';
     var ch = button('Show changes', 'btn small ghost toggle', function () { wlShowChanges = !wlShowChanges; ch.setAttribute('aria-pressed', wlShowChanges ? 'true' : 'false'); wlShowSnap(wlSnaps[wlSnapAt].k); });
     ch.setAttribute('aria-pressed', wlShowChanges ? 'true' : 'false');
     ch.title = 'Mark what changed since the version before: added words in green, deleted ones struck through';
     nav.appendChild(ch);
+    // Put this version back as their writing (what they have now is kept as a version first).
+    nav.appendChild(button('Restore this version', 'btn small', async function () {
+      var x = wlSnaps[wlSnapAt], at = wlAt;
+      if (!x || !at) return;
+      var nm = $('wlMeta').textContent || 'the student';
+      if (!await ask({ title: 'Restore This Version?', text: 'The version from ' + wlWhen(x.at) + ' (' + plural(x.words || 0, 'word', 'words') + ') becomes ' + nm + '’s writing. What they have now is kept as a version, so it can be put back too. If they’re writing, their page switches to it and tells them.', ok: 'Restore' })) return;
+      try { await api('/luddite/restore', { code: at.code, sub: at.sub, k: x.k }); }
+      catch (e) { tell('Couldn’t Restore It', 'Try again.'); return; }
+      tell('Restored', nm + '’s writing is the version from ' + wlWhen(x.at) + ' again.');
+      openWlog(at.code, at.sub, nm);
+    }));
     head.appendChild(nav);
     box.appendChild(head);
     box.appendChild(el('p', 'fine', '')).id = 'wlvMeta';

@@ -1047,8 +1047,9 @@ async function routeLuddite(event, method, path, info) {
     if (!room) throw new HttpError(404, 'no_room');
     // A backup of the writing so far (sent when it has changed), so a lost
     // laptop or a cleared browser doesn't lose the work.
-    if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') await saveDraft(code, me.sub, body.text, prevSeen);
-    return respond(200, { room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
+    let saved = null;
+    if (typeof body.text === 'string' && room.students[me.sub] && room.students[me.sub].status === 'admitted') saved = await saveDraft(code, me.sub, body.text, prevSeen, Number.isFinite(body.baseAt) ? body.baseAt : undefined);
+    return respond(200, { ...(saved && saved.conflict ? { conflict: saved.conflict } : saved ? { draftAt: saved.at } : {}), room: studentView(room, me.sub, me.email, await prefsOf(room.teacher.sub)) });
   }
 
   // ---- Drafts: a student starts a new draft; the old one is kept ----
@@ -1549,7 +1550,33 @@ async function routeLuddite(event, method, path, info) {
     const sub = String(q.sub || ''), st = room.students[sub];
     if (!st) throw new HttpError(404, 'no_student');
     const { state: log } = await readItem('luddite:wlog:' + room.code + ':' + sub);
-    return respond(200, { log: log ? { mins: log.mins || [], bursts: log.bursts || [], restores: log.restores || [], first: log.first || 0, snaps: log.snaps || [] } : null, name: st.name || '', email: st.email || '' });
+    const { state: dr } = await readItem('luddite:draft:' + room.code + ':' + sub);
+    const prevCopy = dr && dr.prev && dr.prev.text ? { at: dr.prev.at, words: (dr.prev.text.trim().match(/\S+/g) || []).length } : null;
+    return respond(200, { prev: prevCopy, log: log ? { mins: log.mins || [], bursts: log.bursts || [], restores: log.restores || [], first: log.first || 0, snaps: log.snaps || [] } : null, name: st.name || '', email: st.email || '' });
+  }
+
+  // PUT /luddite/restore { code, sub, k } -- the teacher puts a version (k, or
+  // 'prev': the copy kept when the writing shrank) back as the student's
+  // writing. What they had is kept as a version first; their page picks the
+  // restored writing up (the draft is marked `restored`, see saveDraft).
+  if (path === '/luddite/restore' && method === 'PUT') {
+    const room = await getRoom(cleanCode(body.code));
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const sub = String(body.sub || '');
+    if (!room.students[sub]) throw new HttpError(404, 'no_student');
+    const key = 'luddite:draft:' + room.code + ':' + sub;
+    const { state: dr } = await readItem(key);
+    let text;
+    if (body.k === 'prev') text = dr && dr.prev && dr.prev.text;
+    else { const { state: snap } = await readItem('luddite:snap:' + room.code + ':' + sub + ':' + Math.floor(Number(body.k) || 0)); text = snap && snap.text; }
+    if (typeof text !== 'string' || !text.trim()) throw new HttpError(404, 'no_snap');
+    if (dr && dr.text && dr.text !== text) await keepVersion(room.code, sub, dr.text, { note: 'before restoring' });
+    const at = Date.now();
+    await mutate(key, (d) => ({ ...(d || {}), code: room.code, sub, text, at, restored: true }));
+    await keepVersion(room.code, sub, text, { note: 'restored' });
+    const words = (text.trim().match(/\S+/g) || []).length;
+    await mutate('luddite:room:' + room.code, (r) => (r && r.students[sub] ? { ...r, students: { ...r.students, [sub]: { ...r.students[sub], words } } } : undefined)).catch(() => {});
+    return respond(200, { ok: true, at, words });
   }
 
   // GET /luddite/snap?code=&sub=&k= -- one version of a student's text (see logWriting).
@@ -1558,6 +1585,11 @@ async function routeLuddite(event, method, path, info) {
     if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
     const sub = String(q.sub || '');
     if (!room.students[sub]) throw new HttpError(404, 'no_student');
+    if (q.k === 'prev') {
+      const { state: dr } = await readItem('luddite:draft:' + room.code + ':' + sub);
+      if (!dr || !dr.prev || !dr.prev.text) throw new HttpError(404, 'no_snap');
+      return respond(200, { snap: { k: 'prev', at: dr.prev.at, words: (dr.prev.text.trim().match(/\S+/g) || []).length, text: dr.prev.text } });
+    }
     const { state: snap } = await readItem('luddite:snap:' + room.code + ':' + sub + ':' + Math.floor(Number(q.k) || 0));
     if (!snap) throw new HttpError(404, 'no_snap');
     return respond(200, { snap: { k: snap.k, at: snap.at, words: snap.words, text: snap.text || '', burst: !!snap.burst } });
@@ -2678,20 +2710,50 @@ function studentPaper(x) {
 // The latest backup of a student's writing in one session. If the writing
 // suddenly shrinks by more than half (a glitch, or a wiped page), the copy
 // before it is kept too, as `prev`.
-async function saveDraft(code, sub, raw, prevSeen) {
+// baseAt (from a student's page): the time of the server's copy that page last
+// had. If the server's copy is newer than that and different -- written on
+// another computer, or restored by the teacher -- it isn't overwritten: the
+// page is told (`conflict`) and the student chooses, and what the page sent is
+// kept as a version, so nothing is lost either way. (Hand-ins pass no baseAt.)
+async function saveDraft(code, sub, raw, prevSeen, baseAt) {
   const text = String(raw).slice(0, MAX_STORED_CHARS);
-  let before = null, glitch = '';
+  let before = null, glitch = '', conflict = null, savedAt = 0;
   await mutate('luddite:draft:' + code + ':' + sub, (d) => {
     before = d ? String(d.text || '') : '';
     glitch = d && d.prev ? String(d.prev.text || '') : '';
-    if (d && d.text === text) { before = null; return undefined; }
+    conflict = null;
+    if (d && d.text === text) { before = null; savedAt = d.at || 0; return undefined; }
+    if (Number.isFinite(baseAt) && d && d.text && (d.at || 0) > baseAt + 1000) {
+      conflict = { text: d.text, at: d.at, words: (d.text.trim().match(/\S+/g) || []).length, restored: !!d.restored };
+      before = null;
+      return undefined;
+    }
     const at = Date.now();
+    savedAt = at;
     const shrank = d && d.text && text.length < d.text.length / 2;
     const prev = shrank ? { text: d.text, at: d.at } : d && d.prev;
     const keepPrev = prev && prev.text.length + text.length < 350000;
     return { code, sub, text, at, ...(keepPrev ? { prev } : {}) };
   });
+  if (conflict) {
+    if (text.trim()) await keepVersion(code, sub, text, { note: 'from another computer' }).catch(() => {});
+    return { conflict };
+  }
   if (before !== null) await logWriting(code, sub, before, text, prevSeen, glitch).catch((e) => console.warn('writing log failed', e.message));
+  return { at: savedAt };
+}
+
+// One more version of a student's text in a session (see logWriting), with a note.
+async function keepVersion(code, sub, text, extra) {
+  let entry = null;
+  await mutate('luddite:wlog:' + code + ':' + sub, (L) => {
+    const log = L || { mins: [], bursts: [], recent: [], first: Date.now() };
+    const k = log.nextSnap || 1;
+    entry = { k, at: Date.now(), words: tokensOf(text).filter(isWord).length, ...(extra || {}) };
+    return { ...log, snaps: [...(log.snaps || []), entry], nextSnap: k + 1 };
+  });
+  await mutate('luddite:snap:' + code + ':' + sub + ':' + entry.k, () => ({ ...entry, text }));
+  return entry;
 }
 
 // ---- The writing log (GET /luddite/wlog) ----
