@@ -1197,7 +1197,26 @@
   .dbnew { border-top: 1.5px solid var(--rule); margin-top: 14px; padding-top: 12px; }
   /* The writing log: figures, a minute-by-minute chart, and anything flagged. */
   #wlogBox { z-index: 60; }
-  #wlogBox .card { max-width: 980px !important; max-height: 92vh; overflow-y: auto; }
+  /* "Writing now" on a student's row: a link to the session they're writing in. */
+  .wnpill { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: none; border: 1.5px solid var(--mint); color: var(--mint-deep); background: var(--mint-tint);
+    border-radius: 999px; padding: 3px 11px; font: 600 14px 'Source Sans 3', sans-serif; cursor: pointer; max-width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wnpill:empty { display: none; }
+  .wnpill:hover { background: #fff; }
+  .wnpill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; animation: wnpulse 2s ease-in-out infinite; }
+  @keyframes wnpulse { 50% { opacity: .35; } }
+  #writingNowList .item { cursor: pointer; }
+  /* Pinned to the top and always the same height, so Previous / Next never move between students. */
+  #wlogBox { align-items: flex-start; padding-top: 3vh; }
+  #wlogBox .card { max-width: 980px !important; height: 94vh; display: flex; flex-direction: column; overflow: hidden; padding-top: 18px; }
+  #wlBody { flex: 1; overflow-y: auto; min-height: 0; }
+  .wltop { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding-bottom: 12px; border-bottom: 1.5px solid var(--rule); }
+  .wlnav { display: flex; gap: 8px; }
+  .wlnav .btn { width: 150px; justify-content: center; }
+  .wlwho { min-width: 0; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; overflow: hidden; }
+  .wlwho h2 { margin: 0; font-size: 18px; }
+  .wlwho .fine { margin: 0; overflow: hidden; text-overflow: ellipsis; }
+  .wlpos { margin: 0; white-space: nowrap; }
+  @media (max-width: 640px) { .wlnav .btn { width: auto; } .wltop { grid-template-columns: auto auto; } .wlwho, .wlpos { grid-column: 1 / -1; grid-row: 2; } }
   .wlstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
   .wlstats div { border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 12px; }
   .wlstats b { display: block; font-size: 25px; font-weight: 600; }
@@ -1631,6 +1650,11 @@
     </div>
 
     <div class="hometab" data-tab="students">
+    <!-- Students writing in one of this teacher's sessions right now, each opening that session (loadWritingNow) -->
+    <section class="panel" id="writingNowBox" hidden>
+      <h2>Writing Now</h2>
+      <div id="writingNowList"></div>
+    </section>
     <section class="panel tint-mint">
       <div class="row" style="justify-content:flex-start; margin-bottom:6px">
         <select class="field" id="studentClass" aria-label="Show students from" hidden></select>
@@ -2007,9 +2031,9 @@
 <!-- A student's writing log: how their words came, minute by minute (GET /luddite/wlog) -->
 <div class="handin livebox" id="wlogBox" hidden>
   <div class="card">
-    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="wlTitle">Writing Log</h2><span class="fine" id="wlMeta" style="margin:0"></span></div>
+    <!-- Previous / Next first, at a fixed place, so a teacher can click through the class without moving the mouse -->
+    <div class="wltop"><span class="wlnav"><button class="btn small ghost" id="wlPrev" type="button">&larr; Previous student</button><button class="btn small ghost" id="wlNext" type="button">Next student &rarr;</button></span><span class="wlwho"><h2 id="wlTitle">Writing Log</h2><span class="fine" id="wlMeta"></span></span><span class="fine wlpos" id="wlPos"></span><button type="button" class="iconbtn" id="wlClose" aria-label="Close the writing log" title="Close (Esc)">×</button></div>
     <div id="wlBody"></div>
-    <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="wlPrev" type="button">&larr; Previous student</button><button class="btn small ghost" id="wlNext" type="button">Next student &rarr;</button></span><button class="btn ghost" id="wlClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -5359,6 +5383,8 @@
     var data = await api('/luddite/assignments');
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
     classes = data.classes || [];
+    sessionList = data.assignments || [];
+    if (homeTab === 'students' && !$('dashScreen').hidden) loadWritingNow(sessionList);
     if (data.prefs) teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs);
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (!changed(data)) return;
@@ -5539,6 +5565,7 @@
     markTabs(t);
     each('.hometab', function (x) { x.hidden = x.dataset.tab !== t; });
     document.body.classList.toggle('studentstab', t === 'students' && !$('dashScreen').hidden);
+    if (t === 'students' && !$('dashScreen').hidden && sessionList.length) loadWritingNow(sessionList, true);
   }
   // A session's papers to grade (from the grading window's session picker):
   // its page opens, and grading floats over it at its first paper to grade.
@@ -5936,11 +5963,13 @@
       w.appendChild(el('b', null, who(names[email], email)));
       if (names[email]) w.appendChild(el('span', null, email));
       row.appendChild(w);
-      var go = function (e) { if (e) e.stopPropagation(); openStudent(email, function () { showDash(); setHomeTab('students'); }); };
+      row.appendChild(wnSlot(email));
+      var go = function (e) { if (e) e.stopPropagation(); if (e && e.target && e.target.closest && e.target.closest('.wnpill')) return; openStudent(email, function () { showDash(); setHomeTab('students'); }); };
       row.addEventListener('click', go);
       row.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(e); });
       box.appendChild(row);
     });
+    paintWritingNow();
   }
   function drawClasses() {
     var box = $('classList');
@@ -6097,6 +6126,8 @@
     try { openedClass = (await api('/luddite/class?id=' + encodeURIComponent(id)))['class']; }
     catch (e) { if (e.message !== 'signed_out') showDash(); return; }
     drawClassScreen();
+    paintWritingNow();
+    loadWritingNow(null, true);
   }
   function drawClassScreen() {
     if (!openedClass) return;
@@ -6130,6 +6161,7 @@
       var w = el('div', 'who');
       w.appendChild(el('b', null, who('', email)));
       row.appendChild(w);
+      row.appendChild(wnSlot(email));
       // A student on the list opens everything they've handed in.
       var cls = openedClass.id;
       var theirs = function () { openStudent(email, function () { openClass(cls); }); };
@@ -6143,6 +6175,7 @@
       }));
       box.appendChild(row);
     });
+    paintWritingNow();
   }
   async function classAction(action, extra) {
     try {
@@ -8525,8 +8558,10 @@
   var roomSubs = [], wlAt = null; // the session's students in the Students list's order; the log showing
   async function openWlog(code, sub, name) {
     wlAt = { code: code, sub: sub };
-    var list = wlList();
-    $('wlPrev').disabled = $('wlNext').disabled = list.length < 2 || list.indexOf(sub) < 0;
+    var list = wlList(), at = list.indexOf(sub);
+    // Always there (greyed when there's no one to step to), so the buttons never move.
+    $('wlPrev').disabled = $('wlNext').disabled = list.length < 2 || at < 0;
+    $('wlPos').textContent = at >= 0 && list.length > 1 ? (at + 1) + ' of ' + list.length : '';
     $('wlTitle').textContent = 'Writing Log';
     $('wlMeta').textContent = name || '';
     $('wlBody').innerHTML = '';
@@ -8610,54 +8645,107 @@
       body.appendChild(f2);
     }
 
-    // The chart: a bar per minute they wrote (up: words added, red if flagged
-    // or unusually fast; down: words deleted), and the total as a line. A gap
-    // of more than five minutes shows as a break, labeled with the time.
+    // The chart: a bar per minute (up: words typed, red if flagged or
+    // unusually fast, gray on top: their own words back at once; down: words
+    // deleted), and a line for how many words their writing had, labeled at its
+    // end. Quiet minutes up to five in a row keep their place, so the time axis
+    // reads evenly; a longer break is a dashed line saying how long it was. The
+    // axis has a time every few minutes, with the date at the start and
+    // wherever the day changes (Jake, 2026-10-27: the chart was ambiguous).
     var wrap = el('div', 'wlchart');
     body.appendChild(wrap);
-    var W = Math.max(wrap.clientWidth || 880, 300), H = 200, top = 16, mid0 = 130, bot = H - 22;
+    var W = Math.max(wrap.clientWidth || 880, 300), H = 284, top = 30, mid0 = 150, bot = 206, L = 46, R = 150;
     var slots = [], gaps = [];
     mins.forEach(function (m, i) {
-      if (i && m.t - mins[i - 1].t > 5 * 60000) { gaps.push(slots.length); slots.push(null); }
+      if (i) {
+        var skip = Math.round((m.t - mins[i - 1].t) / 60000) - 1;
+        if (skip > 5) { gaps.push(slots.length); slots.push({ gap: m.t - mins[i - 1].t }); }
+        else for (var q = 1; q <= skip; q++) slots.push({ t: mins[i - 1].t + q * 60000, quiet: true });
+      }
       slots.push(m);
     });
-    var bw = Math.max(3, Math.min(18, (W - 40) / slots.length)), cw = Math.max(W, bw * slots.length + 40);
+    var bw = Math.max(3, Math.min(22, (W - L - R) / slots.length)), cw = Math.max(W, L + bw * slots.length + R);
     var maxUp = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.add + (m.own || 0)); }, 0));
     var maxDn = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.del); }, 0));
     var maxWords = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.words); }, 0));
     var NS = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('width', cw); svg.setAttribute('height', H);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Writing log chart: words typed and deleted each minute, and the total words in their writing');
     var mk = function (tag, at, text) { var n = document.createElementNS(NS, tag); for (var k in at) n.setAttribute(k, at[k]); if (text != null) n.textContent = text; svg.appendChild(n); return n; };
+    var tip = function (n, text) { n.appendChild(document.createElementNS(NS, 'title')).textContent = text; return n; };
     var css = getComputedStyle(document.documentElement), col = function (v) { return css.getPropertyValue(v).trim(); };
-    mk('line', { x1: 0, x2: cw, y1: mid0, y2: mid0, stroke: col('--rule'), 'stroke-width': 1.5 });
-    var pts = [];
+    var small = { 'font-size': 12, fill: col('--muted'), 'font-family': 'inherit' };
+    // The left axis: what's up, what's down.
+    mk('text', Object.assign({ x: 0, y: top - 14 }, small), '▲ Words typed each minute');
+    mk('text', Object.assign({ x: 0, y: bot + 14 }, small), '▼ Words deleted');
+    mk('text', Object.assign({ x: L - 8, y: top + 4, 'text-anchor': 'end' }, small), String(maxUp));
+    mk('text', Object.assign({ x: L - 8, y: mid0 + 4, 'text-anchor': 'end' }, small), '0');
+    mk('text', Object.assign({ x: L - 8, y: bot - 4, 'text-anchor': 'end' }, small), String(maxDn));
+    mk('line', { x1: L, x2: L + bw * slots.length, y1: top, y2: top, stroke: col('--rule'), 'stroke-dasharray': '2 4' });
+    mk('line', { x1: L, x2: L + bw * slots.length, y1: mid0, y2: mid0, stroke: col('--rule'), 'stroke-width': 1.5 });
+    var pts = [], lastPt = null;
     slots.forEach(function (m, i) {
-      var x = 20 + i * bw;
-      if (!m) { mk('line', { x1: x + bw / 2, x2: x + bw / 2, y1: top, y2: bot, stroke: col('--rule'), 'stroke-dasharray': '3 3' }); return; }
+      var x = L + i * bw;
+      if (m.gap) {
+        mk('line', { x1: x + bw / 2, x2: x + bw / 2, y1: top - 4, y2: bot, stroke: col('--muted'), 'stroke-dasharray': '3 3' });
+        var gm = Math.round(m.gap / 60000);
+        tip(mk('text', Object.assign({ x: x + bw / 2, y: bot + 14, 'text-anchor': 'middle' }, small), gm >= 120 ? Math.round(gm / 60) + ' hr break' : gm + ' min break'), 'No writing for ' + (gm >= 120 ? 'about ' + Math.round(gm / 60) + ' hours' : gm + ' minutes'));
+        // The line doesn't run across a break.
+        if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.75, opacity: 0.6 });
+        pts = [];
+        return;
+      }
+      if (m.quiet) return;
       var flagged = bursts.some(function (b) { return Math.floor(b.at / 60000) * 60000 === m.t; }) || fast.indexOf(m) !== -1;
-      var hUp = (mid0 - top) * m.add / maxUp, hDn = (bot - 8 - mid0) * m.del / maxDn, hOwn = (mid0 - top) * (m.own || 0) / maxUp;
-      // Their own words back at once, in gray on top of what they typed.
-      if (m.own) mk('rect', { x: x + 0.5, y: mid0 - hUp - hOwn, width: Math.max(1, bw - 1.5), height: hOwn, rx: 1.5, fill: col('--rule') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': ' + m.own + ' of their own words back at once (moved, copied or put back)';
-      if (m.add) mk('rect', { x: x + 0.5, y: mid0 - hUp, width: Math.max(1, bw - 1.5), height: hUp, rx: 1.5, fill: flagged ? col('--tomato') : col('--mint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': +' + m.add + ' words' + (m.del ? ', −' + m.del : '') + ' · ' + m.words + ' in all';
-      if (m.del) mk('rect', { x: x + 0.5, y: mid0, width: Math.max(1, bw - 1.5), height: hDn, rx: 1.5, fill: col('--tomato-tint') }).appendChild(document.createElementNS(NS, 'title')).textContent = wlWhen(m.t) + ': −' + m.del + ' words';
-      pts.push((x + bw / 2) + ',' + (mid0 - (mid0 - top) * m.words / maxWords));
+      var hUp = (mid0 - top) * m.add / maxUp, hDn = (bot - mid0) * m.del / maxDn, hOwn = (mid0 - top) * (m.own || 0) / maxUp;
+      if (m.own) mk('rect', { x: x + 0.5, y: mid0 - hUp - hOwn, width: Math.max(1, bw - 1.5), height: hOwn, rx: 1.5, fill: col('--rule') });
+      if (m.add) mk('rect', { x: x + 0.5, y: mid0 - hUp, width: Math.max(1, bw - 1.5), height: hUp, rx: 1.5, fill: flagged ? col('--tomato') : col('--mint') });
+      if (m.del) mk('rect', { x: x + 0.5, y: mid0, width: Math.max(1, bw - 1.5), height: hDn, rx: 1.5, fill: col('--tomato-tint') });
+      // One hover target per minute, the whole height, saying everything about it.
+      tip(mk('rect', { x: x, y: top, width: bw, height: bot - top, fill: 'transparent' }),
+        wlWhen(m.t) + '\nTyped: ' + m.add + (m.own ? '\nTheir own words back at once: ' + m.own : '') + '\nDeleted: ' + m.del + '\nTotal words: ' + m.words + (flagged ? '\n⚑ Flagged or unusually fast' : ''));
+      var y = mid0 - (mid0 - top) * m.words / maxWords;
+      pts.push((x + bw / 2) + ',' + y);
+      lastPt = { x: x + bw / 2, y: y, m: m };
     });
-    if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.5, opacity: 0.55 });
-    // Time labels: the start, after each break, and the end.
-    var labelAt = [0].concat(gaps.map(function (g) { return g + 1; }));
-    var lastX = -999;
-    labelAt.forEach(function (i) {
-      var m = slots[i]; if (!m) return;
-      var x = 20 + i * bw;
+    if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.75, opacity: 0.6 });
+    // The line, named at its end: the total words in their writing.
+    if (lastPt) {
+      mk('circle', { cx: lastPt.x, cy: lastPt.y, r: 3.5, fill: col('--ink'), opacity: 0.75 });
+      var lx = lastPt.x + 8, ly = Math.max(top - 2, Math.min(mid0 - 22, lastPt.y));
+      mk('text', { x: lx, y: ly + 4, 'font-size': 13, 'font-weight': 600, fill: col('--ink'), 'font-family': 'inherit' }, 'Total words: ' + lastPt.m.words);
+      mk('text', Object.assign({ x: lx, y: ly + 19 }, small), '(the line)');
+    }
+    // The time axis: a time every few minutes (never closer than 70px), the
+    // first minute after each break, and the date at the start and wherever
+    // the day changes.
+    var STEPS = [1, 2, 5, 10, 15, 20, 30, 60, 120, 240];
+    var step = STEPS.filter(function (s) { return s * bw >= 70; })[0] || 240;
+    var lastX = -999, lastDay = '';
+    var axisY = H - 24;
+    mk('line', { x1: L, x2: L + bw * slots.length, y1: axisY - 14, y2: axisY - 14, stroke: col('--rule') });
+    slots.forEach(function (m, i) {
+      if (!m.t) return;
+      var afterGap = i === 0 || (slots[i - 1] && slots[i - 1].gap);
+      var onStep = Math.floor(m.t / 60000) % step === 0;
+      if (!afterGap && !onStep) return;
+      var x = L + i * bw + bw / 2;
       if (x - lastX < 70) return;
       lastX = x;
-      mk('text', { x: x, y: H - 6, 'font-size': 12, fill: col('--muted'), 'font-family': 'inherit' }, wlWhen(m.t));
+      mk('line', { x1: x, x2: x, y1: axisY - 14, y2: axisY - 8, stroke: col('--muted') });
+      var d = new Date(m.t), day = d.toDateString();
+      mk('text', Object.assign({ x: x, y: axisY + 4, 'text-anchor': i === 0 ? 'start' : 'middle' }, small), clock(m.t));
+      if (day !== lastDay) {
+        mk('text', Object.assign({ x: x, y: axisY + 20, 'text-anchor': i === 0 ? 'start' : 'middle', 'font-weight': 600, fill: col('--ink') }), d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }));
+        lastDay = day;
+      }
     });
     wrap.appendChild(svg);
     var key = el('div', 'wlkey');
-    [['--mint', 'words typed in a minute'], ['--rule', 'their own words back at once'], ['--tomato-tint', 'words deleted'], ['--tomato', 'flagged or unusually fast'], ['--ink', 'words in all (line)']].forEach(function (k) {
-      var sp = el('span'); var sw = el('i'); sw.style.background = col(k[0]); if (k[0] === '--ink') sw.style.opacity = 0.55; sp.appendChild(sw); sp.appendChild(document.createTextNode(k[1])); key.appendChild(sp);
+    [['--mint', 'words typed in a minute'], ['--rule', 'their own words back at once'], ['--tomato-tint', 'words deleted'], ['--tomato', 'flagged or unusually fast'], ['--ink', 'the line: total words in their writing']].forEach(function (k) {
+      var sp = el('span'); var sw = el('i'); sw.style.background = col(k[0]); if (k[0] === '--ink') { sw.style.opacity = 0.6; sw.style.height = '3px'; sw.style.verticalAlign = '3px'; } sp.appendChild(sw); sp.appendChild(document.createTextNode(k[1])); key.appendChild(sp);
     });
     body.appendChild(key);
     body.appendChild(el('p', 'fine', 'Most students compose at about 5 to 30 words a minute, stopping and going back to change things. A flag isn’t proof: read the words it shows and talk with the student.'));
@@ -9938,7 +10026,81 @@
       w.appendChild(el('b', null, who(x.name, x.email)));
       w.appendChild(el('span', null, (x.email + ' · ') + plural(x.count, 'paper', 'papers') + ' · last ' + new Date(x.last).toLocaleDateString([], { month: 'short', day: 'numeric' })));
       row.appendChild(w);
-      row.addEventListener('click', function () { openStudent(x.email); });
+      row.appendChild(wnSlot(x.email));
+      row.addEventListener('click', function (e) { if (!e.target.closest('.wnpill')) openStudent(x.email); });
+      list.appendChild(row);
+    });
+    paintWritingNow();
+  }
+
+  // Writing now (Jake, 2026-10-27): who is writing in one of this teacher's
+  // sessions right now, from those sessions' pages (the same test as a
+  // session row's Working: let in, not handed in, locked out or paused, and
+  // their page's heartbeat fresh, isLive). Sessions happening now, plus past
+  // ones that may still have someone writing (alternative schedules, or
+  // reopened in the last 12 hours). Shown as a Writing Now panel atop the
+  // Students tab and a pill on the student's row (the finder, a class's ▾, the
+  // class page), each opening that session. Refreshed with Home's poll, at
+  // most every 20 seconds.
+  var writingNow = {}, writingNowAt = 0, writingNowBusy = false, sessionList = [];
+  async function loadWritingNow(list, force) {
+    if (writingNowBusy || (!force && Date.now() - writingNowAt < 20000)) return;
+    writingNowBusy = true;
+    try {
+      if (!list || !list.length) { try { list = sessionList = (await api('/luddite/assignments')).assignments || []; } catch (e) { list = []; } }
+      var now = Date.now();
+      var rooms = list.filter(function (r) {
+        return r.state === 'running' || (r.state === 'ended' && (r.ownCount || (r.endedAt && now - r.endedAt < 12 * 3600000)));
+      }).slice(0, 25);
+      var got = await Promise.all(rooms.map(function (r) { return api('/luddite/assignment?code=' + encodeURIComponent(r.code)).then(function (d) { return d.room; }, function () { return null; }); }));
+      var map = {};
+      got.forEach(function (room) {
+        if (!room) return;
+        Object.keys(room.students || {}).forEach(function (sub) {
+          var st = room.students[sub];
+          if (!st || st.status !== 'admitted' || st.handedIn || st.lockedOut || st.pausedAt || room.pausedAt || !isLive(st)) return;
+          var em = String(st.email || '').toLowerCase();
+          (map[em] = map[em] || []).push({ code: room.code, title: room.title || room.codeLabel || 'Writing session', name: st.name || '', email: st.email });
+        });
+      });
+      writingNow = map;
+      writingNowAt = Date.now();
+    } finally { writingNowBusy = false; }
+    paintWritingNow();
+  }
+  function wnSlot(email) {
+    var b = el('button', 'wnpill no-print');
+    b.type = 'button';
+    b.dataset.email = String(email || '').toLowerCase();
+    return b;
+  }
+  function wnOpen(w) { openRoom(w.code); }
+  function paintWritingNow() {
+    each('.wnpill', function (b) {
+      var w = (writingNow[b.dataset.email] || [])[0];
+      b.textContent = w ? 'Writing now · ' + w.title : '';
+      b.title = w ? 'Opens ' + w.title + ', the writing session they’re writing in right now' : '';
+      b.onclick = w ? function (e) { e.stopPropagation(); wnOpen(w); } : null;
+    });
+    var box = $('writingNowBox'), list = $('writingNowList');
+    if (!box) return;
+    var rows = [];
+    Object.keys(writingNow).forEach(function (em) { writingNow[em].forEach(function (w) { rows.push(w); }); });
+    rows.sort(function (a, b) { return a.title.localeCompare(b.title) || who(a.name, a.email).localeCompare(who(b.name, b.email)); });
+    box.hidden = !rows.length;
+    list.innerHTML = '';
+    rows.forEach(function (w) {
+      var row = el('div', 'item click');
+      row.tabIndex = 0;
+      var d = el('div', 'who');
+      d.appendChild(el('b', null, who(w.name, w.email)));
+      d.appendChild(el('span', null, w.email));
+      row.appendChild(d);
+      var pill = el('span', 'wnpill', 'Writing now · ' + w.title);
+      row.appendChild(pill);
+      row.title = 'Opens ' + w.title;
+      row.addEventListener('click', function () { wnOpen(w); });
+      row.addEventListener('keydown', function (e) { if (e.key === 'Enter') wnOpen(w); });
       list.appendChild(row);
     });
   }
