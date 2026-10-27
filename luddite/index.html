@@ -7034,7 +7034,9 @@
     // the Students list's order, their paper, or (no paper yet) their writing so far.
     roomPaperIds = people.map(function (p) {
       if (p.x && p.x.stored) return p.x.id;
-      return p.s && p.s.sub && p.s.status === 'admitted' && !p.s.handedIn ? 'early:' + room.code + ':' + p.s.sub : null;
+      // (TrogLuddite has no Grade so far, except where grading of it has started)
+      var early = p.s && (!trogOn || p.s.earlyMarked || p.s.earlyGrade || p.s.earlyShared);
+      return p.s && p.s.sub && p.s.status === 'admitted' && !p.s.handedIn && early ? 'early:' + room.code + ':' + p.s.sub : null;
     }).filter(Boolean);
     roomSubs = people.map(function (p) { return p.s && p.s.sub; }).filter(Boolean);
     roomReturned = {};
@@ -7047,7 +7049,7 @@
       .concat(earlyGradings(room).filter(function (g) {
         // (only those whose row shows a bubble: still able to write, or graded or shared already)
         var q = people.filter(function (pp) { return pp.s && pp.s.sub === g.sub; })[0];
-        return q && (q.f.canWrite || g.marked || g.grade || g.returnedAt);
+        return q && ((q.f.canWrite && !trogOn) || g.marked || g.grade || g.returnedAt);
       }));
     var toGrade = done.filter(function (x) { return paperStage(x) === 'tograde'; });
     var toHand = done.filter(function (x) { return paperStage(x) === 'graded'; });
@@ -7542,7 +7544,7 @@
       var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
       if (x && x.stored) bub.title = 'Open the grading';
       row.appendChild(bub);
-    } else if (f.canWrite && s && s.sub && !trogOn) {
+    } else if (f.canWrite && s && s.sub && (!trogOn || s.earlyMarked || s.earlyGrade || s.earlyShared)) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
       var est = s.earlyShared ? STATUS.shared : s.earlyMarked || s.earlyGrade ? STATUS.graded : ['Grade so far', STATUS.grade[1]];
       var early = button(est[0], 'statusbub ' + est[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
