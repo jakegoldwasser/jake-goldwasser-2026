@@ -961,13 +961,17 @@ async function routeLuddite(event, method, path, info) {
       (c.assignments || []).slice(0, MINE_ASSIGNMENTS_PER_CLASS).forEach((code) => { codes.add(code); viaClass.add(code); });
     });
     const rooms = await Promise.all([...codes].map((c) => readItem('luddite:room:' + c)));
-    const list = [];
+    const list = [], live = [];
     rooms.forEach(({ state: r }) => {
       if (!r || r.deletedAt) return;
       if (!viaClass.has(r.code) && !(r.own && r.own[em])) return;
       if (!r.classId && r.emails && !r.emails.includes(em) && !(r.own && r.own[em])) return;
       const s = r.students[me.sub];
       if (s && s.status === 'removed') return;
+      // Live comments from the teacher they haven't read, in any session, over or not.
+      if (s && s.status === 'admitted' && (s.chatT || 0) > (s.seenS || 0)) {
+        live.push({ code: r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email, at: s.chatT });
+      }
       const win = windowOf(r, em, s);
       const state = stateAt(win, now);
       if (state === 'ended' || (state === 'upcoming' && win.start - now > UPCOMING_HORIZON_MS)) return;
@@ -978,7 +982,8 @@ async function routeLuddite(event, method, path, info) {
       });
     });
     list.sort((a, b) => (a.state === b.state ? a.startAt - b.startAt : a.state === 'running' ? -1 : 1));
-    return respond(200, { assignments: list, now });
+    live.sort((a, b) => b.at - a.at);
+    return respond(200, { assignments: list, live, now });
   }
 
   // PUT /luddite/join { code } -- go into an assignment. Someone on its
@@ -1286,7 +1291,8 @@ async function routeLuddite(event, method, path, info) {
     const items = await Promise.all(((mine && mine.returned) || []).map((id) => myShared(id, me).catch(() => null)));
     const seen = {};
     const papers = items.filter((x) => x && x.returnedAt && x.sub === me.sub && !seen[x.id] && (seen[x.id] = 1))
-      .map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS }))
+      .map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS,
+        news: paperNews(x), commentsAt: x.commentsAt || null }))
       .sort((a, b) => b.returnedAt - a.returnedAt);
     return respond(200, { papers });
   }
@@ -1296,6 +1302,11 @@ async function routeLuddite(event, method, path, info) {
   if (path === '/luddite/mypaper' && (method === 'GET' || method === 'PUT')) {
     let paper = await myShared(String((method === 'GET' ? q.id : body.id) || ''), me);
     if (!paper || !paper.returnedAt || paper.sub !== me.sub) throw new HttpError(404, 'no_sub');
+    // Opening it: read (clears New comments on their home page).
+    if (method === 'GET' && paperNews(paper)) {
+      const key = paper.early ? 'luddite:early:' + paper.code + ':' + paper.sub : 'luddite:sub:' + paper.id;
+      await mutate(key, (x) => (x ? { ...x, readAt: Date.now() } : undefined)).catch(() => {});
+    }
     if (method === 'PUT') {
       const ep = paper.early ? 'luddite:early:' + paper.code + ':' + paper.sub : null;
       const counted = await mutate(ep || 'luddite:sub:' + paper.id, (x) => {
@@ -1723,7 +1734,11 @@ async function routeLuddite(event, method, path, info) {
     const saved = { base, marks, endComment: String(body.endComment || '').slice(0, 8000), grade: String(body.grade || '').replace(/\s+/g, ' ').trim().slice(0, 40),
       rubric, rubricScores: cleanScores(body.rubricScores || [], rubric), at: Date.now() };
     if (Buffer.byteLength(JSON.stringify(saved)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
-    await mutate('luddite:early:' + room.code + ':' + sub, (x) => ({ ...saved, ...(x && !x.usedAt ? { returnedAt: x.returnedAt || null, view: x.view } : {}) }));
+    await mutate('luddite:early:' + room.code + ':' + sub, (x) => {
+      const live = x && !x.usedAt ? x : null;
+      const commentsAt = commentsKey(saved.marks, saved.endComment) !== commentsKey(live && live.marks, live && live.endComment) ? Date.now() : (live && live.commentsAt) || 0;
+      return { ...saved, commentsAt, ...(live ? { returnedAt: x.returnedAt || null, view: x.view, readAt: x.readAt || 0 } : {}) };
+    });
     // The session's list shows it graded (or not), apart from whether they've handed in.
     const earlyMarked = marks.length + (saved.endComment.trim() ? 1 : 0);
     await mutate('luddite:room:' + room.code, (r) => (r && r.students[sub] && (r.students[sub].earlyMarked !== earlyMarked || (r.students[sub].earlyGrade || '') !== saved.grade)
@@ -1801,7 +1816,8 @@ async function routeLuddite(event, method, path, info) {
     const rubric = body.rubric === undefined ? piece.rubric || null : cleanRubric(body.rubric);
     const rubricScores = cleanScores(body.rubricScores === undefined ? piece.rubricScores : body.rubricScores, rubric);
     const saved = await mutate('luddite:sub:' + piece.id, (x) => {
-      const next = { ...x, text, words: (text.trim().match(/\S+/g) || []).length, marks, endComment, grade, rubric, rubricScores, markedAt: Date.now() };
+      const next = { ...x, text, words: (text.trim().match(/\S+/g) || []).length, marks, endComment, grade, rubric, rubricScores, markedAt: Date.now(),
+        commentsAt: commentsKey(marks, endComment) !== commentsKey(x.marks, x.endComment) ? Date.now() : x.commentsAt || 0 };
       if (Buffer.byteLength(JSON.stringify(next)) > MAX_ITEM_BYTES) throw new HttpError(413, 'too_many_marks');
       return next;
     });
@@ -2649,7 +2665,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
     submission.marked = carried.marks.length + (carried.endComment.trim() ? 1 : 0);
     if (carried.grade) submission.grade = carried.grade;
     if (prev && prev.returnedAt) submission.returnedAt = prev.returnedAt;
-    else if (early1 && early1.returnedAt) Object.assign(carried, { returnedAt: early1.returnedAt, view: early1.view }), submission.returnedAt = early1.returnedAt;
+    else if (early1 && early1.returnedAt) Object.assign(carried, { returnedAt: early1.returnedAt, view: early1.view, readAt: early1.readAt || 0, commentsAt: early1.commentsAt || 0 }), submission.returnedAt = early1.returnedAt;
     if (early1) await mutate('luddite:early:' + code + ':' + me.sub, (x) => (x ? { ...x, usedAt: Date.now(), paperId: id } : undefined));
     if (early1 && early1.returnedAt) await sharedNowPaper(me.email, 'early:' + code + ':' + me.sub, id);
     const paper = await mutate('luddite:sub:' + id, () => ({
@@ -2784,10 +2800,25 @@ async function myShared(id, me) {
     const text = d ? String(d.text || '') : e.base;
     return { id, early: true, code, sub, email: me.email, name: me.name, roomTitle: room ? titleOf(room) : '', at: d ? d.at : e.at,
       words: (text.trim().match(/\S+/g) || []).length, text, marks: reanchorMarks(e.marks || [], e.base, text),
-      endComment: e.endComment || '', grade: e.grade || '', rubric: e.rubric || null, rubricScores: e.rubricScores || [], returnedAt: e.returnedAt, view: e.view };
+      endComment: e.endComment || '', grade: e.grade || '', rubric: e.rubric || null, rubricScores: e.rubricScores || [], returnedAt: e.returnedAt, view: e.view,
+      readAt: e.readAt || 0, commentsAt: e.commentsAt || 0 };
   }
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(id)) return null;
   return (await readItem('luddite:sub:' + id)).state;
+}
+
+// What the student reads of the teacher's comments (each comment's words and
+// the end comment), so a save that only moves comments or changes nothing
+// doesn't count as new comments (commentsAt, for the student's home page).
+function commentsKey(marks, endComment) {
+  return JSON.stringify([(marks || []).filter((m) => !m.orphan || m.note).map((m) => [m.type, m.note || '']).sort(), String(endComment || '').trim()]);
+}
+// Whether a shared paper has news for its student: 'new' (shared, never
+// opened) or 'comments' (comments changed since they last read it).
+function paperNews(x) {
+  const read = x.readAt || (x.view && x.view.last) || 0;
+  if (!read) return 'new';
+  return (x.commentsAt || 0) > read ? 'comments' : null;
 }
 
 function studentPaper(x) {

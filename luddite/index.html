@@ -1197,6 +1197,14 @@
   .dbnew { border-top: 1.5px solid var(--rule); margin-top: 14px; padding-top: 12px; }
   /* The writing log: figures, a minute-by-minute chart, and anything flagged. */
   #wlogBox { z-index: 60; }
+  /* A student's New for You: a dot and a pill say what's new. */
+  #newsList .item { border-color: var(--pen); }
+  .newpill { flex: none; border-radius: 999px; padding: 2px 10px; font: 600 13px 'Source Sans 3', sans-serif; background: var(--pen); color: #fff; }
+  .lrlist { max-height: 60vh; overflow-y: auto; margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .lrmsg { border: 1.5px solid var(--rule); border-radius: 12px; padding: 10px 14px; max-width: 85%; white-space: pre-wrap; overflow-wrap: break-word; }
+  .lrmsg.t { border-color: var(--pen); color: var(--pen); align-self: flex-start; }
+  .lrmsg.s { align-self: flex-end; }
+  .lrmsg small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
   /* "Writing now" on a student's row: a link to the session they're writing in. */
   .wnpill { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex: none; border: 1.5px solid var(--mint); color: var(--mint-deep); background: var(--mint-tint);
     border-radius: 999px; padding: 3px 11px; font: 600 14px 'Source Sans 3', sans-serif; cursor: pointer; max-width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1377,6 +1385,11 @@
 <section class="screen" id="joinScreen" hidden>
   <div class="card">
     <h1 class="wordmark">Luddite</h1>
+    <!-- New comments from their teacher: on shared grading, and live comments they haven't read (drawNews) -->
+    <div id="newsBox" hidden style="margin-bottom:26px">
+      <label class="joinlbl">New for You</label>
+      <div id="newsList"></div>
+    </div>
     <div id="mineBox" hidden style="margin-bottom:26px">
       <label class="joinlbl">Your Writing Sessions</label>
       <div id="mineList"></div>
@@ -2025,6 +2038,15 @@
     <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0" id="dvTitle"></h2><span class="fine" id="dvMeta" style="margin:0"></span></div>
     <div class="livegrid"><div class="liveread" id="dvText"></div><div class="mgnotes" id="dvNotes"></div></div>
     <div class="row" style="justify-content:space-between"><span class="row" style="margin:0;gap:8px"><button class="btn small ghost" id="dvBack" type="button">&larr; All drafts</button><button class="btn small ghost" id="dvName" type="button" hidden>Name this draft…</button><button class="btn small ghost" id="dvFinal" type="button" hidden>Mark as final</button></span><button class="btn ghost" id="dvClose" type="button">Back to my writing</button></div>
+  </div>
+</div>
+
+<!-- A student reads their teacher's live comments from their home page (GET /luddite/chat, which marks them read) -->
+<div class="handin livebox" id="liveReadBox" hidden>
+  <div class="card">
+    <div class="panelhead" style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h2 style="margin:0">Live Comments</h2><span class="fine" id="lrMeta" style="margin:0"></span></div>
+    <div id="lrList" class="lrlist"></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="lrClose" type="button">Close</button></div>
   </div>
 </div>
 
@@ -2816,6 +2838,7 @@
       var d = await api('/luddite/mine');
       noteNow(d.now);
       mineList = d.assignments || [];
+      mineLive = d.live || [];
     } catch (e) { mineList = []; }
     return mineList;
   }
@@ -2853,12 +2876,15 @@
     $('joinNote').textContent = note || '';
     show('joinScreen');
     drawMine();
+    drawNews();
     loadReturned();
     loadReread();
     loadReflections();
+    startNews();
+    if (mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); drawNews(); } });
     // Check back while something is coming (the screen's own polling stops when it changes).
     if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000);
-    else if (!mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000); } });
+    else if (!mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); drawNews(); if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000); } });
     $('joinCode').focus();
   }
 
@@ -3030,12 +3056,79 @@
   }
   $('rrClose').addEventListener('click', function () { $('rereadView').hidden = true; });
   $('rereadView').addEventListener('click', function (e) { if (e.target === $('rereadView')) $('rereadView').hidden = true; });
+  // New for You (Jake, 2026-10-27): on the student's home page, what their
+  // teacher has said that they haven't read: grading just shared, new comments
+  // on grading already shared (the paper's commentsAt after they last opened
+  // it; news in /luddite/returned), and live comments in any session, over or
+  // not (live in /luddite/mine). Checked every 30 seconds while the page is open.
+  var mineLive = [], newsPapers = [], newsTimer = null;
+  function drawNews() {
+    var list = $('newsList');
+    if (!list) return;
+    list.innerHTML = '';
+    var rows = [];
+    newsPapers.forEach(function (p) {
+      rows.push({ at: p.commentsAt || p.returnedAt, title: p.roomTitle || 'Writing', line: (p.news === 'comments' ? 'New comments from your teacher' : 'Your teacher shared their comments') + ' · ' + whenLabel(p.commentsAt || p.returnedAt), go: function () { openBack(p.id); } });
+    });
+    mineLive.forEach(function (c) {
+      rows.push({ at: c.at, title: c.title, line: 'Live comment from ' + c.teacherName + ' · ' + whenLabel(c.at), go: function () { openLiveRead(c); } });
+    });
+    rows.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    $('newsBox').hidden = !rows.length;
+    rows.forEach(function (r) {
+      var row = el('div', 'item click');
+      row.tabIndex = 0;
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, r.title));
+      w.appendChild(el('span', null, r.line));
+      row.appendChild(w);
+      row.appendChild(button('Read', 'btn small', function (e) { if (e) e.stopPropagation(); r.go(); }));
+      row.addEventListener('click', function (e) { if (!e.target.closest('button')) r.go(); });
+      row.addEventListener('keydown', function (e) { if (e.target === row && e.key === 'Enter') r.go(); });
+      list.appendChild(row);
+    });
+  }
+  async function openLiveRead(c) {
+    $('lrMeta').textContent = c.title + ' · ' + c.teacherName;
+    var list = $('lrList');
+    list.innerHTML = '';
+    list.appendChild(el('p', 'fine', 'Loading…'));
+    $('liveReadBox').hidden = false;
+    var msgs;
+    try { msgs = (await api('/luddite/chat?code=' + encodeURIComponent(c.code))).msgs || []; }
+    catch (e) { list.innerHTML = ''; list.appendChild(el('p', 'fine', 'Couldn’t load the live comments. Try again.')); return; }
+    list.innerHTML = '';
+    msgs.forEach(function (m) {
+      var b = el('div', 'lrmsg ' + (m.from === 'teacher' ? 't' : 's'));
+      b.appendChild(el('small', null, (m.from === 'teacher' ? (m.all ? c.teacherName + ', to everyone' : c.teacherName) : m.hand ? 'You (raised hand)' : 'You') + ' · ' + whenLabel(m.at)));
+      b.appendChild(document.createTextNode(m.text));
+      list.appendChild(b);
+    });
+    if (!msgs.length) list.appendChild(el('p', 'fine', 'No live comments.'));
+    list.scrollTop = list.scrollHeight;
+    // Read now: off the New for You list.
+    mineLive = mineLive.filter(function (x) { return x.code !== c.code; });
+    drawNews();
+  }
+  $('lrClose').addEventListener('click', function () { $('liveReadBox').hidden = true; });
+  $('liveReadBox').addEventListener('click', function (e) { if (e.target === $('liveReadBox')) $('liveReadBox').hidden = true; });
+  function startNews() {
+    clearInterval(newsTimer);
+    newsTimer = setInterval(function () {
+      if ($('joinScreen').hidden) { clearInterval(newsTimer); return; }
+      if (document.hidden) return;
+      loadReturned();
+      loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); drawNews(); } });
+    }, 30000);
+  }
   async function loadReturned() {
     var data;
     try { data = await api('/luddite/returned'); } catch (e) { return; }
     var list = $('backList');
     list.innerHTML = '';
     $('backBox').hidden = !data.papers.length;
+    newsPapers = data.papers.filter(function (p) { return p.news; });
+    drawNews();
     data.papers.forEach(function (p) {
       var row = el('div', 'item click');
       row.tabIndex = 0;
@@ -3043,6 +3136,7 @@
       w.appendChild(el('b', null, p.roomTitle || 'Writing'));
       w.appendChild(el('span', null, 'Shared ' + new Date(p.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
       row.appendChild(w);
+      if (p.news) row.appendChild(el('span', 'newpill', p.news === 'comments' ? 'New comments' : 'New'));
       row.appendChild(button('Read the comments', 'btn small', function () { openBack(p.id); }));
       row.addEventListener('click', function (e) { if (!e.target.closest('button')) openBack(p.id); });
       list.appendChild(row);
@@ -7477,6 +7571,7 @@
   // thing. A title the page set itself (a padlock, a bubble) is kept.
   // By id first, then by label, then by where the button is.
   var TIP_ID = {
+    lrClose: 'Closes your live comments and goes back to your page',
     proctorHomeBtn: 'Opens the writing sessions you proctor',
     leaveRoomBtn: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
     leaveRoomBtn2: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
@@ -7640,6 +7735,7 @@
     exitPreviewBtn: 'Goes back to the writing session’s page'
   };
   var TIP_TEXT = {
+    'read': 'Opens what your teacher wrote to you',
     'join': 'Joins the writing session with this Entry Phrase',
     'sign out': 'Signs you out of Luddite on this computer',
     'coming up': 'Opens every time you’re needed as a proctor from now on, by day, with Print',
