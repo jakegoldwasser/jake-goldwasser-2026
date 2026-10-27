@@ -1326,7 +1326,12 @@
      12 labels in capitals. Weights 400 and 600 only. ---- */
   body { font: 400 16px/1.55 var(--ui); }
   /* Headings and names */
-  .head h2, #lockScreen h2 { font: 600 34px/1.15 var(--ui); letter-spacing: -.01em; text-wrap: balance; }
+  .head h2, #lockScreen h2, .readytitle { font: 600 34px/1.15 var(--ui); letter-spacing: -.01em; text-wrap: balance; }
+  .readytitle { margin: 0 0 6px; }
+  /* In a session, the assignment is what the student came for; Luddite is just the masthead over it. */
+  #readyScreen.insession .wordmark { font-size: 24px; margin: 0 0 20px; color: var(--muted); }
+  /* Luddite HM's BETA tag is sized in em, which would shrink it past reading here. */
+  #readyScreen.insession .wordmark .beta { font-size: 9px; }
   h3.sect, .panelhead h3.sect, .panelhead h3.sect.big, .overlay h2, .handin h2, .newroombox > summary.bigstart,
   .page h3:not(.sect) { font: 600 25px/1.25 var(--ui); letter-spacing: -.005em; text-transform: none; color: var(--ink); text-wrap: balance; }
   .rcard h4, .panel .rcard h4, .classcard h4, .panel .classcard h4, .piece h4, .sheethead b, .item .who b,
@@ -1419,7 +1424,8 @@
 <!-- Ready to write -->
 <section class="screen" id="readyScreen" hidden>
   <div class="card">
-    <h1 class="wordmark">Luddite</h1>
+    <h2 class="wordmark">Luddite</h2>
+    <h1 class="readytitle" id="readyTitle" hidden></h1>
     <p class="sub" id="readyRoom"></p>
     <p class="sub" id="readyWindow" hidden></p>
     <div class="readyprompt" id="readyPrompt" hidden><b>Prompt</b><span id="readyPromptText"></span></div>
@@ -1435,7 +1441,6 @@
     <p class="fine" id="lastSession" hidden></p>
     <div class="row readyacts">
       <span id="dashWrap" hidden><button class="btn ghost" id="dashLink">&larr; Home</button></span>
-      <span id="leaveWrap" hidden><button class="btn small ghost" id="leaveRoomBtn2">Leave this writing session</button></span>
       <span id="newPageWrap" hidden><button class="btn small danger" id="newPageBtn">Clear the page</button></span>
     </div>
     <p class="fine" id="readyWho"><span class="who-email"></span></p>
@@ -3198,7 +3203,6 @@
   }
 
   $('leaveRoomBtn').addEventListener('click', leaveRoom);
-  $('leaveRoomBtn2').addEventListener('click', leaveRoom);
   $('leaveBigBtn').addEventListener('click', leaveRoom);
   $('askUnlockBtn').addEventListener('click', function () {
     var b = $('askUnlockBtn');
@@ -3243,8 +3247,13 @@
     restoreDraft();
     var has = text.trim().length > 0;
     var inRoom = mode === 'room';
-    $('readyRoom').textContent = inRoom && roomInfo ? roomLine(roomInfo) : '';
-    $('readyRoom').hidden = !inRoom;
+    // In a session, its title is the page's heading and Luddite drops to a small mark above it.
+    var titled = !!(inRoom && roomInfo);
+    $('readyScreen').classList.toggle('insession', titled);
+    $('readyTitle').textContent = titled ? roomInfo.title : '';
+    $('readyTitle').hidden = !titled;
+    $('readyRoom').textContent = titled && roomInfo.title.indexOf(roomInfo.teacherName) === -1 ? roomInfo.teacherName : '';
+    $('readyRoom').hidden = !$('readyRoom').textContent;
     // Say only the rules this teacher has switched on.
     var rules = [];
     if (inRoom && roomInfo && roomInfo.atHome) rules.push('You can work on this at home. Press Leave for now whenever you like, and come back to it, on any computer, until your teacher ends the session');
@@ -3274,8 +3283,8 @@
     $('submitBtn').hidden = !inRoom;
     $('submitBtn').disabled = !has || previewing;
     $('newPageWrap').hidden = !has;
-    $('dashWrap').hidden = !isTeacher || previewing || offlineBoot;
-    $('leaveWrap').hidden = !inRoom || previewing;
+    // One way out: Home. In a session it also forgets the session on this computer (students land on the Join page).
+    $('dashWrap').hidden = previewing || !(inRoom || (isTeacher && !offlineBoot));
     var fsOk = canFs() || fsExempt() || !P().lockOnLeave;
     $('noFullscreen').hidden = fsOk;
     $('startBtn').disabled = !fsOk || over;
@@ -3298,7 +3307,6 @@
       $('startBtn').hidden = true;
       $('submitBtn').hidden = true;
       $('newPageWrap').hidden = true;
-      $('leaveWrap').hidden = true;
       $('submitNote').hidden = false;
       $('submitNote').className = 'fine good';
       $('submitNote').textContent = 'Handed in at ' + clock(roomInfo.submittedAt) + '. If you need to keep working on it, ask your teacher to unlock it; this page opens again by itself.';
@@ -4772,7 +4780,7 @@
       setDisplayName((await api('/luddite/me', { displayName: name.trim() })).displayName);
     } catch (e) { tell('Couldn’t Save That', 'Try again.'); }
   });
-  $('dashLink').addEventListener('click', showDash);
+  $('dashLink').addEventListener('click', function () { if (mode === 'room') leaveRoom(); else showDash(); });
   $('backToDash').addEventListener('click', showDash);
 
   $('soloBtn').addEventListener('click', function () {
