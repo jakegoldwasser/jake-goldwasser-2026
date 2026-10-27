@@ -575,6 +575,9 @@
     box-shadow: inset 0 0 0 1px var(--rule); padding: 8px; background: transparent; resize: vertical; }
   .markpop textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
   .markpop .row { margin-top: 8px; justify-content: flex-end; }
+  /* Opened from a cross-out: taking it back gets its own line, so the buttons below never wrap in a narrow margin. */
+  .markpop .unstrike { margin-top: 8px; }
+  .markpop .unstrike[hidden] { display: none; }
   /* The words a new comment is on stay lit while it's typed (openPop). */
   ::highlight(draftmark) { background-color: var(--pen-wash); text-decoration: underline 1.5px var(--pen); }
   @media (max-width: 720px) {
@@ -2155,6 +2158,7 @@
 <div class="markpop no-print" id="markPop" hidden>
   <div class="what" id="popWhat"></div>
   <textarea id="popText"></textarea>
+  <div class="unstrike" id="popUnstrikeRow" hidden><button class="linkish" id="popUnstrike" type="button">Remove cross-out</button></div>
   <div class="row">
     <button class="linkish" id="popDelete">Delete</button>
     <span style="flex:1"></span>
@@ -7763,6 +7767,7 @@
     'circle': 'Draws a circle round these words',
     'remove circle': 'Takes the circle off these words',
     'remove the cross-out': 'Takes the cross-out off these words',
+    'remove cross-out': 'Takes the cross-out off these words',
     'write here': 'Opens a box to write words into the text here',
     'make a grid': 'Makes the rubric a grid of skills and levels, scored on the marking page',
     'paste it in': 'Makes the rubric from text or a table you paste in',
@@ -9465,9 +9470,15 @@
         openPop(has || null, has ? null : { type: 'margin', start: bm.start, end: bm.end }, bt.getBoundingClientRect());
         return;
       }
-      // A click on crossed-out words offers to take the cross-out back.
+      // A click on crossed-out words opens a comment on them (theirs, if they
+      // have one), with Remove the cross-out beside it.
       var st = e.target.closest('.strike'), sm = st && findMark((st.dataset.s || '').split(' ')[0]);
-      if (sm) { hideTools(); openPop(sm, null, st.getBoundingClientRect()); return; }
+      if (sm) {
+        var sc = marginMarks().filter(function (m) { return m.type === 'margin' && m.start === sm.start && m.end === sm.end; })[0];
+        hideTools();
+        openPop(sc || null, sc ? null : { type: 'margin', start: sm.start, end: sm.end }, st.getBoundingClientRect(), sm);
+        return;
+      }
     }
     setTimeout(showTools, 0);
   });
@@ -9770,9 +9781,11 @@
     var q = markParts(m).map(function (r) { return plainOf(piece.text, r[0], r[1]).replace(/\s+/g, ' ').trim(); }).join(' … ');
     return q.length > 60 ? q.slice(0, 57) + '…' : q;
   }
-  function openPop(mark, draft, rect) {
+  var popStrike = null; // the cross-out a comment was opened from (Remove the cross-out)
+  function openPop(mark, draft, rect, strike) {
     if (reading) return;
-    popMark = mark; popDraft = draft;
+    popMark = mark; popDraft = draft; popStrike = strike || null;
+    $('popUnstrikeRow').hidden = !popStrike;
     var m = mark || draft;
     var pop = $('markPop');
     $('popWhat').textContent = m.type === 'margin' ? 'Comment on “' + quoteOf(m) + '”'
@@ -9815,7 +9828,7 @@
     $('markPop').hidden = true;
     clearLasso();
     if (window.CSS && CSS.highlights) CSS.highlights.delete('draftmark');
-    popMark = popDraft = null;
+    popMark = popDraft = popStrike = null;
     each('.paper .on, .mnote.on, .arrowsvg .on', function (n) { n.classList.remove('on'); });
   }
   $('popCancel').addEventListener('click', closePop);
@@ -9843,6 +9856,7 @@
     closePop();
   }
   $('popDelete').addEventListener('click', function () { if (popMark) deleteMark(popMark); closePop(); });
+  $('popUnstrike').addEventListener('click', function () { if (popStrike) deleteMark(popStrike); closePop(); });
   function deleteMark(m) {
     piece.marks = piece.marks.filter(function (x) { return x !== m; });
     drawPiece();
