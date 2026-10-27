@@ -2837,11 +2837,11 @@
       var who = el('div', 'who');
       who.appendChild(el('b', null, a.title));
       var line = a.state === 'running'
-        ? a.teacherName + (a.endAt ? ' \u00b7 until ' + whenLabel(a.endAt) : '') + (a.own && a.multiplier > 1 ? ' \u00b7 extra time' : '')
+        ? a.teacherName + (a.handedIn ? ' \u00b7 handed in' : (a.endAt ? ' \u00b7 until ' + whenLabel(a.endAt) : '') + (a.own && a.multiplier > 1 ? ' \u00b7 extra time' : ''))
         : a.teacherName + ' \u00b7 opens ' + whenLabel(a.startAt) + (a.own ? ' (your own schedule)' : '');
       who.appendChild(el('span', null, line));
       row.appendChild(who);
-      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Open' : 'Enter', 'btn small', function () { roomCode = a.code; joinRoom(a.code); }));
+      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Ask to unlock' : 'Enter', a.handedIn ? 'btn small ghost' : 'btn small', function () { roomCode = a.code; joinRoom(a.code); }));
       else row.appendChild(el('span', 'pill', 'Not started'));
       box.appendChild(row);
     });
@@ -4325,15 +4325,22 @@
     if (!await ask({ title: 'Start Draft ' + (now + 1) + '?', text: 'Draft ' + now + ' is kept as it is now, with any comments on it, and you can reread it under Drafts. Draft ' + (now + 1) + ' starts as a copy, and your teacher grades it afresh.', ok: 'Start Draft ' + (now + 1) })) return;
     var b = $('dbNewBtn');
     b.disabled = true;
+    var d = null;
     try {
       await report('writing'); // the server has their writing as it is now
-      var d = await api('/luddite/newdraft', { code: roomCode });
-      if (roomInfo) { roomInfo.drafts = d.room.drafts; roomInfo.sharedId = d.room.sharedId; roomInfo.draftNames = d.room.draftNames; }
-      syncClassWork();
-      drawDrafts((roomInfo && roomInfo.drafts) || []);
-      $('dbMeta').textContent = 'You’re writing Draft ' + (now + 1) + ' now';
+      d = await api('/luddite/newdraft', { code: roomCode });
     } catch (e) {
       tell('Couldn’t Start a New Draft', e.message === 'nothing_yet' ? 'Write something first.' : e.message === 'cant_write' ? 'You can’t write in this session right now.' : e.message === 'too_many_drafts' ? 'That’s as many drafts as one session keeps.' : 'Check your connection and try again.');
+    }
+    // Redrawing stays outside the try: the draft exists by now, so a slip here mustn't say it failed.
+    // (Started from the writing page's Drafts menu, the Drafts box was never opened and has no draftsCtx.)
+    if (d) {
+      if (roomInfo) { roomInfo.drafts = d.room.drafts; roomInfo.sharedId = d.room.sharedId; roomInfo.draftNames = d.room.draftNames; }
+      syncClassWork();
+      if (draftsCtx && !$('draftsBox').hidden) {
+        drawDrafts((roomInfo && roomInfo.drafts) || []);
+        $('dbMeta').textContent = 'You’re writing Draft ' + (now + 1) + ' now';
+      }
     }
     b.disabled = false;
     if (writing && !locked) pad.focus();
@@ -4657,16 +4664,29 @@
   // Sessions on Home that this teacher writes in (not their own).
   async function loadForYou() {
     var list = (await loadMine()).filter(function (a) { return a.status !== 'removed'; });
+    // Grading shared back to them, as on a student's Join page (the comments open read-only on the marking page).
+    var back = [];
+    try { back = (await api('/luddite/returned')).papers || []; } catch (e) {}
     var box = $('forYouList');
     box.innerHTML = '';
-    $('forYouBox').hidden = !list.length;
+    $('forYouBox').hidden = !list.length && !back.length;
+    back.forEach(function (p) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, p.roomTitle || 'Writing'));
+      w.appendChild(el('span', null, 'Comments shared ' + new Date(p.returnedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })));
+      row.appendChild(w);
+      row.appendChild(button('Read the comments', 'btn small', function () { openBack(p.id); }));
+      box.appendChild(row);
+    });
     list.forEach(function (a) {
       var row = el('div', 'item');
       var w = el('div', 'who');
       w.appendChild(el('b', null, a.title));
-      w.appendChild(el('span', null, a.teacherName + ' \u00b7 ' + (a.state === 'running' ? 'happening now' : 'opens ' + whenLabel(a.startAt))));
+      w.appendChild(el('span', null, a.teacherName + ' \u00b7 ' + (a.handedIn ? 'handed in' : a.state === 'running' ? 'happening now' : 'opens ' + whenLabel(a.startAt))));
       row.appendChild(w);
-      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Open' : 'Enter', 'btn small', function () { mode = 'room'; previewing = false; roomCode = a.code; joinRoom(a.code); }));
+      // Handed in is locked until the teacher unlocks it; the session's page is where to ask.
+      if (a.state === 'running') row.appendChild(button(a.handedIn ? 'Ask to unlock' : 'Enter', a.handedIn ? 'btn small ghost' : 'btn small', function () { mode = 'room'; previewing = false; roomCode = a.code; joinRoom(a.code); }));
       else row.appendChild(el('span', 'pill', 'Not started'));
       box.appendChild(row);
     });
