@@ -9064,7 +9064,8 @@
       var ms = on.filter(function (m) { return m.type === 'margin'; }), ss = on.filter(function (m) { return m.type === 'strike'; });
       if (ms.length) { seg.classList.add('hl'); seg.dataset.m = ms.map(function (m) { return m.id; }).join(' '); }
       if (ss.length) { seg.classList.add('strike'); seg.dataset.s = ss.map(function (m) { return m.id; }).join(' '); }
-      if (on.some(function (m) { return m.type === 'bold'; })) seg.classList.add('tb');
+      var bs = on.filter(function (m) { return m.type === 'bold'; });
+      if (bs.length) { seg.classList.add('tb'); seg.dataset.b = bs.map(function (m) { return m.id; }).join(' '); }
       put(seg, p, true);
     });
     var margin = $('margin');
@@ -9456,6 +9457,14 @@
     if (sel.isCollapsed) {
       var hit = e.target.closest('.ins, .mnum');
       if (hit) { hideTools(); openExisting(hit); return; }
+      // A click on bolded words opens a comment on them (theirs, if they have one).
+      var bt = e.target.closest('.tb'), bm = bt && findMark((bt.dataset.b || '').split(' ')[0]);
+      if (bm) {
+        var has = marginMarks().filter(function (m) { return m.type === 'margin' && m.start === bm.start && m.end === bm.end; })[0];
+        hideTools();
+        openPop(has || null, has ? null : { type: 'margin', start: bm.start, end: bm.end }, bt.getBoundingClientRect());
+        return;
+      }
       // A click on crossed-out words offers to take the cross-out back.
       var st = e.target.closest('.strike'), sm = st && findMark((st.dataset.s || '').split(' ')[0]);
       if (sm) { hideTools(); openPop(sm, null, st.getBoundingClientRect()); return; }
@@ -9784,6 +9793,8 @@
       try { CSS.highlights.set('draftmark', new (Function.prototype.bind.apply(Highlight, [null].concat(markParts(draft).map(function (q) { return domRange(q[0], q[1]); }).filter(Boolean))))()); } catch (e) {}
     } else if (draft && m.type === 'margin' && window.CSS && CSS.highlights && sel.rangeCount && !sel.isCollapsed) {
       try { CSS.highlights.set('draftmark', new Highlight(sel.getRangeAt(0).cloneRange())); } catch (e) {}
+    } else if (draft && m.type === 'margin' && window.CSS && CSS.highlights) {
+      try { var dr = domRange(draft.start, draft.end); if (dr) CSS.highlights.set('draftmark', new Highlight(dr)); } catch (e) {} // opened from bolded words
     }
     var x = Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, rect.left));
     var y = rect.bottom + 8;
