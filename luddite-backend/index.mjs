@@ -172,12 +172,13 @@ const MAX_OPEN_MS = 12 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS = 4000;
 const MAX_REFLECTION_CHARS = 20000;
 // What a teacher can switch in Preferences; these are the defaults.
-const DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
+// trog: TrogLuddite, the teacher's pared-down Luddite (their pages only).
+const DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true, trog: false };
 function cleanPrefs(p) {
   const x = p && typeof p === 'object' ? p : {};
   const out = { ...DEFAULT_PREFS };
   if (x.spellcheck === 'off' || x.spellcheck === 'underline') out.spellcheck = x.spellcheck;
-  ['lockOnLeave', 'blockPaste', 'showCount', 'autoHandIn'].forEach((k) => { if (typeof x[k] === 'boolean') out[k] = x[k]; });
+  ['lockOnLeave', 'blockPaste', 'showCount', 'autoHandIn', 'trog'].forEach((k) => { if (typeof x[k] === 'boolean') out[k] = x[k]; });
   return out;
 }
 async function prefsOf(teacherSub) {
@@ -1572,7 +1573,7 @@ async function routeLuddite(event, method, path, info) {
     });
   }
 
-  // PUT /luddite/prefs { spellcheck, lockOnLeave, blockPaste, showCount, autoHandIn }
+  // PUT /luddite/prefs { spellcheck, lockOnLeave, blockPaste, showCount, autoHandIn, trog }
   // -- what students get while writing, for all of this teacher's sessions.
   if (path === '/luddite/prefs' && method === 'PUT') {
     const prefs = cleanPrefs(body);

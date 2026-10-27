@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Rokkitt:wght@600&display=swap" rel="stylesheet">
+<!-- TrogLuddite's "trog": Rubik Dirt, chunky letters chipped like stone, loaded for just those four letters -->
+<link href="https://fonts.googleapis.com/css2?family=Rubik+Dirt&text=trog&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   /* Concept: a clean sheet of writing paper with umber ink, the same family as
@@ -1377,6 +1379,16 @@
   .panel .grouphead { font: 600 14px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
   .panel .grouphead .dot { width: 10px; height: 10px; }
   .pill, .tag, .chip, .q, .pbtn span, .k { font-size: 12px; }
+
+  /* ---- TrogLuddite (Settings › Enable TrogLuddite; the teacher's pages only): a
+     pared-down Luddite, assign, write, grade. Each extra is marked .trogx and hidden
+     here, unless .trog-on says it's already on in this session, so it can still be
+     turned off. Nothing stored changes, so disabling it brings everything back. ---- */
+  body.trog .trogx:not(.trog-on), body.trog .wnpill { display: none !important; }
+  body:not(.trog) .trogonly { display: none !important; }
+  /* "trog" before the wordmark, chipped out of stone; the wordmark's markup stays
+     as it is, since Luddite HM's sync edits it by pattern. */
+  body.trog .wordmark::before { content: 'trog'; font-family: 'Rubik Dirt', Impact, sans-serif; font-weight: 400; font-size: 0.62em; letter-spacing: 0; margin-right: 0.04em; display: inline-block; transform: rotate(-3deg); }
 </style>
 </head>
 <body>
@@ -1628,8 +1640,8 @@
       <form id="newRoomForm">
           <input class="field wide" id="newRoomTitle" maxlength="80" placeholder="Type the writing session name here" aria-label="Writing session name" autocomplete="off">
           <p class="fine warn" id="newRoomNote" hidden>Please type a name first, so you can tell your writing sessions apart.</p>
-          <label class="fine casualcheck" id="atHomeRow"><input type="checkbox" id="newRoomAtHome"> Let students work on this at home <span class="q" tabindex="0" data-tip="Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click (you still see each time they left), or press Leave for now and come back later, on any computer, until you end the session.">?</span></label>
-          <label class="fine casualcheck"><input type="checkbox" id="newRoomCasual"> Casual session <span class="q" tabindex="0" data-tip="No name or class needed: anyone who types the Entry Phrase comes straight in, with no waiting room.">?</span></label>
+          <label class="fine casualcheck trogx" id="atHomeRow"><input type="checkbox" id="newRoomAtHome"> Let students work on this at home <span class="q" tabindex="0" data-tip="Writing is still full screen, but leaving it doesn’t lock them out: they go back with one click (you still see each time they left), or press Leave for now and come back later, on any computer, until you end the session.">?</span></label>
+          <label class="fine casualcheck trogx"><input type="checkbox" id="newRoomCasual"> Casual session <span class="q" tabindex="0" data-tip="No name or class needed: anyone who types the Entry Phrase comes straight in, with no waiting room.">?</span></label>
 
           <div class="formrow">
             <label class="lbl" for="newRoomPrompt">Prompt <span class="q" tabindex="0" data-tip="Optional. Students see it pinned at the top of their writing page until they close it. You can change it later.">?</span></label>
@@ -1652,8 +1664,8 @@
               <button type="button" data-when="later">At a set time</button>
             </div>
             <div id="newRoomDays" hidden></div>
-            <button class="btn small ghost" id="newRoomAddDay" type="button" style="margin-top:12px" hidden>+ Another day</button>
-            <div class="switchrow" id="daysModeRow" style="margin-top:14px" hidden><span class="nm">The days <span class="q" tabindex="0" data-tip="A new paper each day: a writing session of its own each day, handed in each day. One paper over all the days: one writing session that runs only at these times. Between them students can’t write and their writing waits for them; they hand it in on the last day.">?</span></span>
+            <button class="btn small ghost trogx" id="newRoomAddDay" type="button" style="margin-top:12px" hidden>+ Another day</button>
+            <div class="switchrow trogx" id="daysModeRow" style="margin-top:14px" hidden><span class="nm">The days <span class="q" tabindex="0" data-tip="A new paper each day: a writing session of its own each day, handed in each day. One paper over all the days: one writing session that runs only at these times. Between them students can’t write and their writing waits for them; they hand it in on the last day.">?</span></span>
               <div class="segctl" id="daysMode"><button type="button" data-v="each">A new paper each day</button><button type="button" class="on" data-v="one">One paper over all the days</button></div>
             </div>
           </div>
@@ -1670,7 +1682,7 @@
 
     <div class="hometab" data-tab="students">
     <!-- Students writing in one of this teacher's sessions right now, each opening that session (loadWritingNow) -->
-    <section class="panel" id="writingNowBox" hidden>
+    <section class="panel trogx" id="writingNowBox" hidden>
       <h2>Writing Now</h2>
       <div id="writingNowList"></div>
     </section>
@@ -1727,31 +1739,31 @@
     <div class="head">
       <div class="roomhead"><div class="titlerow"><h2 id="roomTitle"></h2><details class="menu sibmenu" id="sibMenu" hidden><summary class="iconbtn" aria-label="Switch to another writing session" title="Switch to another writing session">&#9662;</summary><div class="pop" id="sibList"></div></details><button type="button" id="roomClass" hidden></button></div><div class="chiprow"><p class="stamp chip" id="roomStamp" tabindex="0"></p><p class="stamp" id="roomWhen"></p></div></div>
       <div class="row">
-        <button class="btn small ghost" id="pauseAllBtn" type="button" hidden>Pause everyone</button>
+        <button class="btn small ghost trogx" id="pauseAllBtn" type="button" hidden>Pause everyone</button>
         <button class="btn small" id="openCloseBtn"></button>
         <details class="menu" id="roomMenu">
           <summary class="btn small ghost">Session Options &#9662;</summary>
           <div class="pop">
             <div class="popsec">Students</div>
             <button type="button" id="phraseBtn">Entry Phrase and link</button>
-            <button type="button" id="anonBtn">Hide names</button>
+            <button type="button" class="trogx" id="anonBtn">Hide names</button>
             <button type="button" id="anonKeyBtn" hidden>Names key</button>
-            <button type="button" id="addProctorRoomBtn">Add a proctor…</button>
-            <button type="button" id="previewBtn">See what students see</button>
+            <button type="button" class="trogx" id="addProctorRoomBtn">Add a proctor…</button>
+            <button type="button" class="trogx" id="previewBtn">See what students see</button>
             <div class="popsec">The Session</div>
             <button type="button" id="renameBtn">Rename</button>
             <button type="button" id="promptBtn">Edit the prompt</button>
-            <button type="button" id="rubricBtn">Rubric…</button>
+            <button type="button" class="trogx" id="rubricBtn">Rubric…</button>
             <button type="button" id="timeBtn">Change the start time</button>
-            <button type="button" id="atHomeBtn">Let students work on this at home</button>
+            <button type="button" class="trogx" id="atHomeBtn">Let students work on this at home</button>
             <button type="button" id="homePrintBtn" hidden>Let students print their writing</button>
-            <button type="button" id="shareWorkBtn">Allow students to see each other’s work</button>
+            <button type="button" class="trogx" id="shareWorkBtn">Allow students to see each other’s work</button>
             <button type="button" id="reopenBtn">Open it again now</button>
             <div class="popsec">Papers</div>
-            <button type="button" id="reflectBtn">Ask for a reflection…</button>
+            <button type="button" class="trogx" id="reflectBtn">Ask for a reflection…</button>
             <button type="button" id="reflectOffBtn" hidden>Stop asking for reflections</button>
             <button type="button" id="printAllRoom">Print all papers</button>
-            <button type="button" id="rereadBtn">Let students reread their papers</button>
+            <button type="button" class="trogx" id="rereadBtn">Let students reread their papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
             <button type="button" id="deleteRoomBtn" class="danger">Delete this writing session</button>
           </div>
@@ -1863,14 +1875,14 @@
         <span class="segctl" id="printDrafts"><button type="button" data-drafts="final">Final only</button><button type="button" data-drafts="all">All drafts</button></span>
         <span class="q" tabindex="0" data-tip="Final only: each student's draft marked final (else the one they're writing). All drafts: every draft, oldest first, each with your comments on it.">?</span>
       </span>
-      <span class="printopt sizeopt">Lined margin
+      <span class="printopt sizeopt trogx">Lined margin
         <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
       </span>
-      <label class="printopt"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
+      <label class="printopt trogx"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
+      <label class="printopt trogx"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="chat"> Live comments <span class="q" tabindex="0" data-tip="The live comments between you and the student while they wrote, after the end comment.">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
-      <span class="printopt sizeopt">Text size
+      <label class="printopt trogx"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
+      <span class="printopt sizeopt trogx">Text size
         <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
       </span>
     </div>
@@ -1889,15 +1901,15 @@
       <button class="linkish" id="markBack">&larr; Back</button>
       <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
       <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous paper</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next paper &rsaquo;</button></span>
-      <span class="grow"><span class="q" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
-      <button type="button" class="fmtbtn" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
-      <button type="button" class="fmtbtn" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
+      <span class="grow"><span class="q trogonly" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes.">?</span><span class="q trogx" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
+      <button type="button" class="fmtbtn trogx" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
+      <button type="button" class="fmtbtn trogx" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
       <span class="savestate" id="markSaved"></span>
       <button class="btn small ghost toggle" id="markChatBtn" type="button" aria-pressed="false" hidden>Live comments</button>
       <button class="btn small ghost toggle" id="markEndBtn" type="button" aria-pressed="true" hidden>End comment</button>
       <button class="btn small ghost toggle" id="markMarksBtn" type="button" aria-pressed="true" hidden>My comments</button>
       <button class="btn small ghost" id="markDrafts" type="button" hidden>Old drafts</button>
-      <button class="btn small ghost" id="markWlog" type="button" hidden>Writing log</button>
+      <button class="btn small ghost trogx" id="markWlog" type="button" hidden>Writing log</button>
       <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
       <button class="btn small" id="markHandBack" type="button">Share Grading</button>
       <button class="btn small ghost" id="markPrint">Print</button>
@@ -1915,7 +1927,7 @@
       <div class="endwrap">
         <label for="endComment">End comment</label>
         <textarea id="endComment" placeholder="What's working, and the one or two things to do next."></textarea>
-        <details class="stockbox" id="stockBox" open>
+        <details class="stockbox trogx" id="stockBox" open>
           <summary>Stock Comments <span class="q" tabindex="0" data-tip="Check the ones that fit this paper: each adds its goal to the On the Next Essay section at the end of the end comment, under Keep Up the Good Work or Room for Improvement, which the student sees with the rest.">?</span></summary>
           <div id="stockList"></div>
           <button type="button" class="btn small ghost" id="stockEdit">Edit stock comments…</button>
@@ -1960,7 +1972,7 @@
 
 <!-- Settings, top right on the teacher pages -->
 <div class="topright no-print" id="topRight" hidden>
-  <span class="nowchip" id="nowChip" aria-live="off"></span>
+  <span class="nowchip trogx" id="nowChip" aria-live="off"></span>
   <button id="prefsBtn" type="button">Settings</button>
 </div>
 
@@ -2106,7 +2118,7 @@
       <span class="segctl" data-pref="lockOnLeave"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
     <div class="switchrow"><span class="nm">Block copy and paste <span class="q" tabindex="0" data-tip="Students can cut, copy and paste within their own writing, but pasting, dropping or auto-inserting anything from elsewhere is refused.">?</span></span>
       <span class="segctl" data-pref="blockPaste"><button type="button" data-v="1">On</button><button type="button" data-v="0">Off</button></span></div>
-    <div class="switchrow" style="display:block">
+    <div class="switchrow trogx" style="display:block">
       <span class="nm">Rubrics <span class="q" tabindex="0" data-tip="Skills down the side, your own levels across the top, and optionally each skill's share of the grade. Apply one to a writing session from its Session options menu, or from the marking page.">?</span></span>
       <div id="rubricList"></div>
       <button class="btn small ghost" type="button" id="newRubricBtn" style="margin-top:8px">+ New rubric</button>
@@ -2130,12 +2142,14 @@
         <p class="fine" id="teacherClassNote" hidden></p>
       </div>
     </div>
-    <div id="permProctorsSection" hidden style="margin-top:22px">
+    <div id="permProctorsSection" class="trogx" hidden style="margin-top:22px">
       <h3 style="margin-top:0">Permanent Proctors <span class="q" tabindex="0" data-tip="In every writing session, they proctor each student on an alternative schedule (a different start or extra time): letting them in, unlocking them, and beginning or pausing their time. They never see what anyone writes. The testing center is always one.">?</span></h3>
       <div id="permProctorList"></div>
       <button class="btn small" id="addPermProctorBtn" type="button" style="margin-top:10px">Add permanent proctor</button>
       <p class="fine" id="permProctorNote" hidden></p>
     </div>
+    <div class="switchrow"><span class="nm">TrogLuddite <span class="q" tabindex="0" data-tip="A pared-down Luddite: assign, write, grade, without the extras. Only your pages change, and nothing is lost: disabling it brings everything back.">?</span></span>
+      <button class="btn small ghost" id="trogBtn" type="button">Enable TrogLuddite</button></div>
     <div style="margin-top:22px">
       <h3 style="margin-top:0">Account</h3>
       <div class="switchrow"><span class="nm">Students see you as <b id="displayName" style="font-weight:600"></b></span>
@@ -2150,8 +2164,8 @@
 
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
-  <button type="button" data-tool="bold">Bold</button>
-  <button type="button" data-tool="circle">Circle</button>
+  <button type="button" class="trogx" data-tool="bold">Bold</button>
+  <button type="button" class="trogx" data-tool="circle">Circle</button>
   <button type="button" data-tool="strike">Cross out</button>
   <button type="button" data-tool="insert">Write here</button>
 </div>
@@ -2728,6 +2742,7 @@
     store(AUTH_KEY, null);
     me = { email: '', name: '', role: '' };
     isTeacher = false;
+    setTrog(false);
     showSignIn(email);
     $('signInNote').textContent = 'Sign in as ' + email + '. After this once, switching to it is one click.';
   }
@@ -2790,6 +2805,7 @@
     store(AUTH_KEY, authToken);
     me = data.luddite;
     isTeacher = me.role === 'owner' || me.role === 'teacher';
+    setTrog(isTeacher && load(trogKey()) === '1');
     if (isTester(me.email)) { var tt = testTokens(); tt[me.email.toLowerCase()] = authToken; store(TEST_KEY, JSON.stringify(tt)); }
     each('.who-email', function (n) { n.textContent = me.email; });
     offlineBoot = false;
@@ -2833,6 +2849,7 @@
     store(AUTH_KEY, null);
     me = { email: '', name: '', role: '' };
     isTeacher = false;
+    setTrog(false);
     try { google.accounts.id.disableAutoSelect(); } catch (e) {}
     showSignIn();
   }
@@ -3924,7 +3941,7 @@
   function fsExempt() { return !canFs() && NO_FULLSCREEN_OK.indexOf((me.email || '').toLowerCase()) !== -1; }
 
   // What the teacher's Settings allow while writing. On your own, everything is on.
-  var DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true };
+  var DEFAULT_PREFS = { spellcheck: 'underline', lockOnLeave: true, blockPaste: true, showCount: true, autoHandIn: true, trog: false };
   function P() { return mode === 'room' && roomInfo && roomInfo.prefs ? roomInfo.prefs : DEFAULT_PREFS; }
 
   function fsNeeded() { return !fsExempt() && P().lockOnLeave; }
@@ -4786,6 +4803,7 @@
   function syncAnonBtn() {
     var on = anonOn();
     $('anonBtn').textContent = on ? 'Show names' : 'Hide names';
+    $('anonBtn').classList.toggle('trog-on', on);
     $('anonKeyBtn').hidden = !on;
     document.body.classList.toggle('is-anon', on);
   }
@@ -5473,6 +5491,27 @@
     });
   });
   $('prefsBtn').addEventListener('click', function () { $('prefsSaved').textContent = ''; syncPrefs(); $('prefsBox').hidden = false; });
+
+  // ---- TrogLuddite: a pared-down Luddite (assign, write, grade), the teacher's
+  // own choice (prefs.trog, on every device; luddite.trog.<email> remembers it so
+  // the page opens that way). Only the teacher's pages change: body.trog hides
+  // each .trogx (see the CSS), and the rows, grading and printing check trogOn.
+  // Nothing stored changes, so disabling it brings everything back.
+  var trogOn = false;
+  function trogKey() { return 'luddite.trog.' + String(me.email || '').toLowerCase(); }
+  function setTrog(on) {
+    on = !!on && isTeacher;
+    var was = trogOn;
+    trogOn = on;
+    document.body.classList.toggle('trog', on);
+    $('trogBtn').textContent = on ? 'Disable TrogLuddite' : 'Enable TrogLuddite';
+    if (me.email) store(trogKey(), on ? '1' : null);
+    if (on !== was) loadPrintOpts();
+    return on !== was;
+  }
+  $('trogBtn').addEventListener('click', function () {
+    if (setTrog(!trogOn)) { savePrefs({ trog: trogOn }); redrawTeacher(); }
+  });
   $('prefsClose').addEventListener('click', function () { $('prefsBox').hidden = true; });
 
   var classes = [];
@@ -5481,8 +5520,8 @@
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
     classes = data.classes || [];
     sessionList = data.assignments || [];
-    if (homeTab === 'students' && !$('dashScreen').hidden) loadWritingNow(sessionList);
-    if (data.prefs) teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs);
+    if (homeTab === 'students' && !$('dashScreen').hidden && !trogOn) loadWritingNow(sessionList);
+    if (data.prefs) { teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs); if (setTrog(teacherPrefs.trog)) lastDrawn = ''; }
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
@@ -6937,6 +6976,8 @@
     $('shareWorkBtn').textContent = room.shareWork ? 'Stop students seeing each other’s work' : 'Allow students to see each other’s work';
     $('atHomeBtn').textContent = room.atHome ? 'Back to class rules (full screen, locking)' : 'Let students work on this at home';
     $('pauseAllBtn').textContent = room.pausedAt ? 'Resume everyone' : 'Pause everyone';
+    // TrogLuddite still shows an extra that's on here, so it can be turned off.
+    [['pauseAllBtn', room.pausedAt], ['rubricBtn', room.rubric], ['atHomeBtn', room.atHome], ['shareWorkBtn', room.shareWork], ['reflectBtn', room.reflect], ['rereadBtn', room.reread]].forEach(function (x) { $(x[0]).classList.toggle('trog-on', !!x[1]); });
     if (room.pausedAt && state === 'running') chip.textContent = '❚❚ Paused';
     else if (state === 'running' && nextSitting(room)) chip.textContent = '❚❚ Between days · next ' + whenLabel(nextSitting(room));
     var proctors = room.proctors || [];
@@ -7465,9 +7506,9 @@
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
     if (x && x.late) line.appendChild(el('em', 'warntext', ' · late'));
-    if (s && (s.drafts || []).length) line.appendChild(document.createTextNode(' · ' + draftLabel(s.drafts.length + 1, s.draftNames, s.finalDraft) + (s.finalDraft && s.finalDraft !== s.drafts.length + 1 ? ' · Final: ' + draftLabel(s.finalDraft, s.draftNames) : '')));
+    if (s && (s.drafts || []).length && !trogOn) line.appendChild(document.createTextNode(' · ' + draftLabel(s.drafts.length + 1, s.draftNames, s.finalDraft) + (s.finalDraft && s.finalDraft !== s.drafts.length + 1 ? ' · Final: ' + draftLabel(s.finalDraft, s.draftNames) : '')));
     // Words that came faster than anyone types (see the writing log).
-    if (s && s.bursts) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
+    if (s && s.bursts && !trogOn) line.appendChild(el('em', 'warntext', ' · ⚑ ' + (s.bursts === 1 ? 'a burst of words' : s.bursts + ' bursts of words')));
     w.appendChild(line);
     row.appendChild(w);
 
@@ -7501,7 +7542,7 @@
       var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
       if (x && x.stored) bub.title = 'Open the grading';
       row.appendChild(bub);
-    } else if (f.canWrite && s && s.sub) {
+    } else if (f.canWrite && s && s.sub && !trogOn) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
       var est = s.earlyShared ? STATUS.shared : s.earlyMarked || s.earlyGrade ? STATUS.graded : ['Grade so far', STATUS.grade[1]];
       var early = button(est[0], 'statusbub ' + est[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
@@ -7520,12 +7561,12 @@
     });
     if (x && x.link && !anonOn()) item('Open in Drive', function () { window.open(x.link, '_blank', 'noopener'); });
     if (s && s.handedIn && f.act !== 'release') item('Unlock so they can write again', function () { roomAction('release', [s.sub]); });
-    if (!f.over && s && !s.handedIn && !s.pausedAt) item('Pause their time', function () { roomAction('pause', [s.sub]); });
-    if (s && s.email) {
+    if (!f.over && s && !s.handedIn && !s.pausedAt && !trogOn) item('Pause their time', function () { roomAction('pause', [s.sub]); });
+    if (s && s.email && (!trogOn || (room.own && room.own[s.email.toLowerCase()]))) {
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
     }
-    if (s && s.sub) item('Writing log', function () { openWlog(room.code, s.sub, p.name); });
+    if (s && s.sub && !trogOn) item('Writing log', function () { openWlog(room.code, s.sub, p.name); });
     if (s && s.sub && (s.drafts || []).length) item('Old drafts', function () { openDrafts({ code: room.code, sub: s.sub, name: p.name }); });
     if (s && s.sub && (s.chatS || s.chatT) && !chatUnread(s)) item('Mark live comments as unread', function () { markChatUnread(s.sub); });
     if (s && s.reflect && s.reflect.status === 'done') item('Let them change their reflection', function () { roomAction('reflectReopen', [s.sub]); });
@@ -9277,7 +9318,7 @@
   // because a Mac sends the right-click before the drag.
   var drag = null, swallowMenu = false;
   $('paper').addEventListener('mousedown', function (e) {
-    if (!piece || reading || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
+    if (!piece || reading || trogOn || !(e.button === 2 || (e.button === 0 && e.ctrlKey))) return;
     var o = pointOffset(e.clientX, e.clientY);
     if (o === null) return;
     drag = { from: o, last: o, x: e.clientX, y: e.clientY, moved: false, menu: null };
@@ -9358,7 +9399,7 @@
     return null;
   }
   $('sheet').addEventListener('mousedown', function (e) {
-    if (!piece || reading || e.button !== 0 || e.ctrlKey || e.metaKey) return;
+    if (!piece || reading || trogOn || e.button !== 0 || e.ctrlKey || e.metaKey) return;
     var t = e.target;
     var onEdge = t === $('sheet') || t === $('margin');
     var overPaper = !!t.closest('#paper');
@@ -9643,6 +9684,7 @@
   $('paper').addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'b' || e.key === 'i')) {
       e.preventDefault();
+      if (trogOn) return; // (no bold or italic in TrogLuddite)
       // With the student's words selected, ⌘B bolds them; with just a caret it sets how your own words come out.
       var bs = e.key === 'b' && piece && !reading && selectionInPaper();
       if (bs && !bs.collapsed) {
@@ -10801,8 +10843,15 @@
       if (odd[i] && i < packets.length - 1) boxes[boxes.length - 1].after(el('div', 'pblank'));
     });
   }
+  // TrogLuddite keeps print options of its own, from the defaults, so ones it
+  // hides (lined margin, double spacing...) never apply unseen.
   var PRINT_OPTS_KEY = 'luddite.printOpts', printOpts = {};
-  try { printOpts = JSON.parse(load(PRINT_OPTS_KEY) || '{}') || {}; } catch (e) { printOpts = {}; }
+  function printOptsKey() { return trogOn ? PRINT_OPTS_KEY + '.trog' : PRINT_OPTS_KEY; }
+  function loadPrintOpts() {
+    if (typeof PRINT_OPTS_KEY !== 'string') return; // (before this part of the page has run)
+    try { printOpts = JSON.parse(load(printOptsKey()) || '{}') || {}; } catch (e) { printOpts = {}; }
+  }
+  loadPrintOpts();
   function drawPrintOpts() {
     // (two-sided and live comments are on unless turned off)
     each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' || c.dataset.opt === 'chat' ? printOpts[c.dataset.opt] !== false : !!printOpts[c.dataset.opt]; });
@@ -10814,7 +10863,7 @@
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
-    store(PRINT_OPTS_KEY, JSON.stringify(printOpts));
+    store(printOptsKey(), JSON.stringify(printOpts));
     drawPrintOpts();
     if (printDrawn.length) drawPrintBody();
   }
@@ -10936,6 +10985,7 @@
     if (!m || !m.email || (tokenEmail && tokenEmail !== m.email.toLowerCase())) return false;
     me = m;
     isTeacher = me.role === 'owner' || me.role === 'teacher';
+    setTrog(isTeacher && load(trogKey()) === '1');
     offlineBoot = true;
     setNetDown(true);
     each('.who-email', function (n) { n.textContent = me.email; });
