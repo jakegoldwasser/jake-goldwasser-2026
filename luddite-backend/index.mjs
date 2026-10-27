@@ -727,7 +727,7 @@ function markedHtml(piece) {
   const margins = notes.filter((m) => m.type === 'margin');
   const num = new Map(notes.map((m, i) => [m.id, i + 1]));
   const cuts = new Set([0, text.length]);
-  marks.forEach((m) => { cuts.add(m.start); cuts.add(m.end); });
+  marks.forEach((m) => { cuts.add(m.start); cuts.add(m.end); (m.parts || []).forEach((q) => { cuts.add(m.start + q[0]); cuts.add(m.start + q[1]); }); });
   const pts = [...cuts].sort((a, b) => a - b);
   const pen = (inner) => '<span style="color:' + PEN + '">' + inner + '</span>';
   let body = '';
@@ -754,8 +754,11 @@ function markedHtml(piece) {
     const next = pts[i + 1];
     if (next === undefined || next === p) return;
     let h = escHtml(text.slice(p, next)).replace(/\n/g, '<br>');
-    const on = marks.filter((m) => (m.type === 'margin' || m.type === 'strike') && m.start <= p && m.end >= next);
+    const covers = (m) => (m.parts ? m.parts.some((q) => m.start + q[0] <= p && m.start + q[1] >= next) : m.start <= p && m.end >= next);
+    const on = marks.filter((m) => m.type !== 'insert' && m.type !== 'arrow' && covers(m));
     if (on.some((m) => m.type === 'strike')) h = '<s style="text-decoration-color:' + PEN + '">' + h + '</s>';
+    if (on.some((m) => m.type === 'bold')) h = '<b style="color:' + PEN + '">' + h + '</b>';
+    if (on.some((m) => m.type === 'circle')) h = '<span style="border:1.5px solid ' + PEN + ';border-radius:9px">' + h + '</span>';
     if (on.some((m) => m.type === 'margin')) h = '<span style="background-color:#e3f0e3">' + h + '</span>';
     body += h;
   });
@@ -818,7 +821,7 @@ function cleanMarks(list, length) {
   let chars = 0;
   const out = list.map((m) => {
     const type = m && m.type;
-    if (!['margin', 'strike', 'insert', 'arrow'].includes(type)) throw new HttpError(400, 'bad_marks');
+    if (!['margin', 'strike', 'insert', 'arrow', 'bold', 'circle'].includes(type)) throw new HttpError(400, 'bad_marks');
     const clamp = (v) => Math.max(0, Math.min(length, Math.floor(Number(v) || 0)));
     let start = clamp(m.start);
     let end = type === 'insert' ? start : Math.max(start, clamp(m.end));
@@ -833,6 +836,16 @@ function cleanMarks(list, length) {
     const mark = { id: String(m.id || '').slice(0, 40) || randomUUID().slice(0, 8), type, start, end, note, at: Number(m.at) || Date.now() };
     if (type === 'arrow') mark.head = m.head === 'start' ? 'start' : 'end';
     if (orphan) mark.orphan = orphan;
+    // A comment on words gathered with a box (the lasso): just those words, as
+    // [from, to] pairs counted from the comment's start, so they move with it.
+    if (type === 'margin' && !orphan && Array.isArray(m.parts) && m.parts.length > 1) {
+      const span = end - start, parts = [];
+      for (const q of m.parts.slice(0, 200)) {
+        const a = Math.max(0, Math.min(span, Math.floor(Number(q && q[0]) || 0))), b = Math.max(a, Math.min(span, Math.floor(Number(q && q[1]) || 0)));
+        if (b > a && (!parts.length || a >= parts[parts.length - 1][1])) parts.push([a, b]);
+      }
+      if (parts.length > 1) mark.parts = parts;
+    }
     // An insert's look, letter by letter: ' ' plain, 'b' bold, 'i' italic, 'x' both.
     if (type === 'insert') {
       const f = String(m.fmt || '').replace(/[^bix ]/g, ' ').slice(0, note.length);
@@ -894,10 +907,27 @@ function reanchorMarks(marks, base, text) {
       out.push({ ...m, start: Math.min(a, b), end: Math.max(a, b), head: a <= b ? m.head : (m.head === 'start' ? 'end' : 'start') });
       continue;
     }
+    // A comment made with a box (parts): each run of its words is found on
+    // its own, so a change to the words between them doesn't lose it.
+    if (m.type === 'margin' && m.parts && m.parts.length > 1) {
+      const found = [];
+      let after = 0;
+      for (const [a, b] of m.parts) {
+        const w = base.slice(m.start + a, m.start + b);
+        const i = w.trim() ? findNear(text, w, scale(m.start + a)) : -1;
+        if (i !== -1 && i >= after) { found.push([i, i + w.length]); after = i + w.length; }
+      }
+      const { parts, ...rest } = m;
+      if (!found.length) { out.push(orphan(rest, parts.map(([a, b]) => base.slice(m.start + a, m.start + b)).join(' \u2026 '))); continue; }
+      const s0 = found[0][0], moved = { ...rest, start: s0, end: found[found.length - 1][1] };
+      if (found.length > 1) moved.parts = found.map(([a, b]) => [a - s0, b - s0]);
+      out.push(moved);
+      continue;
+    }
     const q = base.slice(m.start, m.end);
     const i = q.trim() ? findNear(text, q, scale(m.start)) : -1;
     if (i !== -1) { out.push({ ...m, start: i, end: i + q.length }); continue; }
-    if (m.type === 'strike') continue;
+    if (m.type === 'strike' || m.type === 'bold' || m.type === 'circle') continue; // nothing left to mark
     out.push(orphan(m, q));
   }
   return out;

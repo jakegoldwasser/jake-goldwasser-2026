@@ -513,6 +513,14 @@
   .paper:focus { outline: none; }
   .paper .hl { background: var(--pen-wash); border-bottom: 1.5px solid var(--pen); cursor: pointer; }
   .paper .strike { text-decoration: line-through; text-decoration-color: var(--pen); text-decoration-thickness: 2px; cursor: pointer; }
+  /* The teacher's bold and circle, in the pen. The circle is an outline, which
+     takes no room, so circling never moves the student's words; clone gives
+     each line of a circle that wraps its own rounded ends. */
+  .tb { font-weight: 700; color: var(--pen); }
+  .circ { outline: 1.75px solid var(--pen); outline-offset: 1px; border-radius: 1em; -webkit-box-decoration-break: clone; box-decoration-break: clone; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* The lasso: a box dragged over the paper to gather words for one comment. */
+  .lassobox { position: absolute; z-index: 3; border: 1.5px dashed var(--pen); background: color-mix(in srgb, var(--pen-wash) 45%, transparent); border-radius: 4px; pointer-events: none; }
+  #sheet.lassoing, #sheet.lassoing * { cursor: crosshair !important; user-select: none; }
   .paper .ins { color: var(--pen); cursor: pointer; white-space: pre-wrap; font-family: var(--ui); font-size: .94em; font-weight: 500; } /* the teacher's words: sans, so they never pass for the student's */
   .paper .ins .b { font-weight: 600; }
   .paper .ins .i { font-style: italic; }
@@ -1125,6 +1133,9 @@
   #sheet.nomarks #margin, #sheet.nomarks .arrowsvg, #sheet.nomarks .mnum, #sheet.nomarks .ins, #sheet.nomarks #orphanBox { display: none !important; }
   #sheet.nomarks .paper .hl { background: none; border-bottom: 0; }
   #sheet.nomarks .paper .strike { text-decoration: none; }
+  #sheet.nomarks .paper .tb { color: inherit; }
+  #sheet.nomarks .paper .tb:not(.fb) { font-weight: inherit; }
+  #sheet.nomarks .paper .circ { outline: none; }
   body:not(.markfloat) .markclosebar { display: none; }
   #markScreen .markbar { margin-left: 0; padding-left: 0; }
   #markScreen #gradePick { margin-left: 0; }
@@ -2136,6 +2147,8 @@
 
 <div class="marktools no-print" id="markTools" hidden>
   <button type="button" data-tool="margin">Comment</button>
+  <button type="button" data-tool="bold">Bold</button>
+  <button type="button" data-tool="circle">Circle</button>
   <button type="button" data-tool="strike">Cross out</button>
   <button type="button" data-tool="insert">Write here</button>
 </div>
@@ -2409,6 +2422,35 @@
   // and which styles it has: 1 bold, 2 italic, 4 underline.
   // ---------------------------------------------------------------------
   var FMT_CLS = ['', 'fb', 'fi', 'fb fi', 'fu', 'fb fu', 'fi fu', 'fb fi fu'];
+  // A mark's words, as [from, to] pairs. A comment made with a box (the lasso)
+  // is on just the words in the box (`parts`, counted from its start, so they
+  // move with it); every other mark is on start to end.
+  function markParts(m) { return m.parts && m.parts.length ? m.parts.map(function (q) { return [m.start + q[0], m.start + q[1]]; }) : [[m.start, m.end]]; }
+  function markCovers(m, a, b) { return markParts(m).some(function (q) { return q[0] <= a && q[1] >= b; }); }
+  function markCutsInto(cuts, m) { markParts(m).forEach(function (q) { cuts[q[0]] = 1; cuts[q[1]] = 1; }); }
+  // Circled words go into one span.circ per circle, so a circle reads as one
+  // ring even where other marks cut its words into pieces. put(node, p, seg):
+  // a piece of the text starting at p (seg), or something else at p.
+  function ringPutter(box, marks) {
+    var ring = null;
+    return function (node, p, seg) {
+      if (!seg) {
+        if (ring && ring._m.start < p && p < ring._m.end) ring.appendChild(node);
+        else { ring = null; box.appendChild(node); }
+        return;
+      }
+      var c = null;
+      for (var i = 0; i < marks.length; i++) if (marks[i].type === 'circle' && marks[i].start <= p && marks[i].end > p) { c = marks[i]; break; }
+      if (c && ring && ring._m === c) { ring.appendChild(node); return; }
+      ring = null;
+      if (!c) { box.appendChild(node); return; }
+      ring = el('span', 'circ');
+      ring._m = c;
+      ring.dataset.c = c.id;
+      box.appendChild(ring);
+      ring.appendChild(node);
+    };
+  }
   var scanCache = { text: null, scan: null };
   function fmtScan(text) {
     text = String(text || '');
@@ -4148,13 +4190,14 @@
     numbered.forEach(function (m, i) { num[m.id] = i + 1; });
     var cuts = {}; cuts[0] = 1; cuts[n] = 1;
     var sc = fmtCuts(text, cuts);
-    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; markCutsInto(cuts, m); });
     var pts = Object.keys(cuts).map(Number).filter(function (x) { return x >= 0 && x <= n; }).sort(function (a, b) { return a - b; });
+    var put = ringPutter(txt, marks);
     pts.forEach(function (a, k) {
       // At this point: the numbers of comments ending here and arrows' ends, then words written in.
       marks.forEach(function (m) {
-        if ((m.type === 'margin' && m.end === a) || (m.type === 'arrow' && (m.start === a || m.end === a))) txt.appendChild(el('span', 'mgnum', (m.type === 'arrow' ? '↳' : '') + num[m.id]));
-        if (m.type === 'insert' && m.start === a) txt.appendChild(el('ins', 'mgins', m.note));
+        if ((m.type === 'margin' && m.end === a) || (m.type === 'arrow' && (m.start === a || m.end === a))) put(el('span', 'mgnum', (m.type === 'arrow' ? '↳' : '') + num[m.id]), a, false);
+        if (m.type === 'insert' && m.start === a) put(el('ins', 'mgins', m.note), a, false);
       });
       var b = pts[k + 1];
       if (b === undefined) return;
@@ -4162,9 +4205,10 @@
       for (var i = a; i < b; i++) if (!sc.hide[i]) words += text.charAt(i);
       if (!words) return;
       var cls = FMT_CLS[sc.f[a]] || '';
-      if (marks.some(function (m) { return m.type === 'margin' && m.start <= a && m.end >= b; })) cls += ' mgmark';
+      if (marks.some(function (m) { return m.type === 'margin' && markCovers(m, a, b); })) cls += ' mgmark';
       if (marks.some(function (m) { return m.type === 'strike' && m.start <= a && m.end >= b; })) cls += ' mgstrike';
-      txt.appendChild(cls.trim() ? el('span', cls.trim(), words) : document.createTextNode(words));
+      if (marks.some(function (m) { return m.type === 'bold' && m.start <= a && m.end >= b; })) cls += ' tb';
+      put(cls.trim() ? el('span', cls.trim(), words) : document.createTextNode(words), a, true);
     });
     numbered.forEach(function (m) { notes.appendChild(el('p', null, num[m.id] + '  ' + (m.note || ''))); });
     var orphans = (allMarks || []).filter(function (m) { return m.orphan && m.type !== 'strike'; });
@@ -7714,6 +7758,10 @@
     'larger': 'Prints the papers in the largest type',
     'comment': 'Opens a box to write a comment on these words, in the margin',
     'cross out': 'Crosses out these words',
+    'bold': 'Puts these words in bold, in your pen (or press ⌘B)',
+    'remove bold': 'Takes your bold off these words',
+    'circle': 'Draws a circle round these words',
+    'remove circle': 'Takes the circle off these words',
     'remove the cross-out': 'Takes the cross-out off these words',
     'write here': 'Opens a box to write words into the text here',
     'make a grid': 'Makes the rubric a grid of skills and levels, scored on the marking page',
@@ -8976,13 +9024,14 @@
   function drawPiece() {
     var text = piece.text, marks = liveMarks();
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
-    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; markCutsInto(cuts, m); });
     var sc = fmtCuts(text, cuts);
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
     var numbers = noteNumbers = {};
     marginMarks().forEach(function (m, i) { numbers[m.id] = i + 1; });
     var paper = $('paper');
     paper.innerHTML = '';
+    var put = ringPutter(paper, marks);
     pts.forEach(function (p, i) {
       // At each point: the numbers of margin notes that end here, then
       // anything the teacher wrote in here, then the text up to the next point.
@@ -8990,7 +9039,7 @@
         if (m.type === 'margin' && m.end === p) {
           var n = el('sup', 'mnum', String(numbers[m.id]));
           n.dataset.mark = m.id;
-          paper.appendChild(n);
+          put(n, p, false);
         }
       });
       marks.forEach(function (m) {
@@ -9001,21 +9050,22 @@
           });
           ins.dataset.mark = m.id;
           ins.contentEditable = 'false';
-          paper.appendChild(ins);
+          put(ins, p, false);
         }
       });
       var next = pts[i + 1];
       if (next === undefined || next === p) return;
       // The student's bold/italic/underline markers: kept in place (offsets
       // count them) but never shown.
-      if (sc.hide[p]) { var mk = el('span', 'fmk', text.slice(p, next)); mk.dataset.o = p; paper.appendChild(mk); return; }
+      if (sc.hide[p]) { var mk = el('span', 'fmk', text.slice(p, next)); mk.dataset.o = p; put(mk, p, false); return; }
       var seg = el('span', 'seg' + (sc.f[p] ? ' ' + FMT_CLS[sc.f[p]] : ''), text.slice(p, next));
       seg.dataset.o = p;
-      var on = marks.filter(function (m) { return m.type !== 'insert' && m.start <= p && m.end >= next; });
+      var on = marks.filter(function (m) { return m.type !== 'insert' && m.type !== 'arrow' && markCovers(m, p, next); });
       var ms = on.filter(function (m) { return m.type === 'margin'; }), ss = on.filter(function (m) { return m.type === 'strike'; });
       if (ms.length) { seg.classList.add('hl'); seg.dataset.m = ms.map(function (m) { return m.id; }).join(' '); }
       if (ss.length) { seg.classList.add('strike'); seg.dataset.s = ss.map(function (m) { return m.id; }).join(' '); }
-      paper.appendChild(seg);
+      if (on.some(function (m) { return m.type === 'bold'; })) seg.classList.add('tb');
+      put(seg, p, true);
     });
     var margin = $('margin');
     margin.innerHTML = '';
@@ -9255,6 +9305,91 @@
   });
   window.addEventListener('resize', function () { if (!$('markScreen').hidden) layoutNotes(); });
 
+  // ---- The lasso ----
+  // Option-drag over the paper (or a plain drag from the sheet's blank edges
+  // or the margin) draws a box; the words it touches are gathered into one
+  // comment, on just those words (`parts`), however they fall across lines.
+  // The box is only there while the comment is written.
+  var lasso = null;
+  function clearLasso() { each('#sheet > .lassobox', function (n) { n.parentNode.removeChild(n); }); $('sheet').classList.remove('lassoing'); lasso = null; }
+  function drawLasso(x1, y1, x2, y2) {
+    var box = sheetBox(), b = $('sheet').querySelector('.lassobox');
+    if (!b) { b = el('div', 'lassobox'); $('sheet').appendChild(b); }
+    b.style.left = Math.min(x1, x2) - box.left + 'px';
+    b.style.top = Math.min(y1, y2) - box.top + 'px';
+    b.style.width = Math.abs(x2 - x1) + 'px';
+    b.style.height = Math.abs(y2 - y1) + 'px';
+  }
+  // The student's words whose letters the box (screen coordinates) touches, as runs in the text.
+  function wordsInBox(r) {
+    var hit = [], text = piece.text, hide = fmtScan(text).hide;
+    each('#paper .seg', function (seg) {
+      var t = seg.firstChild, o = Number(seg.dataset.o);
+      if (!t || t.nodeType !== 3) return;
+      var re = /\S+/g, w;
+      while ((w = re.exec(t.data))) {
+        var rg = document.createRange();
+        rg.setStart(t, w.index); rg.setEnd(t, w.index + w[0].length);
+        var rects = rg.getClientRects();
+        for (var i = 0; i < rects.length; i++) {
+          var q = rects[i];
+          if (q.right >= r.left && q.left <= r.right && q.bottom >= r.top && q.top <= r.bottom) { hit.push([o + w.index, o + w.index + w[0].length]); break; }
+        }
+      }
+    });
+    hit.sort(function (a, b) { return a[0] - b[0]; });
+    var runs = [];
+    hit.forEach(function (h) {
+      var last = runs[runs.length - 1], gapOk = !!last;
+      if (last) for (var k = last[1]; k < h[0]; k++) if (!hide[k] && /\S/.test(text.charAt(k))) { gapOk = false; break; }
+      if (gapOk) last[1] = Math.max(last[1], h[1]); else runs.push([h[0], h[1]]);
+    });
+    return runs;
+  }
+  // The DOM range over text offsets a to b (for lighting a lassoed draft's words).
+  function domRange(a, b) {
+    var segs = $('paper').querySelectorAll('.seg'), rg = document.createRange(), started = false;
+    for (var i = 0; i < segs.length; i++) {
+      var o = Number(segs[i].dataset.o), t = segs[i].firstChild, len = t ? t.length : 0;
+      if (!t) continue;
+      if (!started && a >= o && a < o + len) { rg.setStart(t, a - o); started = true; }
+      if (started && b > o && b <= o + len) { rg.setEnd(t, b - o); return rg; }
+    }
+    return null;
+  }
+  $('sheet').addEventListener('mousedown', function (e) {
+    if (!piece || reading || e.button !== 0 || e.ctrlKey || e.metaKey) return;
+    var t = e.target;
+    var onEdge = t === $('sheet') || t === $('margin');
+    var overPaper = !!t.closest('#paper');
+    if (!(onEdge || (e.altKey && overPaper))) return;
+    e.preventDefault();
+    closePop(); hideTools();
+    window.getSelection().removeAllRanges();
+    lasso = { x: e.clientX, y: e.clientY, moved: false };
+    $('sheet').classList.add('lassoing');
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (!lasso || lasso.done) return;
+    if (!lasso.moved && Math.abs(e.clientX - lasso.x) + Math.abs(e.clientY - lasso.y) < 8) return;
+    lasso.moved = true;
+    drawLasso(lasso.x, lasso.y, e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseup', function (e) {
+    if (!lasso || lasso.done) return;
+    var l = lasso;
+    $('sheet').classList.remove('lassoing');
+    if (!l.moved) { clearLasso(); return; }
+    var r = { left: Math.min(l.x, e.clientX), right: Math.max(l.x, e.clientX), top: Math.min(l.y, e.clientY), bottom: Math.max(l.y, e.clientY) };
+    var runs = wordsInBox(r);
+    if (!runs.length) { clearLasso(); return; }
+    l.done = true; // the box stays while the comment is written; closePop clears it
+    var start = runs[0][0], end = runs[runs.length - 1][1];
+    var draft = { type: 'margin', start: start, end: end };
+    if (runs.length > 1) draft.parts = runs.map(function (q) { return [q[0] - start, q[1] - start]; });
+    openPop(null, draft, { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.right - r.left, height: r.bottom - r.top });
+  });
+
   // A DOM position inside the paper -> a character offset in the text.
   function textOffset(node, off) {
     var paper = $('paper');
@@ -9262,6 +9397,11 @@
       var child = paper.childNodes[off];
       if (!child) return piece.text.length;
       node = child; off = 0;
+    }
+    // A circle's span holds pieces of the text: step into the one at this position.
+    if (node.nodeType === 1 && node.classList.contains('circ')) {
+      if (off < node.childNodes.length) { node = node.childNodes[off]; off = 0; }
+      else { var last = node.lastChild; return last ? textOffset(last, last.nodeType === 3 ? last.length : last.childNodes.length) : null; }
     }
     var elem = node.nodeType === 3 ? node.parentNode : node;
     var ins = elem.closest && elem.closest('.ins, .mnum');
@@ -9304,6 +9444,8 @@
       b.hidden = s.start === s.end ? b.dataset.tool !== 'insert' : b.dataset.tool === 'insert';
     });
     $('markTools').querySelector('[data-tool="strike"]').textContent = isStruck(s) ? 'Remove the cross-out' : 'Cross out';
+    $('markTools').querySelector('[data-tool="bold"]').textContent = hasMark('bold', s) ? 'Remove bold' : 'Bold';
+    $('markTools').querySelector('[data-tool="circle"]').textContent = hasMark('circle', s) ? 'Remove circle' : 'Circle';
     tools.hidden = false;
     var rect = s.rect.width || s.rect.height ? s.rect : $('paper').getBoundingClientRect();
     var x = Math.max(8, Math.min(window.innerWidth - tools.offsetWidth - 8, rect.left + rect.width / 2 - tools.offsetWidth / 2));
@@ -9342,8 +9484,8 @@
     if (!b || !toolRange) return;
     var t = b.dataset.tool, r = toolRange;
     hideTools();
-    if (t === 'strike') {
-      if (isStruck(r)) unstrikeRange(r); else strikeRange(r);
+    if (t === 'strike' || t === 'bold' || t === 'circle') {
+      if (hasMark(t, r)) unmarkRange(t, r); else markRange(t, r);
       window.getSelection().removeAllRanges();
       drawPiece();
       queueSave();
@@ -9373,27 +9515,31 @@
     piece.marks.push(m);
     return m;
   }
-  function strikeRange(r) {
+  // Cross-outs, bold and circles: each on a run of the student's words.
+  function markRange(type, r) {
     r = trimRange(r);
     if (r.start >= r.end) return;
-    var already = piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
-    if (!already) newMark({ type: 'strike', start: r.start, end: r.end });
+    var already = piece.marks.some(function (m) { return m.type === type && m.start <= r.start && m.end >= r.end; });
+    if (!already) newMark({ type: type, start: r.start, end: r.end });
   }
-  // Takes the cross-out off these words, keeping it on any crossed-out words either side.
-  function unstrikeRange(r) {
+  // Takes the mark off these words, keeping it on any marked words either side.
+  function unmarkRange(type, r) {
     r = trimRange(r);
     piece.marks.slice().forEach(function (m) {
-      if (m.type !== 'strike' || m.end <= r.start || m.start >= r.end) return;
+      if (m.type !== type || m.end <= r.start || m.start >= r.end) return;
       var left = trimRange({ start: m.start, end: r.start }), right = trimRange({ start: r.end, end: m.end });
       piece.marks = piece.marks.filter(function (x) { return x !== m; });
-      if (left.start < left.end) newMark({ type: 'strike', start: left.start, end: left.end });
-      if (right.start < right.end) newMark({ type: 'strike', start: right.start, end: right.end });
+      if (left.start < left.end) newMark({ type: type, start: left.start, end: left.end });
+      if (right.start < right.end) newMark({ type: type, start: right.start, end: right.end });
     });
   }
-  function isStruck(r) {
+  function hasMark(type, r) {
     r = trimRange(r);
-    return r.start < r.end && piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
+    return r.start < r.end && piece.marks.some(function (m) { return m.type === type && m.start <= r.start && m.end >= r.end; });
   }
+  function strikeRange(r) { markRange('strike', r); }
+  function unstrikeRange(r) { unmarkRange('strike', r); }
+  function isStruck(r) { return hasMark('strike', r); }
   // Backspace (or Delete) with just a caret crosses out the student's letter
   // before (or after) it, or the word with Option/Ctrl, as deleting would.
   // Words already crossed out, spaces and the hidden bold/italic markers are
@@ -9481,7 +9627,18 @@
     $(id).addEventListener('click', function () { toggleFmt(id === 'fmtB' ? 'b' : 'i'); });
   });
   $('paper').addEventListener('keydown', function (e) {
-    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'b' || e.key === 'i')) { e.preventDefault(); toggleFmt(e.key); }
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'b' || e.key === 'i')) {
+      e.preventDefault();
+      // With the student's words selected, ⌘B bolds them; with just a caret it sets how your own words come out.
+      var bs = e.key === 'b' && piece && !reading && selectionInPaper();
+      if (bs && !bs.collapsed) {
+        if (hasMark('bold', bs)) unmarkRange('bold', bs); else markRange('bold', bs);
+        drawPiece(); queueSave(); hideTools();
+        caretAtOffset(bs.end);
+        return;
+      }
+      toggleFmt(e.key);
+    }
     // Tab in the paper suggests an indent there (written in, like typing),
     // instead of moving on to the next field.
     if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && piece && !reading) {
@@ -9607,7 +9764,7 @@
     return 'from \u201c' + wordsAt(text, from) + '\u201d to \u201c' + wordsAt(text, to) + '\u201d';
   }
   function quoteOf(m) {
-    var q = plainOf(piece.text, m.start, m.end).replace(/\s+/g, ' ').trim();
+    var q = markParts(m).map(function (r) { return plainOf(piece.text, r[0], r[1]).replace(/\s+/g, ' ').trim(); }).join(' … ');
     return q.length > 60 ? q.slice(0, 57) + '…' : q;
   }
   function openPop(mark, draft, rect) {
@@ -9629,7 +9786,9 @@
     // A new comment's words stay lit while it's typed (the selection leaves
     // them for the box).
     var sel = window.getSelection();
-    if (draft && m.type === 'margin' && window.CSS && CSS.highlights && sel.rangeCount && !sel.isCollapsed) {
+    if (draft && m.type === 'margin' && window.CSS && CSS.highlights && draft.parts) {
+      try { CSS.highlights.set('draftmark', new (Function.prototype.bind.apply(Highlight, [null].concat(markParts(draft).map(function (q) { return domRange(q[0], q[1]); }).filter(Boolean))))()); } catch (e) {}
+    } else if (draft && m.type === 'margin' && window.CSS && CSS.highlights && sel.rangeCount && !sel.isCollapsed) {
       try { CSS.highlights.set('draftmark', new Highlight(sel.getRangeAt(0).cloneRange())); } catch (e) {}
     }
     var x = Math.max(12, Math.min(window.innerWidth - pop.offsetWidth - 12, rect.left));
@@ -9649,6 +9808,7 @@
   }
   function closePop() {
     $('markPop').hidden = true;
+    clearLasso();
     if (window.CSS && CSS.highlights) CSS.highlights.delete('draftmark');
     popMark = popDraft = null;
     each('.paper .on, .mnote.on, .arrowsvg .on', function (n) { n.classList.remove('on'); });
@@ -9671,6 +9831,7 @@
     } else if (popDraft && (note || popDraft.type === 'arrow')) {
       var nm = { type: popDraft.type, start: popDraft.start, end: popDraft.end, note: note };
       if (popDraft.type === 'arrow') nm.head = popDraft.head;
+      if (popDraft.parts) nm.parts = popDraft.parts;
       addMark(nm);
     }
     window.getSelection().removeAllRanges();
@@ -10244,8 +10405,8 @@
             li.appendChild(el('span', 'kind', 'Arrow'));
             li.appendChild(document.createTextNode(m.quote + (m.note ? ' — ' : '')));
             if (m.note) li.appendChild(el('span', 'note', m.note));
-          } else if (m.type === 'strike') {
-            li.appendChild(el('span', 'kind', 'Crossed out'));
+          } else if (m.type === 'strike' || m.type === 'bold' || m.type === 'circle') {
+            li.appendChild(el('span', 'kind', m.type === 'strike' ? 'Crossed out' : m.type === 'bold' ? 'Bold' : 'Circled'));
             li.appendChild(el('q', null, m.quote));
           } else {
             li.appendChild(el('span', 'kind', 'Added'));
@@ -10295,26 +10456,27 @@
     var num = {};
     allNotes.forEach(function (m, i) { num[m.id] = i + 1; });
     var cuts = {}; cuts[0] = 1; cuts[text.length] = 1;
-    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; });
+    marks.forEach(function (m) { cuts[m.start] = 1; cuts[m.end] = 1; markCutsInto(cuts, m); });
     var topics = printOpts.topics ? topicSentences(text) : [];
     topics.forEach(function (t) { cuts[t[0]] = 1; cuts[t[1]] = 1; });
     var sc = fmtCuts(text, cuts);
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
     var paper = el('div', 'paper');
+    var put = ringPutter(paper, marks);
     pts.forEach(function (pt, i) {
-      margins.forEach(function (m) { if (m.end === pt) paper.appendChild(el('sup', 'mnum', String(num[m.id]))); });
+      margins.forEach(function (m) { if (m.end === pt) put(el('sup', 'mnum', String(num[m.id])), pt, false); });
       marks.forEach(function (m) {
         if (m.type !== 'insert' || m.start !== pt) return;
         var ins = el('span', 'ins');
         fmtRuns(m).forEach(function (r) { ins.appendChild(el('span', (r.f === 'b' || r.f === 'x' ? 'b ' : '') + (r.f === 'i' || r.f === 'x' ? 'i' : ''), r.t)); });
-        paper.appendChild(ins);
+        put(ins, pt, false);
       });
       var next = pts[i + 1];
       if (next === undefined || next === pt) return;
-      var on = marks.filter(function (m) { return (m.type === 'margin' || m.type === 'strike') && m.start <= pt && m.end >= next; });
+      var on = marks.filter(function (m) { return (m.type === 'margin' || m.type === 'strike' || m.type === 'bold') && markCovers(m, pt, next); });
       if (sc.hide[pt]) return;
-      var cls = (topics.some(function (t) { return t[0] <= pt && t[1] >= next; }) ? 'topic ' : '') + (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl ' : '') + FMT_CLS[sc.f[pt]];
-      paper.appendChild(el('span', cls.trim(), text.slice(pt, next)));
+      var cls = (topics.some(function (t) { return t[0] <= pt && t[1] >= next; }) ? 'topic ' : '') + (on.some(function (m) { return m.type === 'strike'; }) ? 'strike ' : '') + (on.some(function (m) { return m.type === 'margin'; }) ? 'hl ' : '') + (on.some(function (m) { return m.type === 'bold'; }) ? 'tb ' : '') + FMT_CLS[sc.f[pt]];
+      put(el('span', cls.trim(), text.slice(pt, next)), pt, true);
     });
     if (printOpts.lined) {
       var pb = el('div', 'ppbody lined' + (printOpts.lined === 'wide' ? ' wide' : ''));
@@ -10326,7 +10488,7 @@
       var notes = el('div', 'pnotes');
       allNotes.forEach(function (m) {
         if (m.type === 'arrow') { notes.appendChild(el('p', null, '[' + num[m.id] + '] Arrow ' + arrowQuote(text, m) + (m.note ? ' — ' + m.note : ''))); return; }
-        var q = plainOf(text, m.start, m.end).replace(/\s+/g, ' ').trim();
+        var q = markParts(m).map(function (r) { return plainOf(text, r[0], r[1]).replace(/\s+/g, ' ').trim(); }).join(' … ');
         notes.appendChild(el('p', null, '[' + num[m.id] + '] “' + (q.length > 80 ? q.slice(0, 77) + '…' : q) + '” — ' + m.note));
       });
       box.appendChild(notes);
