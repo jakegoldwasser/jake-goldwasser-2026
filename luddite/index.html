@@ -4698,11 +4698,27 @@
   // grading and its printing, the same every time, so its papers can be
   // marked without knowing whose they are. Home, a class and a student's
   // page always show names. Nothing is stored differently; it's only how
-  // names are drawn. Which sessions hide names is remembered on this device
-  // (luddite.anonRooms). Names key lists the names behind the labels on the
+  // names are drawn. Hiding is the session's own setting (room.anonNames, the
+  // anonNames action), so it holds on every device until switched off;
+  // luddite.anonRooms only caches it, so a page opens right before the session
+  // loads. Names key lists the names behind the labels on the
   // page showing: who() notes each one it draws, and show() starts afresh.
   var anonRooms = {};
   try { anonRooms = JSON.parse(load('luddite.anonRooms') || '{}') || {}; } catch (e) { anonRooms = {}; }
+  function keepAnonCache() { store('luddite.anonRooms', Object.keys(anonRooms).length ? JSON.stringify(anonRooms) : null); }
+  // A session as the server has it: take its setting. One hidden on this
+  // computer before the setting was the session's is saved to it, once.
+  function noteAnon(room) {
+    if (!room || !room.code) return;
+    var was = !!anonRooms[room.code], on = !!room.anonNames;
+    if (room.anonNames === undefined && was) { api('/luddite/assignment', { code: room.code, action: 'anonNames', subs: [], on: true }).catch(function () {}); on = true; }
+    if (on) anonRooms[room.code] = 1; else delete anonRooms[room.code];
+    if (on === was) return;
+    keepAnonCache();
+    if (anonCtx !== room.code) return;
+    syncAnonBtn();
+    if (!$('markScreen').hidden && piece) showPieceHead();
+  }
   var anonCtx = null; // the writing session whose pages are showing (its page, then grading or printing from it)
   var anonSeen = {};
   function anonOn() { return !!(anonCtx && anonRooms[anonCtx]) && isTeacher && !previewing; }
@@ -4725,13 +4741,18 @@
     $('anonKeyBtn').hidden = !on;
     document.body.classList.toggle('is-anon', on);
   }
-  $('anonBtn').addEventListener('click', function () {
+  $('anonBtn').addEventListener('click', async function () {
     if (!anonCtx) return;
-    if (anonRooms[anonCtx]) delete anonRooms[anonCtx]; else anonRooms[anonCtx] = 1;
-    store('luddite.anonRooms', Object.keys(anonRooms).length ? JSON.stringify(anonRooms) : null);
-    syncAnonBtn();
-    $('anonKeyBox').hidden = true;
-    redrawTeacher();
+    var code = anonCtx, on = !anonRooms[code];
+    var flip = function (v) { if (v) anonRooms[code] = 1; else delete anonRooms[code]; keepAnonCache(); syncAnonBtn(); $('anonKeyBox').hidden = true; redrawTeacher(); };
+    flip(on);
+    try {
+      var data = await api('/luddite/assignment', { code: code, action: 'anonNames', subs: [], on: on });
+      if (teacherRoom && teacherRoom.code === code) teacherRoom = data.room;
+    } catch (e) {
+      flip(!on);
+      tell(on ? 'Couldn’t Hide Names' : 'Couldn’t Show Names', 'Check your connection and try again.');
+    }
   });
   function anonKeyList() {
     return Object.keys(anonSeen).map(function (k) { return anonSeen[k]; }).sort(function (a, b) { return a.alias.localeCompare(b.alias); });
@@ -5600,6 +5621,7 @@
   async function gradeSession(code) {
     var room;
     try { room = (await api('/luddite/assignment?code=' + encodeURIComponent(code))).room; } catch (e) { tell('Couldn’t Open That Session', 'Try again.'); return; }
+    noteAnon(room);
     // Its papers by name (a student writing again still has their paper, with its comments).
     var papers = latestPerStudent(room.submissions).filter(function (x) { return x.stored; })
       .sort(function (a, b) { return who(a.name, a.email).localeCompare(who(b.name, b.email)); });
@@ -6628,6 +6650,7 @@
       var data = await api('/luddite/assignment?code=' + encodeURIComponent(teacherRoom.code));
       if (!data.room.students) { showDash(); return; } // not this teacher's writing session
       teacherRoom = data.room;
+      noteAnon(data.room);
       teacherRoster = data.roster || null;
       renderRoom(data.room, data.drive);
       loadLive(data.room);
@@ -9371,15 +9394,37 @@
     r = trimRange(r);
     return r.start < r.end && piece.marks.some(function (m) { return m.type === 'strike' && m.start <= r.start && m.end >= r.end; });
   }
-  // The cross-out the caret sits just after (Backspace) or just before (Delete), spaces aside.
-  function strikeBeside(p, back) {
-    var found = null;
-    piece.marks.forEach(function (m) {
-      if (m.type !== 'strike') return;
-      var gap = back ? piece.text.slice(m.end, p) : piece.text.slice(p, m.start);
-      if ((back ? m.end <= p : m.start >= p) && !/\S/.test(gap) && (!found || (back ? m.end > found.end : m.start < found.start))) found = m;
-    });
-    return found;
+  // Backspace (or Delete) with just a caret crosses out the student's letter
+  // before (or after) it, or the word with Option/Ctrl, as deleting would.
+  // Words already crossed out, spaces and the hidden bold/italic markers are
+  // stepped over as if gone, so pressing again keeps growing the one cross-out.
+  // Returns where the caret goes, or -1 if there's nothing left to cross out.
+  function strikeFromCaret(p, back, word) {
+    var text = piece.text, hide = fmtScan(text).hide;
+    var gone = function (i) { return hide[i] || /\s/.test(text.charAt(i)) || isStruck({ start: i, end: i + 1 }); };
+    var i = back ? p - 1 : p;
+    while (i >= 0 && i < text.length && gone(i)) i += back ? -1 : 1;
+    if (i < 0 || i >= text.length) return -1;
+    var a = i, b = i + 1;
+    if (word) {
+      while (a > 0 && !hide[a - 1] && !/\s/.test(text.charAt(a - 1)) && !isStruck({ start: a - 1, end: a })) a--;
+      while (b < text.length && !hide[b] && !/\s/.test(text.charAt(b)) && !isStruck({ start: b, end: b + 1 })) b++;
+      if (back) b = i + 1; else a = i;
+    }
+    // Join the cross-outs beside it (with only spaces or markers between) into one.
+    var near = function (m) {
+      if (m.type !== 'strike' || m.orphan || m.note) return false;
+      if (m.start <= b && m.end >= a) return true; // touching or overlapping
+      var lo = m.end < a ? m.end : b, hi = m.end < a ? a : m.start; // the gap between them
+      for (var k = lo; k < hi; k++) if (!hide[k] && /\S/.test(text.charAt(k))) return false;
+      return true;
+    };
+    for (var m = piece.marks.find(near); m; m = piece.marks.find(near)) {
+      a = Math.min(a, m.start); b = Math.max(b, m.end);
+      piece.marks = piece.marks.filter(function (x) { return x !== m; });
+    }
+    newMark({ type: 'strike', start: a, end: b });
+    return back ? a : b;
   }
   function caretAfter(node) {
     var r = document.createRange();
@@ -9494,14 +9539,15 @@
       if (node) caretAfter(node); else caretAtOffset(s.start);
       return;
     }
-    // Backspace right after a cross-out (or Delete right before one) takes the cross-out back.
-    var back = t.indexOf('Backward') !== -1, st = strikeBeside(s.start, back);
-    if (st) {
-      piece.marks = piece.marks.filter(function (x) { return x !== st; });
-      drawPiece();
-      queueSave();
-      caretAtOffset(s.start);
-    }
+    // Anywhere else in the student's words, Backspace crosses out the letter before the caret
+    // (Delete the one after; with Option/Ctrl, the word). Undo, or selecting crossed-out words
+    // and pressing Backspace, takes it back.
+    var back = t.indexOf('Backward') !== -1;
+    var to = strikeFromCaret(s.start, back, t.indexOf('Word') !== -1 || t.indexOf('Line') !== -1);
+    if (to < 0) return;
+    drawPiece();
+    typing = true; queueSave(); typing = false; // a run of Backspaces undoes as one
+    caretAtOffset(to);
   });
   // Keyboards that compose characters can't be stopped beforehand; redraw
   // from the marks so the student's text is never left changed.

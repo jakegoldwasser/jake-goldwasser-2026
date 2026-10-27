@@ -2010,6 +2010,8 @@ async function routeLuddite(event, method, path, info) {
       else if (body.action === 'homePrint') return { ...r, homePrint: !!body.on };
       // Students may reread their own papers, read-only, with no comments or grade (/luddite/reread).
       else if (body.action === 'reread') return { ...r, reread: !!body.on };
+      // Hide names: the teacher's pages for this session show labels, not names, on every device until it's switched off.
+      else if (body.action === 'anonNames') return { ...r, anonNames: !!body.on };
       else if (body.action === 'atHome') {
         const on = !!body.on;
         const students = { ...r.students };
