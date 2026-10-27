@@ -9307,8 +9307,8 @@
 
   // ---- The lasso ----
   // Option-drag over the paper (or a plain drag from the sheet's blank edges
-  // or the margin) draws a box; the words it touches are gathered into one
-  // comment, on just those words (`parts`), however they fall across lines.
+  // or the margin) draws a box; the circled words it touches are gathered into
+  // one comment, on just those words (`parts`), however they fall across lines.
   // The box is only there while the comment is written.
   var lasso = null;
   function clearLasso() { each('#sheet > .lassobox', function (n) { n.parentNode.removeChild(n); }); $('sheet').classList.remove('lassoing'); lasso = null; }
@@ -9320,29 +9320,23 @@
     b.style.width = Math.abs(x2 - x1) + 'px';
     b.style.height = Math.abs(y2 - y1) + 'px';
   }
-  // The student's words whose letters the box (screen coordinates) touches, as runs in the text.
+  // The circles the box (screen coordinates) touches, each whole, in text order:
+  // only circled words are gathered into the comment (Jake, 2026-10-27).
   function wordsInBox(r) {
-    var hit = [], text = piece.text, hide = fmtScan(text).hide;
-    each('#paper .seg', function (seg) {
-      var t = seg.firstChild, o = Number(seg.dataset.o);
-      if (!t || t.nodeType !== 3) return;
-      var re = /\S+/g, w;
-      while ((w = re.exec(t.data))) {
-        var rg = document.createRange();
-        rg.setStart(t, w.index); rg.setEnd(t, w.index + w[0].length);
-        var rects = rg.getClientRects();
-        for (var i = 0; i < rects.length; i++) {
-          var q = rects[i];
-          if (q.right >= r.left && q.left <= r.right && q.bottom >= r.top && q.top <= r.bottom) { hit.push([o + w.index, o + w.index + w[0].length]); break; }
-        }
+    var hit = [];
+    liveMarks().forEach(function (m) {
+      if (m.type !== 'circle') return;
+      var rg = domRange(m.start, m.end), rects = rg ? rg.getClientRects() : [];
+      for (var i = 0; i < rects.length; i++) {
+        var q = rects[i];
+        if (q.right >= r.left && q.left <= r.right && q.bottom >= r.top && q.top <= r.bottom) { hit.push([m.start, m.end]); break; }
       }
     });
     hit.sort(function (a, b) { return a[0] - b[0]; });
     var runs = [];
     hit.forEach(function (h) {
-      var last = runs[runs.length - 1], gapOk = !!last;
-      if (last) for (var k = last[1]; k < h[0]; k++) if (!hide[k] && /\S/.test(text.charAt(k))) { gapOk = false; break; }
-      if (gapOk) last[1] = Math.max(last[1], h[1]); else runs.push([h[0], h[1]]);
+      var last = runs[runs.length - 1];
+      if (last && h[0] <= last[1]) last[1] = Math.max(last[1], h[1]); else runs.push([h[0], h[1]]);
     });
     return runs;
   }
