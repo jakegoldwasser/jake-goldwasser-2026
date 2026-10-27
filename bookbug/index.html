@@ -1696,6 +1696,21 @@
   .move-list { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
   .move-group { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); padding: 8px 10px 2px; }
   .move-row { width: 100%; border: none; background: none; font: inherit; text-align: left; color: inherit; }
+  /* Move/Copy to another book: the entries to send, ticked, above the books */
+  .move-pick-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .move-pick-head .move-group { padding-left: 0; }
+  .move-all { border: none; background: none; font: inherit; font-size: 13px; color: var(--accent); cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
+  .move-pick { max-height: 32vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 0; margin: 4px 0 12px; }
+  .move-pick-sec { font-size: 12px; font-weight: 700; color: var(--ink-faint); padding: 8px 12px 2px; }
+  .move-pick-row { display: flex; align-items: center; gap: 10px; padding: 5px 12px; font-size: 15px; cursor: pointer; user-select: none; }
+  .move-pick-row:hover { background: var(--accent-soft); }
+  .move-pick-row span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .move-pick-row input { flex: none; width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+  .move-to { padding-left: 0; }
+  /* Nothing ticked: the books can't be clicked yet */
+  .move-list.is-off { opacity: .45; pointer-events: none; }
+  .ask-title { font-size: 18px; margin: 0 0 8px; text-wrap: balance; }
+  .ask-text { margin: 0 0 16px; line-height: 1.5; }
   .bb-toast {
     position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); z-index: 96; max-width: calc(100vw - 32px);
     background: var(--ink); color: #FFFFFF; font-size: 13.5px; padding: 10px 16px; border-radius: 999px; box-shadow: 3px 3px 0 var(--line-strong);
@@ -4114,6 +4129,7 @@
 <div class="entry-menu" id="bookMenu" role="menu" hidden>
   <button type="button" role="menuitem" data-action="share" hidden>Share a read-only link…</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
+  <button type="button" role="menuitem" data-action="hybrid" hidden>Convert to hybrid book…</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete…</button>
 </div>
@@ -10984,49 +11000,170 @@
     entryMenuBtn = null;
     entryMenuIndex = null;
   }
-  // ---- Moving an entry to another book ----
-  // Any other poetry collection, novel or essay collection this account
-  // has (not archived). The entry goes to the end of that book, with any
-  // pictures it carries; nothing is lost if names collide.
+  // ---- Moving or copying entries to another book ----
+  // Any other text book or cartoon batch this account has (not archived).
+  // The entries go to the end of that book, with any pictures they carry;
+  // nothing is lost if picture names collide.
   function moveTargets() {
     return activeBooks().filter(function (c) { return c.id !== state.chapbookId && c.data; });
   }
-  // With `keep`, a copy goes over (under a new id) and the entry stays.
-  function moveEntryTo(idx, targetId, keep) {
-    flushPendingSave();
-    var poem = state.poems[idx], target = library.filter(function (c) { return c.id === targetId; })[0];
-    if (!poem || !target || !target.data) return;
-    var data = target.data, copy = JSON.parse(JSON.stringify(poem));
-    delete copy.sample; delete copy.sampleTitle;
-    // Into a hybrid book, a piece keeps being what its own book made it.
-    if (bookFormOf(data) === 'hybrid' && !isHybrid() && !isSection(copy)) copy.genre = GENRE_FOR_FORM[bookFormOf(state)] || 'poem';
-    if (keep) copy.id = makeId();
+  function cartoonTargets() { return activeCartoonBooks().filter(function (c) { return c.data; }); }
+  // What an entry of this book is, whatever book it's in: its own genre in
+  // a hybrid book, else its book's (a novel's entries are chapters).
+  function genreHere(poem) { return isHybrid() ? genreOf(poem) : (GENRE_FOR_FORM[bookFormOf(state)] || 'poem'); }
+  var GENRE_PLURAL = { poem: 'poems', chapter: 'chapters', essay: 'essays', scene: 'scenes', cartoon: 'cartoons' };
+  // "“Ode”", "15 poems", "3 pieces" (mixed genres).
+  function entriesPhrase(poems) {
+    if (poems.length === 1) return '“' + entryLabel(poems[0]) + '”';
+    var g = poems.map(genreHere), same = g.every(function (x) { return x === g[0]; });
+    return poems.length + ' ' + (same ? GENRE_PLURAL[g[0]] : 'pieces');
+  }
+  // A text book becomes a hybrid book: every entry keeps being what it was
+  // (a novel's chapters stay chapters) and others can join it.
+  function convertTextToHybrid(data) {
+    var from = bookFormOf(data);
+    if (from === 'hybrid') return;
+    var g = GENRE_FOR_FORM[from] || 'poem';
+    (data.poems || []).concat(data.archivedPoems || [], (data.deletedPoems || []).map(function (d) { return d && d.poem; })).forEach(function (p) {
+      if (p && !isSection(p) && !HYBRID_GENRES[p.genre]) p.genre = g;
+    });
+    data.form = 'hybrid';
+    addHomeForm('hybrid');
+  }
+  // Puts copies of `poems` at the end of the text book `target` (with
+  // `keep`, under new ids; otherwise they leave this book).
+  function sendToTextBook(poems, target, keep) {
+    var data = target.data, toHybrid = bookFormOf(data) === 'hybrid';
     data.poems = data.poems || [];
     data.images = data.images || {};
-    copy.lines = (copy.lines || []).map(function (line) {
-      var m = IMAGE_LINE_RE.exec(line);
-      var img = m && state.images && state.images['img' + m[1]];
-      if (!img) return line;
-      var key = 'img' + m[1];
-      if (data.images[key] && data.images[key].data !== img.data) {
-        var n = 1;
-        while (data.images['img' + n]) n++;
-        key = 'img' + n;
-      }
-      data.images[key] = img;
-      return line.replace(/\[image \d+/, '[image ' + key.slice(3));
+    poems.forEach(function (poem) {
+      var copy = JSON.parse(JSON.stringify(poem));
+      delete copy.sample; delete copy.sampleTitle;
+      // Into a hybrid book, a piece keeps being what its own book made it;
+      // into any other, it becomes that book's kind of entry.
+      if (toHybrid) copy.genre = genreHere(poem); else delete copy.genre;
+      if (keep) copy.id = makeId();
+      copy.lines = (copy.lines || []).map(function (line) {
+        var m = IMAGE_LINE_RE.exec(line);
+        var img = m && state.images && state.images['img' + m[1]];
+        if (!img) return line;
+        var key = 'img' + m[1];
+        if (data.images[key] && data.images[key].data !== img.data) {
+          var n = 1;
+          while (data.images['img' + n]) n++;
+          key = 'img' + n;
+        }
+        data.images[key] = img;
+        return line.replace(/\[image \d+/, '[image ' + key.slice(3));
+      });
+      data.poems.push(copy);
     });
-    data.poems.push(copy);
     target.updatedAt = Date.now();
+    finishSend(poems, target.title || 'Untitled book', keep);
+  }
+  function finishSend(poems, title, keep) {
+    var phrase = entriesPhrase(poems);
     if (!keep) {
-      state.poems.splice(idx, 1);
-      delete expandedCompactIds[poem.id];
+      var gone = {};
+      poems.forEach(function (p) { gone[p.id] = true; delete expandedCompactIds[p.id]; });
+      state.poems = state.poems.filter(function (p) { return !gone[p.id]; });
     }
     persistLibrary();
+    persistCbLibrary();
     persist();
     renderAll();
     renderChapbooksList();
-    showToast((keep ? 'Copied “' : 'Moved “') + entryLabel(poem) + '” to ' + (target.title || 'Untitled book') + '.');
+    showToast((keep ? 'Copied ' : 'Moved ') + phrase + ' to ' + title + '.');
+  }
+  // A hybrid book's cartoons into a cartoon batch, as cartoons: each
+  // [image N] line starts one, the lines after it its caption.
+  async function sendCartoonsToBatch(poems, entry, keep) {
+    cbFlushPending();
+    var data = entry.data;
+    data.cartoons = data.cartoons || [];
+    data.images = data.images || {};
+    for (var i = 0; i < poems.length; i++) {
+      var cur = null, made = [];
+      (poems[i].lines || []).forEach(function (line) {
+        var m = IMAGE_LINE_RE.exec(line);
+        if (m) { cur = { img: state.images && state.images['img' + m[1]], caption: [] }; made.push(cur); }
+        else if (cur) cur.caption.push(line);
+        else { cur = { img: null, caption: [line] }; made.push(cur); }
+      });
+      for (var j = 0; j < made.length; j++) {
+        var id = null, im = made[j].img;
+        if (im && im.data) {
+          var blob = await (await fetch(im.data)).blob();
+          id = pbUid('img');
+          await pbDbDo('readwrite', function (st) { return st.put({ blob: blob, type: blob.type }, id); });
+          pbImgEls[id] = await pbBlobToImage(blob);
+          data.images[id] = { w: im.w, h: im.h, type: blob.type };
+          var q = pbImgQueue(); q.push(id); pbSetImgQueue(q);
+        }
+        // (spoken: false, so the caption comes over exactly as written)
+        data.cartoons.push(cbNormalizeCartoon({ img: id, caption: made[j].caption.join('\n').trim(), spoken: false }));
+      }
+    }
+    pbFlushImageQueue();
+    entry.updatedAt = Date.now();
+    if (cbId === entry.id) cbState = normalizeCartoonBook(data);
+    finishSend(poems, entry.title || 'Untitled cartoon batch', keep);
+  }
+  // Asks before a book changes type. Resolves to the chosen button's key.
+  function askDialog(title, text, buttons) {
+    return new Promise(function (resolve) {
+      var d = makeDialog('move-box', title, '<h2 class="ask-title"></h2><p class="ask-text"></p><div class="modal-actions"></div>');
+      d.box.querySelector('.ask-title').textContent = title;
+      d.box.querySelector('.ask-text').textContent = text;
+      var row = d.box.querySelector('.modal-actions'), done = false;
+      function onEsc(e) { if (e.key === 'Escape') pick(null); }
+      function pick(k) { if (done) return; done = true; document.removeEventListener('keydown', onEsc, true); d.close(); resolve(k); }
+      buttons.forEach(function (b) {
+        var el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'btn' + (b.primary ? ' btn-primary' : '');
+        el.textContent = b.label;
+        el.addEventListener('click', function () { pick(b.key); });
+        row.appendChild(el);
+      });
+      // Esc or a click outside counts as Cancel.
+      d.ov.addEventListener('click', function (e) { if (e.target === d.ov) pick(null); });
+      document.addEventListener('keydown', onEsc, true);
+      setTimeout(function () { var p = row.querySelector('.btn-primary'); if (p) p.focus(); }, 0);
+    });
+  }
+  // Sends the entries `ids` to `entry` (a text book, or with `isBatch` a
+  // cartoon batch). A book that can't hold them as they are is offered
+  // conversion to a hybrid book first.
+  async function sendEntries(ids, entry, isBatch, keep) {
+    flushPendingSave();
+    var want = {};
+    ids.forEach(function (id) { want[id] = true; });
+    var poems = state.poems.filter(function (p) { return want[p.id] && !isSection(p); });
+    if (!poems.length) return;
+    var genres = poems.map(genreHere), verb = keep ? 'copy' : 'move', Verb = keep ? 'Copy' : 'Move';
+    var title = entry.title || (isBatch ? 'Untitled cartoon batch' : 'Untitled book');
+    var them = poems.length === 1 ? 'it' : 'them';
+    if (isBatch) {
+      if (genres.every(function (g) { return g === 'cartoon'; })) { await sendCartoonsToBatch(poems, entry, keep); return; }
+      var yes = await askDialog('Do you want to convert “' + title + '” to a hybrid book?',
+        'A cartoon batch holds only cartoons. As a hybrid book it keeps its cartoons and can take ' + entriesPhrase(poems) + ' too. The cartoon batch itself goes to the archive.',
+        [{ key: null, label: 'Cancel' }, { key: 'convert', label: 'Convert and ' + verb, primary: true }]);
+      if (!yes) return;
+      var made = await convertCartoonBatch(entry.id);
+      if (made) sendToTextBook(poems, made, keep);
+      return;
+    }
+    var form = bookFormOf(entry.data), own = GENRE_FOR_FORM[form] || 'poem';
+    if (form !== 'hybrid' && genres.some(function (g) { return g !== own; })) {
+      var kind = BOOK_FORMS[form].add.toLowerCase();
+      var ans = await askDialog('Do you want to convert “' + title + '” to a hybrid book?',
+        'It’s a ' + kind + ', so ' + entriesPhrase(poems) + ' would be set as ' + (poems.length === 1 ? (/^[aeiou]/.test(own) ? 'an ' : 'a ') + own : GENRE_PLURAL[own]) + '. As a hybrid book it keeps its ' + GENRE_PLURAL[own] + ' and sets each piece as what it is.',
+        [{ key: null, label: 'Cancel' }, { key: 'as', label: Verb + ' as ' + (poems.length === 1 ? (/^[aeiou]/.test(own) ? 'an ' : 'a ') + own : GENRE_PLURAL[own]) }, { key: 'convert', label: 'Convert and ' + verb, primary: true }]);
+      if (!ans) return;
+      if (ans === 'convert') convertTextToHybrid(entry.data);
+    }
+    sendToTextBook(poems, entry, keep);
   }
   // ---- Moving or copying an entry to another section of this book ----
   // The section an entry sits in (null before the first section).
@@ -11110,43 +11247,104 @@
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
     box.querySelector('.modal-actions .btn').addEventListener('click', close);
   }
+  // Move or Copy to another book: which entries (the one whose ⋯ opened
+  // it, ticked; tick more, Shift-click for a run, or Select all), then
+  // which book. One click on a book sends them all.
   function openMoveDialog(idx, keep) {
     var poem = state.poems[idx];
-    if (!poem) return;
-    var ov = document.createElement('div');
-    ov.className = 'modal-overlay open';
-    var box = document.createElement('div');
-    box.className = 'modal-box move-box';
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-modal', 'true');
-    box.innerHTML = '<p style="margin-top:0;"></p><div class="move-list"></div><div class="modal-actions"><button class="btn" type="button">Cancel</button></div>';
-    box.querySelector('p').textContent = (keep ? 'Copy “' : 'Move “') + entryLabel(poem) + '” to:';
-    var list = box.querySelector('.move-list');
-    TEXT_FORM_KEYS.forEach(function (form) {
-      var books = moveTargets().filter(function (c) { return bookFormOf(c.data) === form; }).sort(function (a, b) { return b.updatedAt - a.updatedAt; });
-      if (!books.length) return;
+    if (!poem || isSection(poem)) return;
+    var nouns = formNouns(), verb = keep ? 'Copy' : 'Move';
+    var d = makeDialog('move-box', verb + ' to another book',
+      '<div class="move-pick-head"><span class="move-group"></span><button type="button" class="move-all"></button></div>' +
+      '<div class="move-pick"></div>' +
+      '<div class="move-group move-to"></div><div class="move-list"></div>' +
+      '<div class="modal-actions"><button class="btn" type="button">Cancel</button></div>');
+    var box = d.box, pick = box.querySelector('.move-pick'), list = box.querySelector('.move-list');
+    box.querySelector('.move-pick-head .move-group').textContent = Cap(nouns.many) + ' to ' + verb.toLowerCase();
+    box.querySelector('.modal-actions .btn').addEventListener('click', d.close);
+    // The entries, under their sections' names.
+    var checks = [], last = null;
+    state.poems.forEach(function (p) {
+      if (isSection(p)) {
+        var h = document.createElement('div');
+        h.className = 'move-pick-sec';
+        h.textContent = sectionLabel(p);
+        pick.appendChild(h);
+        return;
+      }
+      var row = document.createElement('label');
+      row.className = 'move-pick-row';
+      row.innerHTML = '<input type="checkbox"><span></span>';
+      var cb = row.querySelector('input');
+      cb.checked = p === poem;
+      cb.dataset.id = p.id;
+      row.querySelector('span').textContent = entryLabel(p) + (isHybrid() ? ' · ' + entryNoun(p) : '');
+      cb.addEventListener('click', function (e) {
+        // Shift-click ticks (or unticks) everything from the last one clicked.
+        if (e.shiftKey && last !== null) {
+          var a = Math.min(last, checks.indexOf(cb)), b = Math.max(last, checks.indexOf(cb));
+          for (var i = a; i <= b; i++) checks[i].checked = cb.checked;
+        }
+        last = checks.indexOf(cb);
+        sync();
+      });
+      checks.push(cb);
+      pick.appendChild(row);
+    });
+    var allBtn = box.querySelector('.move-all');
+    allBtn.addEventListener('click', function () {
+      var on = !checks.every(function (c) { return c.checked; });
+      checks.forEach(function (c) { c.checked = on; });
+      sync();
+    });
+    var toLabel = box.querySelector('.move-to');
+    function chosen() { return checks.filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.id; }); }
+    function sync() {
+      var n = chosen().length;
+      allBtn.textContent = checks.every(function (c) { return c.checked; }) ? 'Select none' : 'Select all';
+      toLabel.textContent = n ? verb + ' ' + (n === 1 ? 'it' : 'these ' + n) + ' to' : 'Tick at least one';
+      list.classList.toggle('is-off', !n);
+    }
+    function addRow(entry, meta, isBatch) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chapbook-row move-row';
+      b.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>';
+      b.querySelector('.chapbook-title').textContent = entry.title || (isBatch ? 'Untitled cartoon batch' : 'Untitled book');
+      b.querySelector('.chapbook-meta').textContent = meta;
+      b.addEventListener('click', function () {
+        var ids = chosen();
+        if (!ids.length) return;
+        d.close();
+        sendEntries(ids, entry, isBatch, keep);
+      });
+      list.appendChild(b);
+    }
+    function group(label) {
       var h = document.createElement('div');
       h.className = 'move-group';
-      h.textContent = BOOK_FORMS[form].shelf;
+      h.textContent = label;
       list.appendChild(h);
-      books.forEach(function (c) {
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'chapbook-row move-row';
-        b.innerHTML = '<span class="chapbook-title"></span><span class="chapbook-meta"></span>';
-        b.querySelector('.chapbook-title').textContent = c.title || 'Untitled book';
-        b.querySelector('.chapbook-meta').textContent = nounFor(countEntries(c.data.poems || []), c.data);
-        b.addEventListener('click', function () { close(); moveEntryTo(idx, c.id, keep); });
-        list.appendChild(b);
-      });
+    }
+    var newest = function (a, b) { return b.updatedAt - a.updatedAt; };
+    TEXT_FORM_KEYS.forEach(function (form) {
+      var books = moveTargets().filter(function (c) { return bookFormOf(c.data) === form; }).sort(newest);
+      if (!books.length) return;
+      group(BOOK_FORMS[form].shelf);
+      books.forEach(function (c) { addRow(c, nounFor(countEntries(c.data.poems || []), c.data), false); });
     });
-    ov.appendChild(box);
-    document.body.appendChild(ov);
-    function close() { ov.remove(); document.removeEventListener('keydown', onKey, true); }
-    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
-    document.addEventListener('keydown', onKey, true);
-    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
-    box.querySelector('.modal-actions .btn').addEventListener('click', close);
+    var batches = cartoonTargets().sort(newest);
+    if (batches.length) {
+      group(BOOK_FORMS.cartoon.shelf);
+      batches.forEach(function (c) {
+        var n = (c.data.cartoons || []).length;
+        addRow(c, n + (n === 1 ? ' cartoon' : ' cartoons'), true);
+      });
+    }
+    sync();
+    // The ticked entry in view, for a long book.
+    var first = pick.querySelector('input:checked');
+    if (first) first.closest('label').scrollIntoView({ block: 'nearest' });
   }
   // A short note at the foot of the window.
   var toastEl = null, toastTimer = null;
@@ -11241,7 +11439,7 @@
     btn.setAttribute('aria-expanded', 'true');
     var poem = state.poems[index], nouns = formNouns();
     var isEntry = !!poem && !isSection(poem);
-    var hasBooks = isEntry && moveTargets().length > 0, hasSecs = isEntry && sectionTargets(index).length > 0;
+    var hasBooks = isEntry && (moveTargets().length + cartoonTargets().length) > 0, hasSecs = isEntry && sectionTargets(index).length > 0;
     entryMenu.querySelector('[data-action="move"]').hidden = !hasBooks;
     entryMenu.querySelector('[data-action="copy-book"]').hidden = !hasBooks;
     entryMenu.querySelector('[data-action="move-section"]').hidden = !hasSecs;
@@ -15452,6 +15650,10 @@
     btn.setAttribute('aria-expanded', 'true');
     bookMenu.querySelector('[data-action="archive"]').textContent = entry.archived ? 'Unarchive' : 'Archive';
     bookMenu.querySelector('[data-action="delete"]').hidden = !entry.archived;
+    // Any text book but a hybrid one, or a cartoon batch, can become a hybrid book.
+    var isText = library.indexOf(entry) !== -1;
+    bookMenu.querySelector('[data-action="hybrid"]').hidden = entry.archived ||
+      !(cbEntry(entry.id) === entry || (isText && bookFormOf(entry.id === state.chapbookId ? state : entry.data) !== 'hybrid'));
     // From inside the book, once signed in (links live in the account).
     // Picture books, cartoon batches and comics need the backend that
     // shares every kind (cloud-sync-backend's SHARE_LIBRARIES) deployed.
@@ -15472,6 +15674,7 @@
     var fromEditor = bookMenuFromEditor;
     closeBookMenu();
     if (item.dataset.action === 'share') { openShareDialog(); return; }
+    if (item.dataset.action === 'hybrid') { askConvertToHybrid(entry); return; }
     if (cmEntry(entry.id) === entry) {
       if (item.dataset.action === 'duplicate') duplicateComic(entry.id, fromEditor);
       else if (item.dataset.action === 'archive') setComicArchived(entry.id, !entry.archived);
@@ -15494,6 +15697,31 @@
     else if (item.dataset.action === 'archive') setChapbookArchived(entry.id, !entry.archived);
     else deleteChapbookForever(entry.id);
   });
+  // Book menu › Convert to hybrid book…
+  async function askConvertToHybrid(entry) {
+    var isBatch = cbEntry(entry.id) === entry;
+    var title = entry.title || (isBatch ? 'Untitled cartoon batch' : 'Untitled book');
+    var data = isBatch ? null : entry.id === state.chapbookId ? state : entry.data;
+    var own = data ? GENRE_PLURAL[GENRE_FOR_FORM[bookFormOf(data)] || 'poem'] : 'cartoons';
+    var ok = await askDialog('Convert “' + title + '” to a hybrid book?',
+      'Its ' + own + ' stay as they are, and you can add poems, chapters, essays, scenes and cartoons to it.' + (isBatch ? ' The cartoon batch itself goes to the archive.' : ''),
+      [{ key: null, label: 'Cancel' }, { key: 'yes', label: 'Convert', primary: true }]);
+    if (!ok) return;
+    if (isBatch) { await convertCartoonBatch(entry.id); return; }
+    if (entry.id === state.chapbookId) {
+      flushPendingSave();
+      convertTextToHybrid(state);
+      persist();
+      renderAll();
+    } else {
+      convertTextToHybrid(entry.data);
+      entry.updatedAt = Date.now();
+      persistLibrary();
+      if (cloudAuthToken) syncLibraryToCloud();
+    }
+    renderChapbooksList();
+    showToast('“' + title + '” is a hybrid book now.');
+  }
   document.addEventListener('click', function (e) { if (!bookMenu.contains(e.target)) closeBookMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBookMenu(); });
   window.addEventListener('scroll', closeBookMenu, true);
@@ -22567,6 +22795,73 @@
     persistCbLibrary();
     if (openCopy) openCartoonBook(copy.id); else renderChapbooksList();
     if (cloudAuthToken) await syncLibraryToCloud();
+  }
+  // A cartoon batch becomes a hybrid book: a new book of the same name with
+  // each cartoon a cartoon piece (its drawing, then its caption), archived
+  // cartoons in its archive. The batch goes to the archive, so nothing is
+  // lost. Resolves to the new book's library entry, or null if it couldn't.
+  async function convertCartoonBatch(id) {
+    cbFlushPending();
+    var entry = cbEntry(id);
+    if (!entry || !entry.data) return null;
+    var d = normalizeCartoonBook(entry.data), title = entry.title || d.title || '';
+    showToast('Converting “' + (title || 'Untitled cartoon batch') + '”…');
+    var s = blankChapbookState('hybrid');
+    s.bookTitle = title;
+    s.author = d.author || googleUserName || '';
+    s.images = {};
+    s.archivedPoems = [];
+    var missing = 0;
+    async function piece(c) {
+      var lines = [];
+      if (c.img) {
+        var el = await pbLoadImage(c.img), img = null;
+        try { img = el ? await loadImageUrl(el.src) : null; } catch (e) { img = null; }
+        if (!img) { missing++; return null; }
+        var n = 1;
+        while (s.images['img' + n]) n++;
+        s.images['img' + n] = img;
+        s.nextImageNum = n + 1;
+        lines.push('[image ' + n + ']');
+      }
+      lines = lines.concat(String(c.caption || '').split('\n'));
+      if (lines.length < 2) lines.push('');
+      return { id: makeId(), title: '', lines: lines, genre: 'cartoon' };
+    }
+    for (var i = 0; i < d.cartoons.length; i++) {
+      if (cbCartoonIsEmpty(d.cartoons[i])) continue;
+      var p = await piece(d.cartoons[i]);
+      if (p) s.poems.push(p);
+    }
+    for (var j = 0; j < d.archived.length; j++) {
+      var a = await piece(d.archived[j]);
+      if (a) s.archivedPoems.push(a);
+    }
+    // Every drawing comes over, or nothing changes.
+    if (missing) {
+      showToast('Couldn’t load ' + (missing === 1 ? 'one of the drawings' : missing + ' of the drawings') + ' (are you offline?), so nothing was changed.');
+      return null;
+    }
+    var made = { id: makeChapbookId(), title: title, updatedAt: Date.now(), data: s };
+    s.chapbookId = made.id;
+    library.push(made);
+    // A hybrid book keeps its drawings in this browser's storage; if they
+    // don't fit, take it all back rather than leave half a book.
+    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(library)); } catch (e) {
+      library = library.filter(function (c) { return c !== made; });
+      persistLibrary();
+      showToast('Those drawings are too big for this browser’s storage as a hybrid book, so nothing was changed.');
+      return null;
+    }
+    addHomeForm('hybrid');
+    entry.archived = true;
+    entry.archiveChangedAt = Date.now();
+    persistCbLibrary();
+    if (cbId === id && isCartoonShown()) loadChapbook(made.id);
+    renderChapbooksList();
+    showToast('“' + (title || 'Untitled book') + '” is a hybrid book now. The cartoon batch is in the archive.');
+    if (cloudAuthToken) syncLibraryToCloud();
+    return made;
   }
   async function setCartoonBookArchived(id, archived) {
     var entry = cbEntry(id);
