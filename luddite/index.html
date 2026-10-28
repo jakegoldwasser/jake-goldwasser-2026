@@ -1123,10 +1123,26 @@
   body.markfloat #markScreen > .card { margin: 0 auto; }
   .markclose { width: 38px; height: 38px; font-size: 22px; }
   /* × alone at the top right; the grading controls below start at the paper's left edge. */
-  .markclosebar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin: 0 0 6px; }
+  /* Row one never moves from paper to paper: fixed-width Previous / Next first, the session picker after them (cut short if long), then Share Grading and the × pinned right. */
+  #markScreen .markrow { flex-wrap: nowrap; margin-bottom: 4px; }
+  #markScreen .markrow .papernav { flex: none; }
+  #markScreen .markrow #markPrev, #markScreen .markrow #markNext { width: 9.5em; padding-left: 0; padding-right: 0; text-align: center; }
+  #markScreen .markrow .gradepick { flex: 0 1 auto; min-width: 0; }
+  #markScreen .markrow .gradepick > summary { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #markScreen .markrow .savestate { flex: none; width: 13em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #markScreen .markrow #markHandBack { flex: none; width: 10.5em; padding-left: 0; padding-right: 0; text-align: center; }
+  #markScreen .markrow .markclose { flex: none; }
+  /* Row two: quiet tools, plain words that light up on hover; a toggle that's on is tinted. */
+  #markScreen .marktoolrow { gap: 2px; margin: 0 0 10px; }
+  .marktoolrow .tool { border: 0; background: none; font: 600 14px var(--ui); color: var(--muted); padding: 6px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; text-decoration: none; }
+  .marktoolrow .tool:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+  .marktoolrow .tool.toggle[aria-pressed="true"] { background: var(--mint-tint); color: var(--mint-deep); }
+  .marktoolrow .toolsep { width: 1px; height: 18px; background: color-mix(in srgb, var(--ink) 18%, transparent); margin: 0 8px; }
+  .marktoolrow .q { margin-left: 8px; }
+  body.reading #markScreen .marktoolrow { display: none; }
   /* Grading or Viewing (one window), the × and the bar stay put at the top while the paper scrolls. */
   body.markfloat #markScreen .marktop { position: sticky; top: -14px; z-index: 6; background: #E1EADB; padding-top: 14px; margin-top: -14px; }
-  body.markfloat #markScreen .marktop .markbar { margin-bottom: 0; padding-bottom: 12px; }
+  body.markfloat #markScreen .marktop .marktoolrow { margin-bottom: 0; padding-bottom: 10px; }
   .markbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
   .markbody.side { grid-template-columns: minmax(0, 1fr) 330px; }
   .markside { position: sticky; top: 118px; display: flex; flex-direction: column; gap: 10px; background: var(--card); border-radius: 14px;
@@ -1141,7 +1157,7 @@
   #sheet.nomarks .paper .tb { color: inherit; }
   #sheet.nomarks .paper .tb:not(.fb) { font-weight: inherit; }
   #sheet.nomarks .paper .circ { outline: none; }
-  body:not(.markfloat) .markclosebar { display: none; }
+  body:not(.markfloat) #markClose { display: none; }
   #markScreen .markbar { margin-left: 0; padding-left: 0; }
   #markScreen #gradePick { margin-left: 0; }
   body.reading .markclose { display: none !important; }
@@ -1896,23 +1912,30 @@
 <section class="screen page" id="markScreen" hidden>
   <div class="card">
     <div class="marktop">
-    <div class="markclosebar"><button type="button" class="iconbtn markclose" id="markClose" aria-label="Close" title="Close">&times;</button></div>
-    <div class="markbar">
+    <!-- Row one stays put from paper to paper: Previous / Next (fixed widths) at the left, Share Grading and the × at the right. -->
+    <div class="markbar markrow">
       <button class="linkish" id="markBack">&larr; Back</button>
-      <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
       <span class="papernav" id="paperNav" hidden><button type="button" class="btn small ghost" id="markPrev" title="The paper before this one">&lsaquo; Previous paper</button><span class="pos" id="markPos"></span><button type="button" class="btn small ghost" id="markNext" title="The next paper">Next paper &rsaquo;</button></span>
-      <span class="grow"><span class="q trogonly" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes.">?</span><span class="q trogx" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span></span>
+      <details class="menu sibmenu gradepick" id="gradePick" hidden><summary class="btn small ghost" id="gradePickLabel"></summary><div class="pop" id="gradePickList"></div></details>
+      <span class="grow"></span>
+      <span class="savestate" id="markSaved"></span>
+      <button class="btn small" id="markHandBack" type="button">Share Grading</button>
+      <button type="button" class="iconbtn markclose" id="markClose" aria-label="Close" title="Close">&times;</button>
+    </div>
+    <!-- Row two: quiet tools, no outlines. -->
+    <div class="markbar marktoolrow">
+      <button class="tool toggle" id="markMarksBtn" type="button" aria-pressed="true" hidden>My comments</button>
+      <button class="tool toggle" id="markEndBtn" type="button" aria-pressed="true" hidden>End comment</button>
+      <button class="tool toggle" id="markChatBtn" type="button" aria-pressed="false" hidden>Live comments</button>
+      <span class="toolsep"></span>
+      <button class="tool" id="markDrafts" type="button" hidden>Old drafts</button>
+      <button class="tool trogx" id="markWlog" type="button" hidden>Writing log</button>
+      <a class="tool" id="markDrive" target="_blank" rel="noopener" hidden>Open in Drive</a>
+      <button class="tool" id="markPrint">Print</button>
+      <span class="grow"></span>
       <button type="button" class="fmtbtn trogx" id="fmtB" title="Bold what you write in (Cmd/Ctrl+B)" aria-pressed="false"><b>B</b></button>
       <button type="button" class="fmtbtn trogx" id="fmtI" title="Italicize what you write in (Cmd/Ctrl+I)" aria-pressed="false"><i>I</i></button>
-      <span class="savestate" id="markSaved"></span>
-      <button class="btn small ghost toggle" id="markChatBtn" type="button" aria-pressed="false" hidden>Live comments</button>
-      <button class="btn small ghost toggle" id="markEndBtn" type="button" aria-pressed="true" hidden>End comment</button>
-      <button class="btn small ghost toggle" id="markMarksBtn" type="button" aria-pressed="true" hidden>My comments</button>
-      <button class="btn small ghost" id="markDrafts" type="button" hidden>Old drafts</button>
-      <button class="btn small ghost trogx" id="markWlog" type="button" hidden>Writing log</button>
-      <a class="btn small ghost" id="markDrive" target="_blank" rel="noopener" style="text-decoration:none" hidden>Open in Drive</a>
-      <button class="btn small" id="markHandBack" type="button">Share Grading</button>
-      <button class="btn small ghost" id="markPrint">Print</button>
+      <span class="q trogonly" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes.">?</span><span class="q trogx" tabindex="0" data-tip="Click in the text and type to write something in. Select words and press Delete to cross them out; click crossed-out words to take the cross-out back. Right-click words to comment. Command-Z undoes. Right-click and drag from one place to another to draw an arrow between them, with a comment on the connection (on a Mac trackpad: hold Control and drag).">?</span>
     </div>
     </div>
     <p class="gradewait" id="readBanner" hidden></p>
@@ -3120,7 +3143,7 @@
   // (`reading`), so the comments, arrows and cross-outs look just as the
   // teacher left them. A banner above counts down to the grade.
   var reading = false;
-  var backId = null, backPaper = null, backTick = null, backSeenAt = 0;
+  var backId = null, backPaper = null, backTick = null, backPing = null, backSeenAt = 0;
   async function openBack(id) {
     backId = id;
     reading = true;
@@ -3150,12 +3173,18 @@
     backSeenAt = Date.now();
     drawBackTimer();
     window.scrollTo(0, 0);
-    poll(pingBack, 15000);
+    // Its own timer, not the screen's poll(), which anything else on the page
+    // can take over: then the time with the comments stopped counting and the
+    // grade never came.
+    clearInterval(backPing);
+    pingBack();
+    backPing = setInterval(pingBack, 15000);
     clearInterval(backTick);
     backTick = setInterval(drawBackTimer, 1000);
   }
   function leaveReading() {
     clearInterval(backTick);
+    clearInterval(backPing); backPing = null;
     backId = null; backPaper = null; piece = null;
     reading = false;
     document.body.classList.remove('reading');
@@ -3163,17 +3192,21 @@
     $('paper').contentEditable = 'true';
     if (isTeacher) showDash(); else showJoin();
   }
-  function backReading() { return reading && !$('markScreen').hidden && !document.hidden && document.hasFocus(); }
+  function backReading() { return reading && !$('markScreen').hidden && !document.hidden; }
+  // Nothing to read first: no comments, no end comment.
+  function noComments(p) { return !(p.marks || []).length && !(p.endComment || '').trim(); }
   // Tell the server they're still reading (only while the page is in front).
   async function pingBack() {
     if (!backId || !backReading()) return;
-    var was = backPaper && backPaper.gradeReady;
-    backPaper = (await api('/luddite/mypaper', { id: backId })).paper;
+    var was = backPaper && backPaper.gradeReady, id = backId, got;
+    try { got = (await api('/luddite/mypaper', { id: id })).paper; } catch (e) { return; }
+    if (backId !== id) return;
+    backPaper = got;
     backSeenAt = Date.now();
     if (backPaper.gradeReady && !was && piece) {
       piece.rubric = backPaper.rubric; piece.rubricScores = backPaper.rubricScores;
       renderRubric();
-      stopPoll();
+      clearInterval(backPing); backPing = null;
     }
     drawBackTimer();
   }
@@ -3182,7 +3215,9 @@
     if (!p || !reading) return;
     var box = $('readBanner');
     box.innerHTML = '';
+    if (noComments(p) && !p.gradeReady) { box.textContent = 'Your teacher didn’t leave any comments on this paper.'; return; }
     if (p.gradeReady) {
+      if (noComments(p)) box.appendChild(document.createTextNode('Your teacher didn’t leave any comments on this paper. '));
       if (p.grade) { box.appendChild(document.createTextNode('Grade: ')); box.appendChild(el('b', null, p.grade)); }
       else box.textContent = 'Your teacher hasn’t given this a grade.';
       return;
@@ -4189,15 +4224,16 @@
   function drawMyGrading() {
     var p = mgPaper, txt = $('mgText'), notes = $('mgNotes');
     if (!p) return;
-    var sig = JSON.stringify([p.text, p.marks, p.endComment, p.grade, p.gradeReady]);
+    var left = p.gradeReady ? 0 : Math.max(1, Math.ceil((p.gradeAfterMs - p.viewedMs) / 60000));
+    var sig = JSON.stringify([p.text, p.marks, p.endComment, p.grade, p.gradeReady, left]);
     if (txt.dataset.sig === sig) return;
     txt.dataset.sig = sig;
     txt.innerHTML = ''; notes.innerHTML = '';
     markedInto(txt, notes, p.text, p.marks);
     if ((p.endComment || '').trim()) { notes.appendChild(el('h3', null, 'End Comment')); notes.appendChild(el('p', null, p.endComment)); }
     if (p.gradeReady) { if (p.grade) { notes.appendChild(el('h3', null, 'Grade')); notes.appendChild(el('p', null, p.grade)); } }
-    else notes.appendChild(el('p', 'fine', 'Read the comments first. Your grade appears after five minutes with them.'));
-    if (!notes.firstChild) notes.appendChild(el('p', 'fine', 'No comments yet.'));
+    else if (!noComments(p)) notes.appendChild(el('p', 'fine', 'Read the comments first. Your grade appears after five minutes with them: about ' + plural(left, 'minute', 'minutes') + ' to go.'));
+    if (!notes.firstChild) notes.appendChild(el('p', 'fine', 'Your teacher didn’t leave any comments.'));
     $('mgMeta').textContent = p.roomTitle || '';
   }
   // The writing with a teacher's marks in place (read-only): words commented
@@ -4548,6 +4584,30 @@
   // Luddite's own clipboard keeps the bold, italics and underline; the
   // computer's gets plain text.
   function clipCopy() { var t = locked ? '' : padSelection(); if (t) clip = t; }
+  // Copying from an old draft (its window over the writing page), to paste
+  // into the writing: the student's own words with their bold, italics and
+  // underlining, never the teacher's numbers or words written in.
+  function draftSelection() {
+    var sel = window.getSelection(), box = $('dvText');
+    if ($('draftView').hidden || !sel || sel.isCollapsed || !sel.rangeCount || !box.contains(sel.anchorNode) || !box.contains(sel.focusNode)) return '';
+    var frag = sel.getRangeAt(0).cloneContents(), wrap = document.createElement('div');
+    wrap.appendChild(frag);
+    wrap.querySelectorAll('.mgnum, .mgins').forEach(function (n) { n.remove(); });
+    wrap.querySelectorAll('.fb, .fi, .fu').forEach(function (n) {
+      if (n.classList.contains('fb')) n.style.fontWeight = 'bold';
+      if (n.classList.contains('fi')) n.style.fontStyle = 'italic';
+      if (n.classList.contains('fu')) n.style.textDecoration = 'underline';
+    });
+    var t = padSerialize(wrap, 0);
+    return /\S/.test(t) ? t : '';
+  }
+  function draftCopy() {
+    var t = draftSelection();
+    if (!t) return false;
+    clip = t;
+    if (!P().blockPaste && navigator.clipboard) navigator.clipboard.writeText(plainOf(t)).catch(function () {});
+    return true;
+  }
   function clipCut() {
     var t = locked ? '' : padSelection();
     if (!t) return;
@@ -4582,7 +4642,9 @@
   var CLIP_DO = { copy: clipCopy, cut: clipCut, paste: clipPaste };
   ['copy', 'cut', 'paste'].forEach(function (type) {
     document.addEventListener(type, function (e) {
-      if (!writing || !P().blockPaste) return;
+      if (!writing) return;
+      if (type === 'copy' && draftSelection()) { stop(e); draftCopy(); return; }
+      if (!P().blockPaste) return;
       stop(e);
       if (pad.contains(e.target)) CLIP_DO[type]();
     }, true);
@@ -4618,6 +4680,7 @@
     if ((e.metaKey || e.ctrlKey) && !e.altKey && { c: 1, v: 1, x: 1 }[k]) {
       stop(e);
       if (pad.contains(e.target)) clipKey(k);
+      else if (k === 'c') draftCopy();
       return;
     }
     if (/^f\d+$/.test(k)) return stop(e);
