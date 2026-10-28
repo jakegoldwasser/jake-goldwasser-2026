@@ -3261,10 +3261,9 @@
           <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption with it.</p>
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
-            <button class="btn add-poem-btn" id="cbImportBtn" type="button" data-start="camera" title="Photograph drawings one after another; each becomes a cartoon">Take photos</button>
-            <button class="btn" type="button" data-start="photos" title="Photos of drawings from your library; each becomes a cartoon">Choose photos</button>
-            <button class="btn" type="button" data-start="pdf" title="A PDF of drawings; each page becomes a cartoon">Choose a PDF</button>
-            <button class="btn" type="button" id="cbAddEmptyBtn" title="A blank cartoon: drop or click a drawing into it, and write its caption">+ Add cartoon</button>
+            <button class="btn add-poem-btn" id="cbImportBtn" type="button" title="One drawing, photographed or from your files, cleaned up like a scan, as a new cartoon">+ Add cartoon</button>
+            <button class="btn" type="button" id="cbBatchBtn" title="Many drawings at once, from photos, a PDF or the camera, each cleaned up like a scan and made a cartoon">+ Add cartoon batch</button>
+            <button class="btn" type="button" id="cbPhotoBtn" title="A photo, just as it is: no cleanup, no cropping, no change to its color, contrast or brightness">+ Add photo</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
@@ -23162,28 +23161,29 @@
     e.preventDefault();
     cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files), null);
   });
-  // Take photos, Choose photos and Choose a PDF open the import dialog
-  // straight onto the camera or the file picker.
-  // + Add cartoon: a blank one at the end, its drawing area ready for a
-  // drawing dropped (or clicked) into it, and its caption field focused.
-  cbFmt('cbAddEmptyBtn').addEventListener('click', function () {
-    var c = cbNormalizeCartoon({});
-    cbState.cartoons.push(c);
-    cbPersist(); cbRenderList();
-    var item = cbList.querySelector('.cb-item[data-id="' + c.id + '"]');
-    if (item) { item.scrollIntoView({ behavior: 'smooth', block: 'center' }); var ta = item.querySelector('textarea.cb-caption'); if (ta) ta.focus({ preventScroll: true }); }
+  // The list's three ways in (Jake, 2026-10-28). + Add cartoon: one
+  // drawing (a phone offers its camera too), opened in the import dialog
+  // and cleaned up like a scan. + Add cartoon batch: the import dialog, for
+  // photos, a PDF or the live camera. + Add photo: photos come in just as
+  // they are (cbAddFiles), what you see is what prints: no Scan as, shadow,
+  // contrast or brightness fixes, no trimming or cutting apart.
+  function cbChooseImages(multiple, then) {
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = multiple;
+    inp.addEventListener('change', function () { if (inp.files && inp.files.length) then(Array.prototype.slice.call(inp.files)); });
+    inp.click();
+  }
+  cbFmt('cbImportBtn').addEventListener('click', function () {
+    cbChooseImages(false, function (files) { openCartoonImport('photos', files); });
   });
-  // The list's own Choose photos / Choose a PDF go straight to the file
-  // picker, and the import dialog opens with what was picked (never on its
-  // own buttons again); Take photos opens it on the live camera.
-  cbFmt('cbImportBtn').parentNode.querySelectorAll('[data-start]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var kind = b.dataset.start;
-      if (kind === 'camera') { openCartoonImport('camera'); return; }
-      var inp = document.createElement('input');
-      inp.type = 'file'; inp.accept = kind === 'pdf' ? 'application/pdf' : 'image/*'; inp.multiple = kind !== 'pdf';
-      inp.addEventListener('change', function () { if (inp.files && inp.files.length) openCartoonImport(kind, Array.prototype.slice.call(inp.files)); });
-      inp.click();
+  cbFmt('cbBatchBtn').addEventListener('click', function () { openCartoonImport(); });
+  cbFmt('cbPhotoBtn').addEventListener('click', function () {
+    cbChooseImages(true, function (files) {
+      var n = cbState.cartoons.length;
+      cbAddFiles(files, null).then(function () {
+        var c = cbState.cartoons[n], item = c && cbList.querySelector('.cb-item[data-id="' + c.id + '"]');
+        if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     });
   });
 
