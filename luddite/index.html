@@ -8801,7 +8801,11 @@
     // wherever the day changes (Jake, 2026-10-27: the chart was ambiguous).
     var wrap = el('div', 'wlchart');
     body.appendChild(wrap);
-    var W = Math.max(wrap.clientWidth || 880, 300), H = 284, top = 30, mid0 = 150, bot = 206, L = 46, R = 150;
+    // The total words get their own band above the bars, on their own scale
+    // (from their fewest to their most words), so the line is never read
+    // against the bars' numbers (Jake, 2026-10-28: 318 words drawn at the
+    // bars' "10"). A break is a slot of its own, wide enough for its label.
+    var W = Math.max(wrap.clientWidth || 880, 300), H = 356, lTop = 26, lBot = 74, top = 122, mid0 = 222, bot = 278, L = 46, R = 150, GAPW = 58;
     var slots = [], gaps = [];
     mins.forEach(function (m, i) {
       if (i) {
@@ -8811,10 +8815,17 @@
       }
       slots.push(m);
     });
-    var bw = Math.max(3, Math.min(22, (W - L - R) / slots.length)), cw = Math.max(W, L + bw * slots.length + R);
+    var nMin = slots.length - gaps.length;
+    var bw = Math.max(3, Math.min(22, (W - L - R - GAPW * gaps.length) / Math.max(1, nMin)));
+    var xs = [], xEnd = L;
+    slots.forEach(function (m) { xs.push(xEnd); xEnd += m.gap ? GAPW : bw; });
+    var cw = Math.max(W, xEnd + R);
     var maxUp = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.add + (m.own || 0)); }, 0));
     var maxDn = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.del); }, 0));
-    var maxWords = Math.max(10, mins.reduce(function (a, m) { return Math.max(a, m.words); }, 0));
+    var hiW = mins.reduce(function (a, m) { return Math.max(a, m.words); }, 0);
+    var loW = mins.reduce(function (a, m) { return Math.min(a, m.words); }, hiW);
+    if (hiW - loW < 10) loW = Math.max(0, hiW - 10);
+    if (hiW - loW < 10) hiW = loW + 10;
     var NS = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('width', cw); svg.setAttribute('height', H);
@@ -8824,23 +8835,33 @@
     var tip = function (n, text) { n.appendChild(document.createElementNS(NS, 'title')).textContent = text; return n; };
     var css = getComputedStyle(document.documentElement), col = function (v) { return css.getPropertyValue(v).trim(); };
     var small = { 'font-size': 12, fill: col('--muted'), 'font-family': 'inherit' };
-    // The left axis: what's up, what's down.
+    // The total words' band: its label and its own scale.
+    mk('text', Object.assign({ x: 0, y: lTop - 12 }, small), '— Total words in their writing');
+    mk('text', Object.assign({ x: L - 8, y: lTop + 4, 'text-anchor': 'end' }, small), String(hiW));
+    mk('text', Object.assign({ x: L - 8, y: lBot + 4, 'text-anchor': 'end' }, small), String(loW));
+    mk('line', { x1: L, x2: xEnd, y1: lTop, y2: lTop, stroke: col('--rule'), 'stroke-dasharray': '2 4' });
+    mk('line', { x1: L, x2: xEnd, y1: lBot, y2: lBot, stroke: col('--rule'), 'stroke-dasharray': '2 4' });
+    // The bars' axis: what's up, what's down.
     mk('text', Object.assign({ x: 0, y: top - 14 }, small), '▲ Words typed each minute');
-    mk('text', Object.assign({ x: 0, y: bot + 14 }, small), '▼ Words deleted');
+    mk('text', Object.assign({ x: 0, y: bot + 16 }, small), '▼ Words deleted');
     mk('text', Object.assign({ x: L - 8, y: top + 4, 'text-anchor': 'end' }, small), String(maxUp));
     mk('text', Object.assign({ x: L - 8, y: mid0 + 4, 'text-anchor': 'end' }, small), '0');
-    mk('text', Object.assign({ x: L - 8, y: bot - 4, 'text-anchor': 'end' }, small), String(maxDn));
-    mk('line', { x1: L, x2: L + bw * slots.length, y1: top, y2: top, stroke: col('--rule'), 'stroke-dasharray': '2 4' });
-    mk('line', { x1: L, x2: L + bw * slots.length, y1: mid0, y2: mid0, stroke: col('--rule'), 'stroke-width': 1.5 });
+    mk('text', Object.assign({ x: L - 8, y: bot + 4, 'text-anchor': 'end' }, small), String(maxDn));
+    mk('line', { x1: L, x2: xEnd, y1: top, y2: top, stroke: col('--rule'), 'stroke-dasharray': '2 4' });
+    mk('line', { x1: L, x2: xEnd, y1: mid0, y2: mid0, stroke: col('--rule'), 'stroke-width': 1.5 });
     var pts = [], lastPt = null;
+    var drawLine = function () { if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.75, opacity: 0.6 }); else if (pts.length === 1) { var p0 = pts[0].split(','); mk('circle', { cx: p0[0], cy: p0[1], r: 2, fill: col('--ink'), opacity: 0.6 }); } };
     slots.forEach(function (m, i) {
-      var x = L + i * bw;
+      var x = xs[i];
       if (m.gap) {
-        mk('line', { x1: x + bw / 2, x2: x + bw / 2, y1: top - 4, y2: bot, stroke: col('--muted'), 'stroke-dasharray': '3 3' });
+        // A break: a shaded slot, its length written inside it.
         var gm = Math.round(m.gap / 60000);
-        tip(mk('text', Object.assign({ x: x + bw / 2, y: bot + 14, 'text-anchor': 'middle' }, small), gm >= 120 ? Math.round(gm / 60) + ' hr break' : gm + ' min break'), 'No writing for ' + (gm >= 120 ? 'about ' + Math.round(gm / 60) + ' hours' : gm + ' minutes'));
+        var g = mk('rect', { x: x + 4, y: lTop - 4, width: GAPW - 8, height: bot - lTop + 4, rx: 4, fill: col('--rule'), opacity: 0.35 });
+        tip(g, 'No writing for ' + (gm >= 120 ? 'about ' + Math.round(gm / 60) + ' hours' : gm + ' minutes'));
+        mk('text', Object.assign({ x: x + GAPW / 2, y: mid0 - 30, 'text-anchor': 'middle' }, small), gm >= 120 ? Math.round(gm / 60) + ' hr' : gm + ' min');
+        mk('text', Object.assign({ x: x + GAPW / 2, y: mid0 - 15, 'text-anchor': 'middle' }, small), 'break');
         // The line doesn't run across a break.
-        if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.75, opacity: 0.6 });
+        drawLine();
         pts = [];
         return;
       }
@@ -8851,19 +8872,17 @@
       if (m.add) mk('rect', { x: x + 0.5, y: mid0 - hUp, width: Math.max(1, bw - 1.5), height: hUp, rx: 1.5, fill: flagged ? col('--tomato') : col('--mint') });
       if (m.del) mk('rect', { x: x + 0.5, y: mid0, width: Math.max(1, bw - 1.5), height: hDn, rx: 1.5, fill: col('--tomato-tint') });
       // One hover target per minute, the whole height, saying everything about it.
-      tip(mk('rect', { x: x, y: top, width: bw, height: bot - top, fill: 'transparent' }),
+      tip(mk('rect', { x: x, y: lTop, width: bw, height: bot - lTop, fill: 'transparent' }),
         wlWhen(m.t) + '\nTyped: ' + m.add + (m.own ? '\nTheir own words back at once: ' + m.own : '') + '\nDeleted: ' + m.del + '\nTotal words: ' + m.words + (flagged ? '\n⚑ Flagged or unusually fast' : ''));
-      var y = mid0 - (mid0 - top) * m.words / maxWords;
+      var y = lBot - (lBot - lTop) * (m.words - loW) / (hiW - loW);
       pts.push((x + bw / 2) + ',' + y);
       lastPt = { x: x + bw / 2, y: y, m: m };
     });
-    if (pts.length > 1) mk('polyline', { points: pts.join(' '), fill: 'none', stroke: col('--ink'), 'stroke-width': 1.75, opacity: 0.6 });
+    drawLine();
     // The line, named at its end: the total words in their writing.
     if (lastPt) {
       mk('circle', { cx: lastPt.x, cy: lastPt.y, r: 3.5, fill: col('--ink'), opacity: 0.75 });
-      var lx = lastPt.x + 8, ly = Math.max(top - 2, Math.min(mid0 - 22, lastPt.y));
-      mk('text', { x: lx, y: ly + 4, 'font-size': 13, 'font-weight': 600, fill: col('--ink'), 'font-family': 'inherit' }, 'Total words: ' + lastPt.m.words);
-      mk('text', Object.assign({ x: lx, y: ly + 19 }, small), '(the line)');
+      mk('text', { x: lastPt.x + 8, y: Math.max(lTop, Math.min(lBot, lastPt.y)) + 4, 'font-size': 13, 'font-weight': 600, fill: col('--ink'), 'font-family': 'inherit' }, lastPt.m.words + ' words');
     }
     // The time axis: a time every few minutes (never closer than 70px), the
     // first minute after each break, and the date at the start and wherever
@@ -8872,13 +8891,13 @@
     var step = STEPS.filter(function (s) { return s * bw >= 70; })[0] || 240;
     var lastX = -999, lastDay = '';
     var axisY = H - 24;
-    mk('line', { x1: L, x2: L + bw * slots.length, y1: axisY - 14, y2: axisY - 14, stroke: col('--rule') });
+    mk('line', { x1: L, x2: xEnd, y1: axisY - 14, y2: axisY - 14, stroke: col('--rule') });
     slots.forEach(function (m, i) {
       if (!m.t) return;
       var afterGap = i === 0 || (slots[i - 1] && slots[i - 1].gap);
       var onStep = Math.floor(m.t / 60000) % step === 0;
       if (!afterGap && !onStep) return;
-      var x = L + i * bw + bw / 2;
+      var x = xs[i] + bw / 2;
       if (x - lastX < 70) return;
       lastX = x;
       mk('line', { x1: x, x2: x, y1: axisY - 14, y2: axisY - 8, stroke: col('--muted') });
