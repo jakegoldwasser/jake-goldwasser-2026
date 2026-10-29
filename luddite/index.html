@@ -563,6 +563,17 @@
   .stockitem input { margin-top: 3px; flex: none; accent-color: var(--pen); }
   .endwrap label.stockitem.on { color: var(--pen); }
   .stockbox > .btn { margin: 10px 0 4px; }
+  .stockitem > span { flex: 1; }
+  .stockdel { flex: none; width: 24px; height: 24px; margin-top: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 600 16px/1 var(--ui); cursor: pointer; opacity: 0; }
+  .stockitem:hover .stockdel, .stockdel:focus-visible { opacity: 1; }
+  .stockdel:hover { background: var(--rule); color: var(--ink); }
+  @media (hover: none) { .stockdel { opacity: 1; } }
+  .stockgone { display: flex; gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; color: var(--muted); }
+  .stockgone span { flex: 1; }
+  .stockadd { margin: 8px 0 2px; }
+  .stockform { display: grid; gap: 8px; margin: 8px 0 4px; padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 12px; }
+  .stockform .field { width: 100%; box-sizing: border-box; font-size: 14px; }
+  .stockform .stockbtns { display: flex; gap: 8px; justify-content: flex-start; }
   body.reading .stockbox { display: none; }
   @media print { .stockbox { display: none !important; } }
   .endwrap textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--pen); }
@@ -7972,6 +7983,10 @@
     if (b.matches('.cwitem')) return 'Opens this writing, to read only';
     if (b.matches('.ldrow')) return 'Opens this student’s writing with your live comments';
     if (b.matches('.classcaret')) return 'Shows or hides this class’s students right here';
+    if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved on this computer; Undo brings it back). Papers it’s already on keep it';
+    if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved on this computer)';
+    if (b.closest('.stockgone') && k === 'undo') return 'Puts this stock comment back in your list';
+    if (b.closest('.stockform')) return k === 'add' ? 'Adds this comment to your stock comments, at the end of its category' : 'Closes this without adding anything';
     if (b.matches('.odel')) return 'Deletes this comment on deleted words';
     if (b.matches('.fold')) return k === '+' || b.textContent.trim() === '+' ? 'Shows this comment in full again' : 'Minimizes this comment (it’s still there)';
     if (b.closest('#newRoomClasses')) return /type in/.test(k) ? TIP_TEXT['type in email addresses'] : 'Picks this class for the writing session (click again to unpick it). Several classes make one session each';
@@ -10104,10 +10119,88 @@
         cb.addEventListener('change', function () { setStockGoal(it[2], k[0], cb.checked); });
         var tx = el('span');
         tx.appendChild(document.createTextNode(it[2]));
-        row.appendChild(cb); row.appendChild(tx);
+        var del = el('button', 'stockdel', '×'); del.type = 'button';
+        del.setAttribute('aria-label', 'Delete this stock comment');
+        del.addEventListener('click', function (e) { e.preventDefault(); deleteStock(it); });
+        row.appendChild(cb); row.appendChild(tx); row.appendChild(del);
         box.appendChild(row);
+        if (stockGone && stockSame(stockGone.after, it)) box.appendChild(stockGoneRow());
+      });
+      if (stockGone && !stockGone.after && stockGone.kind === k[0]) box.appendChild(stockGoneRow());
+      var add = el('button', 'btn small ghost stockadd', '+ Add a comment'); add.type = 'button';
+      add.addEventListener('click', function () { stockForm(k[0], add); });
+      box.appendChild(add);
+    });
+  }
+  // Adding and deleting stock comments right in the list (Jake, 2026-10-29),
+  // saved on this device as Edit stock comments… does. A deleted one leaves an
+  // Undo in its place until the list is next changed.
+  var stockGone = null;
+  function stockSame(a, b) { return !!a && !!b && JSON.stringify(a) === JSON.stringify(b); }
+  function saveStock(list) { store(stockKey(), JSON.stringify(list)); }
+  function deleteStock(it) {
+    var list = stockList().slice(), i = -1;
+    list.forEach(function (x, j) { if (i === -1 && stockSame(x, it)) i = j; });
+    if (i === -1) return;
+    list.splice(i, 1);
+    stockGone = { item: it, at: i, kind: stockKind(it), after: null };
+    for (var j = i - 1; j >= 0; j--) if (stockKind(list[j]) === stockGone.kind) { stockGone.after = list[j]; break; }
+    saveStock(list);
+    drawStock();
+  }
+  function stockGoneRow() {
+    var g = stockGone, row = el('div', 'stockgone');
+    row.appendChild(el('span', '', 'Deleted “' + g.item[2] + '”'));
+    var undo = el('button', 'btn small ghost', 'Undo'); undo.type = 'button';
+    undo.addEventListener('click', function () {
+      var list = stockList().slice();
+      list.splice(Math.min(g.at, list.length), 0, g.item);
+      stockGone = null;
+      saveStock(list);
+      drawStock();
+    });
+    row.appendChild(undo);
+    return row;
+  }
+  // The form under a kind: a category (one of the kind's, or a new one) and
+  // the comment as the student will read it, added at the end of its category.
+  function stockForm(kind, add) {
+    var cats = [];
+    stockList().forEach(function (it) { if (stockKind(it) === kind && cats.indexOf(it[0]) === -1) cats.push(it[0]); });
+    var f = el('div', 'stockform');
+    var sel = el('select', 'field');
+    cats.forEach(function (c) { var o = el('option', '', c); o.value = c; sel.appendChild(o); });
+    var nw = el('option', '', 'New category…'); nw.value = '\u0000new'; sel.appendChild(nw);
+    var catIn = el('input', 'field'); catIn.placeholder = 'Category name'; catIn.hidden = !!cats.length;
+    if (!cats.length) sel.hidden = true;
+    sel.addEventListener('change', function () { catIn.hidden = sel.value !== '\u0000new'; if (!catIn.hidden) catIn.focus(); });
+    var say = el('input', 'field'); say.placeholder = kind === 'good' ? 'Keep… (as the student will read it)' : 'As the student will read it';
+    var row = el('div', 'stockbtns');
+    var ok = el('button', 'btn small', 'Add'); ok.type = 'button';
+    var no = el('button', 'btn small ghost', 'Cancel'); no.type = 'button';
+    row.appendChild(ok); row.appendChild(no);
+    f.appendChild(sel); f.appendChild(catIn); f.appendChild(say); f.appendChild(row);
+    function done() {
+      var text = say.value.trim(), cat = sel.hidden || sel.value === '\u0000new' ? catIn.value.trim() || 'Comments' : sel.value;
+      if (!text) { say.focus(); return; }
+      var list = stockList().slice(), at = -1;
+      list.forEach(function (it, i) { if (stockKind(it) === kind && it[0] === cat) at = i; });
+      if (at === -1) list.forEach(function (it, i) { if (stockKind(it) === kind) at = i; });
+      list.splice(at === -1 ? list.length : at + 1, 0, kind ? [cat, text, text, kind] : [cat, text, text]);
+      stockGone = null;
+      saveStock(list);
+      drawStock();
+    }
+    ok.addEventListener('click', done);
+    no.addEventListener('click', function () { f.replaceWith(add); add.focus(); });
+    [say, catIn].forEach(function (inp) {
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); done(); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); no.click(); }
       });
     });
+    add.replaceWith(f);
+    say.focus();
   }
   function setStockGoal(goal, kind, on) {
     var sp = stockSplit(piece.endComment), goals = sp.goals.filter(function (g) { return g.text !== goal; });
@@ -10149,6 +10242,7 @@
       if (say) out.push(kind ? [c, say, say, kind] : [c, say, say]);
     });
     store(stockKey(), out.length ? JSON.stringify(out) : null);
+    stockGone = null;
     drawStock();
   });
 
