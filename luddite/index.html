@@ -7545,6 +7545,11 @@
       if (await ask({ title: 'Unlock ' + p.name + '?', text: (s.handedIn ? 'They’ve handed in. Unlocking lets them write on, and they’ll need to hand in again.' : 'They were locked out for leaving the page. Unlocking lets them pick up where they left off.') + (after ? ' The session is over, so they can write with no time limit until they hand in or you end the session again.' : ''), ok: 'Unlock' })) roomAction(s.handedIn ? 'release' : 'unlock', [s.sub]);
     };
   }
+  // A paper's grade rides in its bubble once it has one ("Graded · 92"; Jake, 2026-10-29).
+  function withGrade(label, grade) {
+    grade = String(grade || '').trim();
+    return grade ? label + ' · ' + (grade.length > 12 ? grade.slice(0, 11) + '…' : grade) : label;
+  }
   var STATUS = { progress: ['In progress', 'gray'], grade: ['Grade!', 'pink'], graded: ['Graded', 'yellow'], shared: ['Grading shared', 'green'], none: ['Nothing handed in', 'gray'] };
   function personRow(room, state, p, showEmail) {
     var s = p.s, x = p.x, f = p.f || personFacts(room, state, p), stage = f.stage;
@@ -7615,13 +7620,13 @@
     // Writing again with a paper already handed in: the paper's own bubble, opening that paper (with its comments).
     if (f.status === 'progress' && x && x.stored) { var stg = paperStage(x); st = STATUS[stg === 'back' ? 'shared' : stg === 'graded' ? 'graded' : 'grade']; }
     if (f.status !== 'progress' || (x && x.stored)) {
-      var bub = x && x.stored ? button(st[0], 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
+      var bub = x && x.stored ? button(withGrade(st[0], x.grade), 'statusbub ' + st[1], open) : el('span', 'statusbub ' + st[1], st[0]);
       if (x && x.stored) bub.title = 'Open the grading';
       row.appendChild(bub);
     } else if (f.canWrite && s && s.sub && (!trogOn || s.earlyMarked || s.earlyGrade || s.earlyShared)) {
       // Grading can start before they hand in: their writing so far, marks moving to the paper later.
       var est = s.earlyShared ? STATUS.shared : s.earlyMarked || s.earlyGrade ? STATUS.graded : ['Grade so far', STATUS.grade[1]];
-      var early = button(est[0], 'statusbub ' + est[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
+      var early = button(withGrade(est[0], s.earlyGrade), 'statusbub ' + est[1], function () { openMark('early:' + room.code + ':' + s.sub, function () { openRoom(room.code); }, roomPaperIds, roomReturned); });
       early.title = 'Comment and grade what they’ve written so far; it moves to their paper when they hand it in';
       row.appendChild(early);
     } else row.appendChild(el('span', 'statusbub none'));
@@ -7971,7 +7976,7 @@
   function tipFor(b) {
     var id = b.id, t = id && TIP_ID[id];
     if (t) return typeof t === 'function' ? t(b) : t;
-    var k = tipKey(b.textContent);
+    var k = tipKey(b.matches('.statusbub') ? b.textContent.split(' · ')[0] : b.textContent);
     // Settings' On / Off rows say which setting they set, for every session you run.
     var sw = b.closest('.switchrow');
     if (sw && b.closest('.segctl')) {
