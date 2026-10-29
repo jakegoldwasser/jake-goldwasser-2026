@@ -564,6 +564,15 @@
   .endwrap label.stockitem.on { color: var(--pen); }
   .stockbox > .btn { margin: 10px 0 4px; }
   .stockitem > span { flex: 1; }
+  .extrarow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 18px; font: 600 14px var(--ui); }
+  .schedfield { margin-top: 14px; }
+  .schedfield .lbl { display: block; margin-bottom: 6px; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .schedrange { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .schedrange .field { border: 1.5px solid var(--ink); box-shadow: none; border-radius: 10px; padding: 6px 10px; }
+  .schedbtns { gap: 8px; margin-top: 18px; flex-wrap: wrap; justify-content: flex-end; }
+  .schedbtns .grow { flex: 1; }
+  .pickslots button { font-weight: 400; }
+  .pickslots button b { font-weight: 600; }
   .stockdel { flex: none; width: 24px; height: 24px; margin-top: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 600 16px/1 var(--ui); cursor: pointer; opacity: 0; }
   .stockitem:hover .stockdel, .stockdel:focus-visible { opacity: 1; }
   .stockdel:hover { background: var(--rule); color: var(--ink); }
@@ -1443,6 +1452,10 @@
       <label class="joinlbl">Reflections</label>
       <div id="reflectList"></div>
     </div>
+    <div id="schedPickBox" hidden style="margin-bottom:26px">
+      <label class="joinlbl">Pick a Time</label>
+      <div id="schedPickList"></div>
+    </div>
     <div id="backBox" hidden style="margin-bottom:26px">
       <label class="joinlbl">Grading Shared with You</label>
       <div id="backList"></div>
@@ -2000,6 +2013,7 @@
     </div>
     <div class="head"><h2 id="studentName"></h2></div>
     <p class="fine" id="studentMeta" style="margin:0 0 12px"></p>
+    <div class="extrarow" id="studentExtra"><span>Extra time on assessments</span><div class="segctl" id="studentExtraSeg"></div></div>
     <div id="pieceList"></div>
   </div>
 </section>
@@ -2226,6 +2240,40 @@
 </div>
 
 <!-- Luddite's own pop-up for questions, warnings and short answers (ask()), in place of the browser's -->
+<div class="overlay no-print" id="schedBox" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="schedTitle">
+    <h2 id="schedTitle"></h2>
+    <p class="asktext" id="schedText"></p>
+    <p class="fine" id="schedAsked" hidden></p>
+    <div class="schedfield"><span class="lbl">They pick</span><div class="segctl" id="schedPick"></div></div>
+    <div class="schedfield"><span class="lbl">Between</span>
+      <div class="schedrange"><input type="date" class="field" id="schedFrom" aria-label="First day"> <span>and</span> <input type="date" class="field" id="schedTo" aria-label="Last day"></div>
+    </div>
+    <p class="fine warn" id="schedNote"></p>
+    <div class="row schedbtns">
+      <button class="btn small ghost" id="schedSelf" type="button">Set it myself…</button>
+      <button class="btn small ghost" id="schedDrop" type="button" hidden>Cancel the request</button>
+      <span class="grow"></span>
+      <button class="btn small ghost" id="schedNo" type="button">Close</button>
+      <button class="btn small" id="schedYes" type="button">Send the request</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay no-print" id="pickTimeBox" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="pickTimeTitle">
+    <h2 id="pickTimeTitle"></h2>
+    <p class="asktext" id="pickTimeText"></p>
+    <div class="schedfield"><span class="lbl">Day</span><div class="segctl" id="pickDays"></div></div>
+    <div class="schedfield"><span class="lbl">Time</span><div class="segctl pickslots" id="pickSlots"></div></div>
+    <p class="fine warn" id="pickTimeNote"></p>
+    <div class="row" style="justify-content:flex-end; margin-top:18px">
+      <button class="btn small ghost" id="pickTimeNo" type="button">Cancel</button>
+      <button class="btn small" id="pickTimeYes" type="button" disabled>Save my time</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay no-print" id="askBox" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="askTitle">
     <h2 id="askTitle"></h2>
@@ -2958,6 +3006,7 @@
     loadReturned();
     loadReread();
     loadReflections();
+    loadSchedPicks();
     // Check back while something is coming (the screen's own polling stops when it changes).
     if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000);
     else if (!mineList.length) loadMine().then(function () { if (!$('joinScreen').hidden) { drawMine(); if (mineList.some(function (a) { return a.state === 'upcoming'; })) poll(pollMine, 8000); } });
@@ -2987,6 +3036,97 @@
       list.appendChild(row);
     });
   }
+  // Times a teacher asked this student to pick (extra time or a make-up):
+  // a day in the range asked, then a period or half period on it.
+  var picking = null;
+  function slotLabel(a) {
+    var p = PERIODS.filter(function (x) { return Math.abs(atMinutes(a.start, x.start) - a.start) < 60000 || Math.abs(atMinutes(a.start, x.start) + 22.5 * 60000 - a.start) < 60000; })[0];
+    var half = a.end - a.start < 30 * 60000, second = p && Math.abs(atMinutes(a.start, p.start) - a.start) >= 60000;
+    return dayClock(a.start) + '\u2013' + clock(a.end) + (p ? ' (' + p.letter + ' Period' + (half ? (second ? ', second half' : ', first half') : '') + ')' : '');
+  }
+  function shortDay(t) { return new Date(t).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }); }
+  async function loadSchedPicks() {
+    var data;
+    try { data = await api('/luddite/schedule'); } catch (e) { $('schedPickBox').hidden = true; return; }
+    noteNow(data.now);
+    var list = $('schedPickList'), items = (data.requests || []).filter(function (r) { return r.to > nowMs() || r.answer; });
+    list.innerHTML = '';
+    $('schedPickBox').hidden = !items.length;
+    items.forEach(function (r) {
+      var row = el('div', 'item');
+      var w = el('div', 'who');
+      w.appendChild(el('b', null, r.title));
+      var what = (r.kind === 'extra' ? 'Extra time' : 'Make-up') + ' · ' + r.teacherName;
+      w.appendChild(el('span', null, r.answer ? what + ' · Your time: ' + slotLabel(r.answer)
+        : what + ' · Pick ' + (r.pick === 'half' ? 'a half period' : 'a period') + ' between ' + shortDay(r.from) + ' and ' + shortDay(r.to)));
+      row.appendChild(w);
+      if (!r.answer) row.appendChild(button('Pick a time', 'btn small', function () { openPickTime(r); }));
+      else if (r.answer.start > nowMs()) row.appendChild(button('Change', 'btn small ghost', function () { openPickTime(r); }));
+      list.appendChild(row);
+    });
+  }
+  // The weekdays in the range, from today on, each with its free slots.
+  function pickDays(r) {
+    var out = [], d = new Date(Math.max(r.from, nowMs())); d.setHours(0, 0, 0, 0);
+    for (var i = 0; i < 70 && d.getTime() <= r.to; i++, d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+      var day = d.getTime(), slots = [];
+      PERIODS.forEach(function (p) {
+        var s0 = atMinutes(day, p.start), halves = r.pick === 'half' ? [[s0, s0 + 22.5 * 60000, 'first half'], [s0 + 22.5 * 60000, s0 + 45 * 60000, 'second half']] : [[s0, s0 + 45 * 60000, '']];
+        halves.forEach(function (h) {
+          if (h[0] <= nowMs() || h[0] < r.from || h[1] > r.to) return;
+          if (r.classTime && h[0] < r.classTime.end && r.classTime.start < h[1]) return;
+          slots.push({ start: h[0], end: h[1], letter: p.letter, half: h[2] });
+        });
+      });
+      if (slots.length) out.push({ day: day, slots: slots });
+    }
+    return out;
+  }
+  function openPickTime(r) {
+    var days = pickDays(r);
+    picking = { r: r, days: days, day: null, slot: null };
+    $('pickTimeTitle').textContent = r.kind === 'extra' ? 'Pick a Time for Your Extra Time' : 'Pick a Time for Your Make-Up';
+    $('pickTimeText').textContent = r.title + ', for ' + r.teacherName + ': pick ' + (r.pick === 'half' ? 'half a period' : 'a period') + ' you’re free' +
+      (r.classTime ? ' (you take the first part with your class, ' + slotLabel(r.classTime) + ')' : '') + '. You can change it until it starts.';
+    $('pickTimeNote').textContent = days.length ? '' : 'There are no times left in the days your teacher gave. Ask your teacher.';
+    if (r.answer) days.forEach(function (d) { d.slots.forEach(function (s) { if (s.start === r.answer.start) { picking.day = d; picking.slot = s; } }); });
+    if (!picking.day) picking.day = days[0] || null;
+    drawPickTime();
+    $('pickTimeBox').hidden = false;
+  }
+  function drawPickTime() {
+    var dl = $('pickDays'), sl = $('pickSlots');
+    dl.innerHTML = ''; sl.innerHTML = '';
+    picking.days.forEach(function (d) {
+      var b = el('button', picking.day === d ? 'on' : '', shortDay(d.day)); b.type = 'button';
+      b.addEventListener('click', function () { picking.day = d; picking.slot = null; drawPickTime(); });
+      dl.appendChild(b);
+    });
+    if (picking.day) picking.day.slots.forEach(function (s) {
+      var b = el('button', picking.slot === s ? 'on' : ''); b.type = 'button';
+      b.appendChild(el('b', null, s.letter + (s.half ? ', ' + s.half : '')));
+      b.appendChild(document.createTextNode(' ' + clock(s.start) + '\u2013' + clock(s.end)));
+      b.addEventListener('click', function () { picking.slot = s; drawPickTime(); });
+      sl.appendChild(b);
+    });
+    $('pickTimeYes').disabled = !picking.slot;
+  }
+  $('pickTimeNo').addEventListener('click', function () { $('pickTimeBox').hidden = true; picking = null; });
+  $('pickTimeBox').addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); $('pickTimeNo').click(); } });
+  $('pickTimeYes').addEventListener('click', async function () {
+    if (!picking || !picking.slot) return;
+    $('pickTimeYes').disabled = true;
+    try {
+      await api('/luddite/schedule', { code: picking.r.code, start: picking.slot.start, end: picking.slot.end });
+      $('pickTimeBox').hidden = true; picking = null;
+      loadSchedPicks();
+    } catch (e) {
+      $('pickTimeYes').disabled = false;
+      $('pickTimeNote').textContent = e.message === 'overlap' ? 'That’s during your class’s time: pick another.' : e.message === 'already_started' ? 'Your time has already started.' : e.message === 'out_of_range' ? 'That’s outside the days your teacher gave.' : 'Couldn’t save it. Try again.';
+    }
+  });
+
   async function openReflect(code) {
     var d;
     try { d = await api('/luddite/reflect?code=' + encodeURIComponent(code)); }
@@ -5589,6 +5729,7 @@
   $('prefsClose').addEventListener('click', function () { $('prefsBox').hidden = true; });
 
   var classes = [];
+  var extraTime = {}; // email -> 1.5, 2, ...: extra time on assessments (the teacher's own list)
   async function loadRooms() {
     var data = await api('/luddite/assignments');
     if (data.displayName && data.displayName !== displayName) setDisplayName(data.displayName);
@@ -5597,6 +5738,7 @@
     if (homeTab === 'students' && !$('dashScreen').hidden && !trogOn) loadWritingNow(sessionList);
     if (data.prefs) { teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs); if (setTrog(teacherPrefs.trog)) lastDrawn = ''; }
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
+    if (data.extraTime) extraTime = data.extraTime;
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
     fillClassSelects();
@@ -6882,6 +7024,92 @@
     return button(room.own && room.own[email] ? 'Change alternative schedule' : 'Set Alternative Schedule', 'btn small ghost', function () { openOwnTime(email, name); });
   }
 
+  // ---- Extra time and make-ups (Jake, 2026-10-29) ----
+  // A student's extra time on assessments is set on their page and kept with
+  // the teacher (extraTime, by email). In a session they can't do at home,
+  // such a student with no alternative schedule gets Schedule extra time on
+  // their row; anyone can be asked to schedule a make-up from the row's ⋯.
+  // The request asks them to pick a whole period or a half between two days
+  // on their own Luddite page (room.schedReq); what they pick becomes their
+  // alternative schedule (the backend's schedBlocks).
+  function extraOf(email) { return extraTime[String(email || '').toLowerCase()] || 0; }
+  function drawStudentExtra(email) {
+    var seg = $('studentExtraSeg'), cur = extraOf(email);
+    seg.innerHTML = '';
+    [[0, 'None'], [1.5, '1.5×'], [2, '2×']].forEach(function (o) {
+      var b = el('button', o[0] === cur ? 'on' : '', o[1]); b.type = 'button';
+      b.addEventListener('click', async function () {
+        try {
+          var d = await api('/luddite/extratime', { email: email, multiplier: o[0] });
+          extraTime = d.extraTime || {};
+          drawStudentExtra(email);
+        } catch (e) { tell('Couldn’t Save the Extra Time', 'Try again.'); }
+      });
+      seg.appendChild(b);
+    });
+    // Another multiple (set before, say 1.25×) shows as its own button.
+    if (cur && cur !== 1.5 && cur !== 2) { var x = el('button', 'on', cur + '×'); x.type = 'button'; seg.appendChild(x); }
+  }
+  function canSchedule(room) { return room && !room.atHome && !room.casual; }
+  // The row's button: Schedule extra time while it's needed, Asked to pick a time once asked.
+  function schedButton(room, email, name, handedIn) {
+    var em = String(email || '').toLowerCase();
+    if (!em || !canSchedule(room) || (room.own && room.own[em])) return null;
+    var req = room.schedReq && room.schedReq[em];
+    if (req && !req.answer) return button('Asked to pick a time', 'btn small ghost schedasked', function () { openSched(em, name, req.kind); });
+    if (extraOf(em) && !(handedIn && roomState(room) === 'ended')) return button('Schedule extra time', 'btn small schedbtn', function () { openSched(em, name, 'extra'); });
+    return null;
+  }
+  function dateVal(t) { var d = new Date(t); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function dateFrom(v, end) { var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(v || ''); if (!m) return 0; var d = new Date(+m[1], m[2] - 1, +m[3]); if (end) d.setHours(23, 59, 59, 999); return d.getTime(); }
+  var sched = null;
+  function openSched(email, name, kind) {
+    var room = teacherRoom, req = room.schedReq && room.schedReq[email], mult = extraOf(email);
+    if (req && req.answer) req = null;
+    if (req) kind = req.kind;
+    sched = { email: email, name: name, kind: kind, pick: req ? req.pick : kind === 'extra' && mult && mult < 2 ? 'half' : 'whole' };
+    $('schedTitle').textContent = kind === 'extra' ? 'Schedule Extra Time for ' + name : 'Schedule a Make-Up for ' + name;
+    $('schedText').textContent = kind === 'extra'
+      ? name + (mult ? ' gets ' + mult + '× time' : ' gets extra time') + '. Ask them to pick when to take the rest: they choose a day and a period on their Luddite page, and it becomes their alternative schedule (the session’s time with their class, then the time they pick).'
+      : 'Ask ' + name + ' to pick a time to make up this writing session: they choose a day and a period on their Luddite page, and it becomes their alternative schedule.';
+    $('schedAsked').hidden = !req;
+    if (req) $('schedAsked').textContent = 'Asked ' + new Date(req.at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + '; they haven’t picked a time yet. Sending again changes the request.';
+    $('schedDrop').hidden = !req;
+    $('schedYes').textContent = req ? 'Send the changed request' : 'Send the request';
+    var start = Math.max(nowMs(), room.startAt || 0), from = req ? req.from : start;
+    $('schedFrom').value = dateVal(from);
+    $('schedTo').value = dateVal(req ? req.to : start + 7 * 86400000);
+    $('schedNote').textContent = '';
+    drawSchedPick();
+    $('schedBox').hidden = false;
+    $('schedYes').focus();
+  }
+  function drawSchedPick() {
+    var seg = $('schedPick');
+    seg.innerHTML = '';
+    [['whole', 'A whole period'], ['half', 'A half period']].forEach(function (o) {
+      var b = el('button', sched.pick === o[0] ? 'on' : '', o[1]); b.type = 'button';
+      b.addEventListener('click', function () { sched.pick = o[0]; drawSchedPick(); });
+      seg.appendChild(b);
+    });
+  }
+  function closeSched() { $('schedBox').hidden = true; sched = null; }
+  $('schedNo').addEventListener('click', closeSched);
+  $('schedSelf').addEventListener('click', function () { var s = sched; closeSched(); openOwnTime(s.email, s.name); });
+  $('schedDrop').addEventListener('click', async function () {
+    var s = sched;
+    if (await roomAction('unschedReq', [], { email: s.email })) closeSched();
+  });
+  $('schedYes').addEventListener('click', async function () {
+    var from = dateFrom($('schedFrom').value), to = dateFrom($('schedTo').value, true);
+    if (!from || !to || to < from) { $('schedNote').textContent = 'Pick a first day and a last day after it.'; return; }
+    if (to - from > 60 * 86400000) { $('schedNote').textContent = 'Keep it to 60 days or fewer.'; return; }
+    if (to < nowMs()) { $('schedNote').textContent = 'The last day has already passed.'; return; }
+    if (await roomAction('schedReq', [], { email: sched.email, kind: sched.kind, pick: sched.pick, from: from, to: to })) closeSched();
+    else $('schedNote').textContent = 'Couldn’t send it. Try again.';
+  });
+  $('schedBox').addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSched(); } });
+
   // The prompt on a session's page: one paragraph per run of lines (blank
   // lines between are just the gap), cut to a few lines until opened.
   var roomPromptMin = null, roomPromptShown = null;
@@ -7202,6 +7430,9 @@
         var w = el('div', 'who');
         w.appendChild(el('b', null, who('', email)));
         row.appendChild(w);
+        var sb = schedButton(room, email, who('', email), false);
+        if (!sb && state === 'ended' && canSchedule(room)) sb = button('Ask to schedule a make-up', 'btn small ghost', function () { openSched(email, who('', email), 'makeup'); });
+        if (sb) row.appendChild(sb);
         row.appendChild(ownButton(room, email, who('', email)));
         nl.appendChild(row);
       });
@@ -7609,6 +7840,8 @@
     else if (f.act === 'handback') main = button('Share Grading', 'btn small', async function () {
       try { await handBack([x.id], true); lastDrawn = ''; loadRoom(); } catch (e) { tell('Couldn’t Share the Grading', 'Try again.'); }
     });
+    // Extra time still to schedule (or asked for), when nothing more pressing is.
+    if (!main && p.email) main = schedButton(room, p.email, p.name, !!x);
     // (Still writing: the padlock locks them, handing in their paper now; there's no separate button.)
     // A fixed-width slot, so the ⋯ buttons line up whether or not a row has a main button.
     var slot = el('div', 'mainslot');
@@ -7646,6 +7879,10 @@
     if (s && s.email && (!trogOn || (room.own && room.own[s.email.toLowerCase()]))) {
       var em = s.email.toLowerCase();
       item(room.own && room.own[em] ? 'Change alternative schedule' : 'Set Alternative Schedule', function () { openOwnTime(em, p.name); });
+      if (canSchedule(room) && !(room.own && room.own[em])) {
+        if (extraOf(em)) item('Schedule extra time…', function () { openSched(em, p.name, 'extra'); });
+        item('Ask to schedule a make-up…', function () { openSched(em, p.name, 'makeup'); });
+      }
     }
     if (s && s.sub && !trogOn) item('Writing log', function () { openWlog(room.code, s.sub, p.name); });
     if (s && s.sub && (s.drafts || []).length) item('Old drafts', function () { openDrafts({ code: room.code, sub: s.sub, name: p.name }); });
@@ -7861,6 +8098,15 @@
     exitPreviewBtn: 'Goes back to the writing session’s page'
   };
   var TIP_TEXT = {
+    'schedule extra time': 'Asks this student to pick when to take their extra time (or lets you set it yourself)',
+    'asked to pick a time': 'They haven’t picked a time yet: change the request, cancel it, or set the time yourself',
+    'ask to schedule a make-up': 'Asks this student to pick a time to make up this writing session',
+    'set it myself': 'Sets this student’s alternative schedule yourself instead',
+    'cancel the request': 'Takes back the request, so they no longer see it',
+    'send the request': 'Puts the request on their Luddite page, where they pick a day and a time',
+    'send the changed request': 'Changes the request on their Luddite page',
+    'pick a time': 'Opens the days and times you can pick',
+    'save my time': 'Saves this time as when you’ll write; you can change it until it starts',
     'join': 'Joins the writing session with this Entry Phrase',
     'sign out': 'Signs you out of Luddite on this computer',
     'coming up': 'Opens every time you’re needed as a proctor from now on, by day, with Print',
@@ -7988,6 +8234,10 @@
     if (b.matches('.cwitem')) return 'Opens this writing, to read only';
     if (b.matches('.ldrow')) return 'Opens this student’s writing with your live comments';
     if (b.matches('.classcaret')) return 'Shows or hides this class’s students right here';
+    if (b.closest('#studentExtraSeg')) return 'Sets this student’s extra time on assessments to ' + b.textContent.trim() + ' (sessions they can’t do at home then ask you to schedule it)';
+    if (b.closest('#schedPick')) return 'They pick ' + b.textContent.trim().toLowerCase();
+    if (b.closest('#pickDays')) return 'Shows the times you can pick on this day';
+    if (b.closest('#pickSlots')) return 'Picks this time';
     if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved on this computer; Undo brings it back). Papers it’s already on keep it';
     if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved on this computer)';
     if (b.closest('.stockgone') && k === 'undo') return 'Puts this stock comment back in your list';
@@ -10596,6 +10846,7 @@
     show('studentScreen');
     $('studentName').textContent = '';
     $('studentMeta').textContent = 'Loading…';
+    drawStudentExtra(email);
     $('pieceList').innerHTML = '';
     var data;
     try { data = await api('/luddite/student?email=' + encodeURIComponent(email)); }

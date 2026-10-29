@@ -99,13 +99,14 @@ function verifySession(token) {
 //   luddite:class:<id>      { id, name, teacher: { sub, email, name }, emails: [...],
 //                             assignments: [code, ...] newest first, createdAt }
 //   luddite:mine:<email>    { classes: [id, ...], own: [code, ...], rooms: [code, ...],
-//                           handed: [code, ...] }: how a student's login finds
+//                           handed: [code, ...], sched: [code, ...] }: how a student's login finds
 //                           their assignments (their classes' assignments, ones
 //                           with their own time, and ones they've handed in to,
 //                           for reflections)
 //   luddite:room:<code>     { code, title, teacher: { sub, email, name },
 //                             classId, casual, startAt, prompt, endedAt, open,
 //                             own: { [email]: { startAt, multiplier } },
+//                             schedReq: { [email]: { kind, pick, from, to, at, answer } },
 //                             createdAt, students: { [sub]: {...} },
 //                             submissions: [...] }
 //   luddite:drive:<sub>     { refreshToken, email, rootId, roomFolders }
@@ -180,6 +181,37 @@ function cleanPrefs(p) {
   if (x.spellcheck === 'off' || x.spellcheck === 'underline') out.spellcheck = x.spellcheck;
   ['lockOnLeave', 'blockPaste', 'showCount', 'autoHandIn', 'trog'].forEach((k) => { if (typeof x[k] === 'boolean') out[k] = x[k]; });
   return out;
+}
+// Extra time on assessments, per student (by email), as the teacher set it:
+// 1.5 or 2 (or another multiple from 1.25 to 4).
+function cleanExtraTime(x) {
+  const out = {};
+  if (!x || typeof x !== 'object') return out;
+  Object.keys(x).slice(0, 2000).forEach((em) => {
+    const m = Math.round(Number(x[em]) * 4) / 4;
+    if (EMAIL_RE.test(em) && m > 1 && m <= 4) out[lower(em)] = m;
+  });
+  return out;
+}
+// A request that a student pick their own time (Jake, 2026-10-29): for extra
+// time or a make-up, a whole period or a half, between two days.
+const SCHED_PERIOD_MS = 45 * 60000;
+const SCHED_MAX_DAYS = 60;
+function cleanSchedReq(body) {
+  const kind = body.kind === 'makeup' ? 'makeup' : 'extra';
+  const pick = body.pick === 'half' ? 'half' : 'whole';
+  const from = Math.floor(Number(body.from)), to = Math.floor(Number(body.to));
+  if (!(from > 0 && to > from && to - from <= SCHED_MAX_DAYS * 86400000)) throw new HttpError(400, 'bad_dates');
+  return { kind, pick, from, to, at: Date.now() };
+}
+// What the student picked becomes their alternative schedule, in parts: for
+// extra time, the session's own time with their class and then the slot they
+// picked; for a make-up, just the slot.
+function schedBlocks(room, req, start, end) {
+  const slot = { start, end };
+  if (req.kind !== 'extra' || !room.startAt || room.sittings) return [slot];
+  const cls = { start: room.startAt, end: room.startAt + (room.minutes || REF_MINUTES) * 60000 };
+  return cls.end <= start || end <= cls.start ? [cls, slot].sort((a, b) => a.start - b.start) : [slot];
 }
 async function prefsOf(teacherSub) {
   const { state } = await readItem('luddite:teacher:' + teacherSub);
@@ -1347,6 +1379,49 @@ async function routeLuddite(event, method, path, info) {
   // at, handedInAt }). Reflecting is locked down like writing: leaving the page
   // locks them out until the teacher lets them back in ('reflectUnlock').
 
+  // GET /luddite/schedule -- the times this student's teachers asked them to
+  // pick (extra time or a make-up), with what they picked.
+  if (path === '/luddite/schedule' && method === 'GET') {
+    const em = lower(me.email);
+    const { state: mine } = await readItem('luddite:mine:' + em);
+    const rooms = await Promise.all(((mine && mine.sched) || []).map((c) => readItem('luddite:room:' + c)));
+    const list = [];
+    rooms.forEach(({ state: r }) => {
+      const req = r && !r.deletedAt && r.schedReq && r.schedReq[em];
+      if (!req) return;
+      const cls = req.kind === 'extra' && r.startAt && !r.sittings ? { start: r.startAt, end: r.startAt + (r.minutes || REF_MINUTES) * 60000 } : null;
+      list.push({ code: r.code, title: titleOf(r), teacherName: r.teacher.name || r.teacher.email, kind: req.kind, pick: req.pick,
+        from: req.from, to: req.to, at: req.at, answer: req.answer || null, classTime: cls });
+    });
+    list.sort((a, b) => b.at - a.at);
+    return respond(200, { requests: list, now: Date.now() });
+  }
+
+  // PUT /luddite/schedule { code, start, end } -- the student picks their time:
+  // a whole period or a half, in the days asked, not yet begun. It becomes
+  // their alternative schedule (see schedBlocks); they can change it until it starts.
+  if (path === '/luddite/schedule' && method === 'PUT') {
+    const em = lower(me.email), code = cleanCode(body.code);
+    const start = Math.floor(Number(body.start)), end = Math.floor(Number(body.end));
+    const room = await mutate('luddite:room:' + code, (r) => {
+      const req = r && !r.deletedAt && r.schedReq && r.schedReq[em];
+      if (!req) throw new HttpError(404, 'no_request');
+      const now = Date.now(), len = end - start, want = req.pick === 'half' ? SCHED_PERIOD_MS / 2 : SCHED_PERIOD_MS;
+      if (req.answer && req.answer.start <= now) throw new HttpError(409, 'already_started');
+      if (!(start > now && Math.abs(len - want) <= 60000)) throw new HttpError(400, 'bad_time');
+      if (start < req.from || end > req.to) throw new HttpError(400, 'out_of_range');
+      const blocks = cleanBlocks(schedBlocks(r, req, start, end));
+      return { ...r, schedReq: { ...r.schedReq, [em]: { ...req, answer: { start, end, at: now } } },
+        own: { ...(r.own || {}), [em]: { startAt: blocks[0].start, multiplier: 1, blocks, setAt: now, picked: true } } };
+    });
+    await mutate('luddite:mine:' + em, (m) => {
+      const own = (m && m.own) || [];
+      return own.includes(code) ? undefined : { ...(m || {}), own: [code, ...own].slice(0, 60) };
+    });
+    await noteProctoring(code);
+    return respond(200, { answer: room.schedReq[em].answer });
+  }
+
   // GET /luddite/reflections -- the reflections asked of this student.
   if (path === '/luddite/reflections' && method === 'GET') {
     const em = lower(me.email);
@@ -1567,10 +1642,25 @@ async function routeLuddite(event, method, path, info) {
       assignments: rooms.map(roomSummary),
       classes: await classesOf(state),
       prefs: cleanPrefs(state && state.prefs),
+      extraTime: cleanExtraTime(state && state.extraTime),
       rubrics: (state && state.rubrics) || [],
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
     });
+  }
+
+  // PUT /luddite/extratime { email, multiplier } -- a student's extra time on
+  // assessments (1.5, 2, ...; 1 or nothing takes it off).
+  if (path === '/luddite/extratime' && method === 'PUT') {
+    const em = lower(body.email);
+    if (!EMAIL_RE.test(em)) throw new HttpError(400, 'bad_email');
+    const m = Math.round(Number(body.multiplier) * 4) / 4;
+    const saved = await mutate('luddite:teacher:' + me.sub, (t) => {
+      const x = { ...cleanExtraTime(t && t.extraTime) };
+      if (m > 1 && m <= 4) x[em] = m; else delete x[em];
+      return { ...(t || { rooms: [] }), extraTime: x };
+    });
+    return respond(200, { extraTime: cleanExtraTime(saved.extraTime) });
   }
 
   // PUT /luddite/prefs { spellcheck, lockOnLeave, blockPaste, showCount, autoHandIn, trog }
@@ -2072,19 +2162,38 @@ async function routeLuddite(event, method, path, info) {
         if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
         const multiplier = Math.min(4, Math.max(1, Math.round((Number(body.multiplier) || 1) * 4) / 4));
         const blocks = cleanBlocks(body.blocks);
-        if (blocks) return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt: blocks[0].start, multiplier: 1, blocks, setAt: Date.now() } } };
+        // The teacher setting it takes back a request still waiting for the student to pick.
+        const schedReq = { ...(r.schedReq || {}) };
+        if (schedReq[ownEmail] && !schedReq[ownEmail].answer) delete schedReq[ownEmail];
+        if (blocks) return { ...r, schedReq, own: { ...(r.own || {}), [ownEmail]: { startAt: blocks[0].start, multiplier: 1, blocks, setAt: Date.now() } } };
         const startAt = Number(body.startAt) > 0 ? Math.floor(Number(body.startAt)) : null;
-        return { ...r, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, setAt: Date.now() } } };
+        return { ...r, schedReq, own: { ...(r.own || {}), [ownEmail]: { startAt, multiplier, setAt: Date.now() } } };
       }
       else if (body.action === 'unown') {
         const own = { ...(r.own || {}) };
         delete own[ownEmail];
         return { ...r, own };
       }
+      // Ask a student to pick their own time (extra time or a make-up).
+      else if (body.action === 'schedReq') {
+        if (!EMAIL_RE.test(ownEmail)) throw new HttpError(400, 'bad_email');
+        return { ...r, schedReq: { ...(r.schedReq || {}), [ownEmail]: cleanSchedReq(body) } };
+      }
+      else if (body.action === 'unschedReq') {
+        const sr = { ...(r.schedReq || {}) };
+        delete sr[ownEmail];
+        return { ...r, schedReq: sr };
+      }
       else if (body.action === 'delete') return { ...r, open: false, endedAt: Date.now(), deletedAt: Date.now() };
       else throw new HttpError(400, 'bad_action');
       return { ...r, students };
     });
+    if (body.action === 'schedReq') {
+      await mutate('luddite:mine:' + ownEmail, (m) => {
+        const list = (m && m.sched) || [];
+        return list[0] === code ? undefined : { ...(m || {}), sched: [code, ...list.filter((c) => c !== code)].slice(0, 60) };
+      });
+    }
     if (body.action === 'own') {
       await mutate('luddite:mine:' + ownEmail, (m) => {
         const own = (m && m.own) || [];
