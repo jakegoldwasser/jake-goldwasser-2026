@@ -69,8 +69,8 @@ function writeDoc_(rows) {
   var tz = Session.getScriptTimeZone();
   var first = body.getParagraphs()[0];
   first.setText('Student Narratives').setHeading(DocumentApp.ParagraphHeading.TITLE);
-  var done = rows.filter(function (r) { return r.state === 'done'; }).length;
-  body.appendParagraph(done + ' of ' + rows.length + ' finished · updated ' +
+  var started = rows.filter(function (r) { return r.words > 0; }).length;
+  body.appendParagraph(started + ' of ' + rows.length + ' started · updated ' +
       Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a') +
       ' · Edit in Narratives → Open Narrative Builder (changes made directly here are overwritten).')
     .setHeading(DocumentApp.ParagraphHeading.NORMAL)
@@ -79,12 +79,14 @@ function writeDoc_(rows) {
   rows.forEach(function (r) {
     var h = body.appendParagraph((r.name || '(no name)') + ' — Grade ' + r.grade);
     h.setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    var text = r.text && r.text.trim() ? r.text : '(not started)';
-    var para = body.appendParagraph(text).setHeading(DocumentApp.ParagraphHeading.NORMAL);
-    var t = para.editAsText();
-    t.setItalic(false).setFontSize(11).setForegroundColor('#1f2a2e');
-    if (!r.text || !r.text.trim()) t.setItalic(true).setForegroundColor('#9aa0a3');
-    var note = r.words + ' words' + (r.words > 200 ? ' — OVER 200' : '') + (r.state === 'prog' ? ' — has blanks' : '');
+    var empty = !r.text || !r.text.trim();
+    var paras = empty ? ['(not started)'] : r.text.split(/\n{2,}/);
+    paras.forEach(function (ptext) {
+      var t = body.appendParagraph(ptext).setHeading(DocumentApp.ParagraphHeading.NORMAL).editAsText();
+      t.setItalic(false).setFontSize(11).setForegroundColor('#1f2a2e');
+      if (empty) t.setItalic(true).setForegroundColor('#9aa0a3');
+    });
+    var note = r.words + ' words' + (r.words > 200 ? ' — OVER 200 (nothing was cut)' : '');
     var n = body.appendParagraph(note).setHeading(DocumentApp.ParagraphHeading.NORMAL).editAsText();
     n.setItalic(false).setFontSize(8).setForegroundColor(r.words > 200 ? '#b3261e' : '#9aa0a3');
   });

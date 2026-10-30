@@ -1,6 +1,6 @@
 # Narrative Builder
 
-A mad-lib and rubric builder for student narratives (reading, writing, class participation; under 200 words), saving to a Google Doc through Apps Script and filling Veracross through a bookmarklet. Live preview (saves in the browser only): jake-goldwasser.com/narratives/ (`noindex`, not in the nav).
+A mad-lib and rubric builder for student narratives (reading, writing, class participation; under 200 words), saving to a Google Doc through Apps Script and filling Veracross through a bookmarklet. Use it at **https://jake-goldwasser.com/narratives/** (short link: **jake-goldwasser.com/nb**, a redirect in `nb/`); there it saves in the browser only (`noindex`, not in the nav).
 
 Files: `src/index.html` (edit this), `index.html` (built by `node narratives/build.js`, which puts `veracross-filler.js` in as the bookmarklet; paste it into Apps Script as `Index`), `Code.gs` (Apps Script), `veracross-filler.js`.
 
@@ -26,7 +26,10 @@ Copy the name column from your Google Sheet, plus the grade and pronoun columns 
 - shows a preview, and skips names that are already in the list
 
 ## 3. Write
-- **Fastest:** in each section, click a level (Excels / Strong / Developing / Concern) for each rubric row. The highest-rated criterion becomes the strength sentence, the lowest becomes the growth sentence, and the overall average sets the opening and closing. Any blank you change yourself stays as you set it, even if you click the rubric again.
+- **Only what you mark goes in.** Each rubric row you mark (Exceptionally well / Proficient / Room for growth) adds its own sentence, in the order of the rows; its dropdown swaps the wording, offers next steps, or lets you write your own. A row you don't mark, a dropdown left on “— leave out —” and an empty box add nothing. A sentence you picked or wrote yourself stays put if you change that row's level.
+- **Clearing:** every question has a × (or “— leave out —”), and **Clear sheet** (click twice) clears everything for the student.
+- **Too long?** Past 200 words the meter turns red and a note says how far over; nothing is ever cut for you.
+- **Sections:** Opening, Reading, Writing, Class Participation, Student Writing (grade 9; its own paragraph in the narrative) and Closing.
 - Each blank is a dropdown of phrases based on your Class Participation Rubric, your FLE rubrics and the English 9 syllabus. Choose **✎ write my own…** to type your own words, or **— leave out —** to drop an optional sentence.
 - Each section has a box at the bottom for adding your own sentence.
 - **Grade 9:** the Writing section has a bar where you can quote a line of the student's writing or name the subject of a creative piece (poem, personal essay, short story…).
