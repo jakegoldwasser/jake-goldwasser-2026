@@ -206,6 +206,19 @@
   #roomClass .cdot.noper { width: 18px; height: 18px; }
   h2 .cdot { width: 28px; height: 28px; font-size: 18px; border-radius: 4px; margin-right: 10px; vertical-align: 2px; }
   .classpick button .cdot { margin-right: 6px; box-shadow: 0 0 0 1.5px var(--card); }
+  /* New writing session's classes: a dropdown, several allowed (each ticked). */
+  .classdrop { display: block; }
+  .classdrop > summary.field { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 18px; cursor: pointer; padding-right: 36px; position: relative; min-height: 44px; box-sizing: border-box; }
+  .classdrop > summary.field::-webkit-details-marker { display: none; }
+  .classdrop > summary.field::after { content: '\25BE'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+  .classdrop > summary.field.none { color: var(--muted); }
+  .classdrop > summary .cdot { margin-right: 6px; }
+  .menu.classdrop .pop { left: 0; right: 0; min-width: 0; max-height: 50vh; overflow-y: auto; display: block; }
+  .menu.classdrop .pop button { display: flex; align-items: center; gap: 0; }
+  .menu.classdrop .pop button .tick { width: 22px; flex: none; visibility: hidden; color: var(--mint-deep); font-weight: 600; }
+  .menu.classdrop .pop button.on .tick { visibility: visible; }
+  .menu.classdrop .pop button.on { font-weight: 600; }
+  .menu.classdrop .pop button.typed { border-top: 1px solid var(--rule); border-radius: 0 0 8px 8px; }
   .swatches { display: inline-flex; gap: 8px; flex-wrap: wrap; }
   .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; padding: 0; }
   .swatches button.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
@@ -968,7 +981,7 @@
   .hometab[hidden] { display: none; }
   /* The wordmark and toggle sit at Home's width on every page, wide ones too. */
   .hometabs, .card > .dashtop { max-width: 760px; box-sizing: border-box; margin-left: auto; margin-right: auto; }
-  /* Home's Students tab: the whole page pink (like a class's page), its panels plain cards. */
+  /* Home's Classes tab (once Students): the whole page pink (like a class's page), its panels plain cards. */
   body.studentstab { background: #F2DFE4; }
   .hometab[data-tab="students"] .panel { background: var(--card); border-color: #D9A9B5; }
   /* A writing session's card on Home: one per name; each class's square opens its session. */
@@ -1411,9 +1424,11 @@
   /* Labels: small capitals, never a name */
   .panel .grouphead .n, .phraselbl, .joinlbl, .rcard .phraseline .k, .gradebox label, .endwrap label, .rubrichead .t, #promptBar .pk, .readyprompt > b, .roomprompt > b {
     font: 600 12px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  /* Home's Happening now / Coming up / Past: a label, but in ink and a size up, so it doesn't fade. */
-  .panel .grouphead { font: 600 14px/1.3 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
-  .panel .grouphead .dot { width: 10px; height: 10px; }
+  /* Home's Happening Now / Coming Up / Past: section titles (Jake, 2026-10-30: they were too small). */
+  .panel .grouphead { font: 600 25px/1.25 var(--ui); letter-spacing: -.005em; text-transform: none; color: var(--ink); margin: 30px 0 6px; gap: 10px; }
+  .panel .grouphead:first-child { margin-top: 4px; }
+  .panel .grouphead .dot { width: 12px; height: 12px; }
+  .panel .grouphead .pasthide { font: 400 14px var(--ui); }
   .pill, .tag, .chip, .q, .pbtn span, .k { font-size: 12px; }
 
   /* ---- TrogLuddite (Settings › Enable TrogLuddite; the teacher's pages only): a
@@ -1648,29 +1663,15 @@
       <h2 class="wordmark">Luddite</h2>
     </div>
 
-    <!-- Home's toggle: Writing sessions and Students are Home's two tabs (remembered on the device,
+    <!-- Home's toggle: Overview and Classes are Home's two tabs (remembered on the device,
          luddite.homeTab); Monitor opens the session last opened. The same toggle tops a session's page. -->
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Overview</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="students">Classes</button>
       <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
 
-    <div class="hometab" data-tab="sessions">
-
-    <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
-    <section class="panel tint-sky" id="forYouBox" hidden>
-      <div class="panelhead"><h3 class="sect">For You to Write</h3></div>
-      <div id="forYouList"></div>
-    </section>
-
-    <!-- Writing sessions this teacher proctors (another teacher added them) -->
-    <section class="panel tint-mint" id="proctorBox" hidden>
-      <div class="panelhead"><h3 class="sect">To Proctor</h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
-      <div id="proctorDashList"></div>
-    </section>
-
-    <!-- The two things a teacher starts from Home -->
+    <!-- New writing session, first under the toggle on both of Home's tabs (Overview and Classes) -->
     <div class="actions">
       <button class="btn bigaction" id="newBtn" type="button">+ New writing session</button>
     </div>
@@ -1690,7 +1691,7 @@
 
           <div class="formrow" id="classRow">
             <label class="lbl">Classes <span class="q" tabindex="0" data-tip="Everyone on a class list is let in on their own once the session starts; anyone else can use the Entry Phrase and wait in the waiting room. Pick several classes to make the same writing session for each, each starting at its own class's period. None picked: students use the Entry Phrase.">?</span></label>
-            <div class="segctl classpick" id="newRoomClasses"></div>
+            <details class="menu classdrop" id="newRoomClassDrop"><summary class="field" id="newRoomClassSum" title="Picks the classes for this writing session: several make one session each">Pick classes</summary><div class="pop classpick" id="newRoomClasses"></div></details>
             <div id="newRoomEmailsBox" style="margin-top:10px" hidden>
               <textarea class="field promptfield" id="newRoomEmails" placeholder="One per line, or separated by commas" aria-label="Email addresses for this session"></textarea>
               <p class="fine" id="newRoomEmailsFound" style="text-align:left; margin:4px 0 0"></p>
@@ -1713,6 +1714,21 @@
           <p class="fine warn" id="newRoomWhenNote" hidden></p>
           <button class="btn huge" type="submit">Create the writing session</button>
         </form>
+    </section>
+
+
+    <div class="hometab" data-tab="sessions">
+
+    <!-- Writing sessions this teacher is in as a writer (a class they are on, e.g. a class of teachers) -->
+    <section class="panel tint-sky" id="forYouBox" hidden>
+      <div class="panelhead"><h3 class="sect">For You to Write</h3></div>
+      <div id="forYouList"></div>
+    </section>
+
+    <!-- Writing sessions this teacher proctors (another teacher added them) -->
+    <section class="panel tint-mint" id="proctorBox" hidden>
+      <div class="panelhead"><h3 class="sect">To Proctor</h3><button class="btn small ghost" type="button" data-comingup>Coming up</button></div>
+      <div id="proctorDashList"></div>
     </section>
 
     <section class="panel tint-sun">
@@ -1772,7 +1788,7 @@
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Overview</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="students">Classes</button>
       <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
 
@@ -1859,7 +1875,7 @@
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Overview</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="students">Classes</button>
       <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <p style="margin:0 0 10px"><button class="btn small ghost" id="classBack">&larr; Home</button></p>
@@ -1897,7 +1913,7 @@
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Overview</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="students">Classes</button>
       <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <div class="markbar">
@@ -2002,7 +2018,7 @@
     <div class="dashtop"><h2 class="wordmark">Luddite</h2></div>
     <div class="hometabs" role="tablist" aria-label="Home">
       <button type="button" role="tab" data-tab="sessions">Overview</button>
-      <button type="button" role="tab" data-tab="students">Students</button>
+      <button type="button" role="tab" data-tab="students">Classes</button>
       <button type="button" role="tab" data-tab="monitor">Sessions</button>
     </div>
     <div class="markbar">
@@ -5972,13 +5988,17 @@
   function fillClassSelects() {
     var box = $('newRoomClasses');
     pickedClasses = pickedClasses.filter(classById);
-    var sig = JSON.stringify([classes, pickedClasses, pickedList]);
+    // A dropdown of the classes, several allowed: picking one keeps it open,
+    // so the list is drawn only when the classes change, and marked in place.
+    var sig = JSON.stringify(classes);
     if (box.getAttribute('data-sig') !== sig) {
       box.setAttribute('data-sig', sig);
       box.innerHTML = '';
       classes.forEach(function (c) {
-        var b = el('button', pickedClasses.indexOf(c.id) !== -1 ? 'on' : null);
+        var b = el('button');
         b.type = 'button';
+        b.setAttribute('data-class', c.id);
+        b.appendChild(el('span', 'tick', '\u2713'));
         b.appendChild(classDot(c.id));
         b.appendChild(document.createTextNode(c.name));
         if (c.period) b.appendChild(el('span', 'per', c.period + ' period'));
@@ -5991,17 +6011,36 @@
         });
         box.appendChild(b);
       });
-      var typed = el('button', pickedList ? 'on' : null, 'Type in email addresses');
+      var typed = el('button', 'typed');
       typed.type = 'button';
+      typed.appendChild(el('span', 'tick', '\u2713'));
+      typed.appendChild(document.createTextNode('Type in email addresses'));
       typed.addEventListener('click', function () {
         pickedList = !pickedList;
         pickedClasses = [];
+        $('newRoomClassDrop').open = false;
         fillClassSelects();
         syncClassTime();
         if (pickedList) $('newRoomEmails').focus();
       });
       box.appendChild(typed);
     }
+    each('#newRoomClasses button', function (b) {
+      var on = b.classList.contains('typed') ? pickedList : pickedClasses.indexOf(b.getAttribute('data-class')) !== -1;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    var sum = $('newRoomClassSum');
+    sum.innerHTML = '';
+    sum.classList.toggle('none', !pickedList && !pickedClasses.length);
+    if (pickedList) sum.textContent = 'Email addresses typed in';
+    else if (!pickedClasses.length) sum.textContent = classes.length ? 'Pick classes' : 'No classes yet: make one on the Classes tab';
+    else pickedClasses.map(classById).forEach(function (c) {
+      var one = el('span', 'one');
+      one.appendChild(classDot(c.id));
+      one.appendChild(document.createTextNode(c.name));
+      sum.appendChild(one);
+    });
     $('newRoomEmailsBox').hidden = !pickedList;
     var f = $('studentClass'), fk = f.value;
     f.innerHTML = '';
@@ -10770,7 +10809,7 @@
   // their page's heartbeat fresh, isLive). Sessions happening now, plus past
   // ones that may still have someone writing (alternative schedules, or
   // reopened in the last 12 hours). Shown as a Writing Now panel atop the
-  // Students tab and a pill on the student's row (the finder, a class's ▾, the
+  // Classes tab and a pill on the student's row (the finder, a class's ▾, the
   // class page), each opening that session. Refreshed with Home's poll, at
   // most every 20 seconds.
   var writingNow = {}, writingNowAt = 0, writingNowBusy = false, sessionList = [];
