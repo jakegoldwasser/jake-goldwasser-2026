@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Narrative Builder</title>
+<style>
+  :root{
+    --paper:#f7f4ee; --card:#fffdf9; --ink:#1f2a2e; --muted:#6b7378; --line:#e3ddd2;
+    --accent:#1d5c63; --accent-soft:#e2eeee; --warn:#b3261e; --amber:#9a6400; --ok:#2e7d55;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px}
+  button{font:inherit;cursor:pointer}
+  input,select,textarea{font:inherit;color:inherit}
+  .top{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+  .brand{font-family:var(--serif);font-size:20px;font-weight:600;letter-spacing:.2px}
+  .brand small{font-family:var(--sans);font-size:12px;color:var(--muted);font-weight:400;margin-left:6px}
+  .top .spacer{flex:1}
+  .status{font-size:12px;color:var(--muted)}
+  .status.err{color:var(--warn)}
+  .btn{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:6px 11px}
+  .btn:hover{border-color:#c9c1b2}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+  .btn.danger{color:var(--warn)}
+  label.inline{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  label.inline select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#fff;color:var(--ink)}
+
+  .app{display:grid;grid-template-columns:240px minmax(0,1fr) 360px;height:calc(100% - 55px)}
+  .roster{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:#faf8f3}
+  .roster-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 6px;font-weight:600}
+  .roster-head .count{font-weight:400;color:var(--muted);font-size:12px}
+  .roster ul{list-style:none;margin:0;padding:4px 8px;overflow:auto;flex:1}
+  .roster li{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;cursor:pointer}
+  .roster li:hover{background:#efebe3}
+  .roster li.sel{background:var(--accent-soft)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;background:#cfc8bb}
+  .dot.prog{background:#e0a526} .dot.done{background:var(--ok)} .dot.over{background:var(--warn)}
+  .roster .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .roster .wc{font-size:11px;color:var(--muted)}
+  .roster-foot{padding:10px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
+  .roster-foot .btn{flex:1}
+
+  .builder{overflow:auto;padding:20px 28px 60px}
+  .student-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .field input,.field select{border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:#fff;min-width:0}
+  .field.name input{width:220px} .field.goes input{width:120px}
+  .student-bar .grow{flex:1}
+
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px 12px;margin-bottom:14px}
+  .sec h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+  .ml{font-family:var(--serif);font-size:17px;line-height:2.05;margin:0}
+  .ml .sent{display:inline}
+  .ml .sent.off{opacity:.38}
+  .ml select,.ml input{font-family:var(--serif);font-size:16px;border:none;border-bottom:2px solid var(--accent);background:var(--accent-soft);
+    border-radius:4px 4px 0 0;padding:1px 4px;color:var(--accent);max-width:100%;vertical-align:baseline}
+  .ml select.unset{border-bottom-color:#e0a526;background:#fbf1dc;color:var(--amber)}
+  .ml select.none{border-bottom-color:#cfc8bb;background:#f1eee8;color:var(--muted)}
+  .ml input{height:1.55em;line-height:1.2}
+  .ml input.unset{border-bottom-color:#e0a526;background:#fbf1dc}
+  .ml input::placeholder{color:#b19a6a;font-style:italic}
+  .rub{margin:0 0 10px;padding:8px 10px;background:#f6f3ec;border-radius:8px}
+  .rrow{display:flex;align-items:center;gap:10px;padding:4px 0;flex-wrap:wrap}
+  .rrow+.rrow{border-top:1px solid #ebe5d9}
+  .rlabel{flex:1;min-width:170px;font-size:13px;font-weight:600}
+  .rlabel small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+  .rseg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+  .rseg button{border:0;background:none;padding:5px 10px;font-size:12px;color:var(--muted);white-space:nowrap}
+  .rseg button+button{border-left:1px solid var(--line)}
+  .rseg button.on.lv3{background:#1d5c63;color:#fff} .rseg button.on.lv2{background:#5f9297;color:#fff} .rseg button.on.lv1{background:#c98a12;color:#fff}
+  .extra{margin-top:6px}
+  .extra textarea{width:100%;border:1px dashed var(--line);border-radius:8px;padding:7px 9px;font-family:var(--serif);font-size:15px;resize:vertical;min-height:36px;background:transparent}
+  .extra textarea:focus{border-style:solid;border-color:var(--accent);background:#fff;outline:none}
+  .w9bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0 6px;padding:8px 10px;background:#f4efe4;border-radius:8px;font-size:13px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+  .seg button{border:0;background:none;padding:4px 10px;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .w9bar select,.w9bar input{border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:#fff}
+  .tag9{font-size:10px;font-weight:700;color:#fff;background:var(--accent);border-radius:4px;padding:1px 5px;letter-spacing:.05em}
+
+  .banner{background:#fbf1dc;border:1px solid #ecd39b;color:#6b4d00;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+
+  .preview{border-left:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;min-height:0}
+  .pv-head{padding:14px 18px 8px;display:flex;justify-content:space-between;align-items:baseline}
+  .pv-head b{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .meter{font-size:13px;font-variant-numeric:tabular-nums}
+  .meter.over{color:var(--warn);font-weight:600}
+  .bar{height:4px;margin:0 18px;background:#eee8dc;border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);transition:width .2s}
+  .bar.over i{background:var(--warn)}
+  .pv-body{flex:1;overflow:auto;padding:14px 18px}
+  #pvText{font-family:var(--serif);font-size:16px;line-height:1.6;margin:0;white-space:pre-wrap}
+  #pvText mark{background:#fbf1dc;color:var(--amber);border-radius:3px;padding:0 2px}
+  #ovText{width:100%;height:100%;min-height:300px;font-family:var(--serif);font-size:16px;line-height:1.6;border:1px solid var(--accent);border-radius:8px;padding:10px}
+  .pv-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+  .pv-foot .btn{flex:1}
+  .empty{max-width:440px;margin:80px auto;text-align:center;color:var(--muted)}
+  .empty h2{font-family:var(--serif);color:var(--ink);font-weight:500}
+
+  dialog{border:1px solid var(--line);border-radius:14px;padding:0;max-width:640px;width:calc(100% - 32px);background:var(--card);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(30,35,38,.35)}
+  .dlg{padding:18px 20px}
+  .dlg h2{margin:0 0 6px;font-family:var(--serif);font-weight:500}
+  .dlg p{margin:6px 0;color:#3d474b;line-height:1.5}
+  .dlg textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px;font:12px/1.4 ui-monospace,Menlo,monospace;min-height:130px}
+  .dlg .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  .dlg .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+  .pastePv{max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;background:#fff}
+  .pastePv div{padding:2px 0;border-bottom:1px solid #f1ede5}
+  .bm{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:7px 14px;border-radius:7px;font-weight:600;cursor:grab}
+  ol.steps{padding-left:20px;line-height:1.6;margin:8px 0}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+  .toast.on{opacity:1}
+
+  @media (max-width:1050px){
+    .app{grid-template-columns:200px minmax(0,1fr)}
+    .preview{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}
+    .app{height:auto}
+    .builder{overflow:visible}
+  }
+  @media (max-width:700px){
+    .app{grid-template-columns:1fr}
+    .roster ul{max-height:180px}
+    .builder{padding:14px}
+    .field.name input{width:100%}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Narrative Builder <small id="modeLabel"></small></div>
+  <label class="inline">Period
+    <select id="termSel"><option>semester</option><option>quarter</option><option>year</option><option>term</option></select>
+  </label>
+  <div class="spacer"></div>
+  <span class="status" id="status">Loading…</span>
+  <button class="btn" id="vcBtn">Send to Veracross</button>
+  <button class="btn ghost" id="backupBtn">Backup</button>
+</header>
+
+<div class="app">
+  <aside class="roster">
+    <div class="roster-head">Students <span class="count" id="count"></span></div>
+    <ul id="list"></ul>
+    <div class="roster-foot">
+      <button class="btn primary" id="pasteBtn">Paste roster</button>
+      <button class="btn" id="addBtn">+ One</button>
+      <button class="btn ghost" id="sortBtn" title="Sort by last name">A–Z</button>
+    </div>
+  </aside>
+
+  <main class="builder" id="builder">
+    <div class="empty" id="empty">
+      <h2>Start with your class list</h2>
+      <p>Copy the name column (plus grade and pronouns, if you have them) from your Google Sheet, then click <b>Paste roster</b>.</p>
+      <button class="btn primary" onclick="openPaste()">Paste roster</button>
+    </div>
+    <div id="editor" hidden>
+      <div class="student-bar">
+        <label class="field name"><span>Student name</span><input id="fName" autocomplete="off"></label>
+        <label class="field goes"><span>Goes by</span><input id="fGoes" autocomplete="off"></label>
+        <label class="field"><span>Grade</span><select id="fGrade"></select></label>
+        <label class="field"><span>Pronouns</span><select id="fPron"><option value="she">she / her</option><option value="he">he / him</option><option value="they">they / them</option><option value="name">always use their name (no pronouns)</option></select></label>
+        <div class="grow"></div>
+        <button class="btn ghost danger" id="delBtn">Remove</button>
+      </div>
+      <div id="ovBanner" class="banner" hidden><span>You're editing this narrative by hand, so the choices below won't change it.</span><button class="btn" id="ovRevert">Back to builder</button></div>
+      <div id="sections"></div>
+    </div>
+  </main>
+
+  <aside class="preview">
+    <div class="pv-head"><b>Narrative</b><span class="meter" id="meter">0 / 200 words</span></div>
+    <div class="bar" id="bar"><i style="width:0"></i></div>
+    <div class="pv-body"><p id="pvText"></p><textarea id="ovText" hidden></textarea></div>
+    <div class="pv-foot">
+      <button class="btn" id="prevBtn">← Prev</button>
+      <button class="btn" id="copyBtn">Copy</button>
+      <button class="btn" id="editBtn">Edit by hand</button>
+      <button class="btn" id="nextBtn">Next →</button>
+    </div>
+  </aside>
+</div>
+
+<dialog id="pasteDlg"><div class="dlg">
+  <h2>Paste your roster</h2>
+  <p>Copy cells from Google Sheets and paste below. One student per row. Columns for grade (9, 10…) and pronouns (she/he/they) are detected automatically; a header row is fine.</p>
+  <textarea id="pasteIn" placeholder="Maya Chen	9	she/her&#10;Okafor, Daniel	9	he/him&#10;…"></textarea>
+  <div class="row">
+    <label class="inline">If two name columns, they're
+      <select id="pOrder"><option value="fl">First | Last</option><option value="lf">Last | First</option></select></label>
+    <label class="inline">Default grade <select id="pGrade"></select></label>
+    <label class="inline">Default pronouns <select id="pPron"><option value="they">they/them</option><option value="she">she/her</option><option value="he">he/him</option><option value="name">name only</option></select></label>
+  </div>
+  <div class="pastePv" id="pastePv"><span style="color:var(--muted)">Preview appears here.</span></div>
+  <div class="actions"><button class="btn" onclick="pasteDlg.close()">Cancel</button><button class="btn primary" id="pasteAdd">Add students</button></div>
+</div></dialog>
+
+<dialog id="vcDlg"><div class="dlg">
+  <h2>Send to Veracross</h2>
+  <ol class="steps">
+    <li><b>One time:</b> drag this button to your bookmarks bar → <a class="bm" id="bmLink" href="#" onclick="toast('Drag this to your bookmarks bar instead of clicking it');return false;">Fill Veracross</a></li>
+    <li>Click <b>Copy narratives</b> below.</li>
+    <li>Open the Veracross page where you enter comments for this class and click the <b>Fill Veracross</b> bookmark. Each student's box is filled in and outlined in green.</li>
+    <li>Look them over, then click Save in Veracross.</li>
+  </ol>
+  <div class="row">
+    <label class="inline"><input type="checkbox" id="vcOnlyDone" checked> Only finished narratives (no blanks, ≤ 200 words)</label>
+  </div>
+  <p id="vcSummary" style="font-size:13px"></p>
+  <textarea id="vcOut" readonly hidden></textarea>
+  <div class="actions"><button class="btn" onclick="vcDlg.close()">Close</button><button class="btn primary" id="vcCopy">Copy narratives</button></div>
+</div></dialog>
+
+<dialog id="bkDlg"><div class="dlg">
+  <h2>Backup</h2>
+  <p>This is everything in the builder. Copy it somewhere safe, or paste a backup here and click Restore.</p>
+  <textarea id="bkText" style="min-height:200px"></textarea>
+  <div class="actions"><button class="btn" onclick="bkDlg.close()">Close</button><button class="btn" id="bkCopy">Copy</button><button class="btn danger" id="bkRestore">Restore from pasted</button></div>
+</div></dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- Language ---------------- */
+var PRON = {
+  she:{they:'she',them:'her',their:'her',theirs:'hers',themself:'herself',is:'is',has:'has',was:'was',does:'does',s:'s',es:'es'},
+  he:{they:'he',them:'him',their:'his',theirs:'his',themself:'himself',is:'is',has:'has',was:'was',does:'does',s:'s',es:'es'},
+  they:{they:'they',them:'them',their:'their',theirs:'theirs',themself:'themself',is:'are',has:'have',was:'were',does:'do',s:'',es:''}
+};
+var GRADES = ['6','7','8','9','10','11','12'];
+var LIMIT = 200;
+var PIECES = ['poem','Writing Quarterly piece','micro fiction','short story','personal essay','style imitation','dramatic monologue'];
+var TEXTS = ['Maus','Macbeth','The Picture of Dorian Gray','The Making of a Poem','Micro Fiction','The Odyssey','Genesis','Twelfth Night','Song of Solomon','Othello'];
+
+/* Slots. Option strings may use {they} {them} {their} {Name} {is} {has} and verb endings like read[s] / approach[es]. */
+var SLOTS = {
+  open_adj:{req:true, opts:['a thoughtful','an engaged','a curious','a conscientious','a perceptive','an earnest','a warm and generous','a quiet but attentive','an energetic','a hardworking']},
+  open_more:{opts:[
+    '{They} bring[s] genuine curiosity and thoughtfulness to our work.',
+    '{They} {has} grown noticeably in confidence this {term}.',
+    '{They} approach[es] challenging texts with maturity and empathy.',
+    '{They} {is} a respectful, generous member of our classroom community.',
+    '{They} {is} willing to sit with difficult questions rather than rushing to easy answers.']},
+
+  read_str:{req:true, opts:[
+    'reads with real depth and imagination, often noticing how small choices of language open up larger meanings',
+    'reads closely and carefully, annotating thoroughly and returning to the text for evidence',
+    'persists through difficult passages with patience and curiosity',
+    'brings a thorough, thoughtful reading of each text to class',
+    'is growing more confident with challenging texts',
+    'often reads for plot rather than for how the language creates meaning']},
+  read_text:{type:'text', ph:'a text we read', list:'textsList'},
+  read_text_adj:{req:true, opts:['especially perceptive','insightful','imaginative','careful and nuanced','a highlight of the {term}']},
+  read_grow:{opts:[
+    'annotating more consistently, with written words in the margins',
+    'slowing down to notice how the language of a passage creates meaning',
+    'keeping pace with the assigned reading so that {they} can engage fully in discussion',
+    'writing down questions while reading and bringing them to class',
+    'persisting through moments of uncertainty rather than looking for quick answers']},
+
+  write_str:{req:true, opts:[
+    'makes bold, arguable claims and supports them with sophisticated evidence',
+    'crafts clear, logically structured arguments grounded in the language of the text',
+    'writes clear and compelling sentences that stay focused on substantive analysis',
+    'shows genuine grappling with the tensions in the texts we read',
+    'takes courageous and imaginative risks',
+    'is learning to build arguments around how a text uses language rather than what happens in it']},
+  w9_intro:{req:true, opts:[
+    'One line from {their} {piece} stayed with me:',
+    '{Name}’s {piece} included this striking line:',
+    '{Their} {piece} showed real craft, as in this line:',
+    'I still remember this moment from {their} {piece}:',
+    '{Their} submission to the Ninth Grade Writing Quarterly included this line:']},
+  w9_quote:{type:'text', req:true, ph:'paste a line of their writing', quote:true},
+  w9_topic:{type:'text', req:true, ph:'subject or theme'},
+  w9_adj:{req:true, opts:['poignant and surprising','vivid and moving','funny and inventive','courageous and imaginative','honest and powerful','beautifully observed']},
+  write_grow:{opts:[
+    'sharpening {their} thesis statements so that they make bold, arguable claims with clear stakes',
+    'moving from plot summary toward close analysis of the text’s language',
+    'supporting each point with multiple, carefully chosen quotations',
+    'trimming repetition and filler so that every sentence does analytical work',
+    'making the logical connections between {their} paragraphs more explicit',
+    'attending to grammar, MLA citation, and formatting conventions',
+    'meaningfully integrating feedback from one draft to the next']},
+
+  part_str:{req:true, opts:[
+    'raises the focus, energy, and insight of our discussions',
+    'makes regular contributions that show an in-depth understanding of the material and challenge conventional interpretations',
+    'brings out the best in {their} classmates and makes it easier for others to enter the conversation',
+    'volunteers helpful, thoughtful comments and listens actively to {their} peers',
+    'is a quieter presence whose contributions, when offered, show solid understanding',
+    'contributes regularly, though {their} comments sometimes stay at the surface of the material']},
+  part_more:{opts:[
+    'take[s] careful notes throughout class',
+    'help[s] build a collegial, productive atmosphere in small groups',
+    'take[s] on leadership and supportive roles in group work, inviting everyone to speak',
+    'come[s] to class prepared, with text and notebook out and ready to work',
+    'build[s] on the insights of others rather than repeating them']},
+  part_grow:{opts:[
+    'share {their} ideas more often in whole-class discussion',
+    'build on classmates’ insights rather than repeating points already made',
+    'be mindful of how often {their} voice is in the room',
+    'develop {their} comments with specific evidence from the text',
+    'come to class ready to work, with text and notebook out from the start',
+    'take notes more consistently during discussion',
+    'stay on task during small-group work']},
+
+  close:{req:true, opts:[
+    'It has been a pleasure to teach {name} this {term}.',
+    'I look forward to seeing {their} continued growth as a reader and writer.',
+    '{Name} should be proud of this {term}\u2019s work.',
+    'I am excited to see where {their} curiosity leads next.',
+    'Keep up the great work, {name}!']}
+};
+
+var SECTIONS = [
+  {id:'open', title:'Opening', sents:[
+    {tpl:'{Name} is <<open_adj>> member of our English {grade} class.'},
+    {tpl:'<<open_more>>'}]},
+  {id:'read', title:'Reading', sents:[
+    {tpl:'As a reader, {name} <<read_str>>.'},
+    {tpl:'{Their} reading of <<read_text>> was <<read_text_adj>>.', optional:'read_text'},
+    {tpl:'{They} would benefit from <<read_grow>>.'}]},
+  {id:'write', title:'Writing', sents:[
+    {tpl:'As a writer, {name} <<write_str>>.'},
+    {tpl:'<<w9_intro>> <<w9_quote>>', w9:'quote'},
+    {tpl:'{Name}’s {piece} about <<w9_topic>> was <<w9_adj>>.', w9:'topic'},
+    {tpl:'Going forward, {they} should focus on <<write_grow>>.'}]},
+  {id:'part', title:'Class participation', sents:[
+    {tpl:'In class, {name} <<part_str>>.'},
+    {tpl:'{They} also <<part_more>>.'},
+    {tpl:'I encourage {them} to <<part_grow>>.'}]},
+  {id:'close', title:'Closing', sents:[{tpl:'<<close>>'}]}
+];
+
+/* ---------------- Rubrics ----------------
+ * Levels follow your 2026-27 rubrics: 3 = Exceptionally well, 2 = Proficient, 1 = Room for growth.
+ * Each criterion: label, desc, optional g (grades it applies to), and phrases:
+ *   str  → strength, fills the section's first blank   (levels 3, 2, 1)
+ *   grow → growth area, fills the growth blank          (levels 2, 1)
+ *   more → second strength (participation only)
+ * Swap in new rubrics by editing this block only.
+ */
+var LEVELS = [[3,'Exceptionally well'],[2,'Proficient'],[1,'Room for growth']];
+var UPPER = ['10','11','12'];
+var RUBRIC = {
+  read:{strSlot:'read_str', growSlot:'read_grow', crit:[
+    {id:'r_depth', label:'Depth of reading', desc:'Deep, contemplative, imaginative reading that goes beyond plot',
+     str:{3:['reads with real depth and imagination, often noticing how small choices of language open up larger meanings','brings a deep, contemplative, and imaginative reading to every text we study'],
+          2:['reads thoughtfully and thoroughly, looking beyond plot to how a text is written'],
+          1:['is beginning to read beyond plot toward how a text uses language']},
+     grow:{2:['pushing {their} readings toward bolder, more surprising interpretations'],
+           1:['slowing down to notice how the language of a passage creates meaning','moving beyond plot toward the details of how a text is written']}},
+    {id:'r_char', label:'Literacy: characters', desc:'Understands characters’ complexity and psychological depth, beyond stereotype toward empathy',
+     str:{3:['reads characters with striking empathy, attending to their complexity and psychological depth'],
+          2:['shows an accurate understanding of the complexity of the characters we meet'],
+          1:['is developing a fuller sense of the characters we read about']},
+     grow:{2:['reading characters with even more nuance, moving past first impressions toward empathy'],
+           1:['looking past stereotype toward the psychological depth of the characters we read']}},
+    {id:'r_annot', label:'Annotation & vocabulary', desc:'Annotated text every day; defines unfamiliar words in annotations',
+     str:{3:['annotates thoroughly, defining unfamiliar words and coming to every class with a full, thoughtful reading'],
+          2:['annotates carefully and keeps pace with the assigned reading'],
+          1:['is building more consistent reading and annotation habits']},
+     grow:{2:['using {their} annotations as a springboard for discussion and writing'],
+           1:['annotating every assignment, including definitions of unfamiliar words','keeping pace with the assigned reading and bringing an annotated text to every class']}},
+    {id:'r_persist', label:'Persistence', desc:'Stays with difficulty; brings questions instead of seeking outside answers',
+     str:{3:['persists through the most difficult passages with patience, curiosity, and maturity'],
+          2:['persists through difficult passages and brings {their} questions to class'],
+          1:['is growing more confident with challenging texts']},
+     grow:{2:['bringing more of the questions written down while reading into our discussions'],
+           1:['writing down {their} questions when a passage is difficult and bringing them to class']}}
+  ]},
+  write:{strSlot:'write_str', growSlot:'write_grow', crit:[
+    /* English 9 — Writing Quarter and analytical writing */
+    {id:'w9_courage', g:['9'], label:'Courage & imagination', desc:'Courageous, imaginative writing; poignant, surprising work',
+     str:{3:['writes with courage and imagination, producing poignant, surprising work'],
+          2:['takes thoughtful creative risks in {their} writing'],
+          1:['is beginning to take creative risks in {their} writing']},
+     grow:{2:['taking even bolder creative risks'],
+           1:['writing with more courage and imagination, and trusting {their} voice']}},
+    {id:'w9_revision', g:['9'], label:'Revision & feedback', desc:'Integrates feedback from me and peers; careful work over many drafts',
+     str:{3:['revises with real ambition, meaningfully integrating feedback across many drafts'],
+          2:['integrates feedback thoughtfully from one draft to the next'],
+          1:['is learning to use feedback in revision']},
+     grow:{2:['making bigger, more substantive changes between drafts'],
+           1:['meaningfully integrating feedback from one draft to the next']}},
+    {id:'w9_reflect', g:['9'], label:'Reflection', desc:'Reflective about own strengths and areas that could be improved',
+     str:{3:['reflects insightfully on strengths and areas for growth as a writer'],
+          2:['reflects honestly on {their} growth as a writer'],
+          1:['is beginning to reflect on {their} writing process']},
+     grow:{2:['turning {their} reflections into concrete goals for each new piece'],
+           1:['reflecting more deeply on strengths and areas for growth']}},
+    {id:'w9_argument', g:['9'], label:'Argument', desc:'Bold claims supported by evidence in a logical structure',
+     str:{3:['makes bold, original claims supported by sophisticated evidence and lucid reasoning'],
+          2:['makes clear, interesting arguments supported by evidence'],
+          1:['is learning to support {their} claims with evidence from the text']},
+     grow:{2:['making {their} claims bolder and more original'],
+           1:['building {their} analytical writing around a clear, arguable claim supported by evidence']}},
+    /* English 10 — 2026-27 rubric */
+    {id:'w_surprise', g:UPPER, label:'Surprise', desc:'Close reading that reveals something a sharp reader might have missed',
+     str:{3:['finds genuinely surprising insights in the text, the kind that make a reader wonder how they missed them','reads closely enough to reveal what even a sharp reader might otherwise miss'],
+          2:['reads closely enough to move beyond the plot'],
+          1:['is beginning to look past plot toward the details of the text']},
+     grow:{2:['pushing {their} close readings toward more surprising, original insights'],
+           1:['reading closely enough to reveal something beyond the plot']}},
+    {id:'w_clarity', g:UPPER, label:'Clarity', desc:'Clear, plain language; consistent terminology; avoids abstraction',
+     str:{3:['writes in clear, plain, precise language, even when {their} ideas are complex'],
+          2:['writes clearly and uses {their} terms consistently'],
+          1:['is working toward clearer, more direct prose']},
+     grow:{2:['keeping {their} language plain and {their} terms consistent as {their} ideas grow more complex'],
+           1:['writing in clear, plain language rather than abstraction']}},
+    {id:'w_structure', g:UPPER, label:'Structure', desc:'Logical progression; topic sentences with arguable claims, not plot points',
+     str:{3:['builds essays with a sophisticated, logical progression of ideas'],
+          2:['organizes {their} essays logically, with clear topic sentences'],
+          1:['is learning to organize {their} essays around a clear progression of ideas']},
+     grow:{2:['making the connections between {their} paragraphs feel more natural'],
+           1:['opening each paragraph with an arguable claim rather than a plot point']}},
+    {id:'w_analysis', g:UPPER, label:'Analysis', desc:'Plentiful, persuasive evidence; 3–4 details of close reading per paragraph',
+     str:{3:['supports {their} arguments with plentiful, persuasive close reading'],
+          2:['supports {their} claims with relevant evidence from the text'],
+          1:['is beginning to support {their} claims with evidence from the text']},
+     grow:{2:['developing each paragraph with three or four details of close reading'],
+           1:['supporting each claim with plentiful, specific evidence from the text']}},
+    /* Both grades */
+    {id:'w_mech', label:'Mechanics', desc:'MLA standards of spelling, grammar, style, citation',
+     str:{3:['writes with polish, attending carefully to grammar, style, and MLA citation'],
+          2:['follows the conventions of grammar and MLA citation with care'],
+          1:['is becoming more careful with grammar and citation']},
+     grow:{2:['proofreading for the small errors that occasionally distract from {their} ideas'],
+           1:['proofreading carefully and following MLA conventions']}}
+  ]},
+  part:{strSlot:'part_str', moreSlot:'part_more', growSlot:'part_grow', crit:[
+    {id:'p_discuss', label:'Discussion', desc:'Offers ideas and questions without prompting; ties comments to quotes from the text',
+     str:{3:['offers insightful ideas and questions without prompting, grounding {their} comments in the text','makes regular contributions that show an in-depth understanding of the material and challenge conventional interpretations'],
+          2:['contributes thoughtful comments that show a thorough reading of the text'],
+          1:['contributes occasionally, showing a partial reading of the text']},
+     more:['connect[s] {their} comments directly to quotations from the text','help[s] keep our conversations lively, scholarly, and civil'],
+     grow:{2:['connect {their} comments more directly to quotations from the text'],
+           1:['offer ideas and questions without prompting']}},
+    {id:'p_listen', label:'Listening & room for others', desc:'Listens intently; builds on peers; lets others speak once before speaking twice',
+     str:{3:['brings out the best in {their} classmates, listening intently and making room for every voice'],
+          2:['listens attentively and builds on {their} classmates’ comments'],
+          1:['is a respectful listener in our discussions']},
+     more:['connect[s] {their} comments to those of {their} classmates','make[s] room for every voice in the room'],
+     grow:{2:['connect {their} comments more often to those of {their} classmates'],
+           1:['listen more intently to classmates and make room for every voice']}},
+    {id:'p_prep', label:'Preparedness', desc:'Annotated text and assignments every day; ready when class starts; meets deadlines',
+     str:{3:['arrives fully prepared every day, with {their} annotated text and assignments in hand'],
+          2:['arrives prepared and ready to work'],
+          1:['is working toward arriving consistently prepared']},
+     more:['come[s] to every class ready to start, with materials out and thoughts collected','seek[s] me out outside of class to prepare for assignments'],
+     grow:{2:['communicate with me in advance whenever a deadline becomes difficult'],
+           1:['bring {their} annotated text and assignments to every class, ready to start when class begins']}},
+    {id:'p_focus', label:'Focus & notes', desc:'Follows instructions the first time; consistent notes; no side conversations',
+     str:{3:['raises the focus, energy, and insight of our class'],
+          2:['stays focused in class and takes consistent notes'],
+          1:['is working on staying focused throughout class']},
+     more:['take[s] excellent, consistent notes without prompting','respond[s] to instructions the first time'],
+     grow:{2:['take notes more consistently, without prompting'],
+           1:['avoid side conversations and respond to instructions the first time']}},
+    {id:'p_group', label:'Group work', desc:'Takes part respectfully and enthusiastically; fosters equal participation',
+     str:{3:['takes on leadership in small groups, building a collegial atmosphere that fosters equal participation'],
+          2:['takes part respectfully and enthusiastically in group work'],
+          1:['participates willingly in small-group work']},
+     more:['take[s] part respectfully and enthusiastically in group work','help[s] build a collegial, productive atmosphere in small groups'],
+     grow:{2:['take on more of a leadership role in small groups'],
+           1:['stay on task and contribute equally during small-group work']}}
+  ]}
+};
+var OVERALL = {
+  open_adj:{3:['an engaged','a perceptive','a curious'], 2:['a thoughtful','a conscientious','an earnest'], 1:['an earnest','a capable']},
+  close:{3:['It has been a pleasure to teach {name} this {term}.','I am excited to see where {their} curiosity leads next.','{Name} should be proud of this {term}\u2019s work.'],
+         2:['It has been a pleasure to teach {name} this {term}.','{Name} should be proud of this {term}\u2019s work.','I look forward to seeing {their} continued growth as a reader and writer.'],
+         1:['I look forward to seeing {their} continued growth as a reader and writer.','I look forward to supporting {name}\u2019s continued growth.']}
+};
+function critsFor(area, st){ return RUBRIC[area].crit.filter(function(c){ return !c.g || c.g.indexOf(st.grade)>-1; }); }
+
+/* Merge rubric phrases into the dropdowns, grouped by criterion. */
+(function(){
+  function add(slot, phrase, group){
+    var s = SLOTS[slot]; s.grp = s.grp || s.opts.map(function(){return '';});
+    if(s.opts.indexOf(phrase)===-1){ s.opts.push(phrase); s.grp.push(group); }
+  }
+  Object.keys(RUBRIC).forEach(function(area){
+    var R = RUBRIC[area];
+    R.crit.forEach(function(c){
+      [3,2,1].forEach(function(l){ (c.str[l]||[]).forEach(function(p){ add(R.strSlot, p, c.label); }); });
+      [2,1].forEach(function(l){ (c.grow[l]||[]).forEach(function(p){ add(R.growSlot, p, c.label); }); });
+      if(R.moreSlot) (c.more||[]).forEach(function(p){ add(R.moreSlot, p, c.label); });
+    });
+  });
+  Object.keys(OVERALL).forEach(function(slot){ [3,2,1].forEach(function(l){ OVERALL[slot][l].forEach(function(p){ add(slot, p, ''); }); }); });
+})();
+
+function hashOf(str){ var h=0; for(var i=0;i<str.length;i++){ h=(h*31+str.charCodeAt(i))|0; } return Math.abs(h); }
+function pick(arr, seed){ return arr && arr.length ? arr[hashOf(seed)%arr.length] : null; }
+function setAuto(st, key, val){
+  var curv = st.sel[key];
+  if(curv==null || curv==='' || curv===st.auto[key]){ st.sel[key]=val; st.auto[key]=val; }
+}
+function generate(st){
+  var all=[];
+  Object.keys(RUBRIC).forEach(function(area){
+    var R = RUBRIC[area];
+    var rated = critsFor(area, st).filter(function(c){ return st.rub[c.id]; })
+      .map(function(c){ all.push(st.rub[c.id]); return {c:c, l:st.rub[c.id], h:hashOf(st.id+c.id)}; })
+      .sort(function(a,b){ return b.l-a.l || a.h-b.h; });
+    if(!rated.length){
+      [R.strSlot, R.growSlot, R.moreSlot].forEach(function(k){ if(k && st.auto[k]!=null && st.sel[k]===st.auto[k]){ st.sel[k] = SLOTS[k].req ? '' : '__none'; delete st.auto[k]; } });
+      return;
+    }
+    var top = rated[0], low = rated[rated.length-1];
+    setAuto(st, R.strSlot, pick(top.c.str[top.l], st.id+top.c.id));
+    var growVal = '__none';
+    if(low.l<=2 && (low!==top || low.l===1)) growVal = pick(low.c.grow[low.l], st.id+low.c.id+'g');
+    setAuto(st, R.growSlot, growVal);
+    if(R.moreSlot){
+      var second = rated[1];
+      setAuto(st, R.moreSlot, second && second.l>=2 && second!==low ? pick(second.c.more, st.id+second.c.id+'m') : '__none');
+    }
+  });
+  if(all.length){
+    var avg = all.reduce(function(a,b){return a+b;},0)/all.length;
+    var band = avg>=2.6 ? 3 : avg>=1.75 ? 2 : 1;
+    setAuto(st, 'open_adj', pick(OVERALL.open_adj[band], st.id+'o'));
+    setAuto(st, 'close', pick(OVERALL.close[band], st.id+'c'));
+  }
+}
+function rubricRows(area, st, onChange){
+  var wrap = document.createElement('div'); wrap.className='rub';
+  critsFor(area, st).forEach(function(c){
+    var row = document.createElement('div'); row.className='rrow';
+    row.innerHTML = '<span class="rlabel" title="'+esc(c.desc)+'">'+esc(c.label)+'<small>'+esc(c.desc)+'</small></span>';
+    var seg = document.createElement('span'); seg.className='rseg';
+    LEVELS.forEach(function(L){
+      var b = document.createElement('button'); b.textContent=L[1]; b.className='lv'+L[0]+(st.rub[c.id]===L[0]?' on':'');
+      b.onclick = function(){ st.rub[c.id] = st.rub[c.id]===L[0] ? 0 : L[0]; generate(st); onChange(true); };
+      seg.appendChild(b);
+    });
+    row.appendChild(seg); wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+/* ---------------- State ---------------- */
+var KEY = 'narrativeBuilder.v1';
+var state = {settings:{term:'semester'}, students:[], currentId:null};
+var isGAS = typeof google === 'object' && google.script && google.script.run;
+var $ = function(id){ return document.getElementById(id); };
+
+function uid(){ return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function cur(){ return state.students.find(function(s){return s.id===state.currentId;}) || null; }
+function cap(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function firstName(full){
+  full = (full||'').trim(); if(!full) return '';
+  if(full.indexOf(',')>-1) return (full.split(',')[1]||'').trim().split(/\s+/)[0] || full.split(',')[0];
+  return full.split(/\s+/)[0];
+}
+function newStudent(name, grade, pron){
+  return {id:uid(), name:name||'', goesBy:firstName(name), grade:grade||'9', pronouns:pron||'they',
+    sel:{}, custom:{}, text:{}, extra:{}, rub:{}, auto:{}, w9:{mode:'quote', piece:'poem', pieceCustom:''}, override:null};
+}
+
+/* ---------------- Rendering text ---------------- */
+function resolve(str, st){
+  var p = PRON[st.pronouns] || PRON.they;
+  var nm = (st.goesBy||'').trim() || firstName(st.name) || 'Student';
+  if(st.pronouns==='name') return resolveName(str, st, nm);
+  var piece = st.w9.piece === '__custom' ? (st.w9.pieceCustom||'piece') : st.w9.piece;
+  var map = {name:nm, Name:nm, grade:st.grade, term:state.settings.term||'semester', piece:piece};
+  return str.replace(/\{(\w+)\}/g, function(m,k){
+    if(map.hasOwnProperty(k)) return map[k];
+    var lower = k.charAt(0).toLowerCase()+k.slice(1);
+    if(p.hasOwnProperty(lower)) return k!==lower ? cap(p[lower]) : p[lower];
+    return m;
+  }).replace(/\[(s|es)\]/g, function(m,k){ return p[k]; });
+}
+function quoteFmt(t){
+  t = t.trim().replace(/^["“‘']+|["”’']+$/g,'').trim();
+  if(!/[.!?…]$/.test(t)) t += '.';
+  return '“' + t + '”';
+}
+/* "Always use their name": the first mention in a sentence is the name (or name's);
+   a later possessive becomes "the" (or nothing before classmates/peers), so it never reads "Maya ... Maya's". */
+function resolveName(str, st, nm){
+  var piece = st.w9.piece === '__custom' ? (st.w9.pieceCustom||'piece') : st.w9.piece;
+  var map = {grade:st.grade, term:state.settings.term||'semester', piece:piece};
+  var seen = false, poss = nm + '\u2019s';
+  var out = str.replace(/\{(\w+)\}/g, function(m,k){
+    if(map.hasOwnProperty(k)) return map[k];
+    var lower = k.charAt(0).toLowerCase()+k.slice(1);
+    if(lower==='name' || lower==='they' || lower==='them' || lower==='themself'){ seen = true; return nm; }
+    if(lower==='their' || lower==='theirs'){ if(!seen){ seen = true; return poss; } return k!==lower ? 'The' : 'the'; }
+    if(lower==='is') return 'is'; if(lower==='has') return 'has'; if(lower==='was') return 'was'; if(lower==='does') return 'does';
+    return m;
+  }).replace(/\[(s|es)\]/g, function(m,k){ return k; });
+  return out.replace(/\b(the|The) (classmates|peers)\b/g, '$2');
+}
+/* returns string, null (omit sentence) or undefined (needs a choice) */
+function slotValue(key, st){
+  var s = SLOTS[key];
+  if(s.type==='text'){
+    var t = (st.text[key]||'').trim();
+    if(!t) return s.req ? undefined : null;
+    return s.quote ? quoteFmt(t) : t;
+  }
+  var v = st.sel[key];
+  if(v==null || v==='') return s.req ? undefined : null;
+  if(v==='__none') return null;
+  if(v==='__custom'){ var c=(st.custom[key]||'').trim().replace(/[.]$/,''); return c || undefined; }
+  return v;
+}
+function sentenceActive(sent, st){
+  if(sent.w9) return st.grade==='9' && st.w9.mode===sent.w9;
+  if(sent.optional) return !!(st.text[sent.optional]||'').trim();
+  return true;
+}
+function renderSentence(sent, st){
+  if(!sentenceActive(sent, st)) return null;
+  var omit=false, blank=false;
+  var out = sent.tpl.replace(/<<(\w+)>>/g, function(m,key){
+    var v = slotValue(key, st);
+    if(v===null){ omit=true; return ''; }
+    if(v===undefined){ blank=true; return '____'; }
+    return v;
+  });
+  if(omit) return null;
+  out = resolve(out, st).replace(/\s+/g,' ').replace(/\s+([.,;:!?])/g,'$1').replace(/([.!?])\./g,'$1').trim();
+  return {text:cap(out), blank:blank};
+}
+function narrative(st){
+  if(st.override!=null) return {text:st.override, blank:false};
+  var parts=[], blank=false;
+  SECTIONS.forEach(function(sec){
+    sec.sents.forEach(function(sent){
+      var r = renderSentence(sent, st); if(r){ parts.push(r.text); blank = blank || r.blank; }
+    });
+    var ex = (st.extra[sec.id]||'').trim();
+    if(ex){ ex = cap(resolve(ex, st)); if(!/[.!?”"]$/.test(ex)) ex += '.'; parts.push(ex); }
+  });
+  return {text:parts.join(' '), blank:blank};
+}
+function wc(t){ return (t.trim().match(/\S+/g)||[]).length; }
+function status(st){
+  var n = narrative(st), w = wc(n.text);
+  if(w > LIMIT) return {cls:'over', w:w, n:n};
+  if(n.blank) return {cls:'prog', w:w, n:n};
+  return {cls:'done', w:w, n:n};
+}
+
+/* ---------------- UI: roster ---------------- */
+function renderList(){
+  var ul = $('list'); ul.innerHTML='';
+  state.students.forEach(function(st){
+    var s = status(st);
+    var li = document.createElement('li');
+    if(st.id===state.currentId) li.className='sel';
+    li.innerHTML = '<span class="dot '+s.cls+'"></span><span class="nm">'+esc(st.name||'(no name)')+'</span><span class="wc">'+s.w+'</span>';
+    li.onclick = function(){ select(st.id); };
+    ul.appendChild(li);
+  });
+  var done = state.students.filter(function(s){return status(s).cls==='done';}).length;
+  $('count').textContent = state.students.length ? done+' / '+state.students.length+' done' : '';
+}
+function select(id){ state.currentId=id; renderAll(); $('builder').scrollTop=0; }
+
+/* ---------------- UI: builder ---------------- */
+var measureEl;
+function fit(el){
+  if(!measureEl){ measureEl=document.createElement('span'); measureEl.style.cssText='position:absolute;visibility:hidden;white-space:pre;font-family:'+getComputedStyle(document.body).getPropertyValue('--serif')+';font-size:16px'; document.body.appendChild(measureEl); }
+  var txt = el.tagName==='SELECT' ? (el.options[el.selectedIndex]||{}).text||'' : (el.value || el.placeholder || '');
+  measureEl.textContent = txt;
+  el.style.width = Math.min(measureEl.offsetWidth + (el.tagName==='SELECT'?30:22), el.parentElement.clientWidth || 9999) + 'px';
+}
+function choiceControl(key, st, onChange){
+  var s = SLOTS[key], v = st.sel[key];
+  var frag = document.createDocumentFragment();
+  var sel = document.createElement('select');
+  var html = '';
+  if(s.req) html += '<option value="">choose…</option>';
+  else html += '<option value="__none">— leave out —</option>';
+  var g0=null, open=false;
+  s.opts.forEach(function(o,i){
+    var g = s.grp ? s.grp[i] : '';
+    if(g!==g0){ if(open) html+='</optgroup>'; open=!!g; if(g) html+='<optgroup label="'+esc(g)+'">'; g0=g; }
+    html += '<option value="'+i+'">'+esc(resolve(o, st))+'</option>';
+  });
+  if(open) html+='</optgroup>';
+  html += '<option value="__custom">✎ write my own…</option>';
+  sel.innerHTML = html;
+  var idx = s.opts.indexOf(v);
+  sel.value = v==='__custom' ? '__custom' : idx>-1 ? String(idx) : (s.req ? '' : '__none');
+  sel.className = sel.value==='' ? 'unset' : sel.value==='__none' ? 'none' : '';
+  sel.onchange = function(){
+    var x = sel.value;
+    st.sel[key] = x==='' ? '' : (x==='__none'||x==='__custom') ? x : s.opts[+x];
+    onChange(true);
+    if(x==='__custom') setTimeout(function(){ var inp=document.querySelector('[data-custom="'+key+'"]'); if(inp) inp.focus(); });
+  };
+  frag.appendChild(sel);
+  if(v==='__custom'){
+    frag.appendChild(document.createTextNode(' '));
+    var inp = document.createElement('input');
+    inp.dataset.custom = key; inp.value = st.custom[key]||''; inp.placeholder='type your words';
+    if(!inp.value) inp.className='unset';
+    inp.oninput = function(){ st.custom[key]=inp.value; inp.className=inp.value?'':'unset'; fit(inp); onChange(false); };
+    frag.appendChild(inp);
+    requestAnimationFrame(function(){ fit(inp); });
+  }
+  requestAnimationFrame(function(){ fit(sel); });
+  return frag;
+}
+function textControl(key, st, onChange){
+  var s = SLOTS[key];
+  var inp = document.createElement('input');
+  inp.value = st.text[key]||''; inp.placeholder = s.ph;
+  if(s.list) inp.setAttribute('list', s.list);
+  if(!inp.value && s.req) inp.className='unset';
+  inp.oninput = function(){
+    st.text[key]=inp.value; inp.className = (!inp.value && s.req)?'unset':''; fit(inp);
+    onChange(false);
+  };
+  requestAnimationFrame(function(){ fit(inp); });
+  return inp;
+}
+function buildSentence(sent, st, onChange){
+  var span = document.createElement('span'); span.className='sent'; span._sent = sent;
+  if(!renderSentence(sent, st)) span.classList.add('off');
+  var bits = sent.tpl.split(/(<<\w+>>)/);
+  bits.forEach(function(b, i){
+    var m = b.match(/^<<(\w+)>>$/);
+    if(m){
+      var key=m[1];
+      var q = SLOTS[key].quote;
+      if(q) span.appendChild(document.createTextNode('\u201c'));
+      span.appendChild(SLOTS[key].type==='text' ? textControl(key, st, onChange) : choiceControl(key, st, onChange));
+      if(q) span.appendChild(document.createTextNode('\u201d'));
+    } else if(b){
+      var t = resolve(b, st);
+      if(i===0) t = cap(t);
+      span.appendChild(document.createTextNode(t));
+    }
+  });
+  span.appendChild(document.createTextNode(' '));
+  return span;
+}
+function renderSections(){
+  var st = cur(), box = $('sections'); box.innerHTML='';
+  if(!st) return;
+  var onChange = function(rebuild){
+    touch(st);
+    if(rebuild) renderSections();
+    else box.querySelectorAll('.sent').forEach(function(sp){ sp.classList.toggle('off', !renderSentence(sp._sent, st)); });
+    renderPreview(); renderList();
+  };
+  SECTIONS.forEach(function(sec){
+    var d = document.createElement('div'); d.className='sec';
+    d.innerHTML = '<h3>'+sec.title+'</h3>';
+    if(RUBRIC[sec.id]) d.appendChild(rubricRows(sec.id, st, onChange));
+    if(sec.id==='write' && st.grade==='9') d.appendChild(w9Bar(st, onChange));
+    var p = document.createElement('p'); p.className='ml';
+    sec.sents.forEach(function(sent){
+      if(sent.w9 && !(st.grade==='9' && st.w9.mode===sent.w9)) return;
+      p.appendChild(buildSentence(sent, st, onChange));
+    });
+    d.appendChild(p);
+    var ex = document.createElement('div'); ex.className='extra';
+    var ta = document.createElement('textarea'); ta.rows=1; ta.placeholder='+ Add your own sentence about '+sec.title.toLowerCase()+' (optional)';
+    ta.value = st.extra[sec.id]||'';
+    var grow=function(){ ta.style.height='auto'; ta.style.height=ta.scrollHeight+2+'px'; };
+    ta.oninput = function(){ st.extra[sec.id]=ta.value; grow(); onChange(false); };
+    ex.appendChild(ta); d.appendChild(ex);
+    box.appendChild(d);
+    requestAnimationFrame(grow);
+  });
+}
+function w9Bar(st, onChange){
+  var bar = document.createElement('div'); bar.className='w9bar';
+  bar.innerHTML = '<span class="tag9">GR 9</span> Student writing: ';
+  var seg = document.createElement('span'); seg.className='seg';
+  [['quote','Quote a line'],['topic','Name the subject'],['none','Skip']].forEach(function(o){
+    var b=document.createElement('button'); b.textContent=o[1]; if(st.w9.mode===o[0]) b.className='on';
+    b.onclick=function(){ st.w9.mode=o[0]; onChange(true); }; seg.appendChild(b);
+  });
+  bar.appendChild(seg);
+  if(st.w9.mode!=='none'){
+    bar.appendChild(document.createTextNode(' from their '));
+    var ps=document.createElement('select');
+    ps.innerHTML = PIECES.map(function(p){return '<option>'+p+'</option>';}).join('')+'<option value="__custom">other…</option>';
+    ps.value = st.w9.piece;
+    ps.onchange=function(){ st.w9.piece=ps.value; onChange(true); };
+    bar.appendChild(ps);
+    if(st.w9.piece==='__custom'){
+      var pi=document.createElement('input'); pi.placeholder='e.g. villanelle'; pi.value=st.w9.pieceCustom||''; pi.size=14;
+      pi.oninput=function(){ st.w9.pieceCustom=pi.value; onChange(false); };
+      pi.onchange=function(){ onChange(true); };
+      bar.appendChild(pi);
+    }
+  }
+  return bar;
+}
+
+/* ---------------- UI: preview ---------------- */
+function renderPreview(){
+  var st = cur();
+  if(!st){ $('pvText').innerHTML=''; $('meter').textContent=''; return; }
+  var s = status(st);
+  $('pvText').innerHTML = esc(s.n.text).replace(/____/g,'<mark>____</mark>');
+  var over = s.w > LIMIT;
+  $('meter').textContent = over ? s.w+' words · '+(s.w-LIMIT)+' over' : s.w+' / '+LIMIT+' words';
+  $('meter').className = 'meter'+(over?' over':'');
+  $('bar').className = 'bar'+(over?' over':'');
+  $('bar').firstChild.style.width = Math.min(100, s.w/LIMIT*100)+'%';
+  var ov = st.override!=null;
+  $('ovBanner').hidden = !ov;
+  $('sections').style.opacity = ov ? .45 : 1;
+  $('sections').style.pointerEvents = ov ? 'none' : '';
+  $('pvText').hidden = ov; $('ovText').hidden = !ov;
+  if(ov && document.activeElement!==$('ovText')) $('ovText').value = st.override;
+  $('editBtn').textContent = ov ? 'Done editing' : 'Edit by hand';
+}
+
+function renderHeader(){
+  var st = cur();
+  $('empty').hidden = !!st || state.students.length>0;
+  $('editor').hidden = !st;
+  if(!st && state.students.length){ state.currentId = state.students[0].id; return renderAll(); }
+  if(!st) return;
+  $('fName').value = st.name; $('fGoes').value = st.goesBy; $('fGrade').value = st.grade; $('fPron').value = st.pronouns;
+}
+function renderAll(){ renderHeader(); renderList(); renderSections(); renderPreview(); }
+
+/* ---------------- Events ---------------- */
+function fillGrades(sel, def){ sel.innerHTML = GRADES.map(function(g){return '<option value="'+g+'">'+g+'</option>';}).join(''); sel.value=def; }
+fillGrades($('fGrade'),'9'); fillGrades($('pGrade'),'9');
+var dl = document.createElement('datalist'); dl.id='textsList'; dl.innerHTML = TEXTS.map(function(t){return '<option value="'+esc(t)+'">';}).join(''); document.body.appendChild(dl);
+
+$('fName').oninput = function(){
+  var st=cur(); var oldFirst = firstName(st.name);
+  st.name = this.value;
+  if(!st.goesBy || st.goesBy===oldFirst){ st.goesBy = firstName(st.name); $('fGoes').value = st.goesBy; }
+  touch(st); renderList(); renderPreview(); debounceSections();
+};
+$('fGoes').oninput = function(){ var st=cur(); st.goesBy=this.value; touch(st); renderPreview(); renderList(); debounceSections(); };
+$('fGrade').onchange = function(){ var st=cur(); st.grade=this.value; generate(st); touch(st); renderAll(); };
+$('fPron').onchange = function(){ var st=cur(); st.pronouns=this.value; touch(st); renderAll(); };
+$('termSel').onchange = function(){ state.settings.term=this.value; touchAll(); renderAll(); };
+var secTimer; function debounceSections(){ clearTimeout(secTimer); secTimer=setTimeout(renderSections, 500); }
+
+$('delBtn').onclick = function(){
+  var st=cur(); if(!st) return;
+  var btn=this;
+  if(btn.dataset.armed!=='1'){ btn.dataset.armed='1'; btn.textContent='Click again to remove'; setTimeout(function(){btn.dataset.armed='';btn.textContent='Remove';},3000); return; }
+  btn.dataset.armed=''; btn.textContent='Remove';
+  var i = state.students.indexOf(st);
+  state.students.splice(i,1); removed.add(st.id);
+  state.currentId = (state.students[i]||state.students[i-1]||{}).id || null;
+  touch(null); renderAll();
+};
+$('addBtn').onclick = function(){
+  var last = cur();
+  var st = newStudent('', last?last.grade:'9', 'they');
+  state.students.push(st); state.currentId=st.id; touch(st); renderAll(); $('fName').focus();
+};
+$('sortBtn').onclick = function(){
+  var last=function(n){ n=(n||'').trim(); if(n.indexOf(',')>-1) return n.split(',')[0].trim().toLowerCase(); var p=n.split(/\s+/); return (p[p.length-1]+' '+p[0]).toLowerCase(); };
+  state.students.sort(function(a,b){ return last(a.name).localeCompare(last(b.name)); });
+  touch(null); renderList(); toast('Sorted by last name');
+};
+function step(d){ var i = state.students.indexOf(cur()); var n = state.students[i+d]; if(n) select(n.id); }
+$('prevBtn').onclick = function(){ step(-1); };
+$('nextBtn').onclick = function(){ step(1); };
+$('copyBtn').onclick = function(){ var st=cur(); if(st) copyText(narrative(st).text, 'Narrative copied'); };
+$('editBtn').onclick = function(){
+  var st=cur(); if(!st) return;
+  if(st.override==null){ st.override = narrative(st).text; touch(st); renderPreview(); $('ovText').focus(); }
+  else { renderPreview(); toast('Saved your edits'); }
+};
+$('ovText').oninput = function(){ var st=cur(); st.override=this.value; touch(st); renderPreview(); renderList(); };
+$('ovRevert').onclick = function(){ var st=cur(); st.override=null; touch(st); renderAll(); };
+
+/* ---------------- Roster paste ---------------- */
+function openPaste(){ $('pasteIn').value=''; $('pastePv').innerHTML='<span style="color:var(--muted)">Preview appears here.</span>'; $('pasteDlg').showModal(); $('pasteIn').focus(); }
+$('pasteBtn').onclick = openPaste;
+function parseRoster(){
+  var text = $('pasteIn').value, order = $('pOrder').value, dg = $('pGrade').value, dp = $('pPron').value;
+  var lines = text.split(/\r?\n/).filter(function(l){return l.trim();});
+  var out=[], cols=null;
+  lines.forEach(function(line, li){
+    var cells = line.split('\t').map(function(c){return c.trim();});
+    if(li===0 && cells.some(function(c){return /^(student|name|full name|student name|first( name)?|last( name)?|grade|pronouns?|preferred|nickname|goes by)$/i.test(c);})){
+      cols = cells.map(function(c){ c=c.toLowerCase();
+        if(/^first/.test(c)) return 'first'; if(/^last/.test(c)) return 'last';
+        if(/grade/.test(c)) return 'grade'; if(/pronoun/.test(c)) return 'pron';
+        if(/preferred|nickname|goes by/.test(c)) return 'goes';
+        if(/name|student/.test(c)) return 'name'; return '';
+      });
+      return;
+    }
+    var rec={grade:dg, pron:dp, names:[], first:'', last:'', goes:''};
+    cells.forEach(function(c, i){
+      if(!c) return;
+      var role = cols ? cols[i] : '';
+      var gm = c.match(/^(?:grade\s*)?(\d{1,2})(?:st|nd|rd|th)?$/i);
+      var pm = c.match(/^(she|he|they)\b/i);
+      if(role==='grade' || (!role && gm && GRADES.indexOf(gm[1])>-1)){ if(gm) rec.grade = gm[1]; return; }
+      if(role==='pron' || (!role && pm && /^(she|he|they)(\s*\/\s*\w+)*$/i.test(c))){ if(pm) rec.pron = pm[1].toLowerCase(); return; }
+      if(role==='first'){ rec.first=c; return; } if(role==='last'){ rec.last=c; return; }
+      if(role==='goes'){ rec.goes=c; return; }
+      if(role==='' && cols) return;
+      rec.names.push(c);
+    });
+    var name;
+    if(rec.first||rec.last) name = (rec.first+' '+rec.last).trim();
+    else if(rec.names.length>=2) name = order==='fl' ? rec.names[0]+' '+rec.names[1] : rec.names[1]+' '+rec.names[0];
+    else if(rec.names.length===1){ name = rec.names[0]; var m=name.match(/^([^,]+),\s*(.+)$/); if(m) name = m[2]+' '+m[1]; }
+    if(name) out.push({name:name.replace(/\s+/g,' '), goes:rec.goes, grade:rec.grade, pron:rec.pron});
+  });
+  return out;
+}
+function previewPaste(){
+  var rows = parseRoster();
+  var existing = state.students.map(function(s){return s.name.toLowerCase();});
+  $('pastePv').innerHTML = rows.length ? rows.map(function(r){
+    var dup = existing.indexOf(r.name.toLowerCase())>-1;
+    return '<div>'+esc(r.name)+(r.goes?' ('+esc(r.goes)+')':'')+' · grade '+r.grade+' · '+r.pron+(dup?' <i style="color:var(--amber)">already added</i>':'')+'</div>';
+  }).join('') : '<span style="color:var(--muted)">No names found yet.</span>';
+  $('pasteAdd').textContent = 'Add '+rows.length+' student'+(rows.length===1?'':'s');
+}
+['pasteIn','pOrder','pGrade','pPron'].forEach(function(id){ $(id).addEventListener('input', previewPaste); $(id).addEventListener('change', previewPaste); });
+$('pasteAdd').onclick = function(){
+  var rows = parseRoster(), existing = state.students.map(function(s){return s.name.toLowerCase();}), added=0, first=null;
+  rows.forEach(function(r){
+    if(existing.indexOf(r.name.toLowerCase())>-1) return;
+    var st = newStudent(r.name, r.grade, r.pron); if(r.goes) st.goesBy=r.goes;
+    state.students.push(st); dirty.add(st.id); added++; if(!first) first=st;
+  });
+  $('pasteDlg').close();
+  if(first && !cur()) state.currentId = first.id;
+  touch(null); renderAll(); toast('Added '+added+' student'+(added===1?'':'s'));
+};
+
+/* ---------------- Veracross ---------------- */
+function vcPayload(){
+  var only = $('vcOnlyDone').checked;
+  return state.students.filter(function(s){ return !only || status(s).cls==='done'; })
+    .map(function(s){ return {name:s.name, goesBy:s.goesBy, grade:s.grade, narrative:narrative(s).text}; });
+}
+function vcRefresh(){
+  var p = vcPayload(), skipped = state.students.length - p.length;
+  $('vcSummary').textContent = p.length+' narrative'+(p.length===1?'':'s')+' ready'+(skipped?' · '+skipped+' not finished, left out':'')+'.';
+  $('vcOut').value = JSON.stringify(p);
+}
+$('vcBtn').onclick = function(){ vcRefresh(); $('vcDlg').showModal(); };
+$('vcOnlyDone').onchange = vcRefresh;
+$('vcCopy').onclick = function(){ vcRefresh(); copyText($('vcOut').value, 'Copied — now click Fill Veracross in Veracross', $('vcOut')); };
+$('bmLink').href = 'javascript:' + encodeURIComponent(/*BOOKMARKLET*/'alert("bookmarklet not built")'/*END*/);
+
+/* ---------------- Backup ---------------- */
+$('backupBtn').onclick = function(){ $('bkText').value = JSON.stringify(state, null, 1); $('bkDlg').showModal(); };
+$('bkCopy').onclick = function(){ copyText($('bkText').value, 'Backup copied', $('bkText')); };
+$('bkRestore').onclick = function(){
+  try{
+    var d = JSON.parse($('bkText').value);
+    if(!d || !Array.isArray(d.students)) throw 0;
+    state.students.forEach(function(s){ removed.add(s.id); });
+    state = {settings:d.settings||{term:'semester'}, students:d.students.map(upgrade), currentId:(d.students[0]||{}).id||null};
+    state.students.forEach(function(s){ removed.delete(s.id); dirty.add(s.id); });
+    $('bkDlg').close(); touch(null); renderAll(); toast('Restored '+state.students.length+' students');
+  }catch(e){ toast('That backup could not be read'); }
+};
+
+/* ---------------- Clipboard + toast ---------------- */
+function copyText(text, msg, fallbackEl){
+  function legacy(){
+    var ta = fallbackEl || document.createElement('textarea');
+    if(!fallbackEl){ ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); }
+    else { ta.hidden=false; }
+    ta.select(); var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    if(!fallbackEl) ta.remove();
+    toast(ok ? msg : 'Select the text and press Ctrl/⌘+C');
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast(msg); }, legacy);
+  } else legacy();
+}
+var toastT; function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove('on');},2600); }
+
+/* ---------------- Saving ---------------- */
+var dirty = new Set(), removed = new Set(), saving=false, saveT=null, lastErr=false;
+function setStatus(t, err){ var s=$('status'); s.textContent=t; s.className='status'+(err?' err':''); }
+function touch(st){ if(st) dirty.add(st.id); setStatus('Saving…'); clearTimeout(saveT); saveT=setTimeout(flush, isGAS?1800:300); }
+function touchAll(){ state.students.forEach(function(s){dirty.add(s.id);}); touch(null); }
+function hhmm(){ var d=new Date(); return d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}); }
+function flush(){
+  if(!isGAS){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); setStatus('Saved in this browser · '+hhmm()); }
+    catch(e){ setStatus('Not saved — use Backup', true); }
+    dirty.clear(); removed.clear(); return;
+  }
+  if(saving){ clearTimeout(saveT); saveT=setTimeout(flush, 800); return; }
+  saving=true;
+  var ids=Array.from(dirty), rem=Array.from(removed); dirty.clear(); removed.clear();
+  var payload = {
+    settings: state.settings,
+    order: state.students.map(function(s){return s.id;}),
+    students: ids.map(function(id){ return state.students.find(function(s){return s.id===id;}); }).filter(Boolean),
+    removed: rem,
+    doc: state.students.map(function(s){ var x=status(s); return {name:s.name, grade:s.grade, text:x.n.text, words:x.w, state:x.cls}; })
+  };
+  google.script.run
+    .withSuccessHandler(function(){ saving=false; setStatus('Saved to Google Doc · '+hhmm()); })
+    .withFailureHandler(function(err){
+      saving=false; ids.forEach(function(i){dirty.add(i);}); rem.forEach(function(i){removed.add(i);});
+      setStatus('Couldn’t save — retrying…', true); clearTimeout(saveT); saveT=setTimeout(flush, 5000);
+    })
+    .saveState(JSON.stringify(payload));
+}
+window.addEventListener('beforeunload', function(e){ if(isGAS && (dirty.size||removed.size||saving)){ e.preventDefault(); e.returnValue=''; } });
+
+function upgrade(s){
+  var b = newStudent(s.name, s.grade, s.pronouns);
+  for(var k in s) b[k]=s[k];
+  b.sel=b.sel||{}; b.rub=b.rub||{}; b.auto=b.auto||{}; b.custom=b.custom||{}; b.text=b.text||{}; b.extra=b.extra||{};
+  b.w9 = Object.assign({mode:'quote', piece:'poem', pieceCustom:''}, s.w9||{});
+  if(b.override===undefined) b.override=null;
+  b.grade = String(b.grade||'9');
+  return b;
+}
+function boot(d){
+  if(d){
+    state.settings = Object.assign({term:'semester'}, d.settings||{});
+    state.students = (d.students||[]).map(upgrade);
+    state.currentId = d.currentId && state.students.some(function(s){return s.id===d.currentId;}) ? d.currentId : (state.students[0]||{}).id || null;
+  }
+  $('termSel').value = state.settings.term;
+  renderAll();
+}
+if(isGAS){
+  $('modeLabel').textContent = 'saving to your Google Doc';
+  google.script.run
+    .withSuccessHandler(function(json){ boot(json?JSON.parse(json):null); setStatus('All changes saved'); })
+    .withFailureHandler(function(e){ setStatus('Couldn’t load: '+(e&&e.message||e), true); boot(null); })
+    .loadState();
+} else {
+  $('modeLabel').textContent = 'preview · saves in this browser only';
+  var saved=null; try{ saved = JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){}
+  boot(saved); setStatus(saved ? 'Restored from this browser' : 'Ready');
+}
+</script>
+</body>
+</html>
