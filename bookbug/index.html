@@ -5506,6 +5506,7 @@
     if (!state.chapbookId) return;
     var entry = library.filter(function (c) { return c.id === state.chapbookId; })[0];
     if (!entry) return;
+    noteSyncBases(state.chapbookId, entry.data, state);
     stampEntries(entry.data, state, entry.updatedAt);
     entry.title = state.bookTitle || 'Untitled book';
     entry.updatedAt = Date.now();
@@ -5591,8 +5592,20 @@
   function scheduleCloudAutosave() {
     if (!cloudAuthToken) return;
     clearTimeout(cloudAutosaveTimer);
-    cloudAutosaveTimer = setTimeout(function () { syncLibraryToCloud(); }, 2500);
+    cloudAutosaveTimer = setTimeout(function () { cloudAutosaveTimer = null; syncLibraryToCloud(); }, 2500);
   }
+  // A phone puts the page to sleep the moment it's locked or switched
+  // away from, before those timers fire, so the morning's edits stayed
+  // on the phone, unseen everywhere else, until it was opened again.
+  // Send them as the page goes, not seconds later.
+  function saveBeforeHiding() {
+    flushPendingSave();
+    if (!cloudAutosaveTimer) return;
+    clearTimeout(cloudAutosaveTimer);
+    cloudAutosaveTimer = null;
+    syncLibraryToCloud();
+  }
+  window.addEventListener('pagehide', saveBeforeHiding);
 
   function makeId() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -5902,13 +5915,27 @@
   // A tab left open in the background catches up when it's looked at
   // again, rather than holding (and saving over) an old copy of the books.
   var lastPullAt = 0;
-  document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState !== 'visible' || !cloudAuthToken || !signedInThisLoad) return;
+  // Coming back to a window that was only behind another one, or a page
+  // a phone kept in memory, doesn't count as the tab being shown again,
+  // so focus and pageshow catch up too, as does starting to type (the
+  // last chance to see a newer copy before editing an old one).
+  function catchUpIfStale() {
+    if (!cloudAuthToken || !signedInThisLoad || reconcileOpen) return;
     if (Date.now() - lastPullAt < 15000) return;
     pullLibraryFromCloud();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') catchUpIfStale();
+    else saveBeforeHiding();
   });
+  window.addEventListener('focus', catchUpIfStale);
+  window.addEventListener('pageshow', function (e) { if (e.persisted) catchUpIfStale(); });
+  document.addEventListener('focusin', function (e) {
+    if (e.target && e.target.closest && e.target.closest('.poem-text, [contenteditable="true"], input[type="text"], textarea')) catchUpIfStale();
+  });
+  var pulledOnce = false;
   async function pullLibraryFromCloud() {
-    if (!cloudAuthToken) return;
+    if (!cloudAuthToken || reconcileOpen) return;
     lastPullAt = Date.now();
     if (!signedInThisLoad) setAccountStatus('Syncing…');
     try {
@@ -5930,6 +5957,7 @@
       // lapsed, or books from before sign-in was required) into the
       // account rather than letting either side overwrite the other.
       flushPendingSave();
+      await reconcileEditedEntries(ours.chapbooks || []);
       var localCur = state.chapbookId ? library.filter(function (c) { return c.id === state.chapbookId; })[0] : null;
       var merged = mergeLibraries(library, trash, ours.chapbooks || [], ours.trash || []);
       library = merged.library;
@@ -5953,7 +5981,10 @@
       // Local-first: only re-open from the merged library if nothing's been
       // touched since load; otherwise keep the book in front of the poet
       // (their newer edits win the merge anyway) and just refresh lists.
-      var untouched = bookAtLoad === null || JSON.stringify(state) === bookAtLoad;
+      // (Only on the first pull: a later catch-up -- on focus, or as typing
+      // starts -- redraws the open book only if it actually changed.)
+      var untouched = !pulledOnce && (bookAtLoad === null || JSON.stringify(state) === bookAtLoad);
+      pulledOnce = true;
       if (untouched) openLastOpenedBook();
       else {
         // The open book was edited more recently somewhere else (another
@@ -6134,6 +6165,223 @@
     return out;
   }
 
+  // ---- One entry edited in two places ----
+  // mergeBookData keeps whichever copy of an entry changed last, whole.
+  // That's right when only one copy changed, but when the same poem was
+  // edited on two devices before either saw the other's edits (a phone
+  // whose save hadn't reached the account, then the laptop), the edits
+  // stamped first vanished. So this device remembers, for each entry it
+  // changed that the account hasn't got yet, how the entry stood before
+  // (`syncBase`, kept on this device only). If the account's copy has
+  // changed from that too, both changed: the poet chooses (Merge both,
+  // line by line, is the default), and both copies go into the entry's
+  // snapshots. If only one side changed, that side wins, whatever the
+  // stamps say.
+  var SYNC_BASE_KEY = 'bookbug.syncBase.v1';
+  var syncBase = {};
+  function persistSyncBase() { try { localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(syncBase)); } catch (e) {} }
+  var reconcileOpen = false;
+  // An entry as comparable text: keys sorted (a copy that came back
+  // through another device can list them in another order) and the
+  // `editedAt` stamp left out, since only what's in the entry counts.
+  function canonEntry(v) {
+    if (Array.isArray(v)) return '[' + v.map(canonEntry).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).filter(function (k) { return k !== 'editedAt' && v[k] !== undefined; }).sort()
+        .map(function (k) { return JSON.stringify(k) + ':' + canonEntry(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v === undefined ? null : v);
+  }
+  function entriesById(d) {
+    var m = {};
+    if (d) (d.poems || []).concat(d.archivedPoems || []).forEach(function (p) { if (p && p.id && !m[p.id]) m[p.id] = p; });
+    return m;
+  }
+  function plainCopy(p) { var c = JSON.parse(JSON.stringify(p)); delete c.editedAt; return c; }
+  // As each save lands: an entry changed since the copy saved last gets
+  // that copy as its base, unless it has one already (the base is how
+  // the account last had it, not the keystroke before).
+  // (Read afresh each time: another tab on this device may have noted
+  // or settled bases since this one loaded.)
+  function loadSyncBase() {
+    try { syncBase = JSON.parse(localStorage.getItem(SYNC_BASE_KEY) || '{}') || {}; } catch (e) { syncBase = {}; }
+  }
+  loadSyncBase();
+  function noteSyncBases(bookId, prev, cur) {
+    if (!bookId || !prev || !cur) return;
+    loadSyncBase();
+    var before = entriesById(prev), after = entriesById(cur), added = false;
+    Object.keys(after).forEach(function (id) {
+      if (!before[id] || (syncBase[bookId] && syncBase[bookId][id])) return;
+      if (canonEntry(before[id]) === canonEntry(after[id])) return;
+      (syncBase[bookId] = syncBase[bookId] || {})[id] = plainCopy(before[id]);
+      added = true;
+    });
+    if (added) persistSyncBase();
+  }
+  // What a save is about to send, for the entries that have a base.
+  function syncBaseEntriesNow() {
+    var out = {};
+    Object.keys(syncBase).forEach(function (bookId) {
+      var book = library.filter(function (c) { return c.id === bookId; })[0], have = entriesById(book && book.data);
+      out[bookId] = {};
+      Object.keys(syncBase[bookId]).forEach(function (id) { out[bookId][id] = have[id] ? plainCopy(have[id]) : null; });
+    });
+    return out;
+  }
+  // Once the account has a save: an entry unchanged since needs no base;
+  // one edited while the save was on its way now differs from the
+  // account's copy, which is what was sent.
+  function settleSyncBases(sent) {
+    loadSyncBase();
+    var now = syncBaseEntriesNow();
+    Object.keys(sent).forEach(function (bookId) {
+      var mine = syncBase[bookId];
+      if (!mine) return;
+      Object.keys(sent[bookId]).forEach(function (id) {
+        if (!mine[id]) return;
+        var s = sent[bookId][id], n = now[bookId] && now[bookId][id];
+        if (!s || !n || canonEntry(s) === canonEntry(n)) delete mine[id];
+        else mine[id] = s;
+      });
+      if (!Object.keys(mine).length) delete syncBase[bookId];
+    });
+    persistSyncBase();
+  }
+  // For each line of `base`, the index of the same line in `x` (the
+  // longest common run of lines, as in lineDiff), else -1.
+  function matchLines(base, x) {
+    var map = new Array(base.length).fill(-1), s = 0, e = 0;
+    while (s < base.length && s < x.length && base[s] === x[s]) { map[s] = s; s++; }
+    while (e < base.length - s && e < x.length - s && base[base.length - 1 - e] === x[x.length - 1 - e]) { map[base.length - 1 - e] = x.length - 1 - e; e++; }
+    var n = base.length - s - e, m = x.length - s - e, dp = [], i, j;
+    for (i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+    for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) dp[i][j] = base[s + i] === x[s + j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (base[s + i] === x[s + j]) { map[s + i] = s + j; i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) i++; else j++;
+    }
+    return map;
+  }
+  function sameLines(a, b) { return a.length === b.length && a.every(function (l, i) { return l === b[i]; }); }
+  // Three-way merge of lines: each side's changes since `base` are kept;
+  // where both changed the same stretch differently, both versions stay,
+  // this device's first (`overlap`), so nothing typed on either is lost.
+  function mergeLines3(base, mine, theirs) {
+    var mm = matchLines(base, mine), tm = matchLines(base, theirs);
+    var out = [], overlap = false, b = 0, a = 0, t = 0;
+    function stretch(bEnd, aEnd, tEnd) {
+      var B = base.slice(b, bEnd), A = mine.slice(a, aEnd), T = theirs.slice(t, tEnd);
+      if (sameLines(A, B)) out.push.apply(out, T);
+      else if (sameLines(T, B) || sameLines(A, T)) out.push.apply(out, A);
+      else { out.push.apply(out, A.concat(T)); overlap = true; }
+    }
+    for (var k = 0; k < base.length; k++) {
+      if (mm[k] < 0 || tm[k] < 0) continue;
+      stretch(k, mm[k], tm[k]);
+      out.push(base[k]);
+      b = k + 1; a = mm[k] + 1; t = tm[k] + 1;
+    }
+    stretch(base.length, mine.length, theirs.length);
+    return { lines: out, overlap: overlap };
+  }
+  // The same, field by field over a whole entry: a field only one side
+  // changed takes that side's; lines changed on both are merged; any
+  // other field changed on both keeps this device's.
+  function mergeEntry3(base, mine, theirs) {
+    var out = plainCopy(mine), overlap = false, keys = {};
+    [base, mine, theirs].forEach(function (o) { Object.keys(o).forEach(function (k) { if (k !== 'editedAt') keys[k] = true; }); });
+    Object.keys(keys).forEach(function (k) {
+      var b = canonEntry(base[k]), m = canonEntry(mine[k]), t = canonEntry(theirs[k]);
+      if (m === t || t === b) return;
+      if (m === b) { if (theirs[k] === undefined) delete out[k]; else out[k] = JSON.parse(JSON.stringify(theirs[k])); return; }
+      if (k === 'lines' && Array.isArray(base.lines) && Array.isArray(mine.lines) && Array.isArray(theirs.lines)) {
+        var r = mergeLines3(base.lines, mine.lines, theirs.lines);
+        out.lines = r.lines;
+        if (r.overlap) overlap = true;
+      } else overlap = true;
+    });
+    return { entry: out, overlap: overlap };
+  }
+  // Kept in the entry's snapshots, one at a time (each write reads the
+  // list and puts it back, so two at once would lose one).
+  var snapKeepQueue = Promise.resolve();
+  function snapKeep(bookId, p, name) {
+    if (!p || isSection(p)) return;
+    var rec = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), poemId: p.id, bookId: bookId,
+      at: Date.now(), name: name, title: p.title || '', lines: (p.lines || []).slice() };
+    snapKeepQueue = snapKeepQueue.then(function () { return snapAdd(p, rec); }).catch(function () {});
+  }
+  // Before merging with the account's books (cloudLib): settles every
+  // entry this device changed whose account copy changed too, asking the
+  // poet where both did. Writes the outcome into `library`, stamped to
+  // win the merge that follows.
+  async function reconcileEditedEntries(cloudLib) {
+    loadSyncBase();
+    var todo = [];
+    Object.keys(syncBase).forEach(function (bookId) {
+      var book = library.filter(function (c) { return c.id === bookId; })[0];
+      var theirs = (cloudLib || []).filter(function (c) { return c && c.id === bookId; })[0];
+      if (!book || !book.data || !theirs || !theirs.data) return;
+      var mine = entriesById(book.data), other = entriesById(theirs.data);
+      Object.keys(syncBase[bookId]).forEach(function (id) {
+        var base = syncBase[bookId][id], m = mine[id], o = other[id];
+        // Gone from one copy: mergeBookData's rules for removals apply.
+        if (!m || !o) return;
+        var b = canonEntry(base), ms = canonEntry(m), os = canonEntry(o);
+        if (ms === os) return;
+        var item = { bookId: bookId, id: id, mine: m, theirs: o };
+        if (os === b) item.result = plainCopy(m);
+        else if (ms === b) item.result = plainCopy(o);
+        else { item.both = mergeEntry3(base, m, o); }
+        todo.push(item);
+      });
+    });
+    if (!todo.length) return;
+    var both = todo.filter(function (t) { return t.both; }), choice = 'merge';
+    if (both.length) {
+      var first = both[0].mine, noun = entryNoun(first);
+      var title = both.length === 1
+        ? '“' + (first.title || 'Untitled ' + noun) + '” was changed on another device too'
+        : both.length + ' ' + noun + 's were changed on another device too';
+      var text = 'Edits made here hadn’t reached your account yet. Merge both keeps the changes from each' +
+        (both.some(function (t) { return t.both.overlap; }) ? '; lines changed in both are kept twice, this device’s first.' : '.') +
+        ' Both copies are saved in ' + (both.length === 1 ? 'its' : 'their') + ' snapshots.';
+      reconcileOpen = true;
+      try {
+        choice = await askDialog(title, text, [
+          { key: 'mine', label: 'Keep this device’s' },
+          { key: 'theirs', label: 'Use the other device’s' },
+          { key: 'merge', label: 'Merge both', primary: true }
+        ]) || 'merge';
+      } finally { reconcileOpen = false; }
+      both.forEach(function (t) {
+        snapKeep(t.bookId, t.mine, 'This device’s copy, before merging');
+        snapKeep(t.bookId, t.theirs, 'Another device’s copy, before merging');
+        t.result = choice === 'mine' ? plainCopy(t.mine) : choice === 'theirs' ? plainCopy(t.theirs) : t.both.entry;
+      });
+    }
+    flushPendingSave();
+    todo.forEach(function (t) {
+      var book = library.filter(function (c) { return c.id === t.bookId; })[0];
+      if (!book || !book.data) return;
+      // Later than either copy's stamp, even if the other device's clock
+      // runs ahead, so mergeBookData keeps exactly this.
+      t.result.editedAt = Math.max(Date.now(), bookEntryStamp(t.mine) + 1, bookEntryStamp(t.theirs) + 1);
+      [book.data.poems || [], book.data.archivedPoems || []].forEach(function (list) {
+        for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === t.id) list[i] = t.result;
+      });
+      // The account's copy is now what this one is measured against.
+      syncBase[t.bookId][t.id] = plainCopy(t.theirs);
+    });
+    persistSyncBase();
+    persistLibrary();
+    // (The open book shows the outcome when the caller adopts the merged
+    // library, straight after this with nothing in between.)
+    if (both.length && choice === 'merge') showToast(both.length === 1 ? 'Merged both copies' : 'Merged both copies of each');
+  }
+
   // After a merge, the open book may have gained entries saved elsewhere:
   // show the merged copy (it has everything this tab had, so nothing
   // typed here is lost). Only its entries changing redraws the page;
@@ -6197,26 +6445,33 @@
     // Never push before this page load's first pull has merged the
     // account's books in -- the local copy could be empty or stale (a new
     // device, a slow network), and a PUT replaces the cloud copy wholesale.
-    if (!cloudAuthToken || !signedInThisLoad) return;
+    // (While the poet is choosing between two copies of an entry, the
+    // save that asked carries the choice up; no other save goes first.)
+    if (!cloudAuthToken || !signedInThisLoad || reconcileOpen) return;
     try {
       // Fold in what other devices saved first, so this save carries their
       // books' newest entries too, rather than an older copy of a book
       // replacing one that has more in it.
       var got = await fetch(CLOUD_API_URL, { headers: { Authorization: 'Bearer ' + cloudAuthToken } });
       if (got.status === 401) { handleExpiredCloudAuth(); return; }
-      if (got.ok) {
-        var cur = await got.json();
-        var theirs = (cur.state && cur.state.chapbookbuilder) || {};
-        flushPendingSave();
-        var merged = mergeLibraries(library, trash, theirs.chapbooks || [], theirs.trash || []);
-        library = merged.library;
-        trash = merged.trash;
-        persistLibrary();
-        persistTrash();
-        adoptMergedCurrent();
-        renderChapbooksList();
-        if (isHomeShown()) renderHome();
-      }
+      // The PUT below replaces the account's copy wholesale: never send
+      // one that hasn't just been merged with it. (A server hiccup on the
+      // read used to fall through to saving this device's books over
+      // everything other devices had saved.)
+      if (!got.ok) { cloudFailed('Signed in — couldn’t save to the cloud'); return; }
+      var cur = await got.json();
+      var theirs = (cur.state && cur.state.chapbookbuilder) || {};
+      flushPendingSave();
+      await reconcileEditedEntries(theirs.chapbooks || []);
+      var merged = mergeLibraries(library, trash, theirs.chapbooks || [], theirs.trash || []);
+      library = merged.library;
+      trash = merged.trash;
+      persistLibrary();
+      persistTrash();
+      adoptMergedCurrent();
+      renderChapbooksList();
+      if (isHomeShown()) renderHome();
+      var sent = syncBaseEntriesNow();
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
@@ -6229,6 +6484,7 @@
       });
       if (res.status === 401) { handleExpiredCloudAuth(); return; }
       if (!res.ok) { cloudFailed('Signed in — couldn’t save to the cloud'); return; }
+      settleSyncBases(sent);
       setAccountStatus('Signed in', 'synced');
     } catch (e) {
       cloudFailed('Signed in — couldn’t save to the cloud');
@@ -13739,8 +13995,8 @@
   }
   function localSnapPut(rec) { return snapTx('readwrite', function (st) { return st.put(rec); }); }
   function localSnapDelete(id) { return snapTx('readwrite', function (st) { return st.delete(id); }); }
-  function snapCloudKey(poem) {
-    var b = state.chapbookId || '', p = poem.id || '';
+  function snapCloudKey(poem, bookId) {
+    var b = bookId || state.chapbookId || '', p = poem.id || '';
     return cloudAuthToken && /^[A-Za-z0-9_-]{1,80}$/.test(b) && /^[A-Za-z0-9_-]{1,80}$/.test(p) ? b + '.' + p : null;
   }
   async function cloudSnapsGet(key) {
@@ -13787,7 +14043,7 @@
     return local;
   }
   async function snapAdd(poem, rec) {
-    var key = snapCloudKey(poem);
+    var key = snapCloudKey(poem, rec.bookId);
     if (key) {
       try { await cloudSnapsPut(key, (await cloudSnapsGet(key)).concat([rec])); return rec; } catch (e) { /* fall back to this device */ }
     }
