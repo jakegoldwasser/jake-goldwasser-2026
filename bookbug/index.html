@@ -4169,6 +4169,17 @@
       <button type="button" role="menuitem" data-action="copy-book">Copy to another book…</button>
     </div>
   </div>
+  <!-- Export ›: just this entry, on its own (no title page, contents or
+       back matter); see pieceExportState. -->
+  <div class="menu-sub-wrap" data-sub="export">
+    <button type="button" role="menuitem" class="menu-sub-btn" aria-haspopup="menu" aria-expanded="false">Export</button>
+    <div class="entry-menu entry-sub" role="menu" hidden>
+      <button type="button" role="menuitem" data-export="pdf">Export as PDF</button>
+      <button type="button" role="menuitem" data-export="docx">Export as .docx</button>
+      <button type="button" role="menuitem" data-export="md">Export as Markdown</button>
+      <button type="button" role="menuitem" data-export="manuscript">Export submission manuscript…</button>
+    </div>
+  </div>
   <button type="button" role="menuitem" data-action="duplicate" data-plain-dup>Duplicate</button>
   <div class="menu-sep"></div>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
@@ -8843,10 +8854,12 @@
     // ---- Acknowledgments, About the Author ----
     plan.backMatter.forEach(function (m) { drawEntryPages(m.poem, m.layout); });
 
-    // ---- Back cover -- always present ----
-    var backBytes = [];
-    drawLayoutItems(backBytes, layoutBackCover(state, plan), itemKeys, imagesUsed);
-    contents.push(backBytes);
+    // ---- Back cover -- always present, but for one piece exported alone ----
+    if (!state.pieceOnly) {
+      var backBytes = [];
+      drawLayoutItems(backBytes, layoutBackCover(state, plan), itemKeys, imagesUsed);
+      contents.push(backBytes);
+    }
 
     return { plan: plan, PAGE_W: plan.PAGE_W, PAGE_H: plan.PAGE_H, contents: contents, imagesUsed: imagesUsed };
   }
@@ -11466,6 +11479,8 @@
     // Copy submenu, just a plain Duplicate.
     entryMenu.querySelector('[data-sub="move"]').hidden = !(anySend || hasBooks || hasSecs);
     entryMenu.querySelector('[data-sub="copy"]').hidden = !isEntry;
+    entryMenu.querySelector('[data-sub="export"]').hidden = !isEntry;
+    entryMenu.querySelector('[data-export="manuscript"]').hidden = isScriptForm(state);
     entryMenu.querySelector('[data-plain-dup]').hidden = isEntry || !poem;
     // A section's Archive says which it does: just the heading (its
     // entries join the section above), or the section with its entries.
@@ -11986,6 +12001,13 @@
   }
 
   entryMenu.addEventListener('click', function (e) {
+    var exp = e.target.closest('button[data-export]');
+    if (exp) {
+      var piece = state.poems[entryMenuIndex];
+      closeEntryMenu();
+      exportPiece(piece, exp.dataset.export);
+      return;
+    }
     var send = e.target.closest('button[data-send]');
     if (send) {
       var from = entryMenuIndex;
@@ -17098,7 +17120,13 @@
   // Export
   // ---------------------------------------------------------------------
   var exportStatusEl = document.getElementById('exportStatus');
-  function setExportStatus(msg) { exportStatusEl.textContent = msg || ''; }
+  // An export started from an entry's ⋯ menu also says how it went in a
+  // toast, since the Export panel (and its status line) may be closed.
+  var exportStatusToast = false;
+  function setExportStatus(msg) {
+    exportStatusEl.textContent = msg || '';
+    if (exportStatusToast && msg && !/…$/.test(msg)) showToast(msg);
+  }
   function slugify(s) {
     return (s || 'poetry-booklet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'poetry-booklet';
   }
@@ -17402,8 +17430,8 @@
   function bookAsMarkdown(st) {
     var out = [], hasSections = st.poems.some(isSection);
     function md(line) { return line.replace(/\+\+([^+]+)\+\+/g, '<u>$1</u>'); }
-    out.push('# ' + (st.bookTitle || 'Untitled'));
-    if (st.author) out.push('', '*' + st.author + '*');
+    if (!st.pieceOnly) out.push('# ' + (st.bookTitle || 'Untitled'));
+    if (st.author && !st.pieceOnly) out.push('', '*' + st.author + '*');
     if ((st.epigraph || '').trim()) {
       out.push('');
       st.epigraph.trim().split('\n').forEach(function (l) { out.push('> ' + l + '  '); });
@@ -17411,7 +17439,7 @@
     }
     st.poems.forEach(function (poem) {
       if (isSection(poem)) { out.push('', '## ' + sectionLabel(poem, st)); return; }
-      out.push('', (hasSections ? '### ' : '## ') + entryLabel(poem, st), '');
+      out.push('', (st.pieceOnly ? '# ' : hasSections ? '### ' : '## ') + entryLabel(poem, st), '');
       var verse = isVerseEntry(poem, st), prev = null;
       var starts = isSeriesOn(poem, st) ? seriesParts(poem) : [];
       (poem.lines || []).forEach(function (line, li) {
@@ -17434,7 +17462,7 @@
       var text = (st[bm.key] || '').trim();
       if (text) out.push('', '## ' + bm.title, '', text.split('\n').join('\n\n'));
     });
-    return out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '') + '\n';
   }
   // A read-only way to fetch a book as Markdown from this page (the same
   // text Export as Markdown saves), for the person's own scheduled backup
@@ -17513,7 +17541,8 @@
       // A poem (or a later chapter) starts a new page; the first one
       // follows the title on page one.
       var brk = verse || !firstEntry ? '<w:pageBreakBefore/>' : '';
-      body += p('<w:r>' + (verse ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + head + '</w:t></w:r>', brk + (verse ? SINGLE : DOUBLE) + '<w:jc w:val="' + (verse ? 'left' : 'center') + '"/>', true);
+      // A piece exported alone already has its title on page one.
+      if (!st.pieceOnly) body += p('<w:r>' + (verse ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + head + '</w:t></w:r>', brk + (verse ? SINGLE : DOUBLE) + '<w:jc w:val="' + (verse ? 'left' : 'center') + '"/>', true);
       if (verse) body += p('', SINGLE);
       firstEntry = false;
       var newPara = true;
@@ -17562,6 +17591,9 @@
   // the author's name to start it.
   document.getElementById('exportManuscriptBtn').addEventListener('click', function () {
     if (countEntries(state.poems) === 0) return;
+    askManuscript(state);
+  });
+  function askManuscript(exportSt) {
     var d = makeDialog('subs-box', 'Submission manuscript',
       '<p style="margin-top:0;">Your name and contact details for the top of page one, a line each</p>' +
       '<div class="field"><textarea class="back-text-input" rows="5" aria-label="Contact details" placeholder="Name&#10;Street address&#10;City, State ZIP&#10;Email&#10;Phone"></textarea></div>' +
@@ -17575,10 +17607,42 @@
       persist();
       d.close();
       setExportStatus('Building the manuscript…');
-      saveExport(slugify(state.bookTitle) + '-manuscript.docx', buildManuscriptDocx(state, lines.length ? lines : [state.author || '']), DOCX_MIME);
+      exportStatusToast = !!exportSt.pieceOnly;
+      saveExport(slugify(exportSt.bookTitle) + '-manuscript.docx', buildManuscriptDocx(exportSt, lines.length ? lines : [state.author || '']), DOCX_MIME)
+        .then(function () { exportStatusToast = false; });
     });
     setTimeout(function () { ta.focus(); }, 0);
-  });
+  }
+  // ---------------------------------------------------------------------
+  // One entry exported on its own (an entry's ⋯ › Export): the book's
+  // page, type and settings, but only that poem, chapter, essay or scene,
+  // titled as it is in the book ("Chapter 3" stays Chapter 3), with no
+  // title page, contents, epigraph, character list, back matter or back
+  // cover. A piece that fits on one page goes without a page number.
+  // ---------------------------------------------------------------------
+  function pieceExportState(poem) {
+    var piece = Object.assign({}, poem, { title: entryTitle(poem, state) || poem.title || '' });
+    var st = Object.assign({}, state, {
+      poems: [piece], bookTitle: entryLabel(poem, state), pieceOnly: true,
+      includeTitlePage: false, includeToc: false, includeCast: false, epigraph: '', epigraphSource: ''
+    });
+    BACK_MATTER.forEach(function (bm) { st[bm.key] = ''; });
+    var plan = planBooklet(st);
+    if (plan.totalPages - plan.frontPages - 1 <= 1) st.showPageNumbers = false;
+    return st;
+  }
+  async function exportPiece(poem, kind) {
+    if (!poem || isSection(poem)) return;
+    flushPendingSave();
+    var st = pieceExportState(poem);
+    if (kind === 'manuscript') { askManuscript(st); return; }
+    exportStatusToast = true;
+    try {
+      if (kind === 'pdf') await runExportForState(st, buildBookletPdf, '.pdf');
+      else if (kind === 'docx') await runDocxExportForState(st, '.docx');
+      else await saveExport(slugify(st.bookTitle) + '.md', new TextEncoder().encode(bookAsMarkdown(st)), 'text/markdown');
+    } finally { exportStatusToast = false; }
+  }
 
   async function runDocxExportForState(exportState, filenameSuffix) {
     setExportStatus('Building .docx…');
