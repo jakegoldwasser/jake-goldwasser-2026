@@ -1561,7 +1561,7 @@
   </div>
   <button type="button" class="promptshow" id="promptShow" hidden>Show the prompt</button>
   <div id="pad" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" autocomplete="off" autocorrect="off" autocapitalize="sentences"
-    data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
+    writingsuggestions="false" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
     aria-label="Your writing" data-placeholder="Begin." class="empty"></div>
   <div class="bar">
     <div class="left">
@@ -4873,24 +4873,47 @@
   var shadow = '';
   var ALLOWED_INPUT = /^(insertText|insertCompositionText|insertLineBreak|insertParagraph|delete\w*|historyUndo|historyRedo|formatBold|formatItalic|formatUnderline)$/;
   var MAX_INSERT = 8; // one grapheme, even a long emoji sequence
+  var COMPOSE_MAX = 24; // a word or short phrase from an IME, not a dictated sentence
   var lastBeforeInputOk = false;
+  // Typing comes right after a key goes down; dictation, Siri and Apple's
+  // Writing Tools put text in without one (and can do it a word at a time,
+  // under MAX_INSERT), so text that no key brought in is refused. Modifiers
+  // don't count: the dictation shortcut is a double press of Fn or Control.
+  // (Android keyboards send "Unidentified", which does count.)
+  var keyAt = 0;
+  window.addEventListener('keydown', function (e) {
+    if (!/^(Shift|Control|Alt|Meta|Fn|FnLock|CapsLock|Hyper|Super|OS)$/.test(e.key)) keyAt = Date.now();
+  }, true);
+  function keyed() { return Date.now() - keyAt < 500; }
+  // What changed between two versions of the text: how much is new, and how
+  // much went. A rewrite can leave the length alone, so growth isn't enough.
+  function textDiff(a, b) {
+    var i = 0, n = Math.min(a.length, b.length);
+    while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++;
+    var j = 0;
+    while (j < n - i && a.charCodeAt(a.length - 1 - j) === b.charCodeAt(b.length - 1 - j)) j++;
+    return { added: b.length - i - j, removed: a.length - i - j };
+  }
   pad.addEventListener('beforeinput', function (e) {
     // Enter makes a line break (not a new <div>), and no styles but these three.
     if (e.inputType === 'insertParagraph') { e.preventDefault(); if (!locked) padDo('insertLineBreak'); return; }
     if (/^format/.test(e.inputType) && !/^format(Bold|Italic|Underline)$/.test(e.inputType)) { e.preventDefault(); return; }
     var picked = e.inputType === 'insertReplacementText' && Date.now() - spellMenuAt < 60000;
     var ok = !P().blockPaste || insertingClip || picked || (ALLOWED_INPUT.test(e.inputType) &&
-      !(e.inputType === 'insertText' && e.data && e.data.length > MAX_INSERT));
+      !(e.inputType === 'insertText' && e.data && e.data.length > MAX_INSERT) &&
+      !(/^insert(Text|CompositionText)$/.test(e.inputType) && !keyed() && !(composing && composeKeyed)));
     if (e.inputType === 'insertReplacementText' && !picked) ok = false;
     if (picked) spellMenuAt = 0;
     lastBeforeInputOk = ok;
     if (!ok) e.preventDefault();
   });
   pad.addEventListener('input', function (e) {
-    var grew = pad.value.length - shadow.length;
     // (Text Luddite pastes itself comes through execCommand, which sends no
     // beforeinput, so insertingClip vouches for it.)
-    if (P().blockPaste && !lastBeforeInputOk && !insertingClip && grew > MAX_INSERT && !e.isComposing) { revert(); return; }
+    if (P().blockPaste && !lastBeforeInputOk && !insertingClip && !e.isComposing && !composing) {
+      var c = textDiff(shadow, pad.value);
+      if (c.added > MAX_INSERT || (c.added && !keyed())) { revert(); return; }
+    }
     lastBeforeInputOk = false;
     shadow = pad.value;
     updateCount();
@@ -4903,9 +4926,22 @@
     if (!locked && e.clipboardData) clipPaste(e.clipboardData.getData('text/plain'), true);
   });
   pad.addEventListener('drop', function (e) { e.preventDefault(); });
-  var composing = false;
-  pad.addEventListener('compositionstart', function () { composing = true; });
-  pad.addEventListener('compositionend', function () { composing = false; shadow = pad.value; scheduleSave(); });
+  // A composition (accents, Chinese or Japanese input, and how iOS dictates)
+  // can't be refused as it goes, so it's checked once it ends, and on the
+  // timer below: a key has to have started or fed it, and it can't bring in
+  // more than a phrase.
+  var composing = false, composeBase = '', composeKeyed = false;
+  pad.addEventListener('compositionstart', function () { composing = true; composeBase = shadow; composeKeyed = keyed(); });
+  window.addEventListener('keydown', function () { if (composing) composeKeyed = true; }, true);
+  function composedTooMuch() {
+    var c = textDiff(composeBase, pad.value);
+    return c.added > COMPOSE_MAX || (c.added > 0 && !composeKeyed);
+  }
+  pad.addEventListener('compositionend', function () {
+    composing = false;
+    if (P().blockPaste && !insertingClip && composedTooMuch()) { shadow = composeBase; revert(); return; }
+    shadow = pad.value; scheduleSave();
+  });
   function revert() {
     var pos = caretCount();
     pad.value = shadow;
@@ -4913,7 +4949,9 @@
     updateCount();
   }
   setInterval(function () {
-    if (writing && !composing && P().blockPaste && pad.value !== shadow) revert();
+    if (!writing || !P().blockPaste) return;
+    if (composing) { if (composedTooMuch()) { shadow = composeBase; revert(); } }
+    else if (pad.value !== shadow) revert();
   }, 400);
 
   var saveTimer = null;
