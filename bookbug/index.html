@@ -23775,8 +23775,31 @@
       d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
     }
     ctx.putImageData(im, 0, 0);
+    if (o.marks) scanDropMarks(c, o.marks);
     if (o.frames) scanStripFrame(c);
     return o.trim ? scanTrim(c) : c;
+  }
+  // Remove pencil marks: only the darkest lines are kept, with a pixel or
+  // two round them (their soft edge), and every lighter gray mark goes to
+  // white -- sketch lines, eraser ghosts, the doubled gray edge pencil
+  // leaves beside a line gone over again. `strength` 10 to 100 keeps lines
+  // darker than about 130 down to 30 (80, darker than about 50, suited
+  // Jake's first spread; at full, real lines begin to break). Colored
+  // marks are never touched: a wash or a colored pencil isn't a sketch
+  // line. In place.
+  function scanDropMarks(c, strength) {
+    var W = c.width, H = c.height, N = W * H, ctx = c.getContext('2d'), im = ctx.getImageData(0, 0, W, H), d = im.data, i;
+    var dark = 140 - strength * 1.1, strong = new Uint8Array(N);
+    for (i = 0; i < N; i++) if (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2] < dark) strong[i] = 1;
+    var keep = scanGrow(strong, W, H, Math.max(1, Math.round(Math.max(W, H) / 700)));
+    for (i = 0; i < N; i++) {
+      if (keep[i]) continue;
+      var q = i * 4;
+      if (Math.max(d[q], d[q + 1], d[q + 2]) - Math.min(d[q], d[q + 1], d[q + 2]) > 40) continue;
+      d[q] = d[q + 1] = d[q + 2] = 255;
+    }
+    ctx.putImageData(im, 0, 0);
+    return c;
   }
   // A small estimate (one value per block) blurred back up to full size.
   // The blur fades to see-through at the edges, so it's laid over an
@@ -24292,8 +24315,8 @@
       if (valid(cd)) frame = cd;
     }
     // A little inside: the frame's ruled line (or the sheet's blurred
-    // edge) stays out.
-    var pick = (frame || outer).q, mx = (pick[0][0] + pick[1][0] + pick[2][0] + pick[3][0]) / 4, my = (pick[0][1] + pick[1][1] + pick[2][1] + pick[3][1]) / 4, k2 = frame ? 0.016 : 0.01;
+    // edge) stays out, even where a hand-ruled line wobbles.
+    var pick = (frame || outer).q, mx = (pick[0][0] + pick[1][0] + pick[2][0] + pick[3][0]) / 4, my = (pick[0][1] + pick[1][1] + pick[2][1] + pick[3][1]) / 4, k2 = frame ? 0.026 : 0.01;
     return { frame: !!frame, quad: pick.map(function (p) {
       return [Math.max(0, Math.min(1, (p[0] + (mx - p[0]) * k2) / W)), Math.max(0, Math.min(1, (p[1] + (my - p[1]) * k2) / H))];
     }) };
@@ -24563,6 +24586,7 @@
         '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
         '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
+        '<div class="field"><label>Remove pencil marks <output data-out="marks"></output></label><input type="range" min="0" max="100" step="10" data-k="marks"></div>' +
         '<div class="field" data-thr><label>Ink threshold <output data-out="threshold"></output></label><input type="range" min="60" max="230" step="5" data-k="threshold"></div>' +
         '<label class="checkline" style="text-transform:none;letter-spacing:0;font-weight:400;"><input type="checkbox" data-k="trim"> Trim the blank paper</label>' +
       '</div></div>' +
@@ -24570,7 +24594,7 @@
       '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add ' + many + '</button></div>');
     var box = d.box, sources = [], cur = 0, busy = false, editingEdges = false, adjust = sink && sink.adjust;
     var pp = scanPhotoPrefs();
-    var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true,
+    var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true, marks: 0,
       edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}) };
     if (adjust) {
       // An illustration from before photos were kept as taken has no
@@ -24649,9 +24673,12 @@
     function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; } if (framed(src)) c.trim = false; return c; }
     function syncControls() {
       var dig = !!(sources[cur] && sources[cur].digital);
-      ['shadow', 'contrast', 'brightness'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
+      ['shadow', 'contrast', 'brightness', 'marks'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
       box.querySelectorAll('[data-mode] button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === o.mode); });
-      box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) { r.value = o[r.dataset.k]; box.querySelector('[data-out="' + r.dataset.k + '"]').textContent = o[r.dataset.k]; });
+      box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
+        var k = r.dataset.k, v = o[k] || 0;
+        r.value = v; box.querySelector('[data-out="' + k + '"]').textContent = k === 'marks' && !v ? 'Off' : v;
+      });
       box.querySelector('input[type="checkbox"][data-k="trim"]').checked = o.trim;
       // A ruled frame is the picture's edge: nothing to trim.
       box.querySelector('input[type="checkbox"][data-k="trim"]').closest('label').hidden = framed(sources[cur]);
@@ -25195,7 +25222,7 @@
           var meta = function (j) {
             var r = chosen(src)[j];
             return { spread: assigning ? plan[i][j] : null, raw: rawId,
-              scan: src.digital ? null : { mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, trim: o.trim,
+              scan: src.digital ? null : { mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, marks: o.marks || 0, trim: o.trim,
                 edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, frame: src.frame, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
           };
           var pageId = null;
