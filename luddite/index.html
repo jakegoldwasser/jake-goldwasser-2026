@@ -1033,6 +1033,9 @@
   .pp .pphead span { color: var(--muted); font-size: 13px; }
   .pp .paper { margin-top: 14px; cursor: default; }
   .pp .pgrade { color: var(--pen); font: 600 14pt var(--display); margin-top: 8px; }
+  /* The grade at the foot instead (printOpts.grade 'words'): spelled out,
+     small and upside down, so the comments are read first. */
+  .pp .pgrade.flip { font-size: 9pt; font-weight: 400; margin-top: 14px; text-align: right; transform: rotate(180deg); transform-origin: center; break-inside: avoid; }
   .pp .pnotes { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 10px; color: var(--pen); font-size: 14px; }
   .pp .pnotes p { margin: 4px 0; }
   .pp .pend { color: var(--pen); white-space: pre-wrap; margin-top: 12px; }
@@ -1075,6 +1078,7 @@
     .mnote { font-size: 10.5pt; }
     .endwrap textarea { display: none; }
     .endprint { display: block; }
+    .endwrap > label { display: none; }
     .gradebox { display: none; }
     .gradeprint.has { display: block; }
     .paper .hl, .mnote { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1942,6 +1946,10 @@
       <span class="printopt sizeopt">Comments
         <span class="segctl" id="printNotes"><button type="button" data-notes="margin">In the margin</button><button type="button" data-notes="after">After the paper</button></span>
         <span class="q" tabindex="0" data-tip="In the margin: each comment beside its words, as on the grading page. After the paper: numbered, in a list under the paper.">?</span>
+      </span>
+      <span class="printopt sizeopt">Grade
+        <span class="segctl" id="printGrade"><button type="button" data-grade="top">At the top</button><button type="button" data-grade="words">In words at the bottom</button></span>
+        <span class="q" tabindex="0" data-tip="At the top: the grade as you gave it, under the student's name. In words at the bottom: spelled out (B plus, ninety-two), small and upside down after the comments, so they're read first.">?</span>
       </span>
       <span class="printopt sizeopt trogx">Lined margin
         <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
@@ -8212,6 +8220,8 @@
     'all drafts': 'Prints every draft, oldest first, each with its comments',
     'in the margin': 'Prints each comment in the margin beside the words it’s about',
     'after the paper': 'Prints the comments numbered, in a list after each paper',
+    'at the top': 'Prints the grade under the student’s name, as you gave it',
+    'in words at the bottom': 'Prints the grade spelled out, small and upside down, after the comments',
     'none': 'Prints with no lined margin',
     'narrow': 'Prints with a narrow ruled margin beside the text for writing by hand',
     'wide': 'Prints with a wide ruled margin beside the text for writing by hand',
@@ -11037,7 +11047,8 @@
     head.appendChild(el('b', null, who(p.name, p.email)));
     head.appendChild(el('span', null, (p.roomTitle || '') + (p.draftLabel ? ' · ' + p.draftLabel : '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
     box.appendChild(head);
-    if (p.grade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
+    var flipGrade = printOpts.grade === 'words';
+    if (p.grade && !flipGrade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
     var text = p.text, orphans = (p.marks || []).filter(function (m) { return m.orphan; }), marks = (p.marks || []).filter(function (m) { return !m.orphan; });
     var allNotes = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
     var margins = allNotes.filter(function (m) { return m.type === 'margin'; });
@@ -11095,14 +11106,35 @@
       orphans.forEach(function (m) { on.appendChild(el('p', null, '\u201c' + m.orphan + '\u201d \u2014 ' + (m.note || 'Arrow'))); });
       box.appendChild(on);
     }
-    if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', 'End comment: ' + p.endComment));
+    if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', p.endComment));
     if (printOpts.chat !== false && p.chat && p.chat.length) {
       var lc = el('div', 'pnotes');
       lc.appendChild(el('p', null, 'Live Comments'));
       p.chat.forEach(function (m) { lc.appendChild(el('p', null, '[' + dayClock(m.at) + '] ' + (m.from === 'teacher' ? 'Teacher' + (m.all ? ' (to everyone)' : '') : who(p.name, p.email) + (m.hand ? ' (raised hand)' : '')) + ': ' + m.text)); });
       box.appendChild(lc);
     }
+    if (p.grade && flipGrade) box.appendChild(el('div', 'pgrade flip', 'Grade: ' + gradeInWords(p.grade)));
     return box;
+  }
+  // A grade spelled out: 92 → Ninety-two, B+ → B plus, 45/50 → forty-five
+  // out of fifty, 87.5% → eighty-seven point five percent.
+  var ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  var TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  function numberWords(n) {
+    if (n < 20) return ONES[n];
+    if (n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '');
+    if (n < 1000) return ONES[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + numberWords(n % 100) : '');
+    return String(n);
+  }
+  function gradeInWords(g) {
+    var w = String(g).trim()
+      .replace(/\b([A-Fa-f])\s*\+(?!\w)/g, '$1 plus').replace(/\b([A-Fa-f])\s*[-\u2212\u2013](?![\w])/g, '$1 minus')
+      .replace(/\d+(?:\.\d+)?/g, function (d) {
+        var parts = d.split('.');
+        return numberWords(Number(parts[0])) + (parts[1] ? ' point ' + parts[1].split('').map(function (c) { return ONES[c]; }).join(' ') : '');
+      })
+      .replace(/\s*\/\s*/g, ' out of ').replace(/\s*%/g, ' percent').replace(/\s+/g, ' ');
+    return w.charAt(0).toUpperCase() + w.slice(1);
   }
   // A guess at each paragraph's topic sentence: its first sentence, as
   // [start, end) in the text. Short lines without an end stop (a title, a
@@ -11394,6 +11426,7 @@
     each('#printLined button', function (b) { b.classList.toggle('on', b.dataset.lined === lined); });
     each('#printDrafts button', function (b) { b.classList.toggle('on', b.dataset.drafts === (printOpts.drafts === 'all' ? 'all' : 'final')); });
     each('#printNotes button', function (b) { b.classList.toggle('on', b.dataset.notes === (printOpts.notes === 'after' ? 'after' : 'margin')); });
+    each('#printGrade button', function (b) { b.classList.toggle('on', b.dataset.grade === (printOpts.grade === 'words' ? 'words' : 'top')); });
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
@@ -11406,6 +11439,7 @@
   each('#printLined button', function (b) { b.addEventListener('click', function () { setPrintOpt('lined', b.dataset.lined || false); }); });
   each('#printDrafts button', function (b) { b.addEventListener('click', function () { setPrintOpt('drafts', b.dataset.drafts); }); });
   each('#printNotes button', function (b) { b.addEventListener('click', function () { setPrintOpt('notes', b.dataset.notes); }); });
+  each('#printGrade button', function (b) { b.addEventListener('click', function () { setPrintOpt('grade', b.dataset.grade); }); });
   drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
     store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
