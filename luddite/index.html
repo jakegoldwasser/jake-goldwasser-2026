@@ -1039,6 +1039,9 @@
   .pp .pnotes { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 10px; color: var(--pen); font-size: 14px; }
   .pp .pnotes p { margin: 4px 0; }
   .pp .pend { color: var(--pen); white-space: pre-wrap; margin-top: 12px; }
+  .pp .prefl { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 10px; }
+  .pp .prefl > b { display: block; font: 600 9pt var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .pp .prefltext { font: var(--pp-size, 11.5pt)/1.6 Literata, Georgia, serif; white-space: pre-wrap; }
   /* Printing: just the page itself, at a fixed width so the margin notes
      line up with what they're about (see .printing, set on beforeprint). */
   .sheet.printing { grid-template-columns: 4.55in 2.1in; gap: .3in; padding: 0; box-shadow: none; border-radius: 0; width: 6.95in; }
@@ -1956,6 +1959,7 @@
       </span>
       <label class="printopt trogx"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
       <label class="printopt trogx"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
+      <label class="printopt" id="printReflectRow" hidden><input type="checkbox" data-opt="reflect"> Reflections <span class="q" tabindex="0" data-tip="Each student's reflection on their paper, after your end comment (once they've handed it in).">?</span></label>
       <label class="printopt"><input type="checkbox" data-opt="chat"> Live comments <span class="q" tabindex="0" data-tip="The live comments between you and the student while they wrote, after the end comment.">?</span></label>
       <label class="printopt trogx"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
       <span class="printopt sizeopt trogx">Text size
@@ -11107,6 +11111,12 @@
       box.appendChild(on);
     }
     if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', p.endComment));
+    if (printOpts.reflect && hasReflection(p)) {
+      var rf = el('div', 'prefl');
+      rf.appendChild(el('b', null, 'Reflection'));
+      rf.appendChild(el('div', 'prefltext', p.reflection.text));
+      box.appendChild(rf);
+    }
     if (printOpts.chat !== false && p.chat && p.chat.length) {
       var lc = el('div', 'pnotes');
       lc.appendChild(el('p', null, 'Live Comments'));
@@ -11116,6 +11126,8 @@
     if (p.grade && flipGrade) box.appendChild(el('div', 'pgrade flip', 'Grade: ' + gradeInWords(p.grade)));
     return box;
   }
+  // A reflection prints once it's handed in, as on the grading page.
+  function hasReflection(p) { var r = p.reflection; return !!(r && r.text && r.text.trim() && r.handedInAt); }
   // A grade spelled out: 92 → Ninety-two, B+ → B plus, 45/50 → forty-five
   // out of fifty, 87.5% → eighty-seven point five percent.
   var ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
@@ -11454,6 +11466,7 @@
     $('printBody').innerHTML = '';
     $('printPreview').innerHTML = '';
     $('printRubricsRow').hidden = true;
+    $('printReflectRow').hidden = true;
     $('printGo').disabled = $('printPdf').disabled = true;
     drawPrintOpts();
     printDrawn = []; printDrawSeq++; printDraftInfo = {}; printDraftCache = {};
@@ -11473,6 +11486,7 @@
     printDrawn = drawn;
     printMissing = ids.length - drawn.length;
     $('printRubricsRow').hidden = !drawn.some(paperRubric);
+    $('printReflectRow').hidden = !drawn.some(hasReflection);
     $('printRubrics').checked = load(PRINT_RUBRICS_KEY) === '1';
     await drawPrintBody();
     window.scrollTo(0, 0);
