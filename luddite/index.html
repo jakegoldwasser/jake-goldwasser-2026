@@ -347,6 +347,14 @@
   .pfoot { display: block; break-inside: avoid; white-space: normal; font-size: 0; }
   .pfoot b { display: block; height: 20px; font: 600 9pt/20px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-top: 1px solid #b8b8b8; }
   @media print { .pfoot.brk { break-after: page; } }
+  /* Comments in the margin (printOpts.notes, the default): each floats in a
+     column at the right, level with the start of its words, in the text's own
+     flow so it pages with them; with a lined margin they sit on its lines. */
+  .pp .paper.mside { padding-right: 2.4in; }
+  .pp .ppbody.lined .paper.mside { padding-right: 0; }
+  .pp .paper .pmn { float: right; clear: right; width: 2.1in; margin: 0 -2.4in 6px 0; white-space: normal; font: 400 9.5pt/1.35 var(--ui); color: var(--pen); text-indent: 0; }
+  .pp .ppbody.lined.wide .paper .pmn { width: 4in; margin-right: -4.25in; }
+  .pp .paper .pmn b { font-weight: 600; margin-right: 4px; }
   .pp .paper .topic:not(.hl) { background: #fbeea0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .pp.prub .rtable { font-size: 12pt; }
   .pp.prub .rubricdoc { font-size: 12pt; }
@@ -1930,6 +1938,10 @@
       <span class="printopt sizeopt" id="printDraftsRow" hidden>Drafts
         <span class="segctl" id="printDrafts"><button type="button" data-drafts="final">Final only</button><button type="button" data-drafts="all">All drafts</button></span>
         <span class="q" tabindex="0" data-tip="Final only: each student's draft marked final (else the one they're writing). All drafts: every draft, oldest first, each with your comments on it.">?</span>
+      </span>
+      <span class="printopt sizeopt">Comments
+        <span class="segctl" id="printNotes"><button type="button" data-notes="margin">In the margin</button><button type="button" data-notes="after">After the paper</button></span>
+        <span class="q" tabindex="0" data-tip="In the margin: each comment beside its words, as on the grading page. After the paper: numbered, in a list under the paper.">?</span>
       </span>
       <span class="printopt sizeopt trogx">Lined margin
         <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
@@ -8198,6 +8210,8 @@
     'make the class': 'Makes the class from the name and email addresses above',
     'final only': 'Prints only the draft marked final (else the one they’re writing)',
     'all drafts': 'Prints every draft, oldest first, each with its comments',
+    'in the margin': 'Prints each comment in the margin beside the words it’s about',
+    'after the paper': 'Prints the comments numbered, in a list after each paper',
     'none': 'Prints with no lined margin',
     'narrow': 'Prints with a narrow ruled margin beside the text for writing by hand',
     'wide': 'Prints with a wide ruled margin beside the text for writing by hand',
@@ -11035,9 +11049,17 @@
     topics.forEach(function (t) { cuts[t[0]] = 1; cuts[t[1]] = 1; });
     var sc = fmtCuts(text, cuts);
     var pts = Object.keys(cuts).map(Number).sort(function (a, b) { return a - b; });
-    var paper = el('div', 'paper');
+    var side = printOpts.notes !== 'after' && allNotes.length;
+    var paper = el('div', 'paper' + (side ? ' mside' : ''));
     var put = ringPutter(paper, marks);
     pts.forEach(function (pt, i) {
+      if (side) allNotes.forEach(function (m) {
+        if (m.start !== pt) return;
+        var n = el('span', 'pmn');
+        n.appendChild(el('b', null, String(num[m.id])));
+        n.appendChild(document.createTextNode(m.type === 'arrow' ? 'Arrow ' + arrowQuote(text, m) + (m.note ? ' — ' + m.note : '') : m.note));
+        put(n, pt, false);
+      });
       margins.forEach(function (m) { if (m.end === pt) put(el('sup', 'mnum', String(num[m.id])), pt, false); });
       marks.forEach(function (m) {
         if (m.type !== 'insert' || m.start !== pt) return;
@@ -11058,7 +11080,7 @@
       pb.appendChild(el('div', 'lmargin'));
       box.appendChild(pb);
     } else box.appendChild(paper);
-    if (allNotes.length) {
+    if (allNotes.length && !side) {
       var notes = el('div', 'pnotes');
       allNotes.forEach(function (m) {
         if (m.type === 'arrow') { notes.appendChild(el('p', null, '[' + num[m.id] + '] Arrow ' + arrowQuote(text, m) + (m.note ? ' — ' + m.note : ''))); return; }
@@ -11371,6 +11393,7 @@
     var lined = printOpts.lined === 'wide' ? 'wide' : printOpts.lined ? 'narrow' : '';
     each('#printLined button', function (b) { b.classList.toggle('on', b.dataset.lined === lined); });
     each('#printDrafts button', function (b) { b.classList.toggle('on', b.dataset.drafts === (printOpts.drafts === 'all' ? 'all' : 'final')); });
+    each('#printNotes button', function (b) { b.classList.toggle('on', b.dataset.notes === (printOpts.notes === 'after' ? 'after' : 'margin')); });
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
@@ -11382,6 +11405,7 @@
   each('#printSize button', function (b) { b.addEventListener('click', function () { setPrintOpt('size', Number(b.dataset.size)); }); });
   each('#printLined button', function (b) { b.addEventListener('click', function () { setPrintOpt('lined', b.dataset.lined || false); }); });
   each('#printDrafts button', function (b) { b.addEventListener('click', function () { setPrintOpt('drafts', b.dataset.drafts); }); });
+  each('#printNotes button', function (b) { b.addEventListener('click', function () { setPrintOpt('notes', b.dataset.notes); }); });
   drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
     store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
