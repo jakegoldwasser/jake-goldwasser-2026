@@ -1,5 +1,6 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+import { createHmac, createHash, timingSafeEqual, randomBytes } from 'node:crypto';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
@@ -193,18 +194,231 @@ export function mergeBookbugSave(stored, incoming) {
   return out;
 }
 
-async function getStoredState(userId) {
+// ---- Books stored apart ----
+// A DynamoDB item holds at most 400 KB, and an account's whole state used
+// to be one item, so a big enough library (a hybrid book's drawings did
+// it) made every save fail. Now the account's item holds only a light
+// index: each book (any entry with an id in one of the state's lists:
+// the libraries, their trash, recently deleted) keeps its small fields
+// there, and each of its big fields (a text book's `data`, a deleted
+// book's copy) is a *part* stored apart, replaced in the index by a stub
+//   { $part, $sum, $n, form, bookTitle, title }
+// -- the part's id, a hash of its JSON, how many chunks it takes, and the
+// few words the usage stats and Bookbug HM's overview read. A part is
+// gzipped JSON in the images table (userId, imageId "part:<id>", then
+// "part:<id>:1", ":2"... for each further 350 KB), so a single book can
+// be any size. GET puts the parts back, so the page never sees a stub.
+//
+// The account item stays the one place a save is committed (its
+// conditional PutItem on updatedAt): parts are written first, under ids
+// no other save uses, and an unchanged field keeps the part the stored
+// index already points to. Once the new index is in, parts only the old
+// one used are deleted; a part from a save that lost a race is deleted
+// too. A reader that finds a part gone (a save landed between reading the
+// index and its parts) reads again.
+const PART_MIN_BYTES = 2048;
+const PART_CHUNK_BYTES = 350 * 1024;
+const INDEX_MAX_BYTES = 380 * 1024;
+const PART_STUB_KEEP = ['form', 'bookTitle', 'title'];
+
+export function isPartStub(v) {
+  return !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.$part === 'string';
+}
+function partSum(json) { return createHash('sha256').update(json).digest('base64url').slice(0, 24); }
+function partKey(userId, id, k) { return { userId: { S: userId }, imageId: { S: 'part:' + id + (k ? ':' + k : '') } }; }
+
+// Calls fn(entry, list, i) for every book-like entry (an object with an
+// id) in every list of every app's state.
+function eachStoredEntry(state, fn) {
+  Object.values(state || {}).forEach(app => {
+    if (!app || typeof app !== 'object' || Array.isArray(app)) return;
+    Object.values(app).forEach(list => {
+      if (!Array.isArray(list)) return;
+      list.forEach((e, i) => { if (e && typeof e === 'object' && !Array.isArray(e) && e.id) fn(e, list, i); });
+    });
+  });
+}
+function stubsIn(state) {
+  const out = [];
+  eachStoredEntry(state, e => Object.keys(e).forEach(f => { if (isPartStub(e[f])) out.push(e[f]); }));
+  return out;
+}
+
+// The state to store, with every big field of every book swapped for a
+// stub, and the parts that need writing. `reuse` maps a hash to a stub
+// already stored (or written by this save) with that content.
+export function packState(state, reuse) {
+  const writes = [];
+  const out = {};
+  Object.keys(state || {}).forEach(appKey => {
+    const app = state[appKey];
+    if (!app || typeof app !== 'object' || Array.isArray(app)) { out[appKey] = app; return; }
+    const packedApp = {};
+    Object.keys(app).forEach(listKey => {
+      const list = app[listKey];
+      if (!Array.isArray(list)) { packedApp[listKey] = list; return; }
+      packedApp[listKey] = list.map(e => {
+        if (!e || typeof e !== 'object' || Array.isArray(e) || !e.id) return e;
+        const entry = {};
+        Object.keys(e).forEach(f => {
+          const v = e[f];
+          if (f === 'id' || isPartStub(v) || v === null || (typeof v !== 'object' && typeof v !== 'string')) { entry[f] = v; return; }
+          const json = JSON.stringify(v);
+          if (Buffer.byteLength(json) < PART_MIN_BYTES) { entry[f] = v; return; }
+          const sum = partSum(json);
+          let ref = reuse.get(sum);
+          if (!ref) {
+            const gz = gzipSync(Buffer.from(json));
+            ref = { $part: randomBytes(12).toString('base64url'), $sum: sum, $n: Math.max(1, Math.ceil(gz.length / PART_CHUNK_BYTES)) };
+            writes.push({ ref, gz });
+            reuse.set(sum, ref);
+          }
+          const stub = { $part: ref.$part, $sum: ref.$sum, $n: ref.$n };
+          if (typeof v === 'object' && !Array.isArray(v)) PART_STUB_KEEP.forEach(k => {
+            if (typeof v[k] === 'string') stub[k] = v[k].slice(0, 200);
+          });
+          entry[f] = stub;
+        });
+        return entry;
+      });
+    });
+    out[appKey] = packedApp;
+  });
+  return { packed: out, writes };
+}
+
+async function writePart(userId, { ref, gz }) {
+  for (let k = 0; k < ref.$n; k++) {
+    await ddb.send(new PutItemCommand({
+      TableName: IMAGE_TABLE_NAME,
+      Item: {
+        ...partKey(userId, ref.$part, k),
+        data: { B: gz.subarray(k * PART_CHUNK_BYTES, (k + 1) * PART_CHUNK_BYTES) },
+        ...(k ? {} : { n: { N: String(ref.$n) }, sum: { S: ref.$sum } }),
+        updatedAt: { N: String(Date.now()) }
+      }
+    }));
+  }
+}
+async function deleteParts(userId, refs) {
+  await Promise.all(refs.map(async ref => {
+    for (let k = 0; k < (ref.$n || 1); k++) {
+      try { await ddb.send(new DeleteItemCommand({ TableName: IMAGE_TABLE_NAME, Key: partKey(userId, ref.$part, k) })); } catch (e) {}
+    }
+  }));
+}
+async function readPart(userId, ref) {
+  const chunks = [];
+  for (let k = 0; k < (ref.$n || 1); k++) {
+    const res = await ddb.send(new GetItemCommand({ TableName: IMAGE_TABLE_NAME, Key: partKey(userId, ref.$part, k), ConsistentRead: true }));
+    if (!res.Item) { const e = new Error('part_missing'); e.partMissing = true; throw e; }
+    chunks.push(Buffer.from(res.Item.data.B));
+  }
+  return JSON.parse(gunzipSync(Buffer.concat(chunks)).toString('utf8'));
+}
+
+// The state with every stub replaced by its part.
+async function unpackState(userId, state) {
+  const stubs = stubsIn(state);
+  if (!stubs.length) return state;
+  const byId = new Map();
+  stubs.forEach(s => byId.set(s.$part, s));
+  const values = new Map();
+  const ids = [...byId.keys()];
+  for (let i = 0; i < ids.length; i += 16) {
+    await Promise.all(ids.slice(i, i + 16).map(async id => values.set(id, await readPart(userId, byId.get(id)))));
+  }
+  const out = JSON.parse(JSON.stringify(state));
+  eachStoredEntry(out, e => Object.keys(e).forEach(f => { if (isPartStub(e[f])) e[f] = values.get(e[f].$part); }));
+  return out;
+}
+
+async function readStoredItem(userId) {
   const result = await ddb.send(new GetItemCommand({
     TableName: TABLE_NAME,
-    Key: { userId: { S: userId } }
+    Key: { userId: { S: userId } },
+    ConsistentRead: true
   }));
-  if (!result.Item) return { state: {}, updatedAt: 0, createdAt: 0, exists: false };
+  if (!result.Item) return { state: {}, updatedAt: 0, createdAt: 0, exists: false, item: null };
   return {
     state: migrateLegacyState(JSON.parse(result.Item.state.S)),
     updatedAt: Number(result.Item.updatedAt?.N || 0),
     createdAt: Number(result.Item.createdAt?.N || 0),
-    exists: true
+    exists: true,
+    item: result.Item
   };
+}
+
+// The account's state, whole. A part that went missing means a save
+// landed in between, so it reads again.
+async function getStoredState(userId) {
+  for (let attempt = 0; ; attempt++) {
+    const stored = await readStoredItem(userId);
+    try {
+      return { ...stored, state: await unpackState(userId, stored.state) };
+    } catch (e) {
+      if (!e.partMissing || attempt >= 3) throw e;
+    }
+  }
+}
+
+// Saves one app's data into the account: merged with what's stored (for
+// Bookbug), packed, its new parts written, then the index committed only
+// if nobody else saved in between (else read again and redo it). Returns
+// a response.
+async function saveAppState(userId, app, data, extraFields) {
+  const written = new Map(); // sum -> stub, parts this save has written
+  let committed = null;
+  try {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { state, updatedAt, createdAt, exists } = await readStoredItem(userId);
+      const oldStubs = stubsIn(state);
+      const next = { ...state };
+      next[app] = app === 'chapbookbuilder' ? mergeBookbugSave(state[app], data) : data;
+      const reuse = new Map(written);
+      oldStubs.forEach(s => { if (s.$sum) reuse.set(s.$sum, s); });
+      const { packed, writes } = packState(next, reuse);
+      const body = JSON.stringify(packed);
+      if (Buffer.byteLength(body) > INDEX_MAX_BYTES) return respond(413, { error: 'too_big' });
+      for (const w of writes) {
+        await writePart(userId, w);
+        written.set(w.ref.$sum, w.ref);
+      }
+      const now = Math.max(Date.now(), updatedAt + 1);
+      // createdAt (for usage stats) is stamped on an account's first save and
+      // carried forward, since PutItem replaces the whole item. Accounts from
+      // before it existed don't get one; stats date them by their books.
+      const created = createdAt || (exists ? 0 : now);
+      try {
+        await ddb.send(new PutItemCommand({
+          TableName: TABLE_NAME,
+          Item: {
+            userId: { S: userId },
+            state: { S: body },
+            updatedAt: { N: String(now) },
+            ...(created ? { createdAt: { N: String(created) } } : {}),
+            ...(extraFields || {})
+          },
+          ...(updatedAt
+            ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
+            : { ConditionExpression: exists ? 'attribute_not_exists(updatedAt)' : 'attribute_not_exists(userId)' })
+        }));
+      } catch (e) {
+        if (e.name !== 'ConditionalCheckFailedException') throw e;
+        continue;
+      }
+      committed = packed;
+      const keep = new Set(stubsIn(packed).map(s => s.$part));
+      await deleteParts(userId, oldStubs.filter(s => !keep.has(s.$part)).filter((s, i, a) => a.findIndex(t => t.$part === s.$part) === i));
+      return respond(200, { ok: true });
+    }
+    return respond(409, { error: 'Busy -- try again' });
+  } finally {
+    // Parts this save wrote that didn't make it into what it committed.
+    const keep = new Set(committed ? stubsIn(committed).map(s => s.$part) : []);
+    const stray = [...written.values()].filter(s => !keep.has(s.$part));
+    if (stray.length) await deleteParts(userId, stray);
+  }
 }
 
 // ---- Import from a link ----
@@ -784,12 +998,12 @@ async function routeHmAdmin(event, method, path, info, hm) {
   if (path === '/hm-admin/book' && method === 'GET') {
     const sub = String(q.sub || '');
     if (!HM_SUB.test(sub)) return respond(404, { error: 'not_found' });
-    const res = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: { userId: { S: 'hm#' + sub } } }));
-    if (!res.Item) return respond(404, { error: 'not_found' });
-    const state = JSON.parse(res.Item.state.S);
+    const stored = await getStoredState('hm#' + sub);
+    if (!stored.item) return respond(404, { error: 'not_found' });
+    const state = stored.state;
     const found = hmBooksOf(state.chapbookbuilder || {}).find((b) => b.entry.id === String(q.id || ''));
     if (!found) return respond(404, { error: 'not_found' });
-    const owner = { sub, email: res.Item.email ? res.Item.email.S : '', name: res.Item.name ? res.Item.name.S : '' };
+    const owner = { sub, email: stored.item.email ? stored.item.email.S : '', name: stored.item.name ? stored.item.name.S : '' };
     await hmLog(info.email, 'book', sub + '/' + found.entry.id, (hmBookTitle(found.entry) || 'Untitled') + ' (' + (owner.email || sub) + ')');
     return respond(200, { owner, kind: found.kind, where: found.where, entry: found.entry });
   }
@@ -836,7 +1050,17 @@ async function routeHmAdmin(event, method, path, info, hm) {
   return respond(404, { error: 'Not found' });
 }
 
+// Anything that throws answers with a reason instead of a bare 502.
 export const handler = async (event) => {
+  try {
+    return await route(event);
+  } catch (e) {
+    console.error(e);
+    return respond(500, { error: 'server_error', reason: String((e && (e.name || e.message)) || 'unknown').slice(0, 80) });
+  }
+};
+
+async function route(event) {
   const method = event.requestContext?.http?.method || 'GET';
   const path = event.rawPath || '/';
 
@@ -1031,37 +1255,11 @@ export const handler = async (event) => {
     }
 
     // Read, merge, write -- only if nobody else wrote in between (two
-    // devices saving at once); on a clash, read again and redo the merge.
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const { state, updatedAt, createdAt, exists } = await getStoredState(userId);
-      state[app] = app === 'chapbookbuilder' ? mergeBookbugSave(state[app], payload.data) : payload.data;
-      const now = Math.max(Date.now(), updatedAt + 1);
-      // createdAt (for usage stats) is stamped on an account's first save and
-      // carried forward, since PutItem replaces the whole item. Accounts from
-      // before it existed don't get one; stats date them by their books.
-      const created = createdAt || (exists ? 0 : now);
-      try {
-        await ddb.send(new PutItemCommand({
-          TableName: TABLE_NAME,
-          Item: {
-            userId: { S: userId },
-            state: { S: JSON.stringify(state) },
-            updatedAt: { N: String(now) },
-            ...(created ? { createdAt: { N: String(created) } } : {}),
-            // Bookbug HM's administrators see whose books these are.
-            ...(hm ? { email: { S: lower(info.email) }, name: { S: String(info.name || '') } } : {})
-          },
-          ...(updatedAt
-            ? { ConditionExpression: 'updatedAt = :prev', ExpressionAttributeValues: { ':prev': { N: String(updatedAt) } } }
-            : { ConditionExpression: exists ? 'attribute_not_exists(updatedAt)' : 'attribute_not_exists(userId)' })
-        }));
-        return respond(200, { ok: true });
-      } catch (e) {
-        if (e.name !== 'ConditionalCheckFailedException') throw e;
-      }
-    }
-    return respond(409, { error: 'Busy -- try again' });
+    // devices saving at once); see saveAppState.
+    // Bookbug HM's administrators see whose books these are.
+    return saveAppState(userId, app, payload.data,
+      hm ? { email: { S: lower(info.email) }, name: { S: String(info.name || '') } } : null);
   }
 
   return respond(405, { error: 'Method not allowed' });
-};
+}

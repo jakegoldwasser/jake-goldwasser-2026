@@ -40,10 +40,26 @@ Set under **Configuration → Environment variables**:
 
 One DynamoDB table (`ChapbookBuilderUsers`, despite the name — it now
 holds every tool's data), one item per signed-in Google user, keyed by
-their Google account id. Each item stores a single JSON blob, namespaced
-per app (`{ chapbookbuilder: {...} }` -- Bookbug's key predates its
-rename) so another tool could share the same sign-in without overwriting
-Bookbug's data.
+their Google account id. Each item stores a JSON blob, namespaced per app
+(`{ chapbookbuilder: {...} }` -- Bookbug's key predates its rename) so
+another tool could share the same sign-in without overwriting Bookbug's
+data.
+
+A DynamoDB item holds at most 400 KB, so that item is only an **index**
+(2026-11-02, after Jake's library passed 400 KB and every save failed):
+each book keeps its small fields there, and each big field (a book's
+`data`, a deleted book's copy) is a **part** stored apart, gzipped, in the
+images table under `imageId` `part:<id>` (plus `part:<id>:1`, `:2`... for
+each further 350 KB, so one book can be any size). In the index such a
+field is a stub, `{ $part, $sum, $n, form, bookTitle, title }`; GET puts
+the parts back, so the page never sees one. A save writes only parts whose
+content changed, commits the index (conditional on `updatedAt`, as
+before), then deletes parts the old index used and the new one doesn't
+(`packState`, `saveAppState`, `unpackState`). An account saved the old way
+is read as it is and converted on its next save. Needs `dynamodb:GetItem`,
+`PutItem` and `DeleteItem` on the images table, which the role already
+has. Errors answer `500 { error: 'server_error', reason }` instead of a
+bare 502, and an index still over 380 KB answers `413 too_big`.
 
 ## Picture-book images
 
