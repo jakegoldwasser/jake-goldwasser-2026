@@ -24084,6 +24084,215 @@
     }
     ctx.putImageData(im, 0, 0);
   }
+  // The picture's rectangle by its edges: the sheet, or the frame ruled
+  // round the drawing when there is one (a dummy's spread, a printed
+  // cartoon's box). Long straight edges -- the sheet's against what's
+  // round it, and drawn lines -- are found with a Hough transform: each
+  // edge pixel votes, by its strength, for the lines through it at its own
+  // angle, so a long faint edge adds up and paper grain doesn't. Of every
+  // four lines that close round a plausible rectangle seen at a slant, the
+  // biggest whose sides really are edges along most of their length is
+  // the sheet (or as much of it as shows); a smaller one inside it, close
+  // to each of its sides, is a ruled frame, and wins. The sheet's own
+  // edge on a pile of other paper can be all but invisible; the frame
+  // seldom is. Returns { quad (fractions, clockwise from top left), frame },
+  // or null.
+  function scanFindRect(src) {
+    var c = pbCanvasFrom(src, 800), W = c.width, H = c.height, N = W * H, i, x, y;
+    var d = c.getContext('2d').getImageData(0, 0, W, H).data, L = new Float32Array(N), T = new Float32Array(N);
+    for (i = 0; i < N; i++) L[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    // A light blur against grain; more would erase a faint ruled line.
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) { i = y * W + x; T[i] = (L[i - (x > 0 ? 1 : 0)] + 2 * L[i] + L[i + (x < W - 1 ? 1 : 0)]) / 4; }
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) { i = y * W + x; L[i] = (T[i - (y > 0 ? W : 0)] + 2 * T[i] + T[i + (y < H - 1 ? W : 0)]) / 4; }
+    var gx = new Float32Array(N), gy = new Float32Array(N), mag = new Float32Array(N), mags = [];
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      i = y * W + x;
+      gx[i] = (L[i - W + 1] + 2 * L[i + 1] + L[i + W + 1]) - (L[i - W - 1] + 2 * L[i - 1] + L[i + W - 1]);
+      gy[i] = (L[i + W - 1] + 2 * L[i + W] + L[i + W + 1]) - (L[i - W - 1] + 2 * L[i - W] + L[i - W + 1]);
+      mag[i] = Math.hypot(gx[i], gy[i]);
+      if ((i & 7) === 0) mags.push(mag[i]);
+    }
+    mags.sort(function (a, b) { return a - b; });
+    var thr = Math.max(24, mags[Math.floor(mags.length * 0.8)] || 0), lowThr = 10;
+    var D = Math.ceil(Math.hypot(W, H)), NT = 180, NR = 2 * D + 1, acc = new Float32Array(NT * NR);
+    var cosT = new Float32Array(NT), sinT = new Float32Array(NT);
+    for (var t = 0; t < NT; t++) { cosT[t] = Math.cos(t * Math.PI / NT); sinT[t] = Math.sin(t * Math.PI / NT); }
+    // Only edges with paper on one side vote: a sheet's edge, a pencil
+    // line. A cutting mat's printed grid and the wood round it are long,
+    // straight and strong too, but dark on both sides.
+    var Ls = [];
+    for (i = 0; i < N; i += 13) Ls.push(L[i]);
+    Ls.sort(function (m, n) { return m - n; });
+    var paperL = Ls[Math.floor(Ls.length * 0.9)], brightL = paperL * 0.75;
+    function paperBy(i, x, y) {
+      var m = mag[i] || 1, ux = gx[i] / m * 3, uy = gy[i] / m * 3;
+      var x1 = Math.round(x + ux), y1 = Math.round(y + uy), x2 = Math.round(x - ux), y2 = Math.round(y - uy);
+      var b1 = x1 >= 0 && y1 >= 0 && x1 < W && y1 < H ? L[y1 * W + x1] : 0, b2 = x2 >= 0 && y2 >= 0 && x2 < W && y2 < H ? L[y2 * W + x2] : 0;
+      return Math.max(b1, b2) >= brightL;
+    }
+    for (y = 1; y < H - 1; y++) for (x = 1; x < W - 1; x++) {
+      i = y * W + x;
+      if (mag[i] < lowThr || !paperBy(i, x, y)) continue;
+      var a0 = Math.round(Math.atan2(gy[i], gx[i]) * NT / Math.PI), wv = Math.min(1, mag[i] / thr);
+      for (var da = -2; da <= 2; da++) {
+        var tt = ((a0 + da) % NT + NT) % NT;
+        acc[tt * NR + Math.round(x * cosT[tt] + y * sinT[tt]) + D] += wv;
+      }
+    }
+    // The strongest lines, each a little way from the ones before it (a
+    // ruled frame can sit close inside the sheet's edge).
+    var peaks = [], minVotes = Math.min(W, H) * 0.1;
+    for (var k = 0; k < 40; k++) {
+      var best = -1, bv = minVotes;
+      for (i = 0; i < acc.length; i++) if (acc[i] > bv) { bv = acc[i]; best = i; }
+      if (best < 0) break;
+      var bt = Math.floor(best / NR), br = best % NR - D;
+      peaks.push({ t: bt, r: br });
+      for (var t2 = -4; t2 <= 4; t2++) {
+        var ti = bt + t2, flip = ti < 0 || ti >= NT;
+        ti = (ti % NT + NT) % NT;
+        for (var dr = -6; dr <= 6; dr++) {
+          var rr = (flip ? -br : br) + dr + D;
+          if (rr >= 0 && rr < NR) acc[ti * NR + rr] = 0;
+        }
+      }
+    }
+    function meet(p, q) {
+      var a1 = cosT[p.t], b1 = sinT[p.t], a2 = cosT[q.t], b2 = sinT[q.t], det = a1 * b2 - a2 * b1;
+      if (Math.abs(det) < 1e-6) return null;
+      return [(p.r * b2 - q.r * b1) / det, (a1 * q.r - a2 * p.r) / det];
+    }
+    // How much of a side is edge: points along it with an edge running the
+    // same way within two pixels. A side running off the photo counts for
+    // what's in it.
+    function support(A, B, line) {
+      var n = 0, hit = 0, steps = Math.max(20, Math.round(Math.hypot(B[0] - A[0], B[1] - A[1]) / 3)), nx = cosT[line.t], ny = sinT[line.t];
+      for (var s = 1; s < steps; s++) {
+        var px = A[0] + (B[0] - A[0]) * s / steps, py = A[1] + (B[1] - A[1]) * s / steps, ok = false;
+        if (px < 1 || py < 1 || px >= W - 1 || py >= H - 1) continue;
+        n++;
+        for (var o = -2; o <= 2 && !ok; o++) {
+          var qx = Math.round(px + nx * o), qy = Math.round(py + ny * o), j = qy * W + qx;
+          if (qx < 1 || qy < 1 || qx >= W - 1 || qy >= H - 1) continue;
+          if (mag[j] >= lowThr && paperBy(j, qx, qy) && Math.abs(gx[j] * nx + gy[j] * ny) >= mag[j] * 0.85) ok = true;
+        }
+        if (ok) hit++;
+      }
+      return n < steps * 0.3 ? 1 : hit / n;
+    }
+    // How much of a side is a ruled line: darker along it than the paper
+    // a few pixels to either side, which is about the same both ways.
+    function ruled(A, B, line) {
+      var n = 0, hit = 0, steps = Math.max(20, Math.round(Math.hypot(B[0] - A[0], B[1] - A[1]) / 3)), nx = cosT[line.t], ny = sinT[line.t];
+      function at(px, py) { px = Math.round(px); py = Math.round(py); return px >= 0 && py >= 0 && px < W && py < H ? L[py * W + px] : -1; }
+      for (var s = 1; s < steps; s++) {
+        var px = A[0] + (B[0] - A[0]) * s / steps, py = A[1] + (B[1] - A[1]) * s / steps;
+        var s1 = at(px + nx * 6, py + ny * 6), s2 = at(px - nx * 6, py - ny * 6);
+        if (s1 < 0 || s2 < 0) continue;
+        n++;
+        var mid = 255;
+        for (var o = -2; o <= 2; o++) { var v = at(px + nx * o, py + ny * o); if (v >= 0 && v < mid) mid = v; }
+        if (mid < Math.min(s1, s2) - 8 && Math.abs(s1 - s2) < 25) hit++;
+      }
+      return n ? hit / n : 0;
+    }
+    function area(q) {
+      var a = 0;
+      for (var z = 0; z < 4; z++) a += q[z][0] * q[(z + 1) % 4][1] - q[(z + 1) % 4][0] * q[z][1];
+      return Math.abs(a) / 2;
+    }
+    // Every four lines, two near level and two near upright, that meet in a
+    // plausible rectangle, biggest first.
+    var lev = peaks.filter(function (p) { return Math.abs(p.t - 90) < 40; }), up = peaks.filter(function (p) { return p.t < 50 || p.t > 130; });
+    var cands = [];
+    for (var a = 0; a < lev.length; a++) for (var b = a + 1; b < lev.length; b++) for (var e = 0; e < up.length; e++) for (var f = e + 1; f < up.length; f++) {
+      var q = [meet(lev[a], up[e]), meet(lev[a], up[f]), meet(lev[b], up[f]), meet(lev[b], up[e])];
+      if (q.some(function (p) { return !p || p[0] < -W * 0.05 || p[1] < -H * 0.05 || p[0] > W * 1.05 || p[1] > H * 1.05; })) continue;
+      var cx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, cy = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+      var lines = [lev[a], up[f], lev[b], up[e]];
+      var order = [0, 1, 2, 3].sort(function (m, n) { return Math.atan2(q[m][1] - cy, q[m][0] - cx) - Math.atan2(q[n][1] - cy, q[n][0] - cx); });
+      var tl = 0;
+      for (var z = 1; z < 4; z++) if (q[order[z]][0] + q[order[z]][1] < q[order[tl]][0] + q[order[tl]][1]) tl = z;
+      order = order.slice(tl).concat(order.slice(0, tl));
+      var qq = order.map(function (m) { return q[m]; }), ar = area(qq);
+      if (ar < N * 0.12) continue;
+      var good = true;
+      for (z = 0; z < 4 && good; z++) {
+        var P = qq[(z + 3) % 4], Q = qq[z], R = qq[(z + 1) % 4], u = [P[0] - Q[0], P[1] - Q[1]], w = [R[0] - Q[0], R[1] - Q[1]];
+        if (Math.abs((u[0] * w[0] + u[1] * w[1]) / (Math.hypot(u[0], u[1]) * Math.hypot(w[0], w[1]) || 1)) > 0.5) good = false;
+      }
+      if (!good) continue;
+      // Side z runs from corner z to corner z + 1. Corner m was made by
+      // lines[m] and lines[(m + 3) % 4]; a side lies on the line its two
+      // corners share.
+      var sideLines = [];
+      for (z = 0; z < 4; z++) {
+        var m1 = order[z], m2 = order[(z + 1) % 4], l2 = [lines[m2], lines[(m2 + 3) % 4]];
+        sideLines.push([lines[m1], lines[(m1 + 3) % 4]].filter(function (l) { return l2.indexOf(l) !== -1; })[0]);
+      }
+      cands.push({ q: qq, area: ar, lines: sideLines });
+    }
+    cands.sort(function (m, n) { return n.area - m.area; });
+    // Paper inside, not the cutting mat or table (whose printed grid makes
+    // fine rectangles too): brighter than most of the photo.
+    var insideL = Math.max(110, paperL * 0.8);
+    function light(q) {
+      var sum = 0, n = 0;
+      for (var gu = 1; gu < 12; gu++) for (var gv = 1; gv < 12; gv++) {
+        var u = gu / 12, v = gv / 12;
+        var px = (q[0][0] * (1 - u) + q[1][0] * u) * (1 - v) + (q[3][0] * (1 - u) + q[2][0] * u) * v;
+        var py = (q[0][1] * (1 - u) + q[1][1] * u) * (1 - v) + (q[3][1] * (1 - u) + q[2][1] * u) * v;
+        px = Math.round(px); py = Math.round(py);
+        if (px < 0 || py < 0 || px >= W || py >= H) continue;
+        sum += L[py * W + px]; n++;
+      }
+      return n ? sum / n : 0;
+    }
+    function valid(cd) {
+      if (cd.ok == null) {
+        cd.ok = light(cd.q) >= insideL;
+        for (var z = 0; z < 4 && cd.ok; z++) if (support(cd.q[z], cd.q[(z + 1) % 4], cd.lines[z]) < 0.6) cd.ok = false;
+      }
+      return cd.ok;
+    }
+    var outer = null, ci;
+    for (ci = 0; ci < cands.length && ci < 6000 && !outer; ci++) if (valid(cands[ci])) outer = cands[ci];
+    if (!outer) return null;
+    // A frame: inside the sheet, each corner near the sheet's, taking up
+    // a good part of it.
+    function inside(p, q) {
+      for (var z = 0; z < 4; z++) {
+        var A = q[z], B = q[(z + 1) % 4];
+        if ((B[0] - A[0]) * (p[1] - A[1]) - (B[1] - A[1]) * (p[0] - A[0]) < -2) return false;
+      }
+      return true;
+    }
+    var size = Math.sqrt(outer.area), frame = null;
+    for (ci = 0; ci < cands.length && !frame; ci++) {
+      var cd = cands[ci];
+      if (cd === outer || cd.area > outer.area * 0.97 || cd.area < outer.area * 0.35) continue;
+      if (!cd.q.every(function (p) { return inside(p, outer.q); })) continue;
+      if (!cd.q.every(function (p, z) { return Math.hypot(p[0] - outer.q[z][0], p[1] - outer.q[z][1]) < size * 0.25; })) continue;
+      // Ruled: every side a thin dark line with paper both sides, not a
+      // sheet's edge.
+      if (![0, 1, 2, 3].every(function (z) { return ruled(cd.q[z], cd.q[(z + 1) % 4], cd.lines[z]) >= 0.5; })) continue;
+      if (valid(cd)) frame = cd;
+    }
+    // A little inside: the frame's ruled line (or the sheet's blurred
+    // edge) stays out.
+    var pick = (frame || outer).q, mx = (pick[0][0] + pick[1][0] + pick[2][0] + pick[3][0]) / 4, my = (pick[0][1] + pick[1][1] + pick[2][1] + pick[3][1]) / 4, k2 = frame ? 0.016 : 0.01;
+    return { frame: !!frame, quad: pick.map(function (p) {
+      return [Math.max(0, Math.min(1, (p[0] + (mx - p[0]) * k2) / W)), Math.max(0, Math.min(1, (p[1] + (my - p[1]) * k2) / H))];
+    }) };
+  }
+  // The rectangle to straighten a photo to: its edges (a ruled frame, or
+  // the sheet), else the sheet as the biggest pale patch.
+  function scanFindEdges(src) {
+    var r = scanFindRect(src);
+    if (r) return r;
+    var q = scanFindPaper(src);
+    return q ? { quad: q, frame: false } : null;
+  }
   // Finding the paper's edges in a photo. The sheet is the big bright,
   // pale patch (the table round it is darker or more colorful): the pixels
   // brighter than an Otsu threshold, their largest connected patch, and that
@@ -24226,7 +24435,7 @@
   // percent of a usual sheet (Letter, A4, a 9 x 12 pad, 11 x 14, square)
   // is taken to be that sheet. `w` and `h` are a size in photo pixels.
   var SCAN_SHEETS = [8.5 / 11, 210 / 297, 9 / 12, 11 / 14, 5.5 / 8.5, 1];
-  function scanSheetAspect(q, W, H) {
+  function scanSheetAspect(q, W, H, free) {
     function len(a, b) { return Math.hypot((b[0] - a[0]) * W, (b[1] - a[1]) * H); }
     var w = (len(q[0], q[1]) + len(q[3], q[2])) / 2, h = (len(q[0], q[3]) + len(q[1], q[2])) / 2, ar = w / Math.max(1, h);
     function pt(p) { return [p[0] * W - W / 2, p[1] * H - H / 2, 1]; }
@@ -24244,15 +24453,16 @@
         if (isFinite(r) && r > 0.2 && r < 5) ar = r;
       }
     }
-    var tall = ar < 1, rr = tall ? ar : 1 / ar, snap = rr, off = 0.03;
+    var tall = ar < 1, rr = tall ? ar : 1 / ar, snap = rr, off = free ? 0 : 0.03;
     SCAN_SHEETS.forEach(function (sh) { var e = Math.abs(sh - rr) / sh; if (e < off) { off = e; snap = sh; } });
     return { aspect: tall ? snap : 1 / snap, w: w, h: h };
   }
   // The photo flattened so the sheet's four corners become a rectangle's:
   // each output pixel is looked up through the homography from the
   // rectangle to the photo's quadrilateral, blending the four nearest.
-  function scanWarp(src, q, maxDim) {
-    var W = src.width, H = src.height, sh = scanSheetAspect(q, W, H);
+  // `free`: a ruled frame, any shape, not snapped to a sheet's.
+  function scanWarp(src, q, maxDim, free) {
+    var W = src.width, H = src.height, sh = scanSheetAspect(q, W, H, free);
     var area = Math.max(1, sh.w * sh.h), ow = Math.sqrt(area * sh.aspect), oh = ow / sh.aspect;
     var k = Math.min(1, maxDim / Math.max(ow, oh));
     ow = Math.max(1, Math.round(ow * k)); oh = Math.max(1, Math.round(oh * k));
@@ -24418,13 +24628,15 @@
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
     // Art made on a computer comes in as it is: the photo fixes (shadows,
     // contrast, brightness) are for paper, and are hidden while it's shown.
-    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; } return c; }
+    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; } if (framed(src)) c.trim = false; return c; }
     function syncControls() {
       var dig = !!(sources[cur] && sources[cur].digital);
       ['shadow', 'contrast', 'brightness'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
       box.querySelectorAll('[data-mode] button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === o.mode); });
       box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) { r.value = o[r.dataset.k]; box.querySelector('[data-out="' + r.dataset.k + '"]').textContent = o[r.dataset.k]; });
       box.querySelector('input[type="checkbox"][data-k="trim"]').checked = o.trim;
+      // A ruled frame is the picture's edge: nothing to trim.
+      box.querySelector('input[type="checkbox"][data-k="trim"]').closest('label').hidden = framed(sources[cur]);
       box.querySelector('[data-thr]').hidden = o.mode !== 'bw';
       // Straightening and the light are for photos of paper.
       var photos = sources.some(function (x) { return !x.digital && !x.fromPdf; });
@@ -24519,8 +24731,15 @@
     }
     // The page the cleanup works from: the photo, flattened to the sheet's
     // corners when there are some and straightening is on.
+    // A ruled frame found (`frame`) is the picture itself: it comes in
+    // whole, untrimmed and not cut into separate drawings.
+    function findEdges(src) {
+      var r = src.digital || src.fromPdf ? null : scanFindEdges(src.photo);
+      src.quad = r ? r.quad : null; src.frame = !!(r && r.frame);
+    }
+    function framed(src) { return !!(src && src.frame && src.quad && o.edges); }
     function straighten(src) {
-      src.canvas = o.edges && src.quad && !src.digital && !src.fromPdf ? scanWarp(src.photo, src.quad, 2400) : src.photo;
+      src.canvas = o.edges && src.quad && !src.digital && !src.fromPdf ? scanWarp(src.photo, src.quad, 2400, src.frame) : src.photo;
       src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
     }
     // A page's circled doodles, as boxes over it (tap one to leave it out
@@ -24691,7 +24910,7 @@
     function turnSource(src, dir) {
       src.photo = turnCanvas(src.photo, dir);
       src.turn = (((src.turn || 0) + dir) % 4 + 4) % 4;
-      src.quad = src.digital || src.fromPdf ? null : scanFindPaper(src.photo);
+      findEdges(src);
       straighten(src);
       src.regions = null;
       findRegions(src);
@@ -24716,7 +24935,7 @@
               src.off = src.fromPdf || src.digital ? null : scanOffMask(aw, ah, dark);
               // A page of separate drawings shows each as a box to tap to
               // choose; with none chosen the page comes in whole.
-              var list = scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
+              var list = framed(src) ? [] : scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
               src.regions = scanReadingOrder(list.map(function (f) {
                 return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: null, on: false, loop: false };
               }));
@@ -24822,7 +25041,7 @@
     function addSource(canvas, fromPdf, digital, given) {
       var src = { photo: canvas, canvas: canvas, regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital, spread: null };
       // A photo of paper: where the sheet's corners are, to flatten it to.
-      src.quad = given ? given.quad || null : fromPdf || digital ? null : scanFindPaper(canvas);
+      if (given) { src.quad = given.quad || null; src.frame = !!given.frame; } else findEdges(src);
       if (given && given.box) src.preset = given.box;
       straighten(src);
       sources.push(src);
@@ -24847,7 +25066,7 @@
       strip.hidden = true;
       box.classList.add('is-adjust');
       addBtn.dataset.label = 'Save';
-      addSource(adjust.canvas, !!(adjust.scan && adjust.scan.fromPdf), false, { quad: adjust.scan ? adjust.scan.quad : null, box: adjust.scan ? adjust.scan.box : null });
+      addSource(adjust.canvas, !!(adjust.scan && adjust.scan.fromPdf), false, { quad: adjust.scan ? adjust.scan.quad : null, frame: !!(adjust.scan && adjust.scan.frame), box: adjust.scan ? adjust.scan.box : null });
     }
     // Opened from the list's own buttons: the choice is made, so the
     // dialog's buttons and intro line stay out of the way.
@@ -24904,7 +25123,7 @@
       o.edges = e.target.checked; editingEdges = false; savePhotoPrefs();
       sources.forEach(function (src) {
         if (src.digital || src.fromPdf) return;
-        if (o.edges && !src.quad) src.quad = scanFindPaper(src.photo);
+        if (o.edges && !src.quad) findEdges(src);
         straighten(src); src.regions = null; findRegions(src);
       });
       refresh();
@@ -24938,14 +25157,14 @@
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
             cuts = chosen(src).map(function (r) {
               var c = scanStripFrame(scanCutRegion(page, r, src.aw, src.ah));
-              return placed(o.trim ? scanTrim(c) : c, Math.max(0, Math.floor(r.fx * page.width)), Math.max(0, Math.floor(r.fy * page.height)));
+              return placed(optsFor(src).trim ? scanTrim(c) : c, Math.max(0, Math.floor(r.fx * page.width)), Math.max(0, Math.floor(r.fy * page.height)));
             });
             scanWhiteRings(page, chosen(src), src.aw, src.ah);
           } else if (wholePage(src)) {
             page = scanClean(src.canvas, Object.assign(optsFor(src), { trim: false }), 2400);
             if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
             if (!src.digital) scanStripFrame(page);
-            cuts = [placed(o.trim ? scanTrim(page) : page, 0, 0)];
+            cuts = [placed(optsFor(src).trim ? scanTrim(page) : page, 0, 0)];
           } else continue;
           // The photo as taken, kept so the illustration can be adjusted
           // again from it, with the settings and box it came in with.
@@ -24955,7 +25174,7 @@
             var r = chosen(src)[j];
             return { spread: assigning ? plan[i][j] : null, raw: rawId,
               scan: src.digital ? null : { mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, trim: o.trim,
-                edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
+                edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, frame: src.frame, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
           };
           var pageId = null;
           if (!sink) try {
