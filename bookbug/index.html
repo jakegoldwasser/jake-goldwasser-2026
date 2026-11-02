@@ -2237,6 +2237,13 @@
   .scan-thumb em { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--surface); font: 600 10px/16px system-ui, sans-serif; font-style: normal; white-space: nowrap; }
   .scan-strip:has(em) { padding-bottom: 10px; }
   .scan-strip[hidden], .scan-assign[hidden] { display: none; }
+  /* A phone only takes the photos in (picture books): the settings, the
+     spread picker and the page's boxes are for a computer. */
+  .scan-box.is-phone .scan-main { grid-template-columns: 1fr; }
+  .scan-box.is-phone .scan-controls, .scan-box.is-phone .scan-assign, .scan-box.is-phone .scan-note { display: none; }
+  .scan-box.is-phone .scan-view { height: auto; min-height: 0; }
+  .scan-box.is-phone .scan-view canvas { max-height: 46vh; }
+  @media (max-width: 860px) { #pbImgAdjust { display: none; } }
   .scan-assign { margin: 4px 0 2px; font-size: 13px; color: var(--ink-soft); }
   .scan-assign select { font: inherit; font-size: 16px; color: var(--ink); margin-left: 6px; max-width: calc(100% - 70px); padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
   /* What the photo was taken in: plain checkboxes under one small label. */
@@ -21121,8 +21128,13 @@
       return { label: pbCaption(k), short: k === 0 ? 'First' : k === n - 1 ? 'Last' : String(k), art: sp.items.some(function (it) { return it.type === 'image'; }) };
     });
   }
+  // Photos are taken on a phone; they're straightened and cleaned there
+  // with this device's usual settings, and edited on a computer (Jake,
+  // 2026-11-01: editing on a phone screen doesn't work). Phone width, as
+  // everywhere else in Bookbug.
+  function pbPhoneWidth() { return window.matchMedia('(max-width: 860px)').matches; }
   function pbOpenScan(s) {
-    var placed = [], batch = s == null;
+    var placed = [], batch = s == null, phone = pbPhoneWidth();
     if (batch) {
       var spreads = pbScanSpreads(), story = pbStorySpreads(pbState);
       s = story.filter(function (k) { return !spreads[k].art; })[0];
@@ -21130,9 +21142,10 @@
     }
     openCartoonImport(undefined, null, {
       title: batch ? 'Add a batch of illustrations' : 'Add illustrations', one: 'illustration', many: 'illustrations', mode: 'color', digitalArt: true,
-      hint: batch ? 'Photos or a PDF of your art, all at once, cleaned up like a scan with one set of settings. Each goes on the next spread without an illustration; choose another spread under any photo.'
+      hint: phone ? 'Photos of your art go on the next spreads without an illustration. To adjust them, open the book on a computer.'
+        : batch ? 'Photos or a PDF of your art, all at once, cleaned up like a scan with one set of settings. Each goes on the next spread without an illustration; choose another spread under any photo.'
         : 'Photos or a PDF of your art, cleaned up like a scan. The first goes on this spread, the rest on the next spreads without an illustration.',
-      spreads: pbScanSpreads, startAt: s, startForce: !batch,
+      spreads: pbScanSpreads, startAt: s, startForce: !batch, phone: phone,
       storeRaw: function (enc) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height); },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { placed.push(Object.assign({ id: id }, meta || {})); }); },
       done: function () { pbPlaceScanned(placed); }
@@ -21301,7 +21314,7 @@
       });
       var cleanBtn = pbQb('Clean up ▾', 'Tidy a scanned or photographed drawing', !!it.clean, function (e) {
         e.stopPropagation();
-        pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-clean="adjust">Adjust photo…</button>' +
+        pbCleanMenu.innerHTML = (pbPhoneWidth() ? '' : '<button type="button" role="menuitem" data-clean="adjust">Adjust photo…</button>') +
           '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
           '<button type="button" role="menuitem" data-clean="transparent">Make paper transparent</button>' +
           '<button type="button" role="menuitem" data-clean="ink">Clean up line art</button>' +
@@ -24575,6 +24588,11 @@
       try { localStorage.setItem(SCAN_PHOTO_KEY, JSON.stringify({ edges: o.edges, cond: o.cond })); } catch (e) {}
     }
     var assignEl = box.querySelector('[data-assign]'), assigning = !!(sink && sink.spreads) && !adjust;
+    // On a phone (picture books): photos in, nothing to set. Each comes in
+    // whole (the frame or sheet found), with this device's settings, and
+    // is adjusted later on a computer, from the photo kept with it.
+    var phone = !!(sink && sink.phone) && !adjust, adjustTurn = (adjust && adjust.scan && adjust.scan.turn) || 0;
+    if (phone) box.classList.add('is-phone');
     var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status'), note = box.querySelector('.scan-note');
     var addBtn = box.querySelector('[data-act="add"]');
     // Take photos: the camera opens live in the dialog (a phone's back
@@ -24668,8 +24686,8 @@
           turnSource(src, Number(b.dataset.turn));
           refresh();
         });
-        view.appendChild(turns);
-        if (!src.digital && !src.fromPdf && o.edges) view.appendChild(edgesButton('Edges', 'Move the corners onto the paper’s corners', function () { editingEdges = true; renderView(); }));
+        if (!phone) view.appendChild(turns);
+        if (!phone && !src.digital && !src.fromPdf && o.edges) view.appendChild(edgesButton('Edges', 'Move the corners onto the paper’s corners', function () { editingEdges = true; renderView(); }));
         drawRegions(src, stage, cv);
       }, 30);
     }
@@ -24747,6 +24765,7 @@
     // Boxes are kept as fractions of the whole page; the view may be
     // trimmed, so they're placed through its crop.
     function drawRegions(src, stage, cv) {
+      if (phone) { note.textContent = ''; return; }
       var cb = cv.cropBox || { x: 0, y: 0, W: cv.width, H: cv.height };
       function toView(fx, fy) { return [(fx * cb.W - cb.x) / cv.width * 100, (fy * cb.H - cb.y) / cv.height * 100]; }
       function toPage(e) {
@@ -24935,7 +24954,7 @@
               src.off = src.fromPdf || src.digital ? null : scanOffMask(aw, ah, dark);
               // A page of separate drawings shows each as a box to tap to
               // choose; with none chosen the page comes in whole.
-              var list = framed(src) ? [] : scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
+              var list = framed(src) || phone ? [] : scanFindDrawings(scanOffPaper(ink, aw, ah, dark), aw, ah);
               src.regions = scanReadingOrder(list.map(function (f) {
                 return { fx: f.x / aw, fy: f.y / ah, fw: f.w / aw, fh: f.h / ah, ax: f.x, ay: f.y, mw: f.w, mh: f.h, mask: f.mask, depth: f.depth, ring: null, on: false, loop: false };
               }));
@@ -25029,7 +25048,8 @@
     function refresh() {
       var has = sources.length > 0;
       box.querySelector('.scan-main').hidden = !has;
-      box.querySelector('.scan-empty').hidden = has || typeof start === 'string';
+      // On a phone the line saying where adjusting happens stays up.
+      box.querySelector('.scan-empty').hidden = (has && !phone) || typeof start === 'string';
       var n = cartoonCount();
       addBtn.disabled = !n || busy;
       addBtn.textContent = addBtn.dataset.label || (n ? 'Add ' + n + ' ' + (n === 1 ? one : many) : 'Add ' + many);
@@ -25066,7 +25086,9 @@
       strip.hidden = true;
       box.classList.add('is-adjust');
       addBtn.dataset.label = 'Save';
-      addSource(adjust.canvas, !!(adjust.scan && adjust.scan.fromPdf), false, { quad: adjust.scan ? adjust.scan.quad : null, frame: !!(adjust.scan && adjust.scan.frame), box: adjust.scan ? adjust.scan.box : null });
+      // The kept photo is as it was taken in; quarter turns made in a later
+      // Adjust are kept with the settings (`turn`).
+      addSource(turnCanvas(adjust.canvas, adjustTurn), !!(adjust.scan && adjust.scan.fromPdf), false, { quad: adjust.scan ? adjust.scan.quad : null, frame: !!(adjust.scan && adjust.scan.frame), box: adjust.scan ? adjust.scan.box : null });
     }
     // Opened from the list's own buttons: the choice is made, so the
     // dialog's buttons and intro line stay out of the way.
@@ -25174,7 +25196,7 @@
             var r = chosen(src)[j];
             return { spread: assigning ? plan[i][j] : null, raw: rawId,
               scan: src.digital ? null : { mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, trim: o.trim,
-                edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, frame: src.frame, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
+                edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, frame: src.frame, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
           };
           var pageId = null;
           if (!sink) try {
