@@ -11348,11 +11348,18 @@
     for (var i = 0; i < n; i++) f.appendChild(el('i'));
     return n;
   }
+  // The lines stop two lines of text short of the page's foot: the printed
+  // text can wrap a little differently from this layout (page zoom, for one),
+  // and lines filled to the very bottom then went over onto a page of their own.
+  function footSlack(box) {
+    var pp = box.querySelector('.paper'), lh = pp ? parseFloat(getComputedStyle(pp).lineHeight) : 0;
+    return Math.max(40, Math.ceil(2 * (lh || 26)));
+  }
   // Without a foot on every page, the room left on a paper's last page fills with lines.
   function endFill(box) {
     var last = pageSlices(box).pop(), f = footEl();
     box.appendChild(f);
-    if (fillFoot(f, last.t + PAGE_PX - 6) < 2) f.remove();
+    if (fillFoot(f, last.t + PAGE_PX - footSlack(box)) < 2) f.remove();
   }
   // Where a line starts within its text node.
   function lineStart(n, top) {
@@ -11366,7 +11373,7 @@
     return lo;
   }
   function pageFeet(box) {
-    var cap = PAGE_PX - FOOT_PX - 6, start = box.getBoundingClientRect().top;
+    var slack = footSlack(box), cap = PAGE_PX - FOOT_PX - slack, start = box.getBoundingClientRect().top;
     for (var guard = 0; guard < 80; guard++) {
       var items = lineItems(box).filter(function (it) { return !it.foot && it.t >= start - 0.5; });
       var brk = null;
@@ -11380,7 +11387,7 @@
         f.classList.add('brk');
       }
       // Its lines fill the page down to the bottom margin.
-      fillFoot(f, start + PAGE_PX - 6);
+      fillFoot(f, start + PAGE_PX - slack);
       if (!brk) return;
       start = f.getBoundingClientRect().bottom;
     }
