@@ -2220,7 +2220,7 @@
   .cbf-angle output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
   .cbf-stage.is-angle .scan-region { background-image: linear-gradient(to right, transparent calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% + .5px), transparent calc(66.67% + .5px)), linear-gradient(to bottom, transparent calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% - .5px), rgba(27,26,24,.35) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% - .5px), rgba(27,26,24,.35) calc(66.67% + .5px), transparent calc(66.67% + .5px)); }
   .scan-note { font-size: 13px; color: var(--ink-soft); margin: 6px 0 0; }
-  .scan-note { min-height: 2.6em; }
+  .scan-note { min-height: 3.1em; } /* two lines at its line height, so the rows under it never move */
   .scan-note .scan-all { font-size: inherit; font-weight: 600; color: var(--accent); }
   /* Take photos: the camera live in the dialog, a shutter under it. */
   .scan-cam { margin-bottom: 12px; }
@@ -2233,6 +2233,27 @@
   .scan-strip { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; }
   .scan-thumb { position: relative; flex: 0 0 auto; width: 58px; height: 58px; border: 2px solid var(--line); border-radius: 6px; background: #fff center / contain no-repeat; cursor: pointer; padding: 0; }
   .scan-thumb.is-current { border-color: var(--accent); }
+  /* The spread a photo goes on (picture books), under its thumbnail. */
+  .scan-thumb em { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--surface); font: 600 10px/16px system-ui, sans-serif; font-style: normal; white-space: nowrap; }
+  .scan-strip:has(em) { padding-bottom: 10px; }
+  .scan-strip[hidden], .scan-assign[hidden] { display: none; }
+  .scan-assign { margin: 4px 0 2px; font-size: 13px; color: var(--ink-soft); }
+  .scan-assign select { font: inherit; font-size: 16px; color: var(--ink); margin-left: 6px; max-width: calc(100% - 70px); padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  /* What the photo was taken in: plain checkboxes under one small label. */
+  .scan-conds { border: 0; padding: 0; margin: 0 0 12px; }
+  .scan-conds[hidden] { display: none; }
+  .scan-conds legend { padding: 0; margin-bottom: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+  .scan-check { text-transform: none; letter-spacing: 0; font-weight: 400; margin-bottom: 6px; }
+  .scan-controls > .scan-check { margin: 0 0 12px; }
+  /* Edges: a pill over the page's top-left corner, opposite the turns. */
+  .scan-edges-btn { position: absolute; top: 8px; left: 8px; z-index: 2; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1; cursor: pointer; }
+  .scan-edges-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* The sheet's corners on the photo as taken. */
+  .scan-edges { cursor: default; }
+  .scan-edges svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .scan-edges polygon { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: var(--accent); stroke-width: 2; }
+  .scan-corner { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 999px; background: var(--surface); border: 2px solid var(--accent); cursor: grab; touch-action: none; z-index: 1; }
+  .scan-corner::before { content: ''; position: absolute; inset: -12px; }
   .scan-thumb span { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 999px; background: var(--ink); color: var(--surface); font-size: 12px; line-height: 18px; text-align: center; }
   .scan-controls .field { margin-bottom: 12px; }
   .scan-controls input[type="range"] { width: 100%; accent-color: var(--accent); }
@@ -2978,6 +2999,12 @@
         </div>
         <!-- Story text from a numbered list, at the foot of the spreads like a
              poetry collection's Bring in panel (pbParseStanzas). -->
+        <!-- Many photos of illustrations at once, each to its spread
+             (pbOpenScan with no spread). -->
+        <div class="panel intake-collapsed-bar" id="pbBatchBar">
+          <span class="pb-story-bar-text">Photos of your illustrations, one to a spread</span>
+          <button class="btn btn-sm" id="pbBatchBtn" type="button">Add a batch of illustrations</button>
+        </div>
         <div class="panel intake-collapsed-bar" id="pbStoryBar">
           <span class="pb-story-bar-text">Numbered stanzas, one to a spread</span>
           <button class="btn btn-sm" id="pbStoryOpenBtn" type="button">Bring in story text</button>
@@ -3117,6 +3144,7 @@
               <div class="field">
                 <label>Scanned art</label>
                 <div class="pb-btn-row">
+                  <button type="button" class="btn btn-sm" id="pbImgAdjust" title="Straighten, shadows, the light, contrast and brightness, for this illustration alone">Adjust photo…</button>
                   <button type="button" class="btn btn-sm" id="pbImgShadows" title="Evens out the gray of a scan or phone photo so the paper comes out white">Remove paper shadows</button>
                   <button type="button" class="btn btn-sm" id="pbImgTransparent" title="Lifts the drawing off its paper, so whatever is behind shows through">Make paper transparent</button>
                   <button type="button" class="btn btn-sm" id="pbImgInk" title="Makes a photo or scan of a drawing into crisp black ink on white">Clean up line art</button>
@@ -5063,6 +5091,7 @@
     var num = function (v, d) { return typeof v === 'number' && isFinite(v) ? v : d; };
     if (it.type === 'image') {
       return { id: it.id, type: 'image', img: it.img || null, orig: it.orig || null, clean: it.clean || null,
+        raw: it.raw || null, scan: it.scan && typeof it.scan === 'object' ? it.scan : null,
         area: ['left', 'right', 'spread'].indexOf(it.area) !== -1 ? it.area : 'spread',
         fit: ['bleed', 'center', 'free'].indexOf(it.fit) !== -1 ? it.fit : 'bleed',
         fx: num(it.fx, 0.5), fy: num(it.fy, 0.5), scale: num(it.scale, 0.8),
@@ -21081,35 +21110,88 @@
   // camera; shadows lifted, the table round a photo whited out, the paper
   // trimmed, a page of several drawings cut apart). The first goes on this
   // spread, the rest on the next spreads that have no illustration yet;
-  // any past the book's end wait in its archive. A file dropped on a
-  // spread still goes straight in, untouched, for finished digital art.
-  function pbOpenScan(s) {
-    var ids = [];
-    openCartoonImport(undefined, null, {
-      title: 'Add illustrations', one: 'illustration', many: 'illustrations', mode: 'color', digitalArt: true,
-      hint: 'Photos or a PDF of your art, cleaned up like a scan. The first goes on this spread, the rest on the next spreads without an illustration.',
-      store: function (enc) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { ids.push(id); }); },
-      done: function () { pbPlaceScanned(s, ids); }
+  // any past the book's end wait in its archive. Each photo's spread can
+  // be chosen in the dialog (Goes on). With no spread (`s` null: Add a
+  // batch of illustrations, at the foot of the spreads) they start on the
+  // first story spread without one. A file dropped on a spread still goes
+  // straight in, untouched, for finished digital art.
+  function pbScanSpreads() {
+    var n = pbState.spreads.length;
+    return pbState.spreads.map(function (sp, k) {
+      return { label: pbCaption(k), short: k === 0 ? 'First' : k === n - 1 ? 'Last' : String(k), art: sp.items.some(function (it) { return it.type === 'image'; }) };
     });
   }
-  function pbPlaceScanned(s, ids) {
-    if (!ids.length) return;
+  function pbOpenScan(s) {
+    var placed = [], batch = s == null;
+    if (batch) {
+      var spreads = pbScanSpreads(), story = pbStorySpreads(pbState);
+      s = story.filter(function (k) { return !spreads[k].art; })[0];
+      if (s == null) s = story[0] != null ? story[0] : 0;
+    }
+    openCartoonImport(undefined, null, {
+      title: batch ? 'Add a batch of illustrations' : 'Add illustrations', one: 'illustration', many: 'illustrations', mode: 'color', digitalArt: true,
+      hint: batch ? 'Photos or a PDF of your art, all at once, cleaned up like a scan with one set of settings. Each goes on the next spread without an illustration; choose another spread under any photo.'
+        : 'Photos or a PDF of your art, cleaned up like a scan. The first goes on this spread, the rest on the next spreads without an illustration.',
+      spreads: pbScanSpreads, startAt: s, startForce: !batch,
+      storeRaw: function (enc) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height); },
+      store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { placed.push(Object.assign({ id: id }, meta || {})); }); },
+      done: function () { pbPlaceScanned(placed); }
+    });
+  }
+  // Each illustration onto the spread it was given (or the archive), with
+  // the photo it came from and how it was cleaned (`raw`, `scan`), so
+  // Adjust photo can redo it.
+  function pbPlaceScanned(list) {
+    if (!list.length) return;
     pbCheckpoint();
-    var spreads = pbState.spreads, at = s, first = null, extra = 0, touched = [];
-    function hasArt(k) { return spreads[k].items.some(function (it) { return it.type === 'image'; }); }
-    ids.forEach(function (id, i) {
-      if (i > 0) { at++; while (at < spreads.length && hasArt(at)) at++; }
-      if (at < spreads.length) { var it = pbPlacePicture(at, id, null); touched.push(at); if (!first) first = { s: at, id: it.id }; return; }
-      extra++;
-      pbState.archived.unshift(pbNormalizeSpread({ id: pbUid('s'), itemOnly: true, fromSpreadId: spreads[s].id, archivedFrom: s,
-        items: [pbNormalizeItem({ id: pbUid('p'), type: 'image', img: id, area: 'spread', fit: 'bleed' })] }));
+    var spreads = pbState.spreads, first = null, extra = 0, touched = [];
+    list.forEach(function (p) {
+      var at = typeof p.spread === 'number' && p.spread < spreads.length ? p.spread : null, it;
+      if (at != null) {
+        it = pbPlacePicture(at, p.id, null);
+        if (touched.indexOf(at) === -1) touched.push(at);
+        if (!first) first = { s: at, id: it.id };
+      } else {
+        extra++;
+        it = pbNormalizeItem({ id: pbUid('p'), type: 'image', img: p.id, area: 'spread', fit: 'bleed' });
+        var lastS = spreads.length - 1;
+        pbState.archived.unshift(pbNormalizeSpread({ id: pbUid('s'), itemOnly: true, fromSpreadId: spreads[lastS].id, archivedFrom: lastS, items: [it] }));
+        it = pbState.archived[0].items[0];
+      }
+      it.raw = p.raw || null; it.scan = p.scan || null;
     });
     pbPersist();
     if (extra) renderPbArchive();
     pbSel = null;
     touched.forEach(pbRefreshSpread);
     if (first) pbSelect(first);
-    if (extra) showToast((extra === 1 ? 'One illustration' : extra + ' illustrations') + ' had no spread left, so ' + (extra === 1 ? 'it’s' : 'they’re') + ' in the archive.');
+    if (extra) showToast((extra === 1 ? 'One illustration' : extra + ' illustrations') + ' had no spread, so ' + (extra === 1 ? 'it’s' : 'they’re') + ' in the archive.');
+    else if (list.length > 1) showToast('Added ' + list.length + ' illustrations.', 'Undo', pbUndo);
+  }
+  // Adjust photo…: the illustration's photo back in the importer, with the
+  // settings it came in with, to change for this one alone. One from
+  // before photos were kept starts from the illustration itself.
+  async function pbAdjustPicture(it, s) {
+    var rawId = it.raw || it.orig || it.img, img = await pbLoadImage(rawId);
+    if (!img) { await confirmDialog('This illustration isn’t on this device yet.'); return; }
+    var canvas = pbCanvasFrom(img, 2400), onWhite = document.createElement('canvas');
+    onWhite.width = canvas.width; onWhite.height = canvas.height;
+    var wctx = onWhite.getContext('2d');
+    wctx.fillStyle = '#fff'; wctx.fillRect(0, 0, onWhite.width, onWhite.height); wctx.drawImage(canvas, 0, 0);
+    var made = null;
+    openCartoonImport(undefined, null, {
+      title: 'Adjust the illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
+      hint: '', adjust: { canvas: onWhite, raw: rawId, scan: it.scan },
+      store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = { id: id, scan: meta && meta.scan }; }); },
+      done: function () {
+        if (!made) return;
+        pbCheckpoint();
+        it.img = made.id; it.raw = rawId; it.scan = made.scan || null; it.orig = null; it.clean = null;
+        pbPersist();
+        pbRefreshSpread(s);
+        if (pbSel && pbSel.id === it.id) { pbSyncFormatting(); pbRenderQuickbar(); }
+      }
+    });
   }
 
   // ---- Quick bar over a selected text box or picture ----
@@ -21219,7 +21301,8 @@
       });
       var cleanBtn = pbQb('Clean up ▾', 'Tidy a scanned or photographed drawing', !!it.clean, function (e) {
         e.stopPropagation();
-        pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
+        pbCleanMenu.innerHTML = '<button type="button" role="menuitem" data-clean="adjust">Adjust photo…</button>' +
+          '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
           '<button type="button" role="menuitem" data-clean="transparent">Make paper transparent</button>' +
           '<button type="button" role="menuitem" data-clean="ink">Clean up line art</button>' +
           (it.orig ? '<button type="button" role="menuitem" data-clean="original">Use original</button>' : '');
@@ -21261,7 +21344,8 @@
     var b = e.target.closest('[data-clean]');
     if (!b) return;
     pbCleanMenu.hidden = true;
-    if (b.dataset.clean === 'original') { var it = pbSelected(); if (it && it.orig) pbSetItem({ img: it.orig, orig: null, clean: null }); }
+    if (b.dataset.clean === 'adjust') { var ait = pbSelected(); if (ait) pbAdjustPicture(ait, pbSel.s); }
+    else if (b.dataset.clean === 'original') { var it = pbSelected(); if (it && it.orig) pbSetItem({ img: it.orig, orig: null, clean: null }); }
     else pbRunClean(b.dataset.clean);
   });
   document.addEventListener('click', function (e) { if (!pbCleanMenu.contains(e.target)) pbCleanMenu.hidden = true; });
@@ -21764,6 +21848,7 @@
     btn.disabled = false; btn.textContent = label;
     pbSyncFormatting();
   }
+  pbFmt('pbImgAdjust').addEventListener('click', function () { var it = pbSelected(); if (it && it.type === 'image') pbAdjustPicture(it, pbSel.s); });
   pbFmt('pbImgShadows').addEventListener('click', function () { pbRunClean('shadows'); });
   pbFmt('pbImgTransparent').addEventListener('click', function () { pbRunClean('transparent'); });
   pbFmt('pbImgInk').addEventListener('click', function () { pbRunClean('ink'); });
@@ -22419,6 +22504,7 @@
   }
   pbStoryBox.addEventListener('input', pbStoryCount);
   pbFmt('pbStoryOpenBtn').addEventListener('click', function () { pbStoryShow(true); });
+  pbFmt('pbBatchBtn').addEventListener('click', function () { pbOpenScan(null); });
   pbFmt('pbStoryCloseBtn').addEventListener('click', function () { pbStoryShow(false); });
   pbFmt('pbStoryUploadBtn').addEventListener('click', function () { pbFmt('pbStoryFile').click(); });
   pbFmt('pbStoryFile').addEventListener('change', async function () {
@@ -23546,14 +23632,41 @@
   // smaller copy with the ink taken out (each pixel the brightest near
   // it), smoothed back up, and divided out -- so a shadow or a dim corner
   // turns as white as the rest of the sheet. `shadow` blends that in.
+  // `cond` is how the photo was taken (SCAN_CONDITIONS), each changing the
+  // fix rather than just the sliders:
+  //   day / lamp: the paper's color is made neutral wherever it falls, so
+  //     a lamp's yellow or a window's blue goes, even in a gradient;
+  //   cast: a shadow with a sharp edge (a hand, the phone), so the paper's
+  //     light is followed on a much finer grid;
+  //   glare: a flash or a shiny sheet washes the ink out under a bright
+  //     spot, so the darkest ink nearby is set back to ink as well as the
+  //     paper to white (a local stretch between the two);
+  //   pencil: graphite shines, blowing out the dark strokes where it
+  //     catches the light. Small light flecks inside a stroke are filled
+  //     from the stroke round them, the local stretch runs on a finer grid,
+  //     and the grays are darkened, so faint lines hold.
+  var SCAN_CONDITIONS = [
+    ['day', 'Daylight', 'Window light; takes out a blue cast'],
+    ['lamp', 'Lamplight', 'Indoor bulbs; takes out a yellow cast'],
+    ['cast', 'A shadow across the page', 'A hand or the phone in the light; follows the shadow’s sharp edge'],
+    ['glare', 'Flash or glare', 'A bright spot that washes out the lines under it'],
+    ['pencil', 'Drawn in pencil', 'Graphite shines; darkens the shiny, faint parts of the lines']
+  ];
+  // Checking one also sets the sliders it needs, where they're lower (and
+  // they show it); unchecking leaves them.
+  var SCAN_CONDITION_SLIDERS = { lamp: { shadow: 80 }, cast: { shadow: 100 }, glare: { shadow: 80 }, pencil: { contrast: 30 } };
   function scanClean(src, o, maxDim) {
     var c = pbCanvasFrom(src, maxDim);
-    var ctx = c.getContext('2d'), W = c.width, H = c.height;
-    var im = ctx.getImageData(0, 0, W, H), d = im.data, bg = null, k = (o.shadow || 0) / 100;
-    if (k > 0) {
-      var sw = Math.max(8, Math.round(W / 24)), sh = Math.max(8, Math.round(H / 24));
+    var ctx = c.getContext('2d'), W = c.width, H = c.height, cond = o.cond || {};
+    var im = ctx.getImageData(0, 0, W, H), d = im.data, bg = null, lo = null, tint = null, k = (o.shadow || 0) / 100;
+    var wb = cond.day || cond.lamp, local = cond.glare || cond.pencil, i;
+    if (cond.pencil) scanFillShine(d, W, H, Math.max(1, Math.round(Math.max(W, H) / 1400)));
+    if (k > 0 || wb || local) {
+      var div = cond.cast ? 56 : 24, blurBy = cond.cast ? 140 : 60;
+      var sw = Math.max(8, Math.round(W / div)), sh = Math.max(8, Math.round(H / div));
       var sc = document.createElement('canvas'); sc.width = sw; sc.height = sh;
       var sctx = sc.getContext('2d');
+      if (cond.pencil) ctx.putImageData(im, 0, 0);
       sctx.drawImage(c, 0, 0, sw, sh);
       var sd = sctx.getImageData(0, 0, sw, sh), a = sd.data, out = new Uint8ClampedArray(a.length), R = 2;
       for (var y = 0; y < sh; y++) for (var x = 0; x < sw; x++) {
@@ -23565,33 +23678,135 @@
         var o4 = (y * sw + x) * 4; out[o4] = mr; out[o4 + 1] = mg; out[o4 + 2] = mb; out[o4 + 3] = 255;
       }
       sd.data.set(out); sctx.putImageData(sd, 0, 0);
-      var big = document.createElement('canvas'); big.width = W; big.height = H;
-      var bctx = big.getContext('2d');
-      bctx.imageSmoothingQuality = 'high';
-      bctx.filter = 'blur(' + Math.max(2, Math.round(Math.max(W, H) / 60)) + 'px)';
-      bctx.drawImage(sc, 0, 0, W, H);
-      bg = bctx.getImageData(0, 0, W, H).data;
+      bg = scanSmoothUp(sc, W, H, Math.max(2, Math.round(Math.max(W, H) / blurBy)));
+      // The light's color changes slowly across a sheet, far more slowly
+      // than its brightness; followed closely, it picks up a colored patch
+      // in the drawing and leaves a halo of the opposite color round it.
+      if (wb) tint = scanSmoothUp(sc, W, H, Math.max(4, Math.round(Math.max(W, H) / 10)));
+      // The ink's own darkness near each pixel: the darkest gray pixel in
+      // each block of the full-size page (a small copy would average a thin
+      // line away), spread to the blocks beside it. Colors don't count:
+      // a red coat isn't ink, and setting it to ink's darkness blackens it.
+      if (local) {
+        var bs = Math.max(4, Math.round(Math.max(W, H) / (cond.pencil ? 40 : 24))), lw = Math.ceil(W / bs), lh = Math.ceil(H / bs);
+        var mins = new Uint8Array(lw * lh).fill(255);
+        for (var py = 0; py < H; py++) for (var px = 0; px < W; px++) {
+          var t = (py * W + px) * 4;
+          if (Math.max(d[t], d[t + 1], d[t + 2]) - Math.min(d[t], d[t + 1], d[t + 2]) > 40) continue;
+          var l0 = 0.299 * d[t] + 0.587 * d[t + 1] + 0.114 * d[t + 2], cell = ((py / bs) | 0) * lw + ((px / bs) | 0);
+          if (l0 < mins[cell]) mins[cell] = l0;
+        }
+        var lc = document.createElement('canvas'); lc.width = lw; lc.height = lh;
+        var lctx = lc.getContext('2d'), lim = lctx.createImageData(lw, lh);
+        for (var cy = 0; cy < lh; cy++) for (var cx = 0; cx < lw; cx++) {
+          var m = 255;
+          for (var ny = Math.max(0, cy - 1); ny <= Math.min(lh - 1, cy + 1); ny++) for (var nx = Math.max(0, cx - 1); nx <= Math.min(lw - 1, cx + 1); nx++) if (mins[ny * lw + nx] < m) m = mins[ny * lw + nx];
+          var l4 = (cy * lw + cx) * 4; lim.data[l4] = lim.data[l4 + 1] = lim.data[l4 + 2] = m; lim.data[l4 + 3] = 255;
+        }
+        lctx.putImageData(lim, 0, 0);
+        lo = scanSmoothUp(lc, W, H, Math.max(2, Math.round(bs / 2)));
+      }
     }
     var C = (o.contrast || 0) * 2.55, f = (259 * (C + 255)) / (255 * (259 - C)), B = (o.brightness || 0) * 1.28;
-    var thr = o.threshold == null ? 160 : o.threshold, mode = o.mode;
-    for (var i = 0; i < d.length; i += 4) {
+    var thr = o.threshold == null ? 160 : o.threshold, mode = o.mode, kl = Math.max(k, 0.8);
+    // How far apart paper and ink must be taken to be, so a patch of bare
+    // paper isn't stretched into noise.
+    var minRange = cond.pencil ? 90 : 110, ink0 = 20;
+    for (i = 0; i < d.length; i += 4) {
       var r = d[i], g = d[i + 1], b = d[i + 2];
       if (bg) {
-        r += (Math.min(255, r * 255 / Math.max(1, bg[i])) - r) * k;
-        g += (Math.min(255, g * 255 / Math.max(1, bg[i + 1])) - g) * k;
-        b += (Math.min(255, b * 255 / Math.max(1, bg[i + 2])) - b) * k;
+        var br = bg[i], bgg = bg[i + 1], bb = bg[i + 2];
+        if (wb) {
+          var tr = tint[i], tg = tint[i + 1], tb = tint[i + 2], tl = 0.299 * tr + 0.587 * tg + 0.114 * tb;
+          r *= tl / Math.max(1, tr); g *= tl / Math.max(1, tg); b *= tl / Math.max(1, tb);
+          br = bgg = bb = 0.299 * br + 0.587 * bgg + 0.114 * bb;
+        }
+        if (lo) {
+          var hi = 0.299 * br + 0.587 * bgg + 0.114 * bb, l = 0.299 * r + 0.587 * g + 0.114 * b;
+          var range = Math.max(minRange, hi - lo[i]), lt = ink0 + (l - (hi - range)) * (255 - ink0) / range;
+          lt = l + (Math.max(0, Math.min(255, lt)) - l) * kl;
+          // Grays (pencil, ink) take the stretch; colors only have the
+          // paper's light divided out, so they keep their own depth.
+          var sat = Math.max(r, g, b) - Math.min(r, g, b), grayness = Math.max(0, Math.min(1, (70 - sat) / 40));
+          var fDiv = 1 + (255 / Math.max(1, hi) - 1) * kl, fl = Math.min(3, fDiv + (lt / Math.max(1, l) - fDiv) * grayness);
+          r *= fl; g *= fl; b *= fl;
+        } else if (k > 0) {
+          r += (Math.min(255, r * 255 / Math.max(1, br)) - r) * k;
+          g += (Math.min(255, g * 255 / Math.max(1, bgg)) - g) * k;
+          b += (Math.min(255, b * 255 / Math.max(1, bb)) - b) * k;
+        }
+      }
+      if (cond.pencil) {
+        // Grays darkened, paper left white: 200 goes to about 176. By
+        // lightness, all three together, so no tint is drawn out, and not
+        // colors (a colored pencil or a wash keeps its depth).
+        var lg = Math.max(1, 0.299 * r + 0.587 * g + 0.114 * b), fg = Math.pow(Math.min(255, lg) / 255, 0.5);
+        var gray = Math.max(0, Math.min(1, (70 - (Math.max(r, g, b) - Math.min(r, g, b))) / 40));
+        fg = 1 + (fg - 1) * gray;
+        r *= fg; g *= fg; b *= fg;
+      }
+      // What's left of the paper's tint (a lamp's edge, a glare's halo,
+      // grain the stretch brought up) goes to white, gently, so the
+      // faintest lines are kept.
+      if (wb || local) {
+        var lp = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (lp > 238) r = g = b = 255;
+        else if (lp > 222) { var tw = (lp - 222) / 16; r += (255 - r) * tw; g += (255 - g) * tw; b += (255 - b) * tw; }
       }
       r = f * (r - 128) + 128 + B; g = f * (g - 128) + 128 + B; b = f * (b - 128) + 128 + B;
       if (mode !== 'color') {
-        var l = 0.299 * r + 0.587 * g + 0.114 * b;
-        if (mode === 'bw') l = l >= thr ? 255 : 0;
-        r = g = b = l;
+        var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (mode === 'bw') lum = lum >= thr ? 255 : 0;
+        r = g = b = lum;
       }
       d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
     }
     ctx.putImageData(im, 0, 0);
     if (o.frames) scanStripFrame(c);
     return o.trim ? scanTrim(c) : c;
+  }
+  // A small estimate (one value per block) blurred back up to full size.
+  // The blur fades to see-through at the edges, so it's laid over an
+  // unblurred copy: otherwise the outermost pixels read as no light at all.
+  function scanSmoothUp(small, W, H, blur) {
+    var big = document.createElement('canvas'); big.width = W; big.height = H;
+    var bctx = big.getContext('2d');
+    bctx.imageSmoothingQuality = 'high';
+    bctx.drawImage(small, 0, 0, W, H);
+    bctx.filter = 'blur(' + blur + 'px)';
+    bctx.drawImage(small, 0, 0, W, H);
+    return bctx.getImageData(0, 0, W, H).data;
+  }
+  // Graphite's shine: light flecks inside a dark stroke, narrower than a
+  // few pixels, filled from the stroke round them (a closing: each pixel
+  // the lightest of the darkest near it). Gaps between hatched lines are
+  // wider, and paper is left alone, since only pixels the closing makes
+  // much darker change, and only three quarters of the way. In place.
+  function scanFillShine(d, W, H, r) {
+    var N = W * H, L = new Uint8ClampedArray(N), tmp = new Uint8ClampedArray(N), i, x, y, j;
+    for (i = 0; i < N; i++) L[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    function pass(src, dst, horiz, useMin) {
+      for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+        var v = useMin ? 255 : 0;
+        for (j = -r; j <= r; j++) {
+          var xx = horiz ? x + j : x, yy = horiz ? y : y + j;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          var s = src[yy * W + xx];
+          if (useMin ? s < v : s > v) v = s;
+        }
+        dst[y * W + x] = v;
+      }
+    }
+    var a = new Uint8ClampedArray(N), b = new Uint8ClampedArray(N);
+    pass(L, tmp, true, true); pass(tmp, a, false, true);
+    pass(a, tmp, true, false); pass(tmp, b, false, false);
+    for (i = 0; i < N; i++) {
+      var dl = L[i] - b[i], q = i * 4;
+      // Graphite is gray: a light fleck in a painted color stays.
+      if (dl < 18 || Math.max(d[q], d[q + 1], d[q + 2]) - Math.min(d[q], d[q + 1], d[q + 2]) > 40) continue;
+      dl *= 0.75;
+      d[i * 4] -= dl; d[i * 4 + 1] -= dl; d[i * 4 + 2] -= dl;
+    }
   }
   // A printed cartoon's box (the heavy ruled line round the panel, or what's
   // left of one at a side) isn't part of the drawing: a thick, straight,
@@ -23869,10 +24084,240 @@
     }
     ctx.putImageData(im, 0, 0);
   }
+  // Finding the paper's edges in a photo. The sheet is the big bright,
+  // pale patch (the table round it is darker or more colorful): the pixels
+  // brighter than an Otsu threshold, their largest connected patch, and that
+  // patch's convex hull (so the drawing's ink, holes in it, doesn't matter).
+  // The four hull points that enclose the most area are the corners. Null
+  // when no sheet stands out: a close-up with no table showing, or a patch
+  // that isn't four-sided. Corners are fractions of the image, clockwise
+  // from top left.
+  function scanFindPaper(src) {
+    var c = pbCanvasFrom(src, 420), W = c.width, H = c.height, N = W * H;
+    var d = c.getContext('2d').getImageData(0, 0, W, H).data, v = new Uint8Array(N), hist = new Uint32Array(256), i;
+    for (i = 0; i < N; i++) {
+      var r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+      var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      // Pale beats bright: a white sheet on a sunny yellow table.
+      v[i] = Math.max(0, Math.min(255, Math.round(0.299 * r + 0.587 * g + 0.114 * b - 0.6 * (mx - mn))));
+      hist[v[i]]++;
+    }
+    var sum = 0, sumB = 0, wB = 0, best = 0, thr = 128;
+    for (i = 0; i < 256; i++) sum += i * hist[i];
+    for (i = 0; i < 256; i++) {
+      wB += hist[i]; if (!wB) continue;
+      var wF = N - wB; if (!wF) break;
+      sumB += i * hist[i];
+      var mB = sumB / wB, mF = (sum - sumB) / wF, between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; thr = i; }
+    }
+    // Both sides of the threshold have to be real: a photo all paper (or
+    // all table) has no edge to find.
+    var lit = new Uint8Array(N), nLit = 0;
+    for (i = 0; i < N; i++) if (v[i] > thr) { lit[i] = 1; nLit++; }
+    if (nLit < N * 0.12 || nLit > N * 0.97) return null;
+    // Pencil lines can cut the sheet's patch in two; joined back up first.
+    lit = scanGrow(lit, W, H, 1);
+    var lab = new Int32Array(N), queue = new Int32Array(N), bestId = 0, bestN = 0, id = 0;
+    for (var s = 0; s < N; s++) {
+      if (!lit[s] || lab[s]) continue;
+      var qh = 0, qt = 0; id++;
+      lab[s] = id; queue[qt++] = s;
+      while (qh < qt) {
+        var p = queue[qh++], px = p % W;
+        if (px > 0 && lit[p - 1] && !lab[p - 1]) { lab[p - 1] = id; queue[qt++] = p - 1; }
+        if (px < W - 1 && lit[p + 1] && !lab[p + 1]) { lab[p + 1] = id; queue[qt++] = p + 1; }
+        if (p >= W && lit[p - W] && !lab[p - W]) { lab[p - W] = id; queue[qt++] = p - W; }
+        if (p < N - W && lit[p + W] && !lab[p + W]) { lab[p + W] = id; queue[qt++] = p + W; }
+      }
+      if (qt > bestN) { bestN = qt; bestId = id; }
+    }
+    if (bestN < N * 0.12) return null;
+    // Each row's ends are enough for the hull.
+    var pts = [];
+    for (var y = 0; y < H; y++) {
+      var x0 = -1, x1 = -1;
+      for (var x = 0; x < W; x++) if (lab[y * W + x] === bestId) { if (x0 < 0) x0 = x; x1 = x; }
+      if (x0 >= 0) { pts.push([x0, y]); if (x1 !== x0) pts.push([x1 + 1, y]); }
+    }
+    var hull = scanHull(pts);
+    if (hull.length < 4) return null;
+    function area(q) {
+      var a = 0;
+      for (var k = 0; k < q.length; k++) { var m = q[k], n = q[(k + 1) % q.length]; a += m[0] * n[1] - n[0] * m[1]; }
+      return Math.abs(a) / 2;
+    }
+    // Start from the points furthest out toward each corner, then move each
+    // corner along the hull while that grows the quadrilateral.
+    var ix = [0, 0, 0, 0], sc = [-Infinity, -Infinity, -Infinity, -Infinity];
+    hull.forEach(function (q, k) {
+      var t = [-q[0] - q[1], q[0] - q[1], q[0] + q[1], -q[0] + q[1]];
+      for (var j = 0; j < 4; j++) if (t[j] > sc[j]) { sc[j] = t[j]; ix[j] = k; }
+    });
+    for (var round = 0; round < 6; round++) {
+      var moved = false;
+      for (var j = 0; j < 4; j++) {
+        var bestK = ix[j], bestA = area(ix.map(function (k) { return hull[k]; }));
+        for (var k = 0; k < hull.length; k++) {
+          var trial = ix.slice(); trial[j] = k;
+          var a = area(trial.map(function (t) { return hull[t]; }));
+          if (a > bestA + 0.5) { bestA = a; bestK = k; }
+        }
+        if (bestK !== ix[j]) { ix[j] = bestK; moved = true; }
+      }
+      if (!moved) break;
+    }
+    var quad = ix.map(function (k) { return hull[k]; });
+    // A sheet, not a blob: the corners take in nearly all of the patch,
+    // and every corner is a plausible corner of paper seen at a slant.
+    if (area(quad) < area(hull) * 0.9 || area(quad) < N * 0.12) return null;
+    for (var a4 = 0; a4 < 4; a4++) {
+      var A = quad[(a4 + 3) % 4], B = quad[a4], C = quad[(a4 + 1) % 4];
+      var u = [A[0] - B[0], A[1] - B[1]], w = [C[0] - B[0], C[1] - B[1]];
+      var cos = (u[0] * w[0] + u[1] * w[1]) / (Math.hypot(u[0], u[1]) * Math.hypot(w[0], w[1]) || 1);
+      if (Math.abs(cos) > 0.6) return null;
+    }
+    var cx = (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4, cy = (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4;
+    // Each side that isn't the photo's own edge must be a step from paper
+    // down to table, not light fading across one sheet (a lamp's falloff
+    // splits a photo that's all paper into a bright part and a dim one).
+    var off = Math.max(3, Math.round(Math.max(W, H) * 0.015)), sides = 0;
+    function at(x, y) { x = Math.round(x); y = Math.round(y); return x >= 0 && y >= 0 && x < W && y < H ? v[y * W + x] : -1; }
+    for (var e = 0; e < 4; e++) {
+      var P0 = quad[e], P1 = quad[(e + 1) % 4], ex = P1[0] - P0[0], ey = P1[1] - P0[1], el = Math.hypot(ex, ey) || 1;
+      // On the photo's edge: nothing beyond it to compare.
+      if ((P0[0] <= 2 && P1[0] <= 2) || (P0[1] <= 2 && P1[1] <= 2) || (P0[0] >= W - 3 && P1[0] >= W - 3) || (P0[1] >= H - 3 && P1[1] >= H - 3)) continue;
+      var nx = -ey / el, ny = ex / el;
+      if (nx * (cx - P0[0]) + ny * (cy - P0[1]) < 0) { nx = -nx; ny = -ny; }
+      var diff = 0, n = 0;
+      for (var t2 = 0.1; t2 <= 0.9; t2 += 0.04) {
+        var sx = P0[0] + ex * t2, sy = P0[1] + ey * t2, inV = at(sx + nx * off, sy + ny * off), outV = at(sx - nx * off, sy - ny * off);
+        if (inV < 0 || outV < 0) continue;
+        diff += inV - outV; n++;
+      }
+      if (n < 5 || diff / n < 28) return null;
+      sides++;
+    }
+    if (!sides) return null;
+    // A little inside the edge (the patch was grown a pixel, and the edge
+    // is a blur of paper and table), so no sliver of table comes along.
+    return quad.map(function (q) {
+      var dl = Math.hypot(cx - q[0], cy - q[1]) || 1, mv = 3.5 + dl * 0.006;
+      var qx = q[0] + (cx - q[0]) / dl * mv, qy = q[1] + (cy - q[1]) / dl * mv;
+      return [Math.max(0, Math.min(1, qx / W)), Math.max(0, Math.min(1, qy / H))];
+    });
+  }
+  // Convex hull (monotone chain), clockwise on screen.
+  function scanHull(pts) {
+    pts = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    if (pts.length < 3) return pts;
+    function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+    var lower = [], upper = [], i;
+    for (i = 0; i < pts.length; i++) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], pts[i]) <= 0) lower.pop(); lower.push(pts[i]); }
+    for (i = pts.length - 1; i >= 0; i--) { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], pts[i]) <= 0) upper.pop(); upper.push(pts[i]); }
+    return lower.slice(0, -1).concat(upper.slice(0, -1));
+  }
+  // The sheet's shape once it's flat. Seen at a slant, the near side looks
+  // longer and the sheet shorter than it is, so the sides' lengths can't
+  // say; the corners can, along with the camera's focal length, taking
+  // the lens's center to be the photo's (Zhang and He, "Whiteboard scanning
+  // and image enhancement", 2007). Where that can't be worked out (the
+  // sides near parallel), it's the sides' lengths. A shape within a few
+  // percent of a usual sheet (Letter, A4, a 9 x 12 pad, 11 x 14, square)
+  // is taken to be that sheet. `w` and `h` are a size in photo pixels.
+  var SCAN_SHEETS = [8.5 / 11, 210 / 297, 9 / 12, 11 / 14, 5.5 / 8.5, 1];
+  function scanSheetAspect(q, W, H) {
+    function len(a, b) { return Math.hypot((b[0] - a[0]) * W, (b[1] - a[1]) * H); }
+    var w = (len(q[0], q[1]) + len(q[3], q[2])) / 2, h = (len(q[0], q[3]) + len(q[1], q[2])) / 2, ar = w / Math.max(1, h);
+    function pt(p) { return [p[0] * W - W / 2, p[1] * H - H / 2, 1]; }
+    function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+    function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    var m1 = pt(q[0]), m2 = pt(q[1]), m4 = pt(q[2]), m3 = pt(q[3]), c14 = cross(m1, m4);
+    var k2 = dot(c14, m3) / dot(cross(m2, m4), m3), k3 = dot(c14, m2) / dot(cross(m3, m4), m2);
+    var n2 = [k2 * m2[0] - m1[0], k2 * m2[1] - m1[1], k2 - 1], n3 = [k3 * m3[0] - m1[0], k3 * m3[1] - m1[1], k3 - 1];
+    var nz = n2[2] * n3[2];
+    if (Math.abs(n2[2]) > 1e-6 && Math.abs(n3[2]) > 1e-6 && isFinite(nz)) {
+      var f2 = -(n2[0] * n3[0] + n2[1] * n3[1]) / nz;
+      // A focal length a phone could have (not one from a lopsided guess).
+      if (f2 > 0 && Math.sqrt(f2) > Math.max(W, H) * 0.3 && Math.sqrt(f2) < Math.max(W, H) * 6) {
+        var r = Math.sqrt((n2[0] * n2[0] + n2[1] * n2[1] + f2 * n2[2] * n2[2]) / (n3[0] * n3[0] + n3[1] * n3[1] + f2 * n3[2] * n3[2]));
+        if (isFinite(r) && r > 0.2 && r < 5) ar = r;
+      }
+    }
+    var tall = ar < 1, rr = tall ? ar : 1 / ar, snap = rr, off = 0.03;
+    SCAN_SHEETS.forEach(function (sh) { var e = Math.abs(sh - rr) / sh; if (e < off) { off = e; snap = sh; } });
+    return { aspect: tall ? snap : 1 / snap, w: w, h: h };
+  }
+  // The photo flattened so the sheet's four corners become a rectangle's:
+  // each output pixel is looked up through the homography from the
+  // rectangle to the photo's quadrilateral, blending the four nearest.
+  function scanWarp(src, q, maxDim) {
+    var W = src.width, H = src.height, sh = scanSheetAspect(q, W, H);
+    var area = Math.max(1, sh.w * sh.h), ow = Math.sqrt(area * sh.aspect), oh = ow / sh.aspect;
+    var k = Math.min(1, maxDim / Math.max(ow, oh));
+    ow = Math.max(1, Math.round(ow * k)); oh = Math.max(1, Math.round(oh * k));
+    var P = q.map(function (p) { return [p[0] * W, p[1] * H]; });
+    var M = scanHomography([[0, 0], [ow, 0], [ow, oh], [0, oh]], P);
+    var sd = src.getContext('2d').getImageData(0, 0, W, H).data;
+    var out = document.createElement('canvas'); out.width = ow; out.height = oh;
+    var octx = out.getContext('2d'), im = octx.createImageData(ow, oh), od = im.data;
+    for (var y = 0; y < oh; y++) {
+      var yy = y + 0.5;
+      for (var x = 0; x < ow; x++) {
+        var xx = x + 0.5, z = M[6] * xx + M[7] * yy + 1;
+        var sx = (M[0] * xx + M[1] * yy + M[2]) / z - 0.5, sy = (M[3] * xx + M[4] * yy + M[5]) / z - 0.5;
+        var x0 = Math.floor(sx), y0 = Math.floor(sy), fx = sx - x0, fy = sy - y0, t = (y * ow + x) * 4;
+        if (x0 < 0) { x0 = 0; fx = 0; } if (y0 < 0) { y0 = 0; fy = 0; }
+        if (x0 >= W - 1) { x0 = W - 2; fx = 1; } if (y0 >= H - 1) { y0 = H - 2; fy = 1; }
+        var a = (y0 * W + x0) * 4, b = a + 4, c = a + W * 4, dd = c + 4;
+        for (var ch = 0; ch < 3; ch++) {
+          od[t + ch] = (sd[a + ch] * (1 - fx) + sd[b + ch] * fx) * (1 - fy) + (sd[c + ch] * (1 - fx) + sd[dd + ch] * fx) * fy;
+        }
+        od[t + 3] = 255;
+      }
+    }
+    octx.putImageData(im, 0, 0);
+    return out;
+  }
+  // The 3 x 3 projective map (last entry 1) taking four points to four.
+  function scanHomography(from, to) {
+    var A = [], i;
+    for (i = 0; i < 4; i++) {
+      var x = from[i][0], y = from[i][1], u = to[i][0], v = to[i][1];
+      A.push([x, y, 1, 0, 0, 0, -u * x, -u * y, u]);
+      A.push([0, 0, 0, x, y, 1, -v * x, -v * y, v]);
+    }
+    for (var col = 0; col < 8; col++) {
+      var piv = col;
+      for (i = col + 1; i < 8; i++) if (Math.abs(A[i][col]) > Math.abs(A[piv][col])) piv = i;
+      var tmp = A[col]; A[col] = A[piv]; A[piv] = tmp;
+      for (i = 0; i < 8; i++) {
+        if (i === col || !A[col][col]) continue;
+        var f = A[i][col] / A[col][col];
+        for (var j = col; j < 9; j++) A[i][j] -= f * A[col][j];
+      }
+    }
+    var h = [];
+    for (i = 0; i < 8; i++) h.push(A[i][8] / (A[i][i] || 1));
+    return h;
+  }
   // `sink` (comics, picture books) takes each cleaned drawing instead of
   // the batch: { title, one, many, hint, mode?, digitalArt?, store(encoded)
   // -> Promise, done(count) }; `mode` is the Scan as default (gray if not
   // given), and `digitalArt` brings PNG/WebP/GIF files in untouched.
+  // Picture books also pass `spreads()` ([{ label, short, art }], one per
+  // spread) and `startAt` (with `startForce`, that spread even if it has
+  // art), which shows each photo's spread to choose; `storeRaw(encoded)`,
+  // which keeps each photo as taken so its illustration can be adjusted
+  // again later; and for that later adjusting, `adjust` ({ canvas, raw,
+  // scan }), one photo with the settings it came in with. `store` is then
+  // given ({ spread, raw, scan }) with each illustration.
+  // The photo settings people set for how they take photos (straightening,
+  // the light, pencil) are kept on this device.
+  var SCAN_PHOTO_KEY = 'bookbug.scanPhoto.v1';
+  function scanPhotoPrefs() {
+    try { var v = JSON.parse(localStorage.getItem(SCAN_PHOTO_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
+  }
   function openCartoonImport(start, files, sink) {
     var one = sink ? sink.one : 'cartoon', many = sink ? sink.many : 'cartoons';
     var d = makeDialog('scan-box', sink ? sink.title : 'Import cartoons',
@@ -23884,9 +24329,14 @@
       '<div class="scan-cam" hidden><video playsinline muted></video>' +
         '<div class="scan-cam-row"><span class="scan-cam-count"></span><button class="btn" type="button" data-cam="done">Done</button><button class="btn btn-primary" type="button" data-cam="shoot">Take photo</button></div></div>' +
       '<p class="snap-empty scan-empty">' + (sink ? sink.hint : 'Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption. On a page of several drawings, tap the ones to bring in, each as its own cartoon.') + '</p>' +
-      '<div class="scan-main" hidden><div><div class="scan-view"></div><p class="scan-note"></p><div class="scan-strip"></div></div>' +
+      '<div class="scan-main" hidden><div><div class="scan-view"></div><p class="scan-note"></p>' +
+        '<div class="scan-assign" hidden><label>Goes on <select data-assign></select></label></div><div class="scan-strip"></div></div>' +
       '<div class="scan-controls">' +
         '<div class="field"><label>Scan as</label><div class="seg seg-3" data-mode><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
+        '<label class="checkline scan-check" data-edges-line><input type="checkbox" data-k="edges"> Straighten to the paper’s edges</label>' +
+        '<fieldset class="scan-conds" data-conds><legend>The photo</legend>' + SCAN_CONDITIONS.map(function (c) {
+          return '<label class="checkline scan-check" title="' + c[2] + '"><input type="checkbox" data-cond="' + c[0] + '"> ' + c[1] + '</label>';
+        }).join('') + '</fieldset>' +
         '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
         '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
@@ -23895,8 +24345,26 @@
       '</div></div>' +
       '<p class="scan-status" aria-live="polite"></p>' +
       '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add ' + many + '</button></div>');
-    var box = d.box, sources = [], cur = 0, busy = false;
-    var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true };
+    var box = d.box, sources = [], cur = 0, busy = false, editingEdges = false, adjust = sink && sink.adjust;
+    var pp = scanPhotoPrefs();
+    var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true,
+      edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}) };
+    if (adjust) {
+      // An illustration from before photos were kept as taken has no
+      // settings: it's already cleaned, so it starts with nothing more done.
+      if (adjust.scan) o = Object.assign(o, adjust.scan, { cond: Object.assign({}, adjust.scan.cond || {}) });
+      else Object.assign(o, { shadow: 0, contrast: 0, brightness: 0, edges: false, cond: {}, trim: false });
+    }
+    // A condition's sliders, raised to what it needs.
+    function liftFor(k) {
+      var lift = SCAN_CONDITION_SLIDERS[k] || {};
+      Object.keys(lift).forEach(function (s) { o[s] = Math.max(o[s], lift[s]); });
+    }
+    function savePhotoPrefs() {
+      if (adjust) return;
+      try { localStorage.setItem(SCAN_PHOTO_KEY, JSON.stringify({ edges: o.edges, cond: o.cond })); } catch (e) {}
+    }
+    var assignEl = box.querySelector('[data-assign]'), assigning = !!(sink && sink.spreads) && !adjust;
     var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status'), note = box.querySelector('.scan-note');
     var addBtn = box.querySelector('[data-act="add"]');
     // Take photos: the camera opens live in the dialog (a phone's back
@@ -23950,7 +24418,7 @@
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
     // Art made on a computer comes in as it is: the photo fixes (shadows,
     // contrast, brightness) are for paper, and are hidden while it's shown.
-    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; } return c; }
+    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; } return c; }
     function syncControls() {
       var dig = !!(sources[cur] && sources[cur].digital);
       ['shadow', 'contrast', 'brightness'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
@@ -23958,6 +24426,12 @@
       box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) { r.value = o[r.dataset.k]; box.querySelector('[data-out="' + r.dataset.k + '"]').textContent = o[r.dataset.k]; });
       box.querySelector('input[type="checkbox"][data-k="trim"]').checked = o.trim;
       box.querySelector('[data-thr]').hidden = o.mode !== 'bw';
+      // Straightening and the light are for photos of paper.
+      var photos = sources.some(function (x) { return !x.digital && !x.fromPdf; });
+      box.querySelector('[data-edges-line]').hidden = !photos;
+      box.querySelector('input[data-k="edges"]').checked = o.edges;
+      box.querySelector('[data-conds]').hidden = dig;
+      box.querySelectorAll('input[data-cond]').forEach(function (cb) { cb.checked = !!o.cond[cb.dataset.cond]; });
     }
     var renderTimer = null;
     function renderView() {
@@ -23966,6 +24440,7 @@
         var src = sources[cur];
         if (!src) return;
         view.innerHTML = '';
+        if (editingEdges) { renderEdges(src); return; }
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
         var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 900), stage = document.createElement('div');
@@ -23982,8 +24457,71 @@
           refresh();
         });
         view.appendChild(turns);
+        if (!src.digital && !src.fromPdf && o.edges) view.appendChild(edgesButton('Edges', 'Move the corners onto the paper’s corners', function () { editingEdges = true; renderView(); }));
         drawRegions(src, stage, cv);
       }, 30);
+    }
+    function edgesButton(label, title, fn) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'scan-edges-btn'; b.textContent = label; b.title = title;
+      b.addEventListener('click', fn);
+      return b;
+    }
+    // The photo as taken, with the sheet's four corners to drag; Done
+    // straightens it to them.
+    function renderEdges(src) {
+      var cv = pbCanvasFrom(src.photo, 900), stage = document.createElement('div');
+      stage.className = 'scan-stage scan-edges';
+      stage.appendChild(cv);
+      var q = (src.quad || [[0.06, 0.06], [0.94, 0.06], [0.94, 0.94], [0.06, 0.94]]).map(function (p) { return p.slice(); });
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 1 1'); svg.setAttribute('preserveAspectRatio', 'none');
+      var poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(poly); stage.appendChild(svg);
+      var dots = q.map(function (p, k) {
+        var h = document.createElement('i');
+        h.className = 'scan-corner';
+        h.setAttribute('aria-label', ['Top left', 'Top right', 'Bottom right', 'Bottom left'][k] + ' corner');
+        h.addEventListener('pointerdown', function (e) {
+          if (e.button > 0) return;
+          e.preventDefault(); e.stopPropagation();
+          h.setPointerCapture(e.pointerId);
+          function mv(e) {
+            var r = cv.getBoundingClientRect();
+            q[k] = [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))];
+            draw();
+          }
+          function up() {
+            h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+            src.quad = q.map(function (p) { return p.slice(); }); src.quadMoved = true;
+          }
+          h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+        });
+        stage.appendChild(h);
+        return h;
+      });
+      function draw() {
+        poly.setAttribute('points', q.map(function (p) { return p[0] + ',' + p[1]; }).join(' '));
+        dots.forEach(function (h, k) { h.style.left = q[k][0] * 100 + '%'; h.style.top = q[k][1] * 100 + '%'; });
+      }
+      draw();
+      view.appendChild(stage);
+      view.appendChild(edgesButton('Done', 'Straighten the photo to these corners', finishEdges));
+      note.textContent = src.quad || src.quadMoved ? 'Drag each corner onto a corner of the paper.' : 'Couldn’t find the paper’s edges. Drag each corner onto a corner of the paper.';
+    }
+    function finishEdges() {
+      if (!editingEdges) return;
+      editingEdges = false;
+      var src = sources[cur];
+      if (src && src.quadMoved) { src.quadMoved = false; straighten(src); src.regions = null; findRegions(src); }
+      refresh();
+    }
+    // The page the cleanup works from: the photo, flattened to the sheet's
+    // corners when there are some and straightening is on.
+    function straighten(src) {
+      src.canvas = o.edges && src.quad && !src.digital && !src.fromPdf ? scanWarp(src.photo, src.quad, 2400) : src.photo;
+      src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
     }
     // A page's circled doodles, as boxes over it (tap one to leave it out
     // or put it back), and a drag across the page boxes one it missed.
@@ -24079,7 +24617,7 @@
         : src.multi ? 'Each box comes in as its own ' + one + '. Tap × to remove a box; drag across the page to add one. '
         : anyOn ? 'Only the box comes in. Drag it or its corners to fit, tap × to remove it, or drag across the page to draw a new one. '
         : 'Tap the drawing to bring in, or drag across the page to frame it. With none chosen, the whole page comes in. ';
-      if (src.regions) {
+      if (src.regions && !adjust) {
         var several = document.createElement('button');
         several.type = 'button'; several.className = 'btn-link scan-all';
         several.textContent = src.multi ? 'Just one ' + one + ' from this page' : 'Several ' + many + ' on this page…';
@@ -24151,9 +24689,10 @@
       return t;
     }
     function turnSource(src, dir) {
-      src.canvas = turnCanvas(src.canvas, dir);
+      src.photo = turnCanvas(src.photo, dir);
       src.turn = (((src.turn || 0) + dir) % 4 + 4) % 4;
-      src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
+      src.quad = src.digital || src.fromPdf ? null : scanFindPaper(src.photo);
+      straighten(src);
       src.regions = null;
       findRegions(src);
     }
@@ -24166,7 +24705,7 @@
           setTimeout(function () {
             if (sources.indexOf(src) === -1) return done();
             try {
-              var so = optsFor(src), a = scanClean(src.canvas, { mode: 'gray', shadow: so.shadow, contrast: so.contrast, brightness: so.brightness, trim: false }, 900);
+              var so = optsFor(src), a = scanClean(src.canvas, { mode: 'gray', shadow: so.shadow, contrast: so.contrast, brightness: so.brightness, cond: so.cond, trim: false }, 900);
               var aw = a.width, ah = a.height, d = a.getContext('2d').getImageData(0, 0, aw, ah).data, ink = new Uint8Array(aw * ah);
               // `dark` is what around the paper is followed in from the edge.
               var cut = o.mode === 'bw' ? o.threshold : 180, dark = new Uint8Array(aw * ah);
@@ -24187,6 +24726,11 @@
               var bySize = src.regions.slice().sort(function (a, b) { return b.fw * b.fh - a.fw * a.fh; });
               if (bySize.length && !src.regions.some(function (r) { return r.on; }) &&
                   (bySize.length === 1 || bySize[0].fw * bySize[0].fh >= 3 * bySize[1].fw * bySize[1].fh)) bySize[0].on = true;
+              // Adjusting an illustration again: the box it was cut with.
+              if (src.preset) {
+                src.regions = [Object.assign({}, src.preset, { mask: null, ring: null, on: true, edited: true, drawn: true, loop: false })];
+                src.preset = null;
+              }
             } catch (err) { src.regions = []; }
             if (src.regions.length) refresh();
             else if (sources[cur] === src) renderView();
@@ -24202,7 +24746,50 @@
     function wholePage(src) { return !chosen(src).length && !(src.regions || []).some(function (r) { return r.loop; }); }
     function cartoonsFrom(src) { return chosen(src).length || (wholePage(src) ? 1 : 0); }
     function cartoonCount() { return sources.reduce(function (n, s) { return n + cartoonsFrom(s); }, 0); }
+    // Which spread each photo's illustrations go on (picture books): one
+    // chosen by hand goes there, and the ones after it follow on to the
+    // next spreads without an illustration, so choosing one spread for a
+    // photo re-places the rest of the run behind it. Past the last spread,
+    // the archive.
+    function assignPlan() {
+      var list = sink.spreads(), used = {}, at = sink.startAt || 0, first = true;
+      function free(k) { return k < list.length && !used[k] && (!list[k].art || (first && sink.startForce && k === sink.startAt)); }
+      function next() {
+        while (at < list.length && !free(at)) at++;
+        return at < list.length ? at : 'archive';
+      }
+      return sources.map(function (src) {
+        var n = cartoonsFrom(src), out = [];
+        for (var j = 0; j < n; j++) {
+          var t = j === 0 && src.spread != null ? src.spread : next();
+          out.push(t);
+          if (t !== 'archive') { used[t] = true; at = t + 1; }
+          first = false;
+        }
+        return out;
+      });
+    }
+    var plan = [];
+    function spreadShort(t) { return t === 'archive' ? 'Archive' : sink.spreads()[t].short; }
+    function renderAssign() {
+      var wrap = box.querySelector('.scan-assign'), src = sources[cur];
+      wrap.hidden = !assigning || !src;
+      if (wrap.hidden) return;
+      var list = sink.spreads(), target = plan[cur] && plan[cur].length ? plan[cur][0] : null;
+      assignEl.innerHTML = list.map(function (sp, k) {
+        return '<option value="' + k + '">' + escapeHtml(sp.label + (sp.art ? ' (has an illustration)' : '')) + '</option>';
+      }).join('') + '<option value="archive">The archive</option>';
+      assignEl.disabled = target == null;
+      assignEl.value = target == null ? '' : String(target);
+    }
+    assignEl.addEventListener('change', function () {
+      var src = sources[cur];
+      if (!src) return;
+      src.spread = assignEl.value === 'archive' ? 'archive' : Number(assignEl.value);
+      refresh();
+    });
     function renderStrip() {
+      if (assigning) plan = assignPlan();
       strip.innerHTML = '';
       sources.forEach(function (src, i) {
         var t = document.createElement('button');
@@ -24210,8 +24797,10 @@
         t.className = 'scan-thumb' + (i === cur ? ' is-current' : '');
         t.style.backgroundImage = 'url(' + src.thumb + ')';
         t.title = 'Page ' + (i + 1);
-        t.innerHTML = '<span role="button" aria-label="Leave this one out" title="Leave this one out">×</span>';
+        t.innerHTML = '<span role="button" aria-label="Leave this one out" title="Leave this one out">×</span>' +
+          (assigning && plan[i].length ? '<em>' + spreadShort(plan[i][0]) + '</em>' : '');
         t.addEventListener('click', function (e) {
+          finishEdges();
           if (e.target.tagName === 'SPAN') { sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
           cur = i; refresh();
         });
@@ -24224,18 +24813,25 @@
       box.querySelector('.scan-empty').hidden = has || typeof start === 'string';
       var n = cartoonCount();
       addBtn.disabled = !n || busy;
-      addBtn.textContent = n ? 'Add ' + n + ' ' + (n === 1 ? one : many) : 'Add ' + many;
+      addBtn.textContent = addBtn.dataset.label || (n ? 'Add ' + n + ' ' + (n === 1 ? one : many) : 'Add ' + many);
       syncControls();
       renderStrip();
+      renderAssign();
       if (has) renderView(); else view.innerHTML = '';
     }
-    function addSource(canvas, fromPdf, digital) {
-      var th = pbCanvasFrom(canvas, 120);
-      var src = { canvas: canvas, thumb: th.toDataURL('image/jpeg', 0.7), regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital };
+    function addSource(canvas, fromPdf, digital, given) {
+      var src = { photo: canvas, canvas: canvas, regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital, spread: null };
+      // A photo of paper: where the sheet's corners are, to flatten it to.
+      src.quad = given ? given.quad || null : fromPdf || digital ? null : scanFindPaper(canvas);
+      if (given && given.box) src.preset = given.box;
+      straighten(src);
       sources.push(src);
       // A PDF is already clean; a photo has shadows to lift. (Digital art
       // ignores these, so the first page that isn't sets them.)
-      if (!digital && sources.filter(function (x) { return !x.digital; }).length === 1) { o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20; }
+      if (!given && !digital && sources.filter(function (x) { return !x.digital; }).length === 1) {
+        o.shadow = fromPdf ? 0 : 60; o.contrast = fromPdf ? 0 : 20;
+        Object.keys(o.cond).forEach(liftFor);
+      }
       refresh();
       findRegions(src);
     }
@@ -24244,6 +24840,15 @@
         if (b.dataset.pick === 'camera' && canStream) { startCamera(); return; }
         var inp = box.querySelector('[data-in="' + b.dataset.pick + '"]'); inp.value = ''; inp.click(); });
     });
+    // Adjusting one illustration again: its photo, nothing to pick.
+    if (adjust) {
+      box.querySelector('.scan-pick').hidden = true;
+      box.querySelector('.scan-empty').hidden = true;
+      strip.hidden = true;
+      box.classList.add('is-adjust');
+      addBtn.dataset.label = 'Save';
+      addSource(adjust.canvas, !!(adjust.scan && adjust.scan.fromPdf), false, { quad: adjust.scan ? adjust.scan.quad : null, box: adjust.scan ? adjust.scan.box : null });
+    }
     // Opened from the list's own buttons: the choice is made, so the
     // dialog's buttons and intro line stay out of the way.
     if (typeof start === 'string') {
@@ -24295,12 +24900,30 @@
       r.addEventListener('input', function () { o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
     });
     box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { o.trim = e.target.checked; renderView(); });
+    box.querySelector('input[data-k="edges"]').addEventListener('change', function (e) {
+      o.edges = e.target.checked; editingEdges = false; savePhotoPrefs();
+      sources.forEach(function (src) {
+        if (src.digital || src.fromPdf) return;
+        if (o.edges && !src.quad) src.quad = scanFindPaper(src.photo);
+        straighten(src); src.regions = null; findRegions(src);
+      });
+      refresh();
+    });
+    box.querySelectorAll('input[data-cond]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var k = cb.dataset.cond;
+        if (cb.checked) { o.cond[k] = true; liftFor(k); }
+        else delete o.cond[k];
+        savePhotoPrefs(); syncControls(); renderView();
+      });
+    });
     addBtn.addEventListener('click', async function () {
       if (busy || !cartoonCount()) return;
       busy = true; addBtn.disabled = true;
       try {
         await finding;
         var n = cartoonCount(), done = 0;
+        if (assigning) plan = assignPlan();
         for (var i = 0; i < sources.length; i++) {
           // Each cut notes where on its page it came from (`crop`), and the
           // page is kept too (its circles whited out), so a cartoon can be
@@ -24324,6 +24947,16 @@
             if (!src.digital) scanStripFrame(page);
             cuts = [placed(o.trim ? scanTrim(page) : page, 0, 0)];
           } else continue;
+          // The photo as taken, kept so the illustration can be adjusted
+          // again from it, with the settings and box it came in with.
+          var rawId = adjust ? adjust.raw : null;
+          if (!adjust && sink && sink.storeRaw && !src.digital) try { rawId = await sink.storeRaw(await pbEncode(src.photo, false)); } catch (e) { rawId = null; }
+          var meta = function (j) {
+            var r = chosen(src)[j];
+            return { spread: assigning ? plan[i][j] : null, raw: rawId,
+              scan: src.digital ? null : { mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, trim: o.trim,
+                edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
+          };
           var pageId = null;
           if (!sink) try {
             var penc = await pbEncode(page, false);
@@ -24337,7 +24970,7 @@
             // (clockwise until then). It stays reframable: `rot` turns the
             // page and `crop` is redone in the turned page's fractions.
             var cv = cuts[j].canvas, cr = cuts[j].crop, rot = 0;
-            if (sink) { await sink.store(await pbEncode(cv, o.mode === 'bw')); continue; }
+            if (sink) { await sink.store(await pbEncode(cv, o.mode === 'bw'), meta(j)); continue; }
             if (cv.height > cv.width * 1.1) {
               var q = cbTurnPref();
               cv = turnCanvas(cv, q); rot = q * 90;
