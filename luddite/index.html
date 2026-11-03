@@ -310,10 +310,16 @@
   .rvbody { max-height: 66vh; overflow-y: auto; margin-top: 12px; }
   .printrub { display: inline-flex; gap: 6px; align-items: center; margin: 0 6px 0 0; }
   /* The print page's options (remembered on the device, luddite.printOpts). */
-  .printopts { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 4px 0 6px; }
-  .printopt { display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px; border: 1.5px solid var(--rule); border-radius: 999px; background: var(--card); font-size: 14px; cursor: pointer; }
-  .printopt.sizeopt { cursor: default; padding: 3px 4px 3px 12px; }
-  .printopt[hidden] { display: none; }
+  .printopts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin: 4px 0 18px; padding: 14px 20px 12px; border: 1px solid var(--rule); border-radius: 14px; background: var(--card); }
+  .pogroup h3 { margin: 0 0 6px; }
+  .porow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 15px; }
+  .porow[hidden] { display: none; }
+  .posel { flex: none; width: 196px; font: 600 14px var(--ui); color: var(--ink); background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border: 1.5px solid var(--rule); border-radius: 999px; padding: 6px 30px 6px 12px; appearance: none; -webkit-appearance: none; cursor: pointer; }
+  .posel:hover { border-color: var(--ink); }
+  .posel:focus-visible { outline: none; border-color: var(--ink); }
+  @media (max-width: 720px) { .printopts { grid-template-columns: 1fr; } .pogroup + .pogroup { margin-top: 10px; } }
+  @media print { .printopts { display: none !important; } }
   /* The papers' text size; rubric pages keep their own. */
   .printdoc { --pp-size: 11.5pt; }
   .printdoc .pp:not(.prub) .paper { font-size: var(--pp-size); line-height: 1.7; }
@@ -1940,31 +1946,26 @@
     </div>
     <div class="head"><h2 id="printTitle"></h2></div>
     <div class="printopts">
-      <label class="printopt" id="printRubricsRow" hidden><input type="checkbox" id="printRubrics"> Print rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="duplex"> Two-sided: each paper on its own sheets <span class="q" tabindex="0" data-tip="Adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></label>
-      <span class="printopt sizeopt" id="printDraftsRow" hidden>Drafts
-        <span class="segctl" id="printDrafts"><button type="button" data-drafts="final">Final only</button><button type="button" data-drafts="all">All drafts</button></span>
-        <span class="q" tabindex="0" data-tip="Final only: each student's draft marked final (else the one they're writing). All drafts: every draft, oldest first, each with your comments on it.">?</span>
-      </span>
-      <span class="printopt sizeopt">Comments
-        <span class="segctl" id="printNotes"><button type="button" data-notes="margin">In the margin</button><button type="button" data-notes="after">After the paper</button></span>
-        <span class="q" tabindex="0" data-tip="In the margin: each comment beside its words, as on the grading page. After the paper: numbered, in a list under the paper.">?</span>
-      </span>
-      <span class="printopt sizeopt">Grade
-        <span class="segctl" id="printGrade"><button type="button" data-grade="top">At the top</button><button type="button" data-grade="words">In words at the bottom</button></span>
-        <span class="q" tabindex="0" data-tip="At the top: the grade as you gave it, under the student's name. In words at the bottom: spelled out (B plus, ninety-two), small and upside down after the comments, so they're read first.">?</span>
-      </span>
-      <span class="printopt sizeopt trogx">Lined margin
-        <span class="segctl" id="printLined"><button type="button" data-lined="">None</button><button type="button" data-lined="narrow">Narrow</button><button type="button" data-lined="wide">Wide</button></span>
-      </span>
-      <label class="printopt trogx"><input type="checkbox" data-opt="double"> Double-spaced <span class="q" tabindex="0" data-tip="Room between the lines for comments written in.">?</span></label>
-      <label class="printopt trogx"><input type="checkbox" data-opt="finalLines"> Lines for comments on every page <span class="q" tabindex="0" data-tip="Ruled lines at the foot of every page of a student's writing, for comments by hand.">?</span></label>
-      <label class="printopt" id="printReflectRow" hidden><input type="checkbox" data-opt="reflect"> Reflections <span class="q" tabindex="0" data-tip="Each student's reflection on their paper, after your end comment (once they've handed it in).">?</span></label>
-      <label class="printopt"><input type="checkbox" data-opt="chat"> Live comments <span class="q" tabindex="0" data-tip="The live comments between you and the student while they wrote, after the end comment.">?</span></label>
-      <label class="printopt trogx"><input type="checkbox" data-opt="topics"> Highlight topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></label>
-      <span class="printopt sizeopt trogx">Text size
-        <span class="segctl" id="printSize"><button type="button" data-size="10">Small</button><button type="button" data-size="11.5">Normal</button><button type="button" data-size="13">Large</button><button type="button" data-size="14.5">Larger</button></span>
-      </span>
+      <div class="pogroup">
+        <h3>What Prints</h3>
+        <div class="porow"><span class="pol">Comments <span class="q" tabindex="0" data-tip="In the margin: each comment beside its words, as on the grading page. After the paper: numbered, in a list under the paper. None: no comments at all.">?</span></span><select class="posel" data-sel="notes"><option value="margin">In the margin</option><option value="after">After the paper</option><option value="none">None</option></select></div>
+        <div class="porow"><span class="pol">Marks in the text <span class="q" tabindex="0" data-tip="Your cross-outs, written-in words, bold and circled words. Leave them out (and the comments) for a clean copy of the student's writing.">?</span></span><select class="posel" data-sel="marks"><option value="on">Print</option><option value="off">Leave out</option></select></div>
+        <div class="porow"><span class="pol">End comment</span><select class="posel" data-sel="endComment"><option value="on">Print</option><option value="off">Leave out</option></select></div>
+        <div class="porow"><span class="pol">Grade <span class="q" tabindex="0" data-tip="At the top: the grade as you gave it, under the student's name. In words at the bottom: spelled out (B plus, ninety-two), small and upside down after the comments, so they're read first.">?</span></span><select class="posel" data-sel="grade"><option value="top">At the top</option><option value="words">In words at the bottom</option><option value="none">Leave out</option></select></div>
+        <div class="porow" id="printRubricsRow" hidden><span class="pol">Rubrics <span class="q" tabindex="0" data-tip="Each student's rubric prints right after their paper, so the stack comes out in order, ready to staple.">?</span></span><select class="posel" id="printRubrics"><option value="on">Print</option><option value="off">Leave out</option></select></div>
+        <div class="porow" id="printReflectRow" hidden><span class="pol">Reflections <span class="q" tabindex="0" data-tip="Each student's reflection on their paper, after your end comment (once they've handed it in).">?</span></span><select class="posel" data-sel="reflect"><option value="on">Print</option><option value="off">Leave out</option></select></div>
+        <div class="porow"><span class="pol">Live comments <span class="q" tabindex="0" data-tip="The live comments between you and the student while they wrote, after the end comment.">?</span></span><select class="posel" data-sel="chat"><option value="on">Print</option><option value="off">Leave out</option></select></div>
+        <div class="porow" id="printDraftsRow" hidden><span class="pol">Drafts <span class="q" tabindex="0" data-tip="Final only: each student's draft marked final (else the one they're writing). All drafts: every draft, oldest first, each with your comments on it.">?</span></span><select class="posel" data-sel="drafts"><option value="final">Final only</option><option value="all">All drafts</option></select></div>
+      </div>
+      <div class="pogroup">
+        <h3>Layout</h3>
+        <div class="porow"><span class="pol">Sides <span class="q" tabindex="0" data-tip="Two-sided adds a blank back wherever a paper (with its rubric) ends on the front of a sheet, so two students never share a sheet. Print at the default scale, on Letter paper.">?</span></span><select class="posel" data-sel="duplex"><option value="on">Two-sided</option><option value="off">One-sided</option></select></div>
+        <div class="porow trogx"><span class="pol">Text size</span><select class="posel" data-sel="size"><option value="10">Small</option><option value="11.5">Normal</option><option value="13">Large</option><option value="14.5">Larger</option></select></div>
+        <div class="porow trogx"><span class="pol">Spacing <span class="q" tabindex="0" data-tip="Double leaves room between the lines for comments written in.">?</span></span><select class="posel" data-sel="double"><option value="off">Single</option><option value="on">Double</option></select></div>
+        <div class="porow trogx"><span class="pol">Lined margin <span class="q" tabindex="0" data-tip="A ruled column beside the writing, for marking up by hand.">?</span></span><select class="posel" data-sel="lined"><option value="">None</option><option value="narrow">Narrow</option><option value="wide">Wide</option></select></div>
+        <div class="porow trogx"><span class="pol">Lines for comments <span class="q" tabindex="0" data-tip="Ruled lines for comments by hand: filling the room left on a paper's last page, at the foot of every page, or none.">?</span></span><select class="posel" data-sel="finalLines"><option value="last">At the end</option><option value="every">On every page</option><option value="none">None</option></select></div>
+        <div class="porow trogx"><span class="pol">Topic sentences <span class="q" tabindex="0" data-tip="The first sentence of each paragraph, highlighted in yellow. Luddite guesses, so check them.">?</span></span><select class="posel" data-sel="topics"><option value="off">Not highlighted</option><option value="on">Highlighted</option></select></div>
+      </div>
     </div>
     <div id="printBody" class="printdoc measuring"></div>
     <div id="printPreview"></div>
@@ -11051,9 +11052,13 @@
     head.appendChild(el('b', null, who(p.name, p.email)));
     head.appendChild(el('span', null, (p.roomTitle || '') + (p.draftLabel ? ' · ' + p.draftLabel : '') + ' · ' + new Date(p.at).toLocaleString([], { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + plural(p.words, 'word', 'words')));
     box.appendChild(head);
-    var flipGrade = printOpts.grade === 'words';
-    if (p.grade && !flipGrade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
-    var text = p.text, orphans = (p.marks || []).filter(function (m) { return m.orphan; }), marks = (p.marks || []).filter(function (m) { return !m.orphan; });
+    var flipGrade = printOpts.grade === 'words', noGrade = printOpts.grade === 'none';
+    if (p.grade && !flipGrade && !noGrade) box.appendChild(el('div', 'pgrade', 'Grade: ' + p.grade));
+    // Comments and the marks in the text each print unless left out; with
+    // both left out the student's writing prints clean.
+    var keepNotes = printOpts.notes !== 'none', keepMarks = printOpts.marks !== false;
+    var text = p.text, orphans = keepNotes ? (p.marks || []).filter(function (m) { return m.orphan; }) : [];
+    var marks = (p.marks || []).filter(function (m) { return !m.orphan && (m.type === 'margin' || m.type === 'arrow' ? keepNotes : keepMarks); });
     var allNotes = marks.filter(function (m) { return m.type === 'margin' || m.type === 'arrow'; }).sort(function (a, b) { return a.start - b.start || a.end - b.end; });
     var margins = allNotes.filter(function (m) { return m.type === 'margin'; });
     var num = {};
@@ -11110,7 +11115,7 @@
       orphans.forEach(function (m) { on.appendChild(el('p', null, '\u201c' + m.orphan + '\u201d \u2014 ' + (m.note || 'Arrow'))); });
       box.appendChild(on);
     }
-    if (p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', p.endComment));
+    if (printOpts.endComment !== false && p.endComment && p.endComment.trim()) box.appendChild(el('div', 'pend', p.endComment));
     if (printOpts.reflect && hasReflection(p)) {
       var rf = el('div', 'prefl');
       rf.appendChild(el('b', null, 'Reflection'));
@@ -11123,7 +11128,7 @@
       p.chat.forEach(function (m) { lc.appendChild(el('p', null, '[' + dayClock(m.at) + '] ' + (m.from === 'teacher' ? 'Teacher' + (m.all ? ' (to everyone)' : '') : who(p.name, p.email) + (m.hand ? ' (raised hand)' : '')) + ': ' + m.text)); });
       box.appendChild(lc);
     }
-    if (p.grade && flipGrade) box.appendChild(el('div', 'pgrade flip', 'Grade: ' + gradeInWords(p.grade)));
+    if (p.grade && flipGrade && !noGrade) box.appendChild(el('div', 'pgrade flip', 'Grade: ' + gradeInWords(p.grade)));
     return box;
   }
   // A reflection prints once it's handed in, as on the grading page.
@@ -11236,7 +11241,7 @@
   }
   async function drawPrintBody() {
     var seq = ++printDrawSeq, body = $('printBody');
-    var withRubrics = $('printRubrics').checked && !$('printRubricsRow').hidden;
+    var withRubrics = $('printRubrics').value === 'on' && !$('printRubricsRow').hidden;
     body.innerHTML = '';
     body.classList.toggle('double', !!printOpts.double);
     body.style.setProperty('--pp-size', (printOpts.size || 11.5) + 'pt');
@@ -11398,7 +11403,7 @@
     var body = $('printBody');
     each('#printBody .pblank', function (b) { b.remove(); });
     body.classList.add('measuring');
-    each('#printBody .pp:not(.prub)', printOpts.finalLines ? pageFeet : endFill);
+    if (printOpts.finalLines !== 'none') each('#printBody .pp:not(.prub)', printOpts.finalLines ? pageFeet : endFill);
     each('#printBody .lmargin', function (m) {
       m.innerHTML = '';
       var n = Math.floor(m.getBoundingClientRect().height / 30);
@@ -11436,16 +11441,29 @@
     try { printOpts = JSON.parse(load(printOptsKey()) || '{}') || {}; } catch (e) { printOpts = {}; }
   }
   loadPrintOpts();
+  // Each dropdown's value from printOpts, and back. On/off options are 'on' or
+  // 'off'; two-sided, live comments, marks and the end comment are on unless
+  // turned off. Lined margin true was narrow; lines for comments are at the end
+  // (false), on every page (true) or none.
+  var PRINT_ON_BY_DEFAULT = { duplex: 1, chat: 1, marks: 1, endComment: 1 };
+  var PRINT_SEL = {
+    notes: function (v) { return v === 'after' || v === 'none' ? v : 'margin'; },
+    grade: function (v) { return v === 'words' || v === 'none' ? v : 'top'; },
+    drafts: function (v) { return v === 'all' ? 'all' : 'final'; },
+    size: function (v) { return String(v || 11.5); },
+    lined: function (v) { return v === 'wide' ? 'wide' : v ? 'narrow' : ''; },
+    finalLines: function (v) { return v === 'none' ? 'none' : v ? 'every' : 'last'; }
+  };
+  var PRINT_SET = {
+    size: Number,
+    lined: function (v) { return v || false; },
+    finalLines: function (v) { return v === 'every' ? true : v === 'none' ? 'none' : false; }
+  };
   function drawPrintOpts() {
-    // (two-sided and live comments are on unless turned off)
-    each('#printScreen [data-opt]', function (c) { c.checked = c.dataset.opt === 'duplex' || c.dataset.opt === 'chat' ? printOpts[c.dataset.opt] !== false : !!printOpts[c.dataset.opt]; });
-    each('#printSize button', function (b) { b.classList.toggle('on', Number(b.dataset.size) === (printOpts.size || 11.5)); });
-    // Lined margin: none, narrow (2.1in) or wide (4in, for long comments); true was narrow.
-    var lined = printOpts.lined === 'wide' ? 'wide' : printOpts.lined ? 'narrow' : '';
-    each('#printLined button', function (b) { b.classList.toggle('on', b.dataset.lined === lined); });
-    each('#printDrafts button', function (b) { b.classList.toggle('on', b.dataset.drafts === (printOpts.drafts === 'all' ? 'all' : 'final')); });
-    each('#printNotes button', function (b) { b.classList.toggle('on', b.dataset.notes === (printOpts.notes === 'after' ? 'after' : 'margin')); });
-    each('#printGrade button', function (b) { b.classList.toggle('on', b.dataset.grade === (printOpts.grade === 'words' ? 'words' : 'top')); });
+    each('#printScreen [data-sel]', function (s) {
+      var k = s.dataset.sel, v = printOpts[k];
+      s.value = PRINT_SEL[k] ? PRINT_SEL[k](v) : (PRINT_ON_BY_DEFAULT[k] ? v !== false : !!v) ? 'on' : 'off';
+    });
   }
   function setPrintOpt(k, v) {
     printOpts[k] = v;
@@ -11453,15 +11471,15 @@
     drawPrintOpts();
     if (printDrawn.length) drawPrintBody();
   }
-  each('#printScreen [data-opt]', function (c) { c.addEventListener('change', function () { setPrintOpt(c.dataset.opt, c.checked); }); });
-  each('#printSize button', function (b) { b.addEventListener('click', function () { setPrintOpt('size', Number(b.dataset.size)); }); });
-  each('#printLined button', function (b) { b.addEventListener('click', function () { setPrintOpt('lined', b.dataset.lined || false); }); });
-  each('#printDrafts button', function (b) { b.addEventListener('click', function () { setPrintOpt('drafts', b.dataset.drafts); }); });
-  each('#printNotes button', function (b) { b.addEventListener('click', function () { setPrintOpt('notes', b.dataset.notes); }); });
-  each('#printGrade button', function (b) { b.addEventListener('click', function () { setPrintOpt('grade', b.dataset.grade); }); });
+  each('#printScreen [data-sel]', function (s) {
+    s.addEventListener('change', function () {
+      var k = s.dataset.sel;
+      setPrintOpt(k, PRINT_SET[k] ? PRINT_SET[k](s.value) : PRINT_SEL[k] ? s.value : s.value === 'on');
+    });
+  });
   drawPrintOpts();
   $('printRubrics').addEventListener('change', function () {
-    store(PRINT_RUBRICS_KEY, $('printRubrics').checked ? '1' : null);
+    store(PRINT_RUBRICS_KEY, $('printRubrics').value === 'on' ? '1' : null);
     drawPrintBody();
   });
 
@@ -11494,7 +11512,7 @@
     printMissing = ids.length - drawn.length;
     $('printRubricsRow').hidden = !drawn.some(paperRubric);
     $('printReflectRow').hidden = !drawn.some(hasReflection);
-    $('printRubrics').checked = load(PRINT_RUBRICS_KEY) === '1';
+    $('printRubrics').value = load(PRINT_RUBRICS_KEY) === '1' ? 'on' : 'off';
     await drawPrintBody();
     window.scrollTo(0, 0);
   }
