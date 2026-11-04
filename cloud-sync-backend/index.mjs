@@ -2,6 +2,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand, DeleteItemCommand, Scan
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { gzipSync, gunzipSync } from 'node:zlib';
 
 // This is the AWS Lambda behind Bookbug's "sign in with Google to save to
 // the cloud" feature. It lives at a Function URL (see CLOUD_API_URL in
@@ -193,6 +194,16 @@ export function mergeBookbugSave(stored, incoming) {
   return out;
 }
 
+// An account's books are saved gzipped (`stateZ`, binary): DynamoDB caps an
+// item at 400 KB, and one account's books, as plain JSON (`state`, how they
+// were kept before 2026-11-04), had grown past it, so every save failed.
+// Text compresses several times over. Items still in the old form are read
+// as they are and rewritten gzipped on their next save.
+function userStateText(item) {
+  if (item.stateZ && item.stateZ.B) return gunzipSync(Buffer.from(item.stateZ.B)).toString('utf8');
+  return item.state ? item.state.S : '{}';
+}
+
 async function getStoredState(userId) {
   const result = await ddb.send(new GetItemCommand({
     TableName: TABLE_NAME,
@@ -200,7 +211,7 @@ async function getStoredState(userId) {
   }));
   if (!result.Item) return { state: {}, updatedAt: 0, createdAt: 0, exists: false };
   return {
-    state: migrateLegacyState(JSON.parse(result.Item.state.S)),
+    state: migrateLegacyState(JSON.parse(userStateText(result.Item))),
     updatedAt: Number(result.Item.updatedAt?.N || 0),
     createdAt: Number(result.Item.createdAt?.N || 0),
     exists: true
@@ -556,7 +567,7 @@ export function computeStats(items, selfId, now = Date.now()) {
     }
     if (key === selfId) return;
     let state = {};
-    try { state = migrateLegacyState(JSON.parse(item.state.S)); } catch (e) {}
+    try { state = migrateLegacyState(JSON.parse(userStateText(item))); } catch (e) {}
     const bb = state.chapbookbuilder || {};
     const saved = Number(item.updatedAt?.N || 0);
     accounts.total++;
@@ -765,7 +776,7 @@ async function routeHmAdmin(event, method, path, info, hm) {
         const sub = it.userId.S.slice(3);
         if (!HM_SUB.test(sub)) continue; // hm#admins, hm#adminlog
         let state = {};
-        try { state = JSON.parse(it.state.S); } catch (e) {}
+        try { state = JSON.parse(userStateText(it)); } catch (e) {}
         const books = hmBooksOf(state.chapbookbuilder || {}).map(({ kind, where, entry }) => ({
           id: entry.id, kind, form: kind === 'text' ? (entry.data.form || 'collection') : kind, where,
           title: hmBookTitle(entry), updatedAt: Number(entry.updatedAt) || 0
@@ -786,7 +797,7 @@ async function routeHmAdmin(event, method, path, info, hm) {
     if (!HM_SUB.test(sub)) return respond(404, { error: 'not_found' });
     const res = await ddb.send(new GetItemCommand({ TableName: TABLE_NAME, Key: { userId: { S: 'hm#' + sub } } }));
     if (!res.Item) return respond(404, { error: 'not_found' });
-    const state = JSON.parse(res.Item.state.S);
+    const state = JSON.parse(userStateText(res.Item));
     const found = hmBooksOf(state.chapbookbuilder || {}).find((b) => b.entry.id === String(q.id || ''));
     if (!found) return respond(404, { error: 'not_found' });
     const owner = { sub, email: res.Item.email ? res.Item.email.S : '', name: res.Item.name ? res.Item.name.S : '' };
@@ -1045,7 +1056,7 @@ export const handler = async (event) => {
           TableName: TABLE_NAME,
           Item: {
             userId: { S: userId },
-            state: { S: JSON.stringify(state) },
+            stateZ: { B: gzipSync(JSON.stringify(state)) },
             updatedAt: { N: String(now) },
             ...(created ? { createdAt: { N: String(created) } } : {}),
             // Bookbug HM's administrators see whose books these are.
