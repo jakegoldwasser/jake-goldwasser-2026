@@ -2102,6 +2102,7 @@
   .pb-h-wl { left: -14px; top: 50%; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-size { right: -8px; bottom: -8px; cursor: nwse-resize; border-radius: 3px; }
   .pb-h-fit { right: auto; bottom: auto; }
+  #pbView.is-gray .pb-stage img, #pbView.is-gray .pbt-pic img { filter: grayscale(1); }
   .pb-h-rot { left: 50%; top: -34px; margin-left: -7px; cursor: grab; }
   .pb-h-rot::after { content: ''; position: absolute; left: 50%; top: 12px; height: 18px; border-left: 1.5px solid var(--accent); }
   .pb-h-move {
@@ -3221,6 +3222,11 @@
               <label for="pbSnapOuter" style="text-transform:none;letter-spacing:0;font-weight:400;">Snap story text to the top or bottom of the page</label>
             </div>
             <p class="field-note" style="margin:-4px 0 12px;">Each story text box sits against its page's outer margin, set flush toward the edge.</p>
+            <div class="checkline">
+              <input type="checkbox" id="pbGrayArt">
+              <label for="pbGrayArt" style="text-transform:none;letter-spacing:0;font-weight:400;">All illustrations in grayscale</label>
+            </div>
+            <p class="field-note" style="margin:-4px 0 12px;">Shown, printed and exported in shades of gray. The illustrations keep their color, so unchecking this brings it back.</p>
             <div class="field">
               <label>Page numbers</label>
               <div class="seg seg-3" id="pbPageNums"><button type="button" data-val="outer">Outer corners</button><button type="button" data-val="center">Center</button><button type="button" data-val="none">None</button></div>
@@ -5205,6 +5211,9 @@
       textW: typeof d.textW === 'number' ? d.textW : PB_STANDARD.textW,
       margin: typeof d.margin === 'number' ? d.margin : PB_STANDARD.margin,
       gutter: typeof d.gutter === 'number' ? d.gutter : PB_STANDARD.gutter,
+      // Every illustration shown and printed in grayscale (the art itself
+      // is kept in color, so switching it off brings the color back).
+      gray: !!d.gray,
       spreads: spreads, archived: (d.archived || []).map(pbNormalizeSpread),
       // Recently deleted spreads: { deletedAt, spread, from: 'book' | 'archive', at }.
       deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, spread: pbNormalizeSpread(x.spread), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
@@ -18108,7 +18117,7 @@
     if (!pbState) return;
     pbUndoStack.push(JSON.stringify({ spreads: pbState.spreads, archived: pbState.archived, trim: pbState.trim, font: pbState.font, size: pbState.size,
       snapText: pbState.snapText, pageNums: pbState.pageNums, sizeAuto: pbState.sizeAuto, lh: pbState.lh,
-      textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter }));
+      textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter, gray: !!pbState.gray }));
     if (pbUndoStack.length > 40) pbUndoStack.shift();
   }
   function pbUndo() {
@@ -19050,6 +19059,22 @@
     else { ox = 0; oy = 0; }
     return { x: ax + aw / 2 + ox * aw - dw / 2, y: H / 2 + oy * H - dh / 2, w: dw, h: dh, ax: ax, aw: aw, ox: ox, oy: oy };
   }
+  // A gray copy of an illustration, for a book in grayscale (made once
+  // per image; canvas filters aren't in every browser).
+  var pbGrayCache = new WeakMap();
+  function pbGrayOf(el) {
+    var c = pbGrayCache.get(el);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = el.naturalWidth || el.width; c.height = el.naturalHeight || el.height;
+    var x = c.getContext('2d');
+    x.drawImage(el, 0, 0);
+    var im = x.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (var i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.round(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+    x.putImageData(im, 0, 0);
+    pbGrayCache.set(el, c);
+    return c;
+  }
   // opts: text / art (default both), nonPages ('shade' | 'blank'),
   // placeholders (draw a gray box for a picture not on this device).
   function pbDrawSpread(ctx, sp, s, W, opts) {
@@ -19072,6 +19097,7 @@
           return;
         }
         var r = pbImgRect(it, W, H, el);
+        if (pbState.gray) el = pbGrayOf(el);
         ctx.save();
         if (r.free) {
           ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
@@ -20025,7 +20051,25 @@
       notesBtn.classList.toggle('is-open', open);
       notesBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
-    actions.append(notesBtn, addPic, dots);
+    actions.append(notesBtn);
+    // + Text box (Spread view; Text view has its own on each page): on a
+    // page of the spread with no words yet, else the left one, at the
+    // bottom, open to type in. Double-clicking a page still does it there.
+    if (pbViewMode !== 'text') {
+      var addText = document.createElement('button');
+      addText.type = 'button'; addText.className = 'pb-add-btn'; addText.textContent = '+ Text box';
+      addText.title = 'Add a text box to this spread and start typing (or double-click a page to put one there)';
+      addText.addEventListener('click', function () {
+        var pages = pbSpreadPages(s, pbState.spreads.length), sp = pbState.spreads[s];
+        function hasWords(side) {
+          return sp.items.some(function (x) { return x.type === 'text' && !x.bind && (x.text || '').trim() && ((x.x + x.w / 2 < 0.5) === (side === 'left')); });
+        }
+        var side = pages.left && !hasWords('left') ? 'left' : pages.right && !hasWords('right') ? 'right' : pages.left ? 'left' : 'right';
+        pbAddText(s, side === 'left' ? 0.25 : 0.75, null, 'bottom');
+      });
+      actions.append(addText);
+    }
+    actions.append(addPic, dots);
     head.appendChild(actions);
     card.appendChild(head);
 
@@ -21982,6 +22026,12 @@
     pbFmt('pbBookMargin').value = pbState.margin; pbFmt('pbBookMarginOut').textContent = pbInches(pbState.margin);
     pbFmt('pbBookGutter').value = pbState.gutter; pbFmt('pbBookGutterOut').textContent = pbInches(pbState.gutter);
   }
+  pbFmt('pbGrayArt').addEventListener('change', function () {
+    pbCheckpoint();
+    pbState.gray = pbFmt('pbGrayArt').checked;
+    pbPersist(); pbSyncGray(); pbRefreshAll();
+  });
+  function pbSyncGray() { pbView.classList.toggle('is-gray', !!(pbState && pbState.gray)); }
   pbFmt('pbSnapOuter').addEventListener('change', function () {
     pbCheckpoint();
     pbState.snapText = pbFmt('pbSnapOuter').checked;
@@ -22582,6 +22632,7 @@
     setFontSelect(pbFmt('pbFontSeg'), pbState.font);
     pbSyncBookLayout();
     pbFmt('pbSnapOuter').checked = pbState.snapText;
+    pbFmt('pbGrayArt').checked = !!pbState.gray; pbSyncGray();
     pbFmt('pbPageNums').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === pbState.pageNums); });
     pbRenderTrimGrid();
     updatePbBookMenuBtn();
