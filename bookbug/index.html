@@ -20733,7 +20733,10 @@
     Object.assign(it, changes);
     pbPersist();
     pbRefreshSpread(pbPopFor.s);
-    pbStylePopup(); pbPlacePopup();
+    // The pop-up stays where it is, so the next click lands on the same
+    // button (a story box grows upward from the bottom margin, and the
+    // pop-up used to jump with it; Jake, 2026-11-04).
+    pbStylePopup(); pbPlacePopup(true);
     pbPopText.focus();
   }
   function pbPopBox() {
@@ -20742,11 +20745,12 @@
   }
   // Over the box: the magnified words' middle on the box's own middle,
   // kept inside the window.
-  function pbPlacePopup() {
+  function pbPlacePopup(stay) {
     if (pbPop.hidden || !pbPopFor) return;
     var box = pbPopBox();
     var vw = document.documentElement.clientWidth, w = Math.min(vw - 24, Math.max(380, pbPopText.offsetWidth + 23));
     pbPop.style.width = w + 'px';
+    if (stay) return;
     var r = box ? box.getBoundingClientRect() : { top: 120, bottom: 120, left: vw / 2, width: 0, height: 0 };
     var h = pbPop.offsetHeight;
     var top = r.top + r.height / 2 - (pbPopText.offsetTop + pbPopText.offsetHeight / 2);
@@ -21280,6 +21284,7 @@
   // Selecting: one item at a time, anywhere in the book.
   function pbSelect(sel) {
     var prev = pbSel;
+    if (!sel || !prev || sel.id !== prev.id) pbQbHold = null;
     if (prev && sel && prev.s === sel.s && prev.id === sel.id) { pbSyncFormatting(); return; }
     // An empty text box you've left is removed.
     if (prev) {
@@ -21511,9 +21516,16 @@
     return b;
   }
   function pbQbSep() { var d = document.createElement('span'); d.className = 'pb-qb-sep'; return d; }
+  // Changing a box's size keeps the bar where it was (the box may grow
+  // upward), so − and + stay under the pointer; moving or selecting
+  // something else lets it follow again.
+  var pbQbHold = null;
+  function pbHoldQuickbar() { if (pbSel && !pbQuickbar.hidden) pbQbHold = { id: pbSel.id, top: pbQuickbar.style.top, left: pbQuickbar.style.left }; }
   function pbPositionQuickbar(boxOverride) {
     var it = pbSelected();
     if (!it || !isPictureBookShown() || pbViewMode !== 'spreads' || !pbPop.hidden) { pbQuickbar.hidden = true; return; }
+    if (pbQbHold && pbQbHold.id === it.id && !boxOverride) { pbQuickbar.hidden = false; pbQuickbar.style.top = pbQbHold.top; pbQuickbar.style.left = pbQbHold.left; return; }
+    pbQbHold = null;
     var stage = pbStageEl(pbSel.s);
     var target = boxOverride || (stage && (it.type === 'text' ? stage.querySelector('.pb-tb[data-id="' + it.id + '"]') : stage.querySelector('.pb-sel')));
     if (!target) { pbQuickbar.hidden = true; return; }
@@ -21538,9 +21550,9 @@
         pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
         pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
         pbQbSep(),
-        pbQb('−', 'Smaller', false, function () { pbSetItem(pbSizeChange(it, pbFontSize(it) - 1)); }),
+        pbQb('−', 'Smaller', false, function () { pbHoldQuickbar(); pbSetItem(pbSizeChange(it, pbFontSize(it) - 1)); }),
         (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it); return sz; })(),
-        pbQb('+', 'Larger', false, function () { pbSetItem(pbSizeChange(it, pbFontSize(it) + 1)); }),
+        pbQb('+', 'Larger', false, function () { pbHoldQuickbar(); pbSetItem(pbSizeChange(it, pbFontSize(it) + 1)); }),
         pbQbSep(),
         pbQb('⟸', 'Align left', it.align === 'left', function () { pbSetItem({ align: 'left' }); }),
         pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
