@@ -3392,7 +3392,7 @@
               <button class="btn" id="cbExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two cartoons to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
               <div class="checkline export-check">
                 <input type="checkbox" id="cbCutLinesCheck" checked>
-                <label for="cbCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+                <label for="cbCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
               </div>
               <div class="export-status" id="cbExportStatus"></div>
             </div>
@@ -3565,7 +3565,7 @@
               <button class="btn" id="cmExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two pages to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
               <div class="checkline export-check">
                 <input type="checkbox" id="cmCutLinesCheck" checked>
-                <label for="cmCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+                <label for="cmCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
               </div>
               <div class="export-status" id="cmExportStatus"></div>
             </div>
@@ -4165,7 +4165,7 @@
             <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export printable booklet</button>
             <div class="checkline export-check">
               <input type="checkbox" id="cutLinesCheck" checked>
-              <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+              <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
             </div>
             <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
             <button class="btn" id="exportManuscriptBtn" style="width:100%; justify-content:center;" title="Standard manuscript format for submitting to journals, agents and presses: Times 12, double-spaced prose, your contact details and a word count on page one">Export submission manuscript</button>
@@ -9320,11 +9320,35 @@
   // simply placed (scaled, positioned) twice per sheet.
   var IMPOSE_SHEET_W = 792, IMPOSE_SHEET_H = 612, IMPOSE_OUTER_MARGIN = 36;
 
-  function pdfDashedRectStr(x, y, w, h) {
-    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n';
+  // Printer's crop marks for a booklet sheet: at each corner of the
+  // spread (x, y, w, h), two short lines in the margin lined up with its
+  // edges, starting `gap` clear of the corner and `len` long, and a fold
+  // tick above and below the fold at `foldX`. Nothing is drawn on the
+  // page itself. Returns [x1, y1, x2, y2] segments, in any units.
+  function cropMarkSegs(x, y, w, h, foldX, gap, len) {
+    var segs = [], x1 = x + w, y1 = y + h;
+    [[x, -1], [x1, 1]].forEach(function (cx) {
+      [[y, -1], [y1, 1]].forEach(function (cy) {
+        segs.push([cx[0] + cx[1] * gap, cy[0], cx[0] + cx[1] * (gap + len), cy[0]]);
+        segs.push([cx[0], cy[0] + cy[1] * gap, cx[0], cy[0] + cy[1] * (gap + len)]);
+      });
+    });
+    segs.push([foldX, y - gap, foldX, y - gap - len], [foldX, y1 + gap, foldX, y1 + gap + len]);
+    return segs;
   }
-  function pdfDashedLineStr(x1, y1, x2, y2) {
-    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
+  // In points: 1/8 in clear of the page, 1/4 in long, a hairline in black.
+  function pdfCropMarksStr(x, y, w, h, foldX) {
+    return '0 G\n[] 0 d\n0.5 w\n' + cropMarkSegs(x, y, w, h, foldX, 9, 18).map(function (sg) {
+      return sg[0].toFixed(2) + ' ' + sg[1].toFixed(2) + ' m ' + sg[2].toFixed(2) + ' ' + sg[3].toFixed(2) + ' l S';
+    }).join('\n') + '\n';
+  }
+  function canvasCropMarks(ctx, x, y, w, h, foldX, dpi) {
+    ctx.save();
+    ctx.strokeStyle = '#000000'; ctx.lineWidth = Math.max(1, dpi / 144); ctx.setLineDash([]);
+    ctx.beginPath();
+    cropMarkSegs(x, y, w, h, foldX, dpi / 8, dpi / 4).forEach(function (sg) { ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); });
+    ctx.stroke();
+    ctx.restore();
   }
 
   async function buildImposedBookletPdf(state) {
@@ -9366,8 +9390,7 @@
     function emitSheetFace(leftIdx, rightIdx, rotate180, label) {
       var bytes = [];
       if (state.showCutLines) {
-        pushAscii(bytes, pdfDashedRectStr(startX, startY, boxW * 2, boxH));
-        pushAscii(bytes, pdfDashedLineStr(startX + boxW, startY, startX + boxW, startY + boxH));
+        pushAscii(bytes, pdfCropMarksStr(startX, startY, boxW * 2, boxH, startX + boxW));
       }
       placeForm(bytes, leftIdx, startX, startY);
       placeForm(bytes, rightIdx, startX + boxW, startY);
@@ -22939,11 +22962,7 @@
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, SW, SH);
         pbDrawPage(ctx, face[0], x0, y0, pw);
         pbDrawPage(ctx, face[1], x0 + pw, y0, pw);
-        ctx.save();
-        ctx.strokeStyle = '#999999'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]);
-        ctx.strokeRect(x0, y0, 2 * pw, ph);
-        ctx.beginPath(); ctx.moveTo(x0 + pw, y0); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
-        ctx.restore();
+        canvasCropMarks(ctx, x0, y0, 2 * pw, ph, x0 + pw, PB_DPI);
         var lp = Math.round(PB_DPI * 0.11);
         [face[0], face[1]].forEach(function (p, k) {
           pbLabel(ctx, p > real ? 'blank' : 'p. ' + p, x0 + pw * k + pw / 2, y0 + ph + lp * 1.8, lp, null, 'center');
@@ -22981,11 +23000,7 @@
           ctx.drawImage(await drawPage(face[k] - 1, pw, ph), x0 + k * pw, y0, pw, ph);
         }
         if (cutLines) {
-          ctx.save();
-          ctx.strokeStyle = '#999999'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]);
-          ctx.strokeRect(x0, y0, 2 * pw, ph);
-          ctx.beginPath(); ctx.moveTo(x0 + pw, y0); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
-          ctx.restore();
+          canvasCropMarks(ctx, x0, y0, 2 * pw, ph, x0 + pw, DPI);
           var lp = Math.round(DPI * 0.11);
           [face[0], face[1]].forEach(function (p, k) {
             pbLabel(ctx, p > n ? 'blank' : 'p. ' + p, x0 + pw * k + pw / 2, y0 + ph + lp * 1.8, lp, null, 'center');
