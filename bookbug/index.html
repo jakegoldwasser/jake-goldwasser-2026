@@ -21459,8 +21459,15 @@
   // Edit…: the illustration's photo back in the importer, with the
   // settings it came in with, to change for this one alone. One from
   // before photos were kept starts from the illustration itself.
-  async function pbAdjustPicture(it, s) {
-    var rawId = it.raw || it.orig || it.img, img = await pbLoadImage(rawId);
+  async function pbAdjustPicture(it, s, fromPhoto) {
+    // An illustration brought in before Crop and Erase (its settings a box
+    // cut from a sheet, cropped to the drawing: `scan` without `crop`)
+    // can't be remade from its photo the same way, and opening it from the
+    // photo showed a different picture from the book's (Jake, 2026-11-04).
+    // It opens as the book has it, edits going on from there; Start over
+    // from the photo as taken goes back to the photo.
+    var legacy = !!(it.scan && !it.scan.crop && it.raw) && !fromPhoto;
+    var rawId = legacy ? it.img : it.raw || it.orig || it.img, img = await pbLoadImage(rawId);
     if (!img) { await confirmDialog('This illustration isn’t on this device yet.'); return; }
     var canvas = pbCanvasFrom(img, 2400), onWhite = document.createElement('canvas');
     onWhite.width = canvas.width; onWhite.height = canvas.height;
@@ -21472,8 +21479,10 @@
     pbState.spreads.forEach(function (sp, k) { sp.items.forEach(function (x) { if (x.type === 'image' && x.img) all.push({ it: x, s: k }); }); });
     var at = all.findIndex(function (x) { return x.it === it; }), after = at >= 0 ? all[at + 1] : null;
     openCartoonImport(undefined, null, {
-      title: 'Edit the Illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
-      hint: '', crop: true, aspect: pbSpreadAspect(), adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw, clean: it.clean },
+      title: 'Edit the Illustration', one: 'illustration', many: 'illustrations', mode: legacy ? 'color' : (it.scan && it.scan.mode) || 'color',
+      hint: '', crop: true, aspect: pbSpreadAspect(),
+      adjust: legacy ? { canvas: onWhite, raw: rawId, scan: null, noRaw: true, clean: null, restart: function () { pbAdjustPicture(it, s, true); } }
+        : { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw, clean: it.clean },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = { id: id, scan: meta && meta.scan }; }); },
       next: after ? function () { pbSelect({ s: after.s, id: after.it.id }); pbAdjustPicture(after.it, after.s); } : null,
       done: function () {
@@ -26062,6 +26071,13 @@
       var given = !cropMode ? { quad: aScan ? aScan.quad : null, frame: !!(aScan && aScan.frame), box: aScan ? aScan.box : null }
         : aScan && aScan.crop ? { quad: aScan.quad, erase: aScan.erase, moves: aScan.moves, keepLoop: aScan.keepLoop } : adjust.noRaw ? { quad: SCAN_WHOLE } : null;
       addSource(turnCanvas(adjust.canvas, adjustTurn), !!(aScan && aScan.fromPdf), false, given);
+      if (adjust.restart) {
+        status.textContent = 'Brought in before Crop and Erase, so it opens just as it is in the book. ';
+        var again = document.createElement('button');
+        again.type = 'button'; again.className = 'btn-link scan-all'; again.textContent = 'Start over from the photo as taken';
+        again.addEventListener('click', function () { d.close(); adjust.restart(); });
+        status.appendChild(again);
+      }
     }
     // Opened from the list's own buttons: the choice is made, so the
     // dialog's buttons and intro line stay out of the way.
