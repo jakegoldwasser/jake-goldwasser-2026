@@ -18629,8 +18629,10 @@
     }
     var snapped = pbSnapText(it, s, g);
     g.y = Math.max(m.top, Math.min(1 - m.top - g.h, g.y));
+    // Its words kept inside the text area, not the box: a box wider than
+    // its lines may hang past the margin, so its words can sit centered.
     var L = pbLive('left'), R = pbLive('right');
-    if (!snapped) g.x = Math.max(L.x0, Math.min(R.x1 - g.w, g.x));
+    if (!snapped) { var ws = pbWordsSpan(it, g); g.x = Math.max(L.x0 - ws.off, Math.min(R.x1 - ws.off - ws.w, g.x)); }
     pbGeomCache.set(it, { key: key, g: g });
     return g;
   }
@@ -18649,15 +18651,28 @@
     if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side] || !text.trim()) return false;
     var mid = g.y + g.h / 2;
     if (Math.abs(mid - 0.5) < 0.1) return false;
-    var Wpt = 2 * pbTrim(pbState.trim).pageW * 72, bw = g.w * Wpt, tw = 0;
-    pbWrapRich(pbMeasureCtx2, it, text, g.size, bw).forEach(function (ln) { tw = Math.max(tw, ln.w); });
-    var off = g.align === 'left' ? 0 : g.align === 'right' ? bw - tw : (bw - tw) / 2;
-    var l = pbLive(side), x0 = (side === 'left' ? 0.25 : 0.75) - tw / Wpt / 2;
-    // The words kept inside the text area (the box itself may hang past it).
-    x0 = Math.max(l.x0, Math.min(l.x1 - tw / Wpt, x0));
-    g.x = x0 - off / Wpt;
+    g.x = pbWordsCenterX(it, side, g);
     g.y = mid < 0.5 ? pbMargins().top : PB_BOTTOM;
     return true;
+  }
+  // Where a box's printed words sit inside it, as fractions of the
+  // spread: `off` from the box's left edge to the words' left, and `w`,
+  // the longest line's width. A box is often wider than its lines, so
+  // centering the box doesn't center the words; centering is by these.
+  function pbWordsSpan(it, g) {
+    var Wpt = 2 * pbTrim(pbState.trim).pageW * 72, bw = g.w * Wpt, tw = 0, text = pbItemText(it);
+    if (!text.trim()) return { off: 0, w: g.w };
+    pbWrapRich(pbMeasureCtx2, it, text, g.size, bw).forEach(function (ln) { tw = Math.max(tw, ln.w); });
+    tw = Math.min(tw, bw);
+    var off = g.align === 'left' ? 0 : g.align === 'right' ? bw - tw : (bw - tw) / 2;
+    return { off: off / Wpt, w: tw / Wpt };
+  }
+  // The box's x that puts its words in the middle of its page, kept
+  // inside the text area (the box itself may hang past it).
+  function pbWordsCenterX(it, side, g) {
+    var sp = pbWordsSpan(it, g), l = pbLive(side), x0 = (side === 'left' ? 0.25 : 0.75) - sp.w / 2;
+    x0 = Math.max(l.x0, Math.min(l.x1 - sp.w, x0));
+    return x0 - sp.off;
   }
   // Folios: story pages only, in the outer bottom corners or centered,
   // 0.4 in from the trim.
@@ -19759,6 +19774,7 @@
     var mine = pbPageTexts(toS, side);
     var w = it.path ? it.w : pbStraddles(it) ? pbStoryW(side) : Math.min(it.w, pbStoryW(side));
     Object.assign(it, { x: pbCenterX(side, w), w: w, y: PB_BOTTOM, rot: 0 });
+    if (!it.path) { var mg = pbGeom(it, toS); it.x += pbWordsCenterX(it, side, mg) - mg.x; }
     pbState.spreads[toS].items.push(it);
     pbMakeRoomBelow(toS, mine, pbGeom(it, toS).h || 2 * pbLineFrac(it));
     pbSel = { s: toS, id: it.id };
@@ -20392,16 +20408,20 @@
     var sw = stage.clientWidth, sh = stage.clientHeight;
     var wF = box.offsetWidth / sw, hF = box.offsetHeight / sh;
     var my = pbMargins().top, L = pbLive('left'), R = pbLive('right');
+    // Centers and margins catch the printed words, not the box (often
+    // wider than its lines): `wo` is where the words start in the box,
+    // `ww` how wide they are.
+    var span = it.path ? { off: 0, w: wF } : pbWordsSpan(it, g), wo = span.off, ww = span.w;
     // Each target: where the box's left (or top) would go, and where to draw the line.
     var xs = [
-      { v: x0, line: x0 + wF / 2, start: true, label: 'Where it started' },
-      { v: 0.25 - wF / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wF / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wF / 2, line: 0.5, label: 'Spread center' },
-      { v: (L.x0 + L.x1) / 2 - wF / 2, line: (L.x0 + L.x1) / 2, label: 'Text area center' }, { v: (R.x0 + R.x1) / 2 - wF / 2, line: (R.x0 + R.x1) / 2, label: 'Text area center' },
-      { v: L.x0, line: L.x0, label: 'Outer margin' }, { v: L.x1 - wF, line: L.x1, label: 'Gutter' }, { v: R.x0, line: R.x0, label: 'Gutter' }, { v: R.x1 - wF, line: R.x1, label: 'Outer margin' }
+      { v: x0, line: x0 + wo + ww / 2, start: true, label: 'Where it started' },
+      { v: 0.25 - wo - ww / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wo - ww / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wo - ww / 2, line: 0.5, label: 'Spread center' },
+      { v: (L.x0 + L.x1) / 2 - wo - ww / 2, line: (L.x0 + L.x1) / 2, label: 'Text area center' }, { v: (R.x0 + R.x1) / 2 - wo - ww / 2, line: (R.x0 + R.x1) / 2, label: 'Text area center' },
+      { v: L.x0 - wo, line: L.x0, label: 'Outer margin' }, { v: L.x1 - wo - ww, line: L.x1, label: 'Gutter' }, { v: R.x0 - wo, line: R.x0, label: 'Gutter' }, { v: R.x1 - wo - ww, line: R.x1, label: 'Outer margin' }
     ];
     // Where it rested before its last move, too, so a slip bigger than
     // the snap distance can still be dragged straight back.
-    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wF / 2, start: true, label: 'Where it was' });
+    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wo + ww / 2, start: true, label: 'Where it was' });
     var ys = [
       { v: y0, line: y0 + hF / 2, start: true, label: 'Where it started' },
       { v: 0.5 - hF / 2, line: 0.5, label: 'Page middle' }, { v: my, line: my, label: 'Top margin' }, { v: 1 - my - hF, line: 1 - my, label: 'Bottom margin' }
@@ -21481,7 +21501,7 @@
     var stage = pbStageEl(s), box = stage && stage.querySelector('.pb-tb[data-id="' + it.id + '"]');
     var hF = box ? box.offsetHeight / stage.clientHeight : 2 * pbLineFrac(it), m = pbMargins(), l = pbLive(side);
     var y = where === 'top' ? m.top : where === 'middle' ? 0.5 - hF / 2 : PB_BOTTOM;
-    pbSetItem({ x: it.x + (pbCenterX(side, g.w) - g.x), y: y, rot: 0 });
+    pbSetItem({ x: it.x + (pbWordsCenterX(it, side, g) - g.x), y: y, rot: 0 });
   }
   function pbItemHasInfo(it) { return it.type === 'image' || (!it.bind && !!(it.text || '').trim()); }
   function pbItemAction(action) {
@@ -21906,7 +21926,7 @@
       if (b.dataset.place === 'top') ch.y = my;
       else if (b.dataset.place === 'middle') ch.y = 0.5 - hFrac / 2;
       else if (b.dataset.place === 'bottom') ch.y = PB_BOTTOM;
-      else ch.x = pbCenterX(pbPageSide(it), it.w);
+      else { var cg = pbGeom(it, pbSel.s); ch.x = it.x + (pbWordsCenterX(it, pbPageSide(it), cg) - cg.x); }
       pbSetItem(ch);
     });
   });
