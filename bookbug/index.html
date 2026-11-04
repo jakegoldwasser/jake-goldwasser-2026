@@ -2101,7 +2101,9 @@
   .pb-h-w { right: -14px; top: 50%; margin-top: -7px; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-wl { left: -14px; top: 50%; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-size { right: -8px; bottom: -8px; cursor: nwse-resize; border-radius: 3px; }
-  .pb-h-fit { right: auto; bottom: auto; }
+  .pb-h-c { width: 12px; height: 12px; border-radius: 2px; }
+  .pb-h-nw { left: -7px; top: -7px; cursor: nwse-resize; } .pb-h-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+  .pb-h-ne { right: -7px; top: -7px; cursor: nesw-resize; } .pb-h-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
   #pbView.is-gray .pb-stage img, #pbView.is-gray .pbt-pic img { filter: grayscale(1); }
   .pb-h-rot { left: 50%; top: -34px; margin-left: -7px; cursor: grab; }
   .pb-h-rot::after { content: ''; position: absolute; left: 50%; top: 12px; height: 18px; border-left: 1.5px solid var(--accent); }
@@ -21044,25 +21046,25 @@
     if (it.fit === 'free') {
       var ratio = el ? el.naturalHeight / el.naturalWidth : 0.75;
       pbPlaceOverlay(ov, it.x, it.y, it.w, it.w * W * ratio / H, it.rot);
-      var size = document.createElement('div');
-      size.className = 'pb-h pb-h-size';
-      size.title = 'Drag to resize';
-      size.addEventListener('pointerdown', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var w0 = it.w;
-        pbTrack(e, function (ev, dx) {
-          var r = stage.getBoundingClientRect();
-          it._w = Math.max(0.03, w0 + dx / r.width);
-          var node = pbImgNode(stage, it);
-          node.style.width = (it._w * 100) + '%';
-          node.style.height = (it._w * W * ratio / H * 100) + '%';
-          pbPlaceOverlay(ov, it.x, it.y, it._w, it._w * W * ratio / H, it.rot);
-        }, function (ev, moved) {
-          if (!moved) return;
-          pbCheckpoint();
-          it.w = it._w; delete it._w;
-          pbPersist();
-        });
+      // Its four corners resize it about its middle.
+      pbCornerHandles(ov, function () {
+        var w0 = it.w, cx = it.x + w0 / 2, cy = it.y + w0 * W * ratio / H / 2, node = pbImgNode(stage, it);
+        return {
+          apply: function (k) {
+            var w = Math.max(0.03, Math.min(2, w0 * k)), h = w * W * ratio / H;
+            it._w = w; it._x = cx - w / 2; it._y = cy - h / 2;
+            node.style.width = (w * 100) + '%'; node.style.height = (h * 100) + '%';
+            node.style.left = (it._x * 100) + '%'; node.style.top = (it._y * 100) + '%';
+            pbPlaceOverlay(ov, it._x, it._y, w, h, it.rot);
+          },
+          end: function () {
+            if (typeof it._w !== 'number') return;
+            pbCheckpoint();
+            it.w = it._w; it.x = it._x; it.y = it._y;
+            delete it._w; delete it._x; delete it._y;
+            pbPersist(); pbSyncFormatting();
+          }
+        };
       });
       var rot = document.createElement('div');
       rot.className = 'pb-h pb-h-rot';
@@ -21085,45 +21087,58 @@
           pbSyncFormatting();
         });
       });
-      ov.append(size, rot);
+      ov.append(rot);
     } else {
       var ax = it.area === 'right' ? 0.5 : 0, aw = it.area === 'spread' ? 1 : 0.5;
       pbPlaceOverlay(ov, ax, 0, aw, 1, 0);
+      // The border follows the illustration as it shows (the part on its
+      // page(s)), with a resize handle at each corner.
+      var showOn = function (r) {
+        var x0 = Math.max(r.x, r.ax), x1 = Math.min(r.x + r.w, r.ax + r.aw), y0 = Math.max(r.y, 0), y1 = Math.min(r.y + r.h, H);
+        pbPlaceOverlay(ov, x0 / W, y0 / H, Math.max(0, x1 - x0) / W, Math.max(0, y1 - y0) / H, 0);
+      };
+      if (el) showOn(pbImgRect(it, W, H, el));
       // Full bleed and centered resize from a handle at the illustration's
       // corner (kept on its page(s)): dragging away from its middle makes it
       // larger, toward it smaller, the same as Zoom / Size in Formatting.
-      if (el) {
-        var grip = document.createElement('div');
-        grip.className = 'pb-h pb-h-size pb-h-fit';
-        grip.title = 'Drag to make it larger or smaller';
-        var placeGrip = function (r) {
-          var gx = Math.min(1, Math.max(0, (r.x + r.w - r.ax) / r.aw)), gy = Math.min(1, Math.max(0, (r.y + r.h) / H));
-          grip.style.left = 'calc(' + gx * 100 + '% - 8px)'; grip.style.top = 'calc(' + gy * 100 + '% - 8px)';
-        };
-        placeGrip(pbImgRect(it, W, H, el));
-        grip.addEventListener('pointerdown', function (e) {
-          e.preventDefault(); e.stopPropagation();
-          var node = pbImgNode(stage, it), img = node && node.querySelector('img');
-          if (!img) return;
-          var ir = img.getBoundingClientRect(), cx = ir.left + ir.width / 2, cy = ir.top + ir.height / 2;
-          var d0 = Math.max(8, Math.hypot(e.clientX - cx, e.clientY - cy)), bleed = it.fit === 'bleed';
-          var v0 = bleed ? (it.zoom || 1) : it.scale, v = v0;
-          pbTrack(e, function (ev) {
-            v = v0 * Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0;
+      if (el) pbCornerHandles(ov, function () {
+        var node = pbImgNode(stage, it), img = node && node.querySelector('img'), bleed = it.fit === 'bleed';
+        var v0 = bleed ? (it.zoom || 1) : it.scale, v = v0;
+        return {
+          apply: function (k) {
+            v = v0 * k;
             v = bleed ? Math.min(4, Math.max(0.5, v)) : Math.min(1, Math.max(0.1, v));
             v = Math.round(v * 100) / 100;
             var r = pbImgRect(Object.assign({}, it, bleed ? { zoom: v } : { scale: v }), W, H, el);
-            img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / H * 100) + '%';
-            img.style.width = (r.w / r.aw * 100) + '%'; img.style.height = (r.h / H * 100) + '%';
-            placeGrip(r);
-          }, function (ev, moved) {
-            if (moved && v !== v0) pbSetItem(bleed ? { zoom: v } : { scale: v });
-          });
-        });
-        ov.appendChild(grip);
-      }
+            if (img) {
+              img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / H * 100) + '%';
+              img.style.width = (r.w / r.aw * 100) + '%'; img.style.height = (r.h / H * 100) + '%';
+            }
+            showOn(r);
+          },
+          end: function () { if (v !== v0) pbSetItem(bleed ? { zoom: v } : { scale: v }); }
+        };
+      });
     }
     stage.appendChild(ov);
+  }
+  // Resize handles at a selection's four corners: dragging one away from
+  // the middle makes the illustration larger, toward it smaller, as in
+  // Slides. `start()` gives { apply(k), end() } for each drag, k being the
+  // pointer's distance from the middle over where it started.
+  function pbCornerHandles(ov, start) {
+    ['nw', 'ne', 'sw', 'se'].forEach(function (c) {
+      var h = document.createElement('div');
+      h.className = 'pb-h pb-h-c pb-h-' + c;
+      h.title = 'Drag to make it larger or smaller';
+      h.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var r = ov.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        var d0 = Math.max(8, Math.hypot(e.clientX - cx, e.clientY - cy)), op = start();
+        pbTrack(e, function (ev) { op.apply(Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0); }, function (ev, moved) { if (moved) op.end(); });
+      });
+      ov.appendChild(h);
+    });
   }
   function pbImgNode(stage, it) {
     var idx = pbState.spreads[+stage.closest('.pb-spread').dataset.spread].items.filter(function (x) { return x.type === 'image'; }).indexOf(it);
