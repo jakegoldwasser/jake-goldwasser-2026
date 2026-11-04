@@ -21133,6 +21133,9 @@
   // batch of illustrations, at the foot of the spreads) they start on the
   // first story spread without one. A file dropped on a spread still goes
   // straight in, untouched, for finished digital art.
+  // A spread's width over its height, which a ruled frame on a dummy sheet
+  // is drawn to.
+  function pbSpreadAspect() { var t = pbTrim(pbState.trim); return 2 * t.pageW / t.pageH; }
   function pbScanSpreads() {
     var n = pbState.spreads.length;
     return pbState.spreads.map(function (sp, k) {
@@ -21156,7 +21159,7 @@
       hint: phone ? 'Photos of your art go on the next spreads without an illustration. To adjust them, open the book on a computer.'
         : batch ? 'Photos or a PDF of your art, all at once, cleaned up like a scan with one set of settings. Each goes on the next spread without an illustration; choose another spread under any photo.'
         : 'Photos or a PDF of your art, cleaned up like a scan. The first goes on this spread, the rest on the next spreads without an illustration.',
-      spreads: pbScanSpreads, startAt: s, startForce: !batch, phone: phone, crop: true,
+      spreads: pbScanSpreads, startAt: s, startForce: !batch, phone: phone, crop: true, aspect: pbSpreadAspect(),
       storeRaw: function (enc) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height); },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { placed.push(Object.assign({ id: id }, meta || {})); }); },
       done: function () { pbPlaceScanned(placed); }
@@ -21205,7 +21208,7 @@
     var made = null;
     openCartoonImport(undefined, null, {
       title: 'Adjust the illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
-      hint: '', crop: true, adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw },
+      hint: '', crop: true, aspect: pbSpreadAspect(), adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = { id: id, scan: meta && meta.scan }; }); },
       done: function () {
         if (!made) return;
@@ -24561,17 +24564,138 @@
     for (i = 0; i < 8; i++) h.push(A[i][8] / (A[i][i] || 1));
     return h;
   }
+  // A ruled frame by its lines alone: a pencil rule is a thin dark line
+  // with paper on both sides (a dark valley in bright paper), the opposite
+  // of a cutting mat's printed grid (thin bright lines on dark) and of a
+  // sheet's edge (a step from light to dark). Valleys running across the
+  // photo and valleys running up it are found apart, each family's long
+  // straight lines by a Hough transform restricted to its own angles, and
+  // of every two of each that close round a rectangle, the biggest whose
+  // four sides are ruled along most of their length is the frame. Corners
+  // in fractions, clockwise from top left, or null.
+  function scanFindRuled(src, aspect) {
+    var c = pbCanvasFrom(src, 1200), W = c.width, H = c.height, N = W * H, i, x, y;
+    var d = c.getContext('2d').getImageData(0, 0, W, H).data, L = new Float32Array(N), T = new Float32Array(N);
+    var S = new Uint8Array(N);
+    for (i = 0; i < N; i++) {
+      L[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+      S[i] = Math.max(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]) - Math.min(d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+    }
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) { i = y * W + x; T[i] = (L[i - (x > 0 ? 1 : 0)] + 2 * L[i] + L[i + (x < W - 1 ? 1 : 0)]) / 4; }
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) { i = y * W + x; L[i] = (T[i - (y > 0 ? W : 0)] + 2 * T[i] + T[i + (y < H - 1 ? W : 0)]) / 4; }
+    var Ls = [];
+    for (i = 0; i < N; i += 11) Ls.push(L[i]);
+    Ls.sort(function (a, b) { return a - b; });
+    var paper = Ls[Math.floor(Ls.length * 0.92)], bright = paper * 0.78, off = 3;
+    // Paper: light and nearly colorless (a wooden table is light but orange).
+    function isPaper(j) { return L[j] >= bright && S[j] < 40; }
+    // How far a pixel dips below the paper on both sides of it, across
+    // (`hz`: a line running across) or along (`vt`) the photo.
+    var hz = new Float32Array(N), vt = new Float32Array(N);
+    for (y = off; y < H - off; y++) for (x = off; x < W - off; x++) {
+      i = y * W + x;
+      var u = L[i - off * W], dn = L[i + off * W], lf = L[i - off], rt = L[i + off];
+      if (isPaper(i - off * W) && isPaper(i + off * W)) { var dh = Math.min(u, dn) - L[i]; if (dh > 5) hz[i] = dh; }
+      if (isPaper(i - off) && isPaper(i + off)) { var dv = Math.min(lf, rt) - L[i]; if (dv > 5) vt[i] = dv; }
+    }
+    var D = Math.ceil(Math.hypot(W, H)), NR = 2 * D + 1;
+    function hough(map, t0, t1) {
+      var nt = t1 - t0 + 1, acc = new Float32Array(nt * NR), cs = [], sn = [], k;
+      for (k = 0; k < nt; k++) { var a = (t0 + k) * Math.PI / 180; cs.push(Math.cos(a)); sn.push(Math.sin(a)); }
+      for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+        var v = map[y * W + x];
+        if (!v) continue;
+        v = Math.min(1, v / 25);
+        for (k = 0; k < nt; k++) acc[k * NR + Math.round(x * cs[k] + y * sn[k]) + D] += v;
+      }
+      var peaks = [], minVotes = Math.min(W, H) * 0.12;
+      for (var p = 0; p < 14; p++) {
+        var best = -1, bv = minVotes;
+        for (i = 0; i < acc.length; i++) if (acc[i] > bv) { bv = acc[i]; best = i; }
+        if (best < 0) break;
+        var bt = Math.floor(best / NR), br = best % NR - D;
+        peaks.push({ t: t0 + bt, r: br, c: cs[bt], s: sn[bt] });
+        for (var tt = Math.max(0, bt - 3); tt <= Math.min(nt - 1, bt + 3); tt++) for (var dr = -8; dr <= 8; dr++) {
+          var rr = br + dr + D;
+          if (rr >= 0 && rr < NR) acc[tt * NR + rr] = 0;
+        }
+      }
+      return peaks;
+    }
+    // Lines across have normals near 90 degrees, lines up near 0.
+    var across = hough(hz, 70, 110), up = hough(vt, -20, 20);
+    function meet(p, q) {
+      var det = p.c * q.s - q.c * p.s;
+      if (Math.abs(det) < 1e-6) return null;
+      return [(p.r * q.s - q.r * p.s) / det, (p.c * q.r - q.c * p.r) / det];
+    }
+    function ruledAlong(A, B, map, line) {
+      var n = 0, hit = 0, steps = Math.max(20, Math.round(Math.hypot(B[0] - A[0], B[1] - A[1]) / 3));
+      for (var s = 1; s < steps; s++) {
+        var px = A[0] + (B[0] - A[0]) * s / steps, py = A[1] + (B[1] - A[1]) * s / steps, ok = false;
+        if (px < 2 || py < 2 || px >= W - 2 || py >= H - 2) continue;
+        n++;
+        for (var o = -2; o <= 2 && !ok; o++) {
+          var qx = Math.round(px + line.c * o), qy = Math.round(py + line.s * o);
+          if (map[qy * W + qx]) ok = true;
+        }
+        if (ok) hit++;
+      }
+      return n ? hit / n : 0;
+    }
+    // Every rectangle that's ruled all round; with the book's spread shape
+    // (`aspect`, width over height), the biggest of that shape wins, since
+    // the edge of a sheet underneath can rule a line too.
+    var found = [];
+    for (var a = 0; a < across.length; a++) for (var b = 0; b < across.length; b++) {
+      var top = across[a], bot = across[b];
+      for (var e = 0; e < up.length; e++) for (var f = 0; f < up.length; f++) {
+        var lf = up[e], rt = up[f];
+        var q = [meet(top, lf), meet(top, rt), meet(bot, rt), meet(bot, lf)];
+        if (q.some(function (p) { return !p || p[0] < 0 || p[1] < 0 || p[0] >= W || p[1] >= H; })) continue;
+        // Top above bottom, left of right.
+        if (q[0][0] >= q[1][0] || q[3][0] >= q[2][0] || q[0][1] >= q[3][1] || q[1][1] >= q[2][1]) continue;
+        var ar = 0;
+        for (var z = 0; z < 4; z++) ar += q[z][0] * q[(z + 1) % 4][1] - q[(z + 1) % 4][0] * q[z][1];
+        ar = Math.abs(ar) / 2;
+        if (ar < N * 0.1) continue;
+        // A frame is ruled on one sheet: each corner is on paper.
+        if (!q.every(function (p) {
+          var n = 0;
+          for (var oy = -6; oy <= 6; oy += 6) for (var ox = -6; ox <= 6; ox += 6) {
+            var qx = Math.round(p[0] + ox), qy = Math.round(p[1] + oy);
+            if (qx >= 0 && qy >= 0 && qx < W && qy < H && isPaper(qy * W + qx)) n++;
+          }
+          return n >= 6;
+        })) continue;
+        if (ruledAlong(q[0], q[1], hz, top) < 0.55 || ruledAlong(q[3], q[2], hz, bot) < 0.55 ||
+            ruledAlong(q[0], q[3], vt, lf) < 0.55 || ruledAlong(q[1], q[2], vt, rt) < 0.55) continue;
+        found.push({ q: q, area: ar });
+      }
+    }
+    if (!found.length) return null;
+    found.forEach(function (f) { f.fq = f.q.map(function (p) { return [p[0] / W, p[1] / H]; }); f.aspect = scanSheetAspect(f.fq, W, H, true).aspect; });
+    var fit = aspect ? found.filter(function (f) { return Math.abs(f.aspect / aspect - 1) < 0.03; }) : [];
+    var pool = fit.length ? fit : found;
+    pool.sort(function (a, b) { return b.area - a.area; });
+    // A little inside, so the ruled line itself stays out.
+    var q = pool[0].fq, mx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, my = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+    return q.map(function (p) { return [p[0] + (mx - p[0]) * 0.02, p[1] + (my - p[1]) * 0.02]; });
+  }
   // The part of a photo to keep (picture books), as four corners in
   // fractions of the photo, clockwise from top left: the picture's own
   // edges, both its straightening and its crop. A ruled frame is the
-  // picture. Otherwise the drawing on the sheet: the sheet flattened small
+  // picture (`aspect`, the book's spread shape, picks it out from other
+  // ruled lines, as on a dummy sheet laid on others). Otherwise the drawing on the sheet: the sheet flattened small
   // and cleaned, the ink's extent found (the table round a photo left out),
   // a little paper kept round it, and those corners taken back onto the
   // photo through the sheet's own perspective; a drawing filling nearly
   // all of its sheet keeps the whole sheet. No sheet found: the ink's
   // extent in the photo itself. No ink: the sheet, or the whole photo.
   var SCAN_WHOLE = [[0, 0], [1, 0], [1, 1], [0, 1]];
-  function scanGuessKeep(photo) {
+  function scanGuessKeep(photo, aspect) {
+    var ruled = scanFindRuled(photo, aspect);
+    if (ruled) return ruled;
     var r = scanFindEdges(photo);
     if (r && r.frame) return r.quad;
     var base = r ? r.quad : SCAN_WHOLE, small = pbCanvasFrom(photo, 1000);
@@ -25322,7 +25446,7 @@
       if (cropMode) {
         // The best guess at what to keep; a photo adjusted again keeps its
         // own outline and erasing.
-        src.guess = digital ? SCAN_WHOLE : scanGuessKeep(canvas);
+        src.guess = digital ? SCAN_WHOLE : scanGuessKeep(canvas, sink.aspect);
         src.quad = ((given && given.quad) || src.guess).map(function (p) { return p.slice(); });
         src.erase = given && given.erase ? given.erase.map(function (poly) { return poly.map(function (p) { return p.slice(); }); }) : [];
         src.regions = [];
