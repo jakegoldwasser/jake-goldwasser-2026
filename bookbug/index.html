@@ -2101,6 +2101,7 @@
   .pb-h-w { right: -14px; top: 50%; margin-top: -7px; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-wl { left: -14px; top: 50%; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-size { right: -8px; bottom: -8px; cursor: nwse-resize; border-radius: 3px; }
+  .pb-h-fit { right: auto; bottom: auto; }
   .pb-h-rot { left: 50%; top: -34px; margin-left: -7px; cursor: grab; }
   .pb-h-rot::after { content: ''; position: absolute; left: 50%; top: 12px; height: 18px; border-left: 1.5px solid var(--accent); }
   .pb-h-move {
@@ -2251,10 +2252,12 @@
   .scan-box.is-phone .scan-main { grid-template-columns: 1fr; }
   .scan-box.is-phone .scan-controls, .scan-box.is-phone .scan-assign, .scan-box.is-phone .scan-note { display: none; }
   .scan-box .modal-actions [data-act="undo"] { margin-right: auto; }
+  /* Transparent paper shows as a checkerboard, so it's plain it's see-through. */
+  .scan-view.is-clear .scan-stage canvas { background: repeating-conic-gradient(#E6E1D8 0% 25%, #FFFFFF 0% 50%) 0 0 / 16px 16px; }
   .scan-box.is-phone .modal-actions [data-act="undo"], .scan-box.is-phone .modal-actions [data-act="next"] { display: none; }
   .scan-box.is-phone .scan-view { height: auto; min-height: 0; }
   .scan-box.is-phone .scan-view canvas { max-height: 46vh; }
-  @media (max-width: 860px) { #pbImgAdjust { display: none; } }
+  @media (max-width: 860px) { #pbImgAdjust, #pbImgCleanField { display: none; } }
   .scan-assign { margin: 4px 0 2px; font-size: 13px; color: var(--ink-soft); }
   .scan-assign select { font: inherit; font-size: 16px; color: var(--ink); margin-left: 6px; max-width: calc(100% - 70px); padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
   /* What the photo was taken in: plain checkboxes under one small label. */
@@ -3159,16 +3162,11 @@
                 <label>Angle</label>
                 <div class="pb-range"><input type="range" id="pbImgRot" min="-90" max="90" step="15"><output id="pbImgRotOut"></output></div>
               </div>
-              <div class="field">
+              <div class="field" id="pbImgCleanField">
                 <label>Scanned art</label>
                 <div class="pb-btn-row">
-                  <button type="button" class="btn btn-sm" id="pbImgAdjust" title="Straighten, shadows, the light, contrast and brightness, for this illustration alone">Adjust photo…</button>
-                  <button type="button" class="btn btn-sm" id="pbImgShadows" title="Evens out the gray of a scan or phone photo so the paper comes out white">Remove paper shadows</button>
-                  <button type="button" class="btn btn-sm" id="pbImgTransparent" title="Lifts the drawing off its paper, so whatever is behind shows through">Make paper transparent</button>
-                  <button type="button" class="btn btn-sm" id="pbImgInk" title="Makes a photo or scan of a drawing into crisp black ink on white">Clean up line art</button>
-                  <button type="button" class="btn btn-sm" id="pbImgOriginal" hidden>Use original</button>
+                  <button type="button" class="btn btn-sm" id="pbImgAdjust" title="Straighten, crop, shadows, the light, contrast, white or transparent paper and crisp line art, for this illustration alone">Clean up…</button>
                 </div>
-                <p class="field-note" style="margin:4px 0 0;">Works best on drawings and paintings on white paper.</p>
               </div>
               <div class="pb-btn-row">
                 <button type="button" class="btn btn-sm" data-item-action="replace">Replace…</button>
@@ -18572,19 +18570,6 @@
     ctx.putImageData(im, 0, 0);
     return c;
   }
-  async function pbCleanImage(it, mode) {
-    var srcId = it.orig || it.img;
-    var src = await pbLoadImage(srcId);
-    if (!src) throw new Error('This illustration isn’t on this device yet.');
-    var c = pbFlattenPaper(pbCanvasFrom(src, PB_IMG_MAX_DIM), mode === 'transparent');
-    if (mode === 'ink') c = pbInkify(c);
-    var enc = await pbEncode(c, mode === 'transparent');
-    var id = await pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
-    pbCheckpoint();
-    it.orig = srcId;
-    it.img = id;
-    it.clean = mode;
-  }
 
   // ---------------------------------------------------------------------
   // Drawing a spread (preview, flatplan, exports)
@@ -21001,6 +20986,39 @@
     } else {
       var ax = it.area === 'right' ? 0.5 : 0, aw = it.area === 'spread' ? 1 : 0.5;
       pbPlaceOverlay(ov, ax, 0, aw, 1, 0);
+      // Full bleed and centered resize from a handle at the illustration's
+      // corner (kept on its page(s)): dragging away from its middle makes it
+      // larger, toward it smaller, the same as Zoom / Size in Formatting.
+      if (el) {
+        var grip = document.createElement('div');
+        grip.className = 'pb-h pb-h-size pb-h-fit';
+        grip.title = 'Drag to make it larger or smaller';
+        var placeGrip = function (r) {
+          var gx = Math.min(1, Math.max(0, (r.x + r.w - r.ax) / r.aw)), gy = Math.min(1, Math.max(0, (r.y + r.h) / H));
+          grip.style.left = 'calc(' + gx * 100 + '% - 8px)'; grip.style.top = 'calc(' + gy * 100 + '% - 8px)';
+        };
+        placeGrip(pbImgRect(it, W, H, el));
+        grip.addEventListener('pointerdown', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          var node = pbImgNode(stage, it), img = node && node.querySelector('img');
+          if (!img) return;
+          var ir = img.getBoundingClientRect(), cx = ir.left + ir.width / 2, cy = ir.top + ir.height / 2;
+          var d0 = Math.max(8, Math.hypot(e.clientX - cx, e.clientY - cy)), bleed = it.fit === 'bleed';
+          var v0 = bleed ? (it.zoom || 1) : it.scale, v = v0;
+          pbTrack(e, function (ev) {
+            v = v0 * Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0;
+            v = bleed ? Math.min(4, Math.max(0.5, v)) : Math.min(1, Math.max(0.1, v));
+            v = Math.round(v * 100) / 100;
+            var r = pbImgRect(Object.assign({}, it, bleed ? { zoom: v } : { scale: v }), W, H, el);
+            img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / H * 100) + '%';
+            img.style.width = (r.w / r.aw * 100) + '%'; img.style.height = (r.h / H * 100) + '%';
+            placeGrip(r);
+          }, function (ev, moved) {
+            if (moved && v !== v0) pbSetItem(bleed ? { zoom: v } : { scale: v });
+          });
+        });
+        ov.appendChild(grip);
+      }
     }
     stage.appendChild(ov);
   }
@@ -21169,7 +21187,7 @@
   }
   // Each illustration onto the spread it was given (or the archive), with
   // the photo it came from and how it was cleaned (`raw`, `scan`), so
-  // Adjust photo can redo it.
+  // Clean up can redo it.
   function pbPlaceScanned(list) {
     if (!list.length) return;
     pbCheckpoint();
@@ -21197,7 +21215,7 @@
     if (extra) showToast((extra === 1 ? 'One illustration' : extra + ' illustrations') + ' had no spread, so ' + (extra === 1 ? 'it’s' : 'they’re') + ' in the archive.');
     else if (list.length > 1) showToast('Added ' + list.length + ' illustrations.', 'Undo', pbUndo);
   }
-  // Adjust photo…: the illustration's photo back in the importer, with the
+  // Clean up…: the illustration's photo back in the importer, with the
   // settings it came in with, to change for this one alone. One from
   // before photos were kept starts from the illustration itself.
   async function pbAdjustPicture(it, s) {
@@ -21213,8 +21231,8 @@
     pbState.spreads.forEach(function (sp, k) { sp.items.forEach(function (x) { if (x.type === 'image' && x.img) all.push({ it: x, s: k }); }); });
     var at = all.findIndex(function (x) { return x.it === it; }), after = at >= 0 ? all[at + 1] : null;
     openCartoonImport(undefined, null, {
-      title: 'Adjust the illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
-      hint: '', crop: true, aspect: pbSpreadAspect(), adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw },
+      title: 'Clean Up the Illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
+      hint: '', crop: true, aspect: pbSpreadAspect(), adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw, clean: it.clean },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = { id: id, scan: meta && meta.scan }; }); },
       next: after ? function () { pbSelect({ s: after.s, id: after.it.id }); pbAdjustPicture(after.it, after.s); } : null,
       done: function () {
@@ -21333,19 +21351,10 @@
       [['bleed', 'Bleed'], ['center', 'Centered'], ['free', 'Free']].forEach(function (f) {
         pbQuickbar.appendChild(pbQb(f[1], f[0] === 'bleed' ? 'Fill to the edges; drag to choose what shows' : f[0] === 'center' ? 'Whole illustration, centered' : 'Place it anywhere, any size and angle', it.fit === f[0], function () { pbSetFit(it, f[0]); }));
       });
-      var cleanBtn = pbQb('Clean up ▾', 'Tidy a scanned or photographed drawing', !!it.clean, function (e) {
-        e.stopPropagation();
-        pbCleanMenu.innerHTML = (pbPhoneWidth() ? '' : '<button type="button" role="menuitem" data-clean="adjust">Adjust photo…</button>') +
-          '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
-          '<button type="button" role="menuitem" data-clean="transparent">Make paper transparent</button>' +
-          '<button type="button" role="menuitem" data-clean="ink">Clean up line art</button>' +
-          (it.orig ? '<button type="button" role="menuitem" data-clean="original">Use original</button>' : '');
-        pbCleanMenu.hidden = false;
-        var r = cleanBtn.getBoundingClientRect();
-        pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
-        pbCleanMenu.style.top = (r.bottom + 6) + 'px';
-      });
-      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Archive', 'Send this illustration to the archive', false, function () { pbItemAction('delete'); }));
+      // Every fix for a photo or scan is in the one Clean up window (on a
+      // computer: photos are cleaned up there, not on a phone).
+      if (!pbPhoneWidth()) pbQuickbar.append(pbQbSep(), pbQb('Clean up…', 'Straighten, crop, shadows, contrast, white or transparent paper, crisp line art', false, function () { pbAdjustPicture(it, pbSel.s); }));
+      pbQuickbar.append(pbQbSep(), pbQb('Archive', 'Send this illustration to the archive', false, function () { pbItemAction('delete'); }));
     }
     pbPositionQuickbar();
   }
@@ -21375,12 +21384,6 @@
       pbSetPath(cs, cit, pre.pts, pre.closed);
       return;
     }
-    var b = e.target.closest('[data-clean]');
-    if (!b) return;
-    pbCleanMenu.hidden = true;
-    if (b.dataset.clean === 'adjust') { var ait = pbSelected(); if (ait) pbAdjustPicture(ait, pbSel.s); }
-    else if (b.dataset.clean === 'original') { var it = pbSelected(); if (it && it.orig) { pbSetItem({ img: it.orig, orig: null, clean: null }); showToast('Back to the original and saved.', 'Undo', pbUndo); } }
-    else pbRunClean(b.dataset.clean);
   });
   document.addEventListener('click', function (e) { if (!pbCleanMenu.contains(e.target)) pbCleanMenu.hidden = true; });
   window.addEventListener('scroll', function () { pbCleanMenu.hidden = true; }, true);
@@ -21744,10 +21747,6 @@
       pbFmt('pbImgScale').value = pct; pbRangeOut('pbImgScale', pct + '%');
       pbFmt('pbImgRotField').hidden = it.fit !== 'free';
       pbFmt('pbImgRot').value = it.rot; pbRangeOut('pbImgRot', it.rot + '°');
-      pbFmt('pbImgOriginal').hidden = !it.orig;
-      pbFmt('pbImgShadows').classList.toggle('btn-primary', it.clean === 'shadows');
-      pbFmt('pbImgTransparent').classList.toggle('btn-primary', it.clean === 'transparent');
-      pbFmt('pbImgInk').classList.toggle('btn-primary', it.clean === 'ink');
     }
   }
   pbFmt('pbFmtScope').addEventListener('click', function (e) {
@@ -21868,37 +21867,7 @@
   pbFmt('pbImgFit').querySelectorAll('button').forEach(function (b) {
     b.addEventListener('click', function () { var it = pbSelected(); if (it) pbSetFit(it, b.dataset.val); });
   });
-  async function pbRunClean(mode) {
-    var it = pbSelected();
-    if (!it) return;
-    var btn = pbFmt(mode === 'transparent' ? 'pbImgTransparent' : mode === 'ink' ? 'pbImgInk' : 'pbImgShadows');
-    var label = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Working…';
-    setPbExportStatus('');
-    var what = mode === 'transparent' ? 'Paper made transparent' : mode === 'ink' ? 'Line art cleaned up' : 'Paper shadows removed';
-    // Done from the menu, it's applied and saved at once: the note says so,
-    // since there's no dialog to save from.
-    showToast('Working on it…');
-    try {
-      await pbCleanImage(it, mode);
-      pbPersist();
-      if (pbSel) pbRefreshSpread(pbSel.s);
-      showToast(what + ' and saved. Nothing more to do.', 'Undo', pbUndo);
-    } catch (err) {
-      await confirmDialog(err && err.message ? err.message : 'Couldn’t clean up that illustration.');
-    }
-    btn.disabled = false; btn.textContent = label;
-    pbSyncFormatting();
-  }
   pbFmt('pbImgAdjust').addEventListener('click', function () { var it = pbSelected(); if (it && it.type === 'image') pbAdjustPicture(it, pbSel.s); });
-  pbFmt('pbImgShadows').addEventListener('click', function () { pbRunClean('shadows'); });
-  pbFmt('pbImgTransparent').addEventListener('click', function () { pbRunClean('transparent'); });
-  pbFmt('pbImgInk').addEventListener('click', function () { pbRunClean('ink'); });
-  pbFmt('pbImgOriginal').addEventListener('click', function () {
-    var it = pbSelected();
-    if (!it || !it.orig) return;
-    pbSetItem({ img: it.orig, orig: null, clean: null });
-  });
 
   // Whole book: shape and size, and the type new boxes start with.
   function pbRenderTrimGrid() {
@@ -24795,6 +24764,10 @@
         '<fieldset class="scan-conds" data-conds><legend>The photo</legend>' + SCAN_CONDITIONS.map(function (c) {
           return '<label class="checkline scan-check" title="' + c[2] + '"><input type="checkbox" data-cond="' + c[0] + '"> ' + c[1] + '</label>';
         }).join('') + '</fieldset>' +
+        '<fieldset class="scan-conds" data-paper hidden><legend>Clean up</legend>' +
+          '<label class="checkline scan-check" title="Evens out the gray of a scan or phone photo so the paper comes out white"><input type="checkbox" data-post="flatten"> Whiten the paper</label>' +
+          '<label class="checkline scan-check" title="Lifts the drawing off its paper, so whatever is behind shows through"><input type="checkbox" data-post="clear"> Make the paper transparent</label>' +
+          '<label class="checkline scan-check" title="Makes the drawing crisp black ink on white"><input type="checkbox" data-post="ink"> Crisp line art</label></fieldset>' +
         '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
         '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
@@ -24808,12 +24781,15 @@
     var box = d.box, sources = [], cur = 0, busy = false, editingEdges = false, adjust = sink && sink.adjust;
     var pp = scanPhotoPrefs();
     var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true, marks: 0,
-      edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}) };
+      edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}), flatten: false, clear: false, ink: false };
     if (adjust) {
       // An illustration from before photos were kept as taken has no
       // settings: it's already cleaned, so it starts with nothing more done.
       if (adjust.scan) o = Object.assign(o, adjust.scan, { cond: Object.assign({}, adjust.scan.cond || {}) });
       else Object.assign(o, { shadow: 0, contrast: 0, brightness: 0, edges: false, cond: {}, trim: false });
+      // A fix from the old Clean up menu, made on top of the photo's
+      // cleanup, is one of the Clean up checkboxes now.
+      if (adjust.clean) { o.flatten = true; o.clear = adjust.clean === 'transparent'; o.ink = adjust.clean === 'ink'; }
     }
     // A condition's sliders, raised to what it needs; `lifted` keeps what
     // each was before, so unchecking it puts them back (to what the other
@@ -24870,14 +24846,21 @@
         prev: s.prev, photoView: s.photoView, multi: s.multi, spread: s.spread, erase: s.erase && s.erase.slice(),
         regions: s.regions && s.regions.map(function (r) { return Object.assign({}, r); }) };
     }
-    function checkpoint() {
-      undoStack.push({ o: Object.assign({}, o, { cond: Object.assign({}, o.cond) }), cur: cur, seq: seq, list: sources.slice(), states: sources.map(srcState) });
+    // The button names what it would take back ("Undo lamplight").
+    function syncUndo() {
+      var top = undoStack[undoStack.length - 1];
+      undoBtn.disabled = !top;
+      undoBtn.textContent = top && top.what ? 'Undo ' + top.what.charAt(0).toLowerCase() + top.what.slice(1) : 'Undo';
+      undoBtn.title = top ? 'Take back the last change (⌘Z)' : 'Nothing to undo yet';
+    }
+    function checkpoint(what) {
+      undoStack.push({ what: what || '', o: Object.assign({}, o, { cond: Object.assign({}, o.cond) }), cur: cur, seq: seq, list: sources.slice(), states: sources.map(srcState) });
       if (undoStack.length > 60) undoStack.shift();
-      undoBtn.disabled = false;
+      syncUndo();
     }
     function undoLast() {
       var u = undoStack.pop();
-      undoBtn.disabled = !undoStack.length;
+      syncUndo();
       if (!u) return;
       editingEdges = false;
       Object.assign(o, u.o, { cond: Object.assign({}, u.o.cond) });
@@ -24980,6 +24963,9 @@
       box.querySelector('[data-edges-line]').hidden = !photos || cropMode;
       box.querySelector('input[data-k="edges"]').checked = o.edges;
       box.querySelector('[data-conds]').hidden = dig;
+      box.querySelector('[data-paper]').hidden = !cropMode;
+      box.querySelectorAll('input[data-post]').forEach(function (cb) { cb.checked = !!o[cb.dataset.post]; });
+      view.classList.toggle('is-clear', !!o.clear);
       box.querySelectorAll('input[data-cond]').forEach(function (cb) { cb.checked = !!o.cond[cb.dataset.cond]; });
     }
     var renderTimer = null;
@@ -24993,7 +24979,7 @@
         if (editingEdges) { renderEdges(src); return; }
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
-        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 900), stage = document.createElement('div');
+        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 2400), stage = document.createElement('div');
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
@@ -25009,15 +24995,17 @@
       turns.addEventListener('click', function (e) {
         var b = e.target.closest('[data-turn]');
         if (!b) return;
-        checkpoint();
+        checkpoint('turn');
         if (cropMode) turnKeep(src, Number(b.dataset.turn)); else turnSource(src, Number(b.dataset.turn));
         refresh();
       });
       return turns;
     }
     // ---- The Keep outline (picture books) ----
-    // The kept part, straightened, at about `maxDim`: a smaller copy of the
-    // photo is flattened for the views, and the cleanup runs on that.
+    // The kept part, straightened, at about `maxDim`. The view is cleaned
+    // up at the same size as what's saved (and only shown smaller): thin
+    // pencil lines go lighter in a smaller copy, and the cleanup then read
+    // them differently, so the view didn't match the book.
     function keepWarp(src, maxDim) {
       // The outline still on the ruled frame: the spread's exact shape, so
       // a full-bleed illustration isn't zoomed (and cut) to fill it. The
@@ -25028,11 +25016,19 @@
         Math.abs(scanSheetAspect(src.quad, src.photo.width, src.photo.height, true).aspect / sink.aspect - 1) < 0.15 ? sink.aspect : 0;
       return scanWarp(maxDim >= 2400 ? src.photo : pbCanvasFrom(src.photo, maxDim), src.quad, maxDim, true, shape);
     }
+    // The Clean up checkboxes go last, on what the photo's cleanup made,
+    // in the preview, the thumbnails and what's saved alike.
     function keepResult(src, warped, maxDim) {
-      return scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad);
+      return paperFix(scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad));
+    }
+    function paperFix(c) {
+      if (!o.flatten && !o.clear && !o.ink) return c;
+      c = pbFlattenPaper(c, o.clear && !o.ink);
+      if (o.ink) { c = pbInkify(c); if (o.clear) c = pbFlattenPaper(c, true); }
+      return c;
     }
     function keepPreview(src) {
-      if (!src.prev) src.prev = keepWarp(src, 1200);
+      if (!src.prev) src.prev = keepWarp(src, 2400);
       return src.prev;
     }
     function keepThumb(src) {
@@ -25065,7 +25061,7 @@
     }
     // Erase view: what comes in. A drag across it whites that area out.
     function renderKept(src) {
-      var cv = keepResult(src, keepPreview(src), 900), stage = document.createElement('div');
+      var cv = keepResult(src, keepPreview(src), 2400), stage = document.createElement('div');
       stage.className = 'scan-stage';
       stage.appendChild(cv);
       view.appendChild(stage);
@@ -25095,7 +25091,7 @@
           if (e.type === 'pointercancel' || Math.abs(b[0] - a[0]) < 0.01 || Math.abs(b[1] - a[1]) < 0.01) return;
           // From the result's corners back onto the photo, through the
           // outline's perspective.
-          checkpoint();
+          checkpoint('erase');
           var M = scanHomography(SCAN_WHOLE, src.quad), x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
           src.erase.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(function (p) { return scanHApply(M, p[0], p[1]); }));
           refresh();
@@ -25128,7 +25124,7 @@
           if (e.button > 0) return;
           e.preventDefault(); e.stopPropagation();
           h.setPointerCapture(e.pointerId);
-          checkpoint();
+          checkpoint('outline');
           function mv(e) { var p = at(e); q[k] = [clamp(p[0]), clamp(p[1])]; draw(); }
           function up() { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); done(); }
           h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
@@ -25145,7 +25141,7 @@
         if (e.button > 0 || !inside(at(e))) return;
         e.preventDefault();
         stage.setPointerCapture(e.pointerId);
-        checkpoint();
+        checkpoint('outline');
         var p0 = at(e), q0 = q.map(function (p) { return p.slice(); });
         var minX = Math.min.apply(null, q0.map(function (p) { return p[0]; })), maxX = Math.max.apply(null, q0.map(function (p) { return p[0]; }));
         var minY = Math.min.apply(null, q0.map(function (p) { return p[1]; })), maxY = Math.max.apply(null, q0.map(function (p) { return p[1]; }));
@@ -25164,8 +25160,8 @@
       }
       function renderNote() {
         note.textContent = 'Only what’s inside the outline is kept; everything outside is cut away.';
-        if (!sameQuad(src.quad, src.guess)) noteLink('Best guess', function () { checkpoint(); src.quad = src.guess.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
-        if (!sameQuad(src.quad, SCAN_WHOLE)) noteLink('Whole photo', function () { checkpoint(); src.quad = SCAN_WHOLE.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
+        if (!sameQuad(src.quad, src.guess)) noteLink('Best guess', function () { checkpoint('outline'); src.quad = src.guess.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
+        if (!sameQuad(src.quad, SCAN_WHOLE)) noteLink('Whole photo', function () { checkpoint('outline'); src.quad = SCAN_WHOLE.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
       }
       draw();
       view.appendChild(stage);
@@ -25198,7 +25194,7 @@
           if (e.button > 0) return;
           e.preventDefault(); e.stopPropagation();
           h.setPointerCapture(e.pointerId);
-          checkpoint();
+          checkpoint('corners');
           function mv(e) {
             var r = cv.getBoundingClientRect();
             q[k] = [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))];
@@ -25289,13 +25285,13 @@
           '<i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i>';
         place(el, rg.fx, rg.fy, rg.fw, rg.fh);
         el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkpoint(); toggle(rg); refresh(); }
-          if ((e.key === 'Delete' || e.key === 'Backspace') && rg.on) { e.preventDefault(); checkpoint(); unchoose(rg); refresh(); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkpoint('box'); toggle(rg); refresh(); }
+          if ((e.key === 'Delete' || e.key === 'Backspace') && rg.on) { e.preventDefault(); checkpoint('box'); unchoose(rg); refresh(); }
         });
         el.addEventListener('pointerdown', function (e) {
           if (e.button > 0) return;
           e.stopPropagation(); e.preventDefault();
-          if (e.target.closest('.scan-x')) { checkpoint(); unchoose(rg); refresh(); return; }
+          if (e.target.closest('.scan-x')) { checkpoint('box'); unchoose(rg); refresh(); return; }
           var corner = e.target.dataset && e.target.dataset.c, p0 = toPage(e), sx = e.clientX, sy = e.clientY, moved = false;
           var r0 = { fx: rg.fx, fy: rg.fy, fw: rg.fw, fh: rg.fh }, r = r0;
           el.setPointerCapture(e.pointerId);
@@ -25317,7 +25313,7 @@
           function up(e) {
             el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
             if (e.type === 'pointercancel') { refresh(); return; }
-            checkpoint();
+            checkpoint('box');
             if (!moved) toggle(rg);
             else {
               rg.fx = r.fx; rg.fy = r.fy; rg.fw = r.fw; rg.fh = r.fh; rg.edited = true; choose(rg);
@@ -25344,7 +25340,7 @@
         several.textContent = src.multi ? 'Just one ' + one + ' from this page' : 'Several ' + many + ' on this page…';
         several.addEventListener('click', function () {
           if (src.multi) {
-            checkpoint();
+            checkpoint('box');
             var keep = null;
             src.regions.forEach(function (r) { if (r.on && !keep) keep = r; });
             src.multi = false;
@@ -25356,7 +25352,7 @@
           var yes = document.createElement('button'), no = document.createElement('button');
           yes.type = no.type = 'button'; yes.className = no.className = 'btn-link scan-all';
           yes.textContent = 'Yes, several'; no.textContent = 'No, just one'; no.style.marginLeft = '12px';
-          yes.addEventListener('click', function () { checkpoint(); src.multi = true; refresh(); });
+          yes.addEventListener('click', function () { checkpoint('box'); src.multi = true; refresh(); });
           no.addEventListener('click', function () { refresh(); });
           note.appendChild(yes); note.appendChild(no);
         });
@@ -25366,7 +25362,7 @@
         var all = document.createElement('button');
         all.type = 'button'; all.className = 'btn-link scan-all'; all.textContent = 'Choose all';
         all.style.marginLeft = '12px';
-        all.addEventListener('click', function () { checkpoint(); regs.forEach(function (r) { r.on = true; }); refresh(); });
+        all.addEventListener('click', function () { checkpoint('box'); regs.forEach(function (r) { r.on = true; }); refresh(); });
         note.appendChild(all);
       }
       stage.addEventListener('pointerdown', function (e) {
@@ -25387,7 +25383,7 @@
           var r = rect(e);
           if (e.type === 'pointercancel' || r.fw < 0.03 || r.fh < 0.03) return;
           r.mask = null; r.edited = true; r.drawn = true;
-          checkpoint();
+          checkpoint('box');
           src.regions = src.regions.concat([r]);
           choose(r);
           src.regions = scanReadingOrder(src.regions);
@@ -25508,7 +25504,7 @@
     assignEl.addEventListener('change', function () {
       var src = sources[cur];
       if (!src) return;
-      checkpoint();
+      checkpoint('where it goes');
       src.spread = assignEl.value === 'archive' ? 'archive' : Number(assignEl.value);
       refresh();
     });
@@ -25525,7 +25521,7 @@
           (assigning && plan[i].length ? '<em>' + spreadShort(plan[i][0]) + '</em>' : '');
         t.addEventListener('click', function (e) {
           finishEdges();
-          if (e.target.tagName === 'SPAN') { checkpoint(); sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
+          if (e.target.tagName === 'SPAN') { checkpoint('leaving it out'); sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
           cur = i; refresh();
         });
         strip.appendChild(t);
@@ -25640,17 +25636,17 @@
       takeImages(e.target.files).then(function () { if (sources.length) status.textContent = sources.length + ' so far. Take photos again for the next one.'; });
     });
     box.querySelectorAll('[data-mode] button').forEach(function (b) {
-      b.addEventListener('click', function () { if (o.mode !== b.dataset.val) checkpoint(); o.mode = b.dataset.val; syncControls(); renderView(); });
+      b.addEventListener('click', function () { if (o.mode !== b.dataset.val) checkpoint(b.textContent); o.mode = b.dataset.val; syncControls(); renderView(); });
     });
     box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
       // One drag of a slider is one change to undo.
       var sliding = false;
-      r.addEventListener('input', function () { if (!sliding) { checkpoint(); sliding = true; } o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
+      r.addEventListener('input', function () { if (!sliding) { checkpoint(r.closest('.field').querySelector('label').firstChild.textContent.trim()); sliding = true; } o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
       r.addEventListener('change', function () { sliding = false; });
     });
-    box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { checkpoint(); o.trim = e.target.checked; renderView(); });
+    box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { checkpoint('crop'); o.trim = e.target.checked; renderView(); });
     box.querySelector('input[data-k="edges"]').addEventListener('change', function (e) {
-      checkpoint();
+      checkpoint('straightening');
       o.edges = e.target.checked; editingEdges = false; savePhotoPrefs();
       sources.forEach(function (src) {
         if (src.digital || src.fromPdf) return;
@@ -25659,10 +25655,21 @@
       });
       refresh();
     });
+    box.querySelectorAll('input[data-post]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        checkpoint(cb.closest('label').textContent.trim());
+        o[cb.dataset.post] = cb.checked;
+        // Transparent paper and crisp lines both start from white paper.
+        if (cb.checked && cb.dataset.post !== 'flatten') o.flatten = true;
+        if (!cb.checked && cb.dataset.post === 'flatten') { o.clear = false; o.ink = false; }
+        sources.forEach(keepThumb);
+        syncControls(); renderView();
+      });
+    });
     box.querySelectorAll('input[data-cond]').forEach(function (cb) {
       cb.addEventListener('change', function () {
         var k = cb.dataset.cond;
-        checkpoint();
+        checkpoint(cb.closest('label').textContent.trim());
         if (cb.checked) { o.cond[k] = true; liftFor(k); }
         else { delete o.cond[k]; dropFor(k); }
         savePhotoPrefs(); syncControls(); renderView();
@@ -25684,9 +25691,9 @@
             status.textContent = 'Adding ' + (++done) + ' of ' + n + '…';
             var kept = keepResult(src, keepWarp(src, 2400), 2400), keptRaw = adjust ? adjust.raw : null;
             if (!adjust && sink.storeRaw && !src.digital) try { keptRaw = await sink.storeRaw(await pbEncode(src.photo, false)); } catch (e) { keptRaw = null; }
-            await sink.store(await pbEncode(kept, o.mode === 'bw'), { spread: assigning ? plan[i][0] : null, raw: keptRaw,
+            await sink.store(await pbEncode(kept, o.mode === 'bw' || o.clear), { spread: assigning ? plan[i][0] : null, raw: keptRaw,
               scan: src.digital ? null : { crop: true, mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, marks: o.marks || 0,
-                cond: Object.assign({}, o.cond), quad: src.quad, erase: src.erase, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
+                cond: Object.assign({}, o.cond), flatten: !!o.flatten, clear: !!o.clear, ink: !!o.ink, quad: src.quad, erase: src.erase, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
             continue;
           }
           function placed(c, x0, y0) {
