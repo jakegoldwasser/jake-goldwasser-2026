@@ -5113,7 +5113,7 @@
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       rel: typeof it.rel === 'number' ? it.rel : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null,
-      copyright: !!it.copyright || undefined, path: pbNormPath(it.path) };
+      copyright: !!it.copyright || undefined, placed: !!it.placed || undefined, path: pbNormPath(it.path) };
   }
   // A text box's path (see pbPathLayout): points in pt from the box's
   // corner, and whether it closes into a shape.
@@ -18608,7 +18608,7 @@
   var pbGeomCache = new WeakMap();
   function pbGeom(it, s) {
     var sp = pbState.spreads[s];
-    var key = [pbItemText(it), it.x, it.y, it.w, it.rot, it.align, pbFontSize(it), pbLh(it), pbFontKey(it), it.bold, it.italic,
+    var key = [pbItemText(it), it.x, it.y, it.w, it.rot, it.align, it.placed, pbFontSize(it), pbLh(it), pbFontKey(it), it.bold, it.italic,
       pbState.trim, pbState.margin, pbState.gutter, pbState.snapText, sp && sp.left.role, sp && sp.right.role].join('|');
     if (it.type === 'text' && it.path) return pbPathGeom(it);
     var hit = pbGeomCache.get(it);
@@ -18634,11 +18634,12 @@
   // half, else the bottom one, and its words -- what they actually take
   // up, not the box, which can be wider than its lines -- are centered on
   // the page. Left alone: a box across the fold, one sitting in the
-  // page's middle (put there on purpose), matter pages and boxes with no
-  // words. In place on `g`; true if it moved it.
+  // page's middle (put there on purpose), a box moved by hand (`placed`:
+  // dragged or nudged, it stays where it's put; Jake, 2026-11-03), matter
+  // pages and boxes with no words. In place on `g`; true if it moved it.
   function pbSnapText(it, s, g) {
     var sp = pbState.spreads[s];
-    if (!pbState.snapText || it.auto || it.bind || pbStraddles(it)) return false;
+    if (!pbState.snapText || it.placed || it.auto || it.bind || pbStraddles(it)) return false;
     var side = pbPageSide(it), text = pbItemText(it);
     if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side] || !text.trim()) return false;
     var mid = g.y + g.h / 2;
@@ -20414,18 +20415,19 @@
       var to = cross.end();
       if (to && ev.type === 'pointerup') {
         pbCheckpoint();
-        it.x += last.x - x0; it.y = last.y;
+        it.x = last.x; it.y = last.y; it.placed = true;
         pbMoveItemToSpread(s, it, pbStageSpread(to));
         return;
       }
       if (to) { pbRefreshSpread(s); return; }
       if (moved && (last.x !== x0 || last.y !== y0)) {
         pbCheckpoint();
-        var px = it.x, py = it.y;
-        // Store the move relative to where it was placed (a snapped-to-edge
-        // box keeps its own x underneath).
-        it.x += last.x - x0;
+        var px = x0, py = y0;
+        // Kept where it's dropped, as seen: from now on it isn't snapped
+        // to the top or bottom of its page (`placed`).
+        it.x = last.x;
         it.y = last.y;
+        it.placed = true;
         // Remembered for this session only (not saved with the book).
         Object.defineProperty(it, '_prevX', { value: px, writable: true, configurable: true, enumerable: false });
         Object.defineProperty(it, '_prevY', { value: py, writable: true, configurable: true, enumerable: false });
@@ -21518,7 +21520,10 @@
     if (d && (it.type === 'text' || it.fit === 'free')) {
       e.preventDefault();
       var t = pbTrim(pbState.trim), ratio = 2 * t.pageW / t.pageH;
-      pbSetItem({ x: it.x + d[0] * step, y: it.y + d[1] * step * ratio });
+      // From where it shows (a snapped box's own x and y may differ), and
+      // then it stays where it's nudged.
+      var at = it.type === 'text' ? pbGeom(it, pbSel.s) : it;
+      pbSetItem(it.type === 'text' ? { x: at.x + d[0] * step, y: at.y + d[1] * step * ratio, placed: true } : { x: it.x + d[0] * step, y: it.y + d[1] * step * ratio });
     }
   });
 
