@@ -24939,9 +24939,12 @@
     // photo is flattened for the views, and the cleanup runs on that.
     function keepWarp(src, maxDim) {
       // The outline still on the ruled frame: the spread's exact shape, so
-      // a full-bleed illustration isn't zoomed (and cut) to fill it.
+      // a full-bleed illustration isn't zoomed (and cut) to fill it. The
+      // camera's angle can throw the shape worked out from the corners off
+      // by several percent; a frame that's sideways (a photo still to turn)
+      // is far further off, and keeps its own shape.
       var shape = src.guess && src.guess.ruled && sink.aspect && sameQuad(src.quad, src.guess) &&
-        Math.abs(scanSheetAspect(src.quad, src.photo.width, src.photo.height, true).aspect / sink.aspect - 1) < 0.05 ? sink.aspect : 0;
+        Math.abs(scanSheetAspect(src.quad, src.photo.width, src.photo.height, true).aspect / sink.aspect - 1) < 0.15 ? sink.aspect : 0;
       return scanWarp(maxDim >= 2400 ? src.photo : pbCanvasFrom(src.photo, maxDim), src.quad, maxDim, true, shape);
     }
     function keepResult(src, warped, maxDim) {
