@@ -2246,6 +2246,11 @@
   .scan-tabs button { flex: 0 0 auto; padding: 6px 18px; }
   .scan-keep polygon { fill: none; }
   .scan-veil { fill: rgba(27, 26, 24, 0.55); }
+  .scan-lasso { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .scan-lasso polygon { fill: color-mix(in srgb, var(--danger) 12%, transparent); stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .scan-lasso-keep { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .scan-shape { display: inline-flex; vertical-align: middle; margin-left: 6px; }
+  .scan-shape button { padding: 2px 10px; font-size: 12px; }
   .scan-sel { border: 1.5px dashed var(--accent); cursor: move; z-index: 3; }
   .scan-hole { position: absolute; background: #FFFFFF; pointer-events: none; }
   .scan-piece { position: absolute; pointer-events: none; z-index: 2; max-width: none !important; max-height: none !important; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
@@ -24905,7 +24910,20 @@
     if (phone) box.classList.add('is-phone');
     // Picture books: one Keep outline per photo. The Erase view (what comes
     // in) is the one shown first; a phone only ever shows that.
-    var cropMode = !!(sink && sink.crop), cropView = 'erase';
+    var cropMode = !!(sink && sink.crop), cropView = 'erase', eraseShape = 'box', cropShape = 'outline';
+    // A small two-way switch in the note (Box | Lasso, Outline | Lasso).
+    function shapeSwitch(list, current, pick) {
+      var seg = document.createElement('span');
+      seg.className = 'seg scan-shape';
+      list.forEach(function (o) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = o[1]; b.title = o[2];
+        b.classList.toggle('active', o[0] === current);
+        b.addEventListener('click', function () { pick(o[0]); renderView(); });
+        seg.appendChild(b);
+      });
+      note.appendChild(seg);
+    }
     var tabs = box.querySelector('.scan-tabs');
     tabs.hidden = !cropMode || phone;
     tabs.addEventListener('click', function (e) {
@@ -24925,7 +24943,7 @@
     var undoStack = [], seq = 0;
     function srcState(s) {
       return { photo: s.photo, canvas: s.canvas, thumb: s.thumb, turn: s.turn, quad: s.quad, guess: s.guess, frame: s.frame, off: s.off, aw: s.aw, ah: s.ah,
-        prev: s.prev, photoView: s.photoView, multi: s.multi, spread: s.spread, erase: s.erase && s.erase.slice(), moves: s.moves && s.moves.slice(), sel: s.sel,
+        prev: s.prev, photoView: s.photoView, multi: s.multi, spread: s.spread, erase: s.erase && s.erase.slice(), moves: s.moves && s.moves.slice(), sel: s.sel, keepLoop: s.keepLoop,
         regions: s.regions && s.regions.map(function (r) { return Object.assign({}, r); }) };
     }
     // The button names what it would take back ("Undo lamplight").
@@ -25100,8 +25118,19 @@
     }
     // The Clean up checkboxes go last, on what the photo's cleanup made,
     // in the preview, the thumbnails and what's saved alike.
-    function keepResult(src, warped, maxDim) {
-      return paperFix(movesOn(scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad), src.moves));
+    function keepResult(src, warped, maxDim, noLoop) {
+      return paperFix(keepInside(movesOn(scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad), src.moves), noLoop ? null : src.keepLoop));
+    }
+    // Lasso crop: white everywhere outside the loop, which is drawn on the
+    // picture as it comes in (after erasing and moving), in its fractions.
+    function keepInside(c, loop) {
+      if (!loop || loop.length < 3) return c;
+      var w = c.width, h = c.height, ctx = c.getContext('2d');
+      ctx.beginPath(); ctx.rect(0, 0, w, h);
+      loop.forEach(function (p, k) { if (k) ctx.lineTo(p[0] * w, p[1] * h); else ctx.moveTo(p[0] * w, p[1] * h); });
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF'; ctx.fill('evenodd');
+      return c;
     }
     // Select and move: each move lifts a box of the drawing (in fractions
     // of what comes in), leaves white paper where it was, and sets it down
@@ -25145,6 +25174,8 @@
       var wasRuled = src.guess.ruled;
       src.quad = quadT(src.quad); src.guess = quadT(src.guess); src.guess.ruled = wasRuled;
       src.erase = src.erase.map(function (poly) { return poly.map(pt); });
+      // The loop is in the result's fractions, which turn with it.
+      if (src.keepLoop) src.keepLoop = src.keepLoop.map(function (p) { return dir < 0 ? [p[1], 1 - p[0]] : [1 - p[1], p[0]]; });
       // Moves are in the result's own fractions, which turn with it.
       src.moves = (src.moves || []).map(function (m) {
         return dir < 0 ? { x: m.y, y: 1 - m.x - m.w, w: m.h, h: m.w, dx: m.dy, dy: -m.dx } : { x: 1 - m.y - m.h, y: m.x, w: m.h, h: m.w, dx: -m.dy, dy: m.dx };
@@ -25173,10 +25204,14 @@
       if (phone) { note.textContent = ''; return; }
       view.appendChild(turnButtons(src));
       if (cropView === 'move') { renderMove(src, stage, cv); return; }
-      note.textContent = 'Drag across anything you want gone; it turns white. The rest stays.';
+      // Box or Lasso: a box drawn across what's to go, or a loop drawn
+      // round it by hand (for a stray mark tucked in beside the drawing).
+      note.textContent = eraseShape === 'lasso' ? 'Draw a loop round anything you want gone; inside it turns white. ' : 'Drag across anything you want gone; it turns white. The rest stays. ';
+      shapeSwitch([['box', 'Box', 'Erase inside a box you drag'], ['lasso', 'Lasso', 'Erase inside a loop you draw']], eraseShape, function (v) { eraseShape = v; });
       stage.addEventListener('pointerdown', function (e) {
         if (e.button > 0) return;
         e.preventDefault();
+        if (eraseShape === 'lasso') { lassoErase(e); return; }
         var r0 = cv.getBoundingClientRect(), rect = document.createElement('div');
         function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
         var a = at(e), b = a;
@@ -25201,6 +25236,34 @@
         }
         stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
       });
+      // The loop is drawn over the view as it's made, and closed on its
+      // own when let go; it goes onto the photo through the outline, like
+      // a box, so it stays put if the outline or settings change.
+      function lassoErase(e) {
+        var r0 = cv.getBoundingClientRect(), NS = 'http://www.w3.org/2000/svg';
+        function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
+        var pts = [at(e)], svg = document.createElementNS(NS, 'svg'), line = document.createElementNS(NS, 'polygon');
+        svg.setAttribute('viewBox', '0 0 1 1'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'scan-lasso');
+        line.setAttribute('vector-effect', 'non-scaling-stroke');
+        svg.appendChild(line); stage.appendChild(svg);
+        stage.setPointerCapture(e.pointerId);
+        function draw() { line.setAttribute('points', pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ')); }
+        function move(e) {
+          var p = at(e), q = pts[pts.length - 1];
+          if (Math.hypot((p[0] - q[0]) * r0.width, (p[1] - q[1]) * r0.height) >= 3) { pts.push(p); draw(); }
+        }
+        function up(e) {
+          stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', up);
+          svg.remove();
+          var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+          if (e.type === 'pointercancel' || pts.length < 3 || Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.01 || Math.max.apply(null, ys) - Math.min.apply(null, ys) < 0.01) return;
+          checkpoint('lasso erase');
+          var M = scanHomography(SCAN_WHOLE, src.quad);
+          src.erase.push(pts.map(function (p) { return scanHApply(M, p[0], p[1]); }));
+          refresh();
+        }
+        stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      }
     }
     // Select and move: drag a box round part of the drawing (it stays
     // selected), then drag inside it to move that part; where it was turns
@@ -25274,6 +25337,7 @@
     // Drag a corner to move it, or inside the outline to move it whole.
     function renderCrop(src) {
       if (!src.photoView) src.photoView = pbCanvasFrom(src.photo, 900);
+      if (cropShape === 'lasso') { renderLassoCrop(src); return; }
       var cv = src.photoView, stage = document.createElement('div');
       stage.className = 'scan-stage scan-edges scan-keep';
       stage.appendChild(cv);
@@ -25330,7 +25394,8 @@
         dots.forEach(function (h, k) { h.style.left = q[k][0] * 100 + '%'; h.style.top = q[k][1] * 100 + '%'; });
       }
       function renderNote() {
-        note.textContent = 'Only what’s inside the outline is kept; everything outside is cut away.';
+        note.textContent = 'Only what’s inside the outline is kept; everything outside is cut away. ';
+        shapeSwitch(CROP_SHAPES, cropShape, function (v) { cropShape = v; });
         if (!sameQuad(src.quad, src.guess)) noteLink('Best guess', function () { checkpoint('outline'); src.quad = src.guess.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
         if (!sameQuad(src.quad, SCAN_WHOLE)) noteLink('Whole photo', function () { checkpoint('outline'); src.quad = SCAN_WHOLE.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
       }
@@ -25338,6 +25403,52 @@
       view.appendChild(stage);
       view.appendChild(turnButtons(src));
       renderNote();
+    }
+    var CROP_SHAPES = [['outline', 'Outline', 'Four corners: what comes in, straightened'], ['lasso', 'Lasso', 'A loop drawn round the drawing: everything outside it turns white']];
+    // Lasso crop: a loop drawn by hand round what to keep, on the picture
+    // as it comes in; everything outside it turns white (the outline still
+    // sets the shape that comes in). Drawing again replaces it.
+    function renderLassoCrop(src) {
+      var cv = keepResult(src, keepPreview(src), 2400, true), stage = document.createElement('div'), NS = 'http://www.w3.org/2000/svg';
+      stage.className = 'scan-stage scan-edges';
+      stage.appendChild(cv);
+      var svg = document.createElementNS(NS, 'svg'), veil = document.createElementNS(NS, 'path'), loop = document.createElementNS(NS, 'polygon');
+      svg.setAttribute('viewBox', '0 0 1 1'); svg.setAttribute('preserveAspectRatio', 'none');
+      veil.setAttribute('fill-rule', 'evenodd'); veil.setAttribute('class', 'scan-veil');
+      loop.setAttribute('vector-effect', 'non-scaling-stroke'); loop.setAttribute('class', 'scan-lasso-keep');
+      svg.append(veil, loop); stage.appendChild(svg);
+      function show(pts) {
+        var str = (pts || []).map(function (p) { return p[0] + ',' + p[1]; });
+        loop.setAttribute('points', str.join(' '));
+        veil.setAttribute('d', pts && pts.length > 2 ? 'M0,0H1V1H0Z M' + str.join(' L') + 'Z' : '');
+      }
+      show(src.keepLoop);
+      view.appendChild(stage);
+      view.appendChild(turnButtons(src));
+      note.textContent = src.keepLoop ? 'Only what’s inside the loop is kept; outside it turns white. Draw again to change it. ' : 'Draw a loop round the drawing to keep; everything outside it turns white. ';
+      shapeSwitch(CROP_SHAPES, cropShape, function (v) { cropShape = v; });
+      if (src.keepLoop) noteLink('Keep everything', function () { checkpoint('lasso crop'); src.keepLoop = null; keepChanged(src); renderView(); });
+      stage.addEventListener('pointerdown', function (e) {
+        if (e.button > 0) return;
+        e.preventDefault();
+        var r0 = cv.getBoundingClientRect();
+        function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
+        var pts = [at(e)];
+        stage.setPointerCapture(e.pointerId);
+        function move(e) {
+          var p = at(e), q = pts[pts.length - 1];
+          if (Math.hypot((p[0] - q[0]) * r0.width, (p[1] - q[1]) * r0.height) >= 3) { pts.push(p); show(pts); }
+        }
+        function up(e) {
+          stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', up);
+          var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+          if (e.type === 'pointercancel' || pts.length < 3 || Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.02 || Math.max.apply(null, ys) - Math.min.apply(null, ys) < 0.02) { show(src.keepLoop); return; }
+          checkpoint('lasso crop');
+          src.keepLoop = pts;
+          keepChanged(src); renderView();
+        }
+        stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      });
     }
     function edgesButton(label, title, fn) {
       var b = document.createElement('button');
@@ -25723,6 +25834,7 @@
         src.quad = ((given && given.quad) || src.guess).map(function (p) { return p.slice(); });
         src.erase = given && given.erase ? given.erase.map(function (poly) { return poly.map(function (p) { return p.slice(); }); }) : [];
         src.moves = given && given.moves ? given.moves.map(function (m) { return Object.assign({}, m); }) : [];
+        src.keepLoop = given && given.keepLoop ? given.keepLoop.map(function (p) { return p.slice(); }) : null;
         src.regions = [];
       } else {
         // A photo of paper: where the sheet's corners are, to flatten it to.
@@ -25760,7 +25872,7 @@
       // before outlines (or none) gets the best guess, and an illustration
       // with no photo kept is its own whole picture.
       var given = !cropMode ? { quad: aScan ? aScan.quad : null, frame: !!(aScan && aScan.frame), box: aScan ? aScan.box : null }
-        : aScan && aScan.crop ? { quad: aScan.quad, erase: aScan.erase, moves: aScan.moves } : adjust.noRaw ? { quad: SCAN_WHOLE } : null;
+        : aScan && aScan.crop ? { quad: aScan.quad, erase: aScan.erase, moves: aScan.moves, keepLoop: aScan.keepLoop } : adjust.noRaw ? { quad: SCAN_WHOLE } : null;
       addSource(turnCanvas(adjust.canvas, adjustTurn), !!(aScan && aScan.fromPdf), false, given);
     }
     // Opened from the list's own buttons: the choice is made, so the
@@ -25865,7 +25977,7 @@
             if (!adjust && sink.storeRaw && !src.digital) try { keptRaw = await sink.storeRaw(await pbEncode(src.photo, false)); } catch (e) { keptRaw = null; }
             await sink.store(await pbEncode(kept, o.mode === 'bw' || o.clear), { spread: assigning ? plan[i][0] : null, raw: keptRaw,
               scan: src.digital ? null : { crop: true, mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, marks: o.marks || 0,
-                cond: Object.assign({}, o.cond), flatten: !!o.flatten, clear: !!o.clear, ink: !!o.ink, quad: src.quad, erase: src.erase, moves: src.moves, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
+                cond: Object.assign({}, o.cond), flatten: !!o.flatten, clear: !!o.clear, ink: !!o.ink, quad: src.quad, erase: src.erase, moves: src.moves, keepLoop: src.keepLoop, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
             continue;
           }
           function placed(c, x0, y0) {
