@@ -20685,9 +20685,16 @@
           // Keep the far edge put (the box turns about its center, so this
           // is close, not exact, for a turned box).
           var x = fromLeft ? x0 + (w0 - w) : x0;
-          box.style.width = (w * 100) + '%';
-          box.style.left = (x * 100) + '%';
           it._w = w; it._x = x;
+          // The words rewrap as it goes, like PowerPoint or Slides: the box
+          // is laid out as it would be at this width (snapping, shrinking
+          // to fit and all) and its lines set again.
+          var tmp = Object.assign({}, it, { w: w, x: x }), g = pbGeom(tmp, s), ed = box.querySelector('.pb-tb-text');
+          box.style.width = (g.w * 100) + '%';
+          box.style.left = (g.x * 100) + '%';
+          box.style.top = (g.y * 100) + '%';
+          if (ed) { ed.innerHTML = pbSetLines(tmp, g); pbStyleText(ed, tmp, g); }
+          box.classList.toggle('is-shrunk', !!g.shrunk);
           pbPositionQuickbar(box);
         }, function (ev, moved) {
           if (!moved) return;
@@ -20695,6 +20702,7 @@
           it.w = it._w; it.x = it._x;
           delete it._w; delete it._x;
           pbPersist();
+          pbRefreshSpread(s);
           pbSyncFormatting();
         });
       });
