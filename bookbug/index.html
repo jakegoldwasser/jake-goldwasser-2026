@@ -24514,8 +24514,11 @@
   // each output pixel is looked up through the homography from the
   // rectangle to the photo's quadrilateral, blending the four nearest.
   // `free`: a ruled frame, any shape, not snapped to a sheet's.
-  function scanWarp(src, q, maxDim, free) {
+  // `shape`, if given, is the result's width over height, whatever the
+  // corners say (a ruled frame is drawn to be the spread).
+  function scanWarp(src, q, maxDim, free, shape) {
     var W = src.width, H = src.height, sh = scanSheetAspect(q, W, H, free);
+    if (shape) sh.aspect = shape;
     var area = Math.max(1, sh.w * sh.h), ow = Math.sqrt(area * sh.aspect), oh = ow / sh.aspect;
     var k = Math.min(1, maxDim / Math.max(ow, oh));
     ow = Math.max(1, Math.round(ow * k)); oh = Math.max(1, Math.round(oh * k));
@@ -24678,9 +24681,13 @@
     var fit = aspect ? found.filter(function (f) { return Math.abs(f.aspect / aspect - 1) < 0.03; }) : [];
     var pool = fit.length ? fit : found;
     pool.sort(function (a, b) { return b.area - a.area; });
-    // A little inside, so the ruled line itself stays out.
+    // Just inside, past the ruled line and no further: more cut Jake's
+    // drawing short by a few millimeters (2026-11-03). Marked `ruled`, so
+    // the picture can be set to the spread's exact shape.
     var q = pool[0].fq, mx = (q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, my = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
-    return q.map(function (p) { return [p[0] + (mx - p[0]) * 0.02, p[1] + (my - p[1]) * 0.02]; });
+    var out = q.map(function (p) { return [p[0] + (mx - p[0]) * 0.006, p[1] + (my - p[1]) * 0.006]; });
+    out.ruled = true;
+    return out;
   }
   // The part of a photo to keep (picture books), as four corners in
   // fractions of the photo, clockwise from top left: the picture's own
@@ -24931,7 +24938,11 @@
     // The kept part, straightened, at about `maxDim`: a smaller copy of the
     // photo is flattened for the views, and the cleanup runs on that.
     function keepWarp(src, maxDim) {
-      return scanWarp(maxDim >= 2400 ? src.photo : pbCanvasFrom(src.photo, maxDim), src.quad, maxDim, true);
+      // The outline still on the ruled frame: the spread's exact shape, so
+      // a full-bleed illustration isn't zoomed (and cut) to fill it.
+      var shape = src.guess && src.guess.ruled && sink.aspect && sameQuad(src.quad, src.guess) &&
+        Math.abs(scanSheetAspect(src.quad, src.photo.width, src.photo.height, true).aspect / sink.aspect - 1) < 0.05 ? sink.aspect : 0;
+      return scanWarp(maxDim >= 2400 ? src.photo : pbCanvasFrom(src.photo, maxDim), src.quad, maxDim, true, shape);
     }
     function keepResult(src, warped, maxDim) {
       return scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad);
@@ -24954,7 +24965,8 @@
       function quadT(q) { var m = q.map(pt); return dir < 0 ? [m[1], m[2], m[3], m[0]] : [m[3], m[0], m[1], m[2]]; }
       src.photo = turnCanvas(src.photo, dir);
       src.turn = (((src.turn || 0) + dir) % 4 + 4) % 4;
-      src.quad = quadT(src.quad); src.guess = quadT(src.guess);
+      var wasRuled = src.guess.ruled;
+      src.quad = quadT(src.quad); src.guess = quadT(src.guess); src.guess.ruled = wasRuled;
       src.erase = src.erase.map(function (poly) { return poly.map(pt); });
       src.photoView = null;
       keepChanged(src);
