@@ -3275,6 +3275,10 @@
                 <input type="checkbox" id="pbNotesInPdf">
                 <label for="pbNotesInPdf" style="text-transform:none;letter-spacing:0;font-weight:400;">Include illustration notes</label>
               </div>
+              <div class="checkline export-check" title="The words alone, laid out on their pages, with no illustrations: for reading the text through, or sketching on">
+                <input type="checkbox" id="pbTextOnly">
+                <label for="pbTextOnly" style="text-transform:none;letter-spacing:0;font-weight:400;">Text only (leave out the illustrations)</label>
+              </div>
               <button class="btn" id="pbExportPrintBtn" type="button" style="width:100%; justify-content:center;">Export printable dummy</button>
               <p class="pb-export-note">Prints double-sided on US Letter, landscape. Fold the stack in half and staple along the fold.</p>
               <button class="btn" id="pbExportPptxBtn" type="button" style="width:100%; justify-content:center;">Export as .pptx</button>
@@ -5138,7 +5142,7 @@
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       rel: typeof it.rel === 'number' ? it.rel : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null,
-      copyright: !!it.copyright || undefined, placed: !!it.placed || undefined, path: pbNormPath(it.path) };
+      copyright: !!it.copyright || undefined, placed: !!it.placed || undefined, wSet: !!it.wSet || undefined, path: pbNormPath(it.path) };
   }
   // A text box's path (see pbPathLayout): points in pt from the box's
   // corner, and whether it closes into a shape.
@@ -6017,6 +6021,7 @@
       // Lambda); Bookbug's data lives under state.chapbookbuilder, the
       // key from before it was renamed.
       var ours = (data.state && data.state.chapbookbuilder) || {};
+      await tbFillImagesFromCloud(ours.chapbooks);
       // Fold whatever is cached here (edits made while a sign-in had
       // lapsed, or books from before sign-in was required) into the
       // account rather than letting either side overwrite the other.
@@ -6505,6 +6510,89 @@
     syncBookUrl();
   }
 
+  // ---- A text book's pictures go to the picture store ----
+  // An account's books are saved as one item, which the database caps at
+  // 400 KB, and pictures in a text book (a hybrid book's cartoons, a
+  // converted cartoon batch) are kept in it as data URLs: one book's
+  // drawings took an account past the cap, and every save failed (Jake,
+  // 2026-11-04). So each is sent to the picture store picture books use
+  // (`?image=`), under an id made from its contents, and the save carries
+  // just { cloud: id, w, h }; on the way back in, each is filled in again
+  // from this device's own copy, else fetched. A picture that can't be
+  // sent stays in the book as before.
+  var TB_IMG_SENT_KEY = 'bookbug.tbImagesSent.v1';
+  function tbImgSent() { try { return JSON.parse(localStorage.getItem(TB_IMG_SENT_KEY) || '{}'); } catch (e) { return {}; } }
+  function tbMarkImgSent(id) { var m = tbImgSent(); m[id] = 1; try { localStorage.setItem(TB_IMG_SENT_KEY, JSON.stringify(m)); } catch (e) {} }
+  function tbImgId(data) {
+    var h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (var i = 0; i < data.length; i++) { var c = data.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 + c, 2246822519) ^ (h2 >>> 13); }
+    return 'tb' + (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36) + data.length.toString(36);
+  }
+  async function tbSendImage(id, dataUrl) {
+    var m = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
+    if (!m || !/^image\/(jpeg|png|webp)$/.test(m[1]) || m[2].length > 400 * 1024) return false;
+    try {
+      var res = await fetch(CLOUD_API_URL + '?image=' + encodeURIComponent(id), {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: m[1], data: m[2] })
+      });
+      return res.ok;
+    } catch (e) { return false; }
+  }
+  // The library as it's saved: each book's pictures swapped for their ids
+  // in the store (this device's books are left as they are).
+  async function tbLibraryForCloud(lib) {
+    var sent = tbImgSent(), out = [];
+    for (var b = 0; b < lib.length; b++) {
+      var entry = lib[b], imgs = entry && entry.data && entry.data.images;
+      if (!imgs || typeof imgs !== 'object' || !Object.keys(imgs).length) { out.push(entry); continue; }
+      var swapped = {}, changed = false;
+      for (var key in imgs) {
+        var im = imgs[key];
+        if (!im || typeof im.data !== 'string' || im.data.indexOf('data:') !== 0) { swapped[key] = im; continue; }
+        var id = tbImgId(im.data);
+        if (!sent[id] && await tbSendImage(id, im.data)) { tbMarkImgSent(id); sent[id] = 1; }
+        if (sent[id]) {
+          var ref = Object.assign({}, im, { cloud: id });
+          delete ref.data;
+          swapped[key] = ref; changed = true;
+        } else swapped[key] = im;
+      }
+      out.push(changed ? Object.assign({}, entry, { data: Object.assign({}, entry.data, { images: swapped }) }) : entry);
+    }
+    return out;
+  }
+  // Fills in the pictures of books from the account (in place), before
+  // they're merged with this device's.
+  async function tbFillImagesFromCloud(cloudLib) {
+    var have = null;
+    function local(id) {
+      if (!have) {
+        have = {};
+        library.forEach(function (en) {
+          var imgs = en && en.data && en.data.images;
+          if (imgs) Object.keys(imgs).forEach(function (k) { var im = imgs[k]; if (im && typeof im.data === 'string') have[tbImgId(im.data)] = im.data; });
+        });
+      }
+      return have[id];
+    }
+    for (var b = 0; b < (cloudLib || []).length; b++) {
+      var imgs = cloudLib[b] && cloudLib[b].data && cloudLib[b].data.images;
+      if (!imgs) continue;
+      for (var key in imgs) {
+        var im = imgs[key];
+        if (!im || !im.cloud || typeof im.data === 'string') continue;
+        var data = local(im.cloud);
+        if (!data) {
+          var blob = await pbFetchCloudImage(im.cloud);
+          if (blob) data = await new Promise(function (done) { var r = new FileReader(); r.onload = function () { done(String(r.result)); }; r.onerror = function () { done(null); }; r.readAsDataURL(blob); });
+        }
+        if (data) { im.data = data; delete im.cloud; }
+      }
+    }
+  }
+
   async function syncLibraryToCloud() {
     // Never push before this page load's first pull has merged the
     // account's books in -- the local copy could be empty or stale (a new
@@ -6525,6 +6613,7 @@
       if (!got.ok) { cloudFailed('Signed in — couldn’t save to the cloud'); return; }
       var cur = await got.json();
       var theirs = (cur.state && cur.state.chapbookbuilder) || {};
+      await tbFillImagesFromCloud(theirs.chapbooks);
       flushPendingSave();
       await reconcileEditedEntries(theirs.chapbooks || []);
       var merged = mergeLibraries(library, trash, theirs.chapbooks || [], theirs.trash || []);
@@ -6536,11 +6625,12 @@
       renderChapbooksList();
       if (isHomeShown()) renderHome();
       var sent = syncBaseEntriesNow();
+      var libraryOut = await tbLibraryForCloud(library);
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: 'chapbookbuilder', data: {
-          chapbooks: library, trash: trash, lastOpened: getLastOpened(),
+          chapbooks: libraryOut, trash: trash, lastOpened: getLastOpened(),
           pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
           cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, comicBooks: cmLibrary, comicBookTrash: cmTrash, recentlyDeleted: freshDeleted(recentlyDeleted),
           poemTiers: poemTiersForCloud(), tierView: tierViewForCloud()
@@ -18731,6 +18821,17 @@
     return it.auto && pbState.sizeAuto ? Math.round(it.size * pbAutoSize(pbState.trim) / 17 * 2) / 2 : it.size;
   }
   function pbLh(it) { return it.lh || pbState.lh; }
+  // The change that sets a box's type size to `pt`: a box sized relative
+  // to the story's type (a title, the copyright) keeps being relative, so
+  // its own size used to be ignored (Jake, 2026-11-04: the size buttons did
+  // nothing there).
+  function pbSizeChange(it, pt) {
+    pt = Math.max(6, Math.min(200, pt));
+    if (it.rel) return { rel: pt / pbBookSize() };
+    // An automatic box's size follows the trim while type size is automatic.
+    if (it.auto && it.size && pbState.sizeAuto) return { size: Math.round(pt * 17 / pbAutoSize(pbState.trim) * 2) / 2 };
+    return { size: pt };
+  }
   // The margins as fractions of the spread: outer (and top/bottom) and
   // the gutter each side of the fold.
   function pbMargins() {
@@ -19252,7 +19353,7 @@
     ctx.translate(x, y);
     ctx.beginPath(); ctx.rect(0, 0, w, w * pbTrim(pbState.trim).pageH / pbTrim(pbState.trim).pageW); ctx.clip();
     if (spot.side === 'right') ctx.translate(-w, 0);
-    pbDrawSpread(ctx, pbState.spreads[spot.s], spot.s, w * 2, { nonPages: 'blank' });
+    pbDrawSpread(ctx, pbState.spreads[spot.s], spot.s, w * 2, { nonPages: 'blank', art: !pbExportTextOnly });
     ctx.restore();
   }
   function pbCanvasFor(canvas, cssW, cssH) {
@@ -20613,15 +20714,27 @@
       pbQb('<b>B</b>', styled ? 'Bold (select words first to bold just those)' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
       pbQb('<i>I</i>', styled ? 'Italic (select words first to italicize just those)' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
       pbQbSep(),
-      pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
+      pbQb('−', 'Smaller', false, function () { pbPopSet(pbSizeChange(it, pbFontSize(it) - 1)); }),
       (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it) + ' pt'; return sz; })(),
-      pbQb('+', 'Larger', false, function () { pbSetItem({ size: Math.min(200, pbFontSize(it) + 1) }); }),
+      pbQb('+', 'Larger', false, function () { pbPopSet(pbSizeChange(it, pbFontSize(it) + 1)); }),
       pbQbSep(),
-      pbQb('⟸', 'Align left', it.align === 'left', function () { pbSetItem({ align: 'left' }); }),
-      pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
-      pbQb('⟹', 'Align right', it.align === 'right', function () { pbSetItem({ align: 'right' }); })
+      pbQb('⟸', 'Align left', it.align === 'left', function () { pbPopSet({ align: 'left' }); }),
+      pbQb('⟺', 'Center', it.align === 'center', function () { pbPopSet({ align: 'center' }); }),
+      pbQb('⟹', 'Align right', it.align === 'right', function () { pbPopSet({ align: 'right' }); })
     );
     autoGrow(pbPopText);
+  }
+  // A change from the pop-up's own bar: made to the box being typed in
+  // (whatever is selected), and the pop-up redrawn to show it.
+  function pbPopSet(changes) {
+    var it = pbPopItem();
+    if (!it) return;
+    pbCheckpoint();
+    Object.assign(it, changes);
+    pbPersist();
+    pbRefreshSpread(pbPopFor.s);
+    pbStylePopup(); pbPlacePopup();
+    pbPopText.focus();
   }
   function pbPopBox() {
     var stage = pbPopFor && pbStageEl(pbPopFor.s);
@@ -20743,8 +20856,12 @@
   var pbPopRaf = null;
   pbPop.querySelector('.pb-pop-done').addEventListener('click', function () { pbClosePopup(); });
   pbPop.addEventListener('mousedown', function (e) { if (e.target.closest('button')) e.preventDefault(); });
+  // Return (or Enter) is done, as in Slides' text boxes on a phone or a
+  // chat box; Shift+Return starts a new line (Jake, 2026-11-04).
   pbPopText.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); pbClosePopup(); }
+    else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); e.stopPropagation(); pbClosePopup(); }
+    else if (e.key === 'Enter' && e.shiftKey && !e.isComposing) { e.preventDefault(); document.execCommand('insertLineBreak'); }
   });
   document.addEventListener('pointerdown', function (e) {
     if (!pbPop.hidden && !pbPop.contains(e.target) && !e.target.closest('.pb-tb[data-id="' + (pbPopFor && pbPopFor.id) + '"]')) pbClosePopup();
@@ -20796,7 +20913,7 @@
         }, function (ev, moved) {
           if (!moved) return;
           pbCheckpoint();
-          it.w = it._w; it.x = it._x;
+          it.w = it._w; it.x = it._x; it.wSet = true;
           delete it._w; delete it._x;
           pbPersist();
           pbRefreshSpread(s);
@@ -20993,6 +21110,12 @@
           it.ox = ox; it.oy = oy;
           var r = pbImgRect(it, rw, rh, el), img = node.querySelector('img');
           if (img) { img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / rh * 100) + '%'; }
+          // Its selection border follows (the part on its page(s)).
+          var sel = stage.querySelector('.pb-sel[data-for="' + it.id + '"]');
+          if (sel) {
+            var bx0 = Math.max(r.x, r.ax), bx1 = Math.min(r.x + r.w, r.ax + r.aw), by0 = Math.max(r.y, 0), by1 = Math.min(r.y + r.h, rh);
+            pbPlaceOverlay(sel, bx0 / rw, by0 / rh, Math.max(0, bx1 - bx0) / rw, Math.max(0, by1 - by0) / rh, 0);
+          }
           placeGhost();
         }
       }, function (ev, moved) {
@@ -21406,9 +21529,9 @@
         pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
         pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
         pbQbSep(),
-        pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
+        pbQb('−', 'Smaller', false, function () { pbSetItem(pbSizeChange(it, pbFontSize(it) - 1)); }),
         (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it); return sz; })(),
-        pbQb('+', 'Larger', false, function () { pbSetItem({ size: Math.min(200, pbFontSize(it) + 1) }); }),
+        pbQb('+', 'Larger', false, function () { pbSetItem(pbSizeChange(it, pbFontSize(it) + 1)); }),
         pbQbSep(),
         pbQb('⟸', 'Align left', it.align === 'left', function () { pbSetItem({ align: 'left' }); }),
         pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
@@ -22022,8 +22145,10 @@
   function pbRefreshAll() { pbState.spreads.forEach(function (sp, s) { pbRefreshSpread(s); }); pbSyncFormatting(); }
   wireSeg('pbFontSeg', function (val) {
     pbCheckpoint();
+    // Book-wide settings reach every box that follows the book (its own
+    // font, size, spacing or width unset); a box changed on its own keeps
+    // its change (Jake, 2026-11-04).
     pbState.font = val;
-    pbStoryBoxes(function (it) { it.font = null; });
     pbPersist(); pbRefreshAll();
   });
   function pbSetGlobalSize(v) {
@@ -22031,7 +22156,6 @@
     pbCheckpoint();
     pbState.size = v;
     pbState.sizeAuto = false;
-    pbStoryBoxes(function (it) { it.size = null; });
     pbPersist(); pbRefreshAll(); pbSyncBookLayout();
   }
   pbFmt('pbGlobalSizeDown').addEventListener('click', function () { pbSetGlobalSize(pbBookSize() - 1); });
@@ -22048,7 +22172,7 @@
   function pbApplyTextW() {
     pbState.spreads.forEach(function (sp, s) {
       sp.items.forEach(function (it) {
-        if (it.type !== 'text' || it.auto || sp[pbPageSide(it)].role !== 'story' || pbStraddles(it)) return;
+        if (it.type !== 'text' || it.auto || it.wSet || sp[pbPageSide(it)].role !== 'story' || pbStraddles(it)) return;
         var side = pbPageSide(it), l = pbLive(side), w = pbStoryW(side);
         var x = it.align === 'right' ? it.x + it.w - w : it.align === 'center' ? it.x + it.w / 2 - w / 2 : it.x;
         it.w = w;
@@ -22068,7 +22192,7 @@
     el.addEventListener('change', function () { started = false; pbSyncBookLayout(); });
   }
   function pbInches(v) { return (Math.round(v * 1000) / 1000) + ' in'; }
-  pbWireBookRange('pbBookLh', function (v) { pbState.lh = v; pbStoryBoxes(function (it) { it.lh = null; }); }, function (v) { return Math.round(v * 100) + '%'; });
+  pbWireBookRange('pbBookLh', function (v) { pbState.lh = v; }, function (v) { return Math.round(v * 100) + '%'; });
   pbWireBookRange('pbBookTextW', function (v) { pbState.textW = v / 100; pbApplyTextW(); }, function (v) { return v + '% of the page'; });
   pbWireBookRange('pbBookMargin', function (v) { pbState.margin = v; }, pbInches);
   pbWireBookRange('pbBookGutter', function (v) { pbState.gutter = v; }, pbInches);
@@ -22345,15 +22469,44 @@
   // A standard layout: the matter pages go back to story (words you've
   // written on them stay), then the layout's roles are set in page
   // order, each following from the page before -- as for a new book.
+  // Whether page p has the story on it: words or an illustration of the
+  // author's (not a matter page's own text).
+  function pbPageHasStory(book, p) {
+    var spot = pbPageSpot(p, book.spreads.length), sp = book.spreads[spot.s];
+    if (!sp || sp[spot.side].role !== 'story') return false;
+    return sp.items.some(function (it) {
+      if (it.type === 'image') return it.fit === 'free' ? pbPageSide(it) === spot.side : (it.area === spot.side || it.area === 'spread');
+      return !it.bind && !it.auto && (it.text || '').trim() && (pbStraddles(it) || pbPageSide(it) === spot.side);
+    });
+  }
+  // A layout with more matter pages than the book has room for never
+  // writes over the story: a blank spread goes in before the first story
+  // page it would take (front matter) or after the last (back matter),
+  // moving the story along, until none is in the way (Jake, 2026-11-04).
+  // Returns how many spreads went in.
+  function pbMakeRoomForLayout(book, layout) {
+    var added = 0;
+    for (var guard = 0; guard < 12; guard++) {
+      var n = book.spreads.length, total = pbTotalPagesFor(n), roles = layout.roles(total), hit = 0;
+      for (var p = 2; p < total && !hit; p++) if (roles[p] && roles[p] !== 'story' && pbPageHasStory(book, p)) hit = p;
+      if (!hit) break;
+      var at = pbPageSpot(hit, n).s + (hit > total / 2 ? 1 : 0);
+      book.spreads.splice(Math.max(1, Math.min(n - 1, at)), 0, pbBlankSpread());
+      added++;
+    }
+    return added;
+  }
   function pbApplyLayout(book, key) {
     var layout = PB_LAYOUTS.filter(function (l) { return l.key === key; })[0];
-    if (!layout) return;
+    if (!layout) return 0;
+    var added = pbMakeRoomForLayout(book, layout);
     var total = pbTotalPagesFor(book.spreads.length);
     [total, total - 1, total - 2, 5, 4, 3, 2, 1].forEach(function (p, i, a) {
       if (p >= 1 && p <= total && a.indexOf(p) === i && pbRoleAt(book, p) !== 'story') pbApplyRole(book, p, 'story');
     });
     var roles = layout.roles(total);
     for (var p = 1; p <= total; p++) if (roles[p] && pbRoleAt(book, p) !== roles[p]) pbApplyRole(book, p, roles[p]);
+    return added;
   }
   // The box on page p holding its dedication (the italic line a
   // dedication page is laid out with) or its copyright.
@@ -22382,11 +22535,12 @@
       lab.querySelector('span').textContent = l.about(pages.total);
       lab.querySelector('input').addEventListener('change', function () {
         pbCheckpoint();
-        pbApplyLayout(pbState, l.key);
+        var added = pbApplyLayout(pbState, l.key);
         pbValidateRoles(pbState);
         pbSel = null;
         pbPersist();
         pbRenderView();
+        if (added) showToast('Added ' + (added === 1 ? 'a spread' : added + ' spreads') + ' so the matter pages don’t go over the story (now ' + pbTotalPagesFor(pbState.spreads.length) + ' pages).', 'Undo', pbUndo);
       });
       box.appendChild(lab);
     });
@@ -22937,7 +23091,7 @@
       c.width = W; c.height = H + band;
       var ctx = c.getContext('2d');
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, c.width, c.height);
-      pbDrawSpread(ctx, sp, s, W, { nonPages: 'shade' });
+      pbDrawSpread(ctx, sp, s, W, { nonPages: 'shade', art: !pbExportTextOnly });
       ctx.fillStyle = '#C9D2D9'; ctx.fillRect(W / 2, 0, 1, H);
       var cap = Math.round(PB_DPI * 0.12), p = pbSpreadPages(s, n);
       if (p.left) pbLabel(ctx, 'p. ' + p.left, W / 4, H + cap * 2, cap, null, 'center');
@@ -23177,7 +23331,7 @@
       if (hasArt) {
         var c = document.createElement('canvas');
         c.width = W; c.height = Math.round(pbSpreadH(W));
-        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, pathText: true, nonPages: 'shade' });
+        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, pathText: true, nonPages: 'shade', art: !pbExportTextOnly });
         add('ppt/media/image' + k + '.jpeg', await pbJpeg(c));
       }
       add('ppt/slides/slide' + k + '.xml', pptxSlide(sp, k - 1, SWe, SHe, hasArt));
@@ -23193,8 +23347,11 @@
     return makeZip(files);
   }
 
+  // Export › Text only: every export leaves the illustrations out.
+  var pbExportTextOnly = false;
   async function runPbExport(kind) {
     pbFlushPending();
+    pbExportTextOnly = pbFmt('pbTextOnly').checked;
     var btns = ['pbExportDigitalBtn', 'pbExportPrintBtn', 'pbExportPptxBtn'].map(pbFmt);
     btns.forEach(function (b) { b.disabled = true; });
     setPbExportStatus(kind === 'pptx' ? 'Building PowerPoint…' : 'Building PDF…');
@@ -23207,7 +23364,7 @@
         mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
       } else {
         bytes = await (kind === 'print' ? buildPrintableDummyPdf() : buildDigitalDummyPdf(pbFmt('pbNotesInPdf').checked));
-        filename = pbSlug() + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
+        filename = pbSlug() + (pbExportTextOnly ? '-text' : '') + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
         mime = 'application/pdf';
       }
       var note = missing ? ' Some illustrations aren’t on this device yet, so they’re left out.' : '';
@@ -23223,6 +23380,7 @@
       else setPbExportStatus('Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.');
     }
     btns.forEach(function (b) { b.disabled = false; });
+    pbExportTextOnly = false;
   }
   pbFmt('pbExportDigitalBtn').addEventListener('click', function () { runPbExport('digital'); });
   pbFmt('pbExportPrintBtn').addEventListener('click', function () { runPbExport('print'); });
