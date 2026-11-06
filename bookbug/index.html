@@ -1327,12 +1327,14 @@
   .preview-full[hidden] { display: none; }
   html.preview-full-open, html.preview-full-open body { overflow: hidden; }
   .preview-full-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  /* Mirror writing (Preferences): the words flip left to right in a text
-     book's editor and preview, nothing else. The CSS scale property, not
-     transform, so it adds to any transform these already have; typing,
-     the caret and clicks still work through it. Exports are untouched. */
-  body.pref-mirror :is(.poem-text, .poem-title, .poem-writer-title, .poem-title-compact, .section-title,
-    .series-part-title, .stage-edit-title, .stage-edit-body, #bookTitleInput, .preview-page) { scale: -1 1; }
+  /* Mirror writing (an entry's ⋯ menu, `poem.mirror`): that one poem,
+     chapter, essay or scene shows back to front, left to right, in its
+     editor, its Title View row and its preview pages; nothing else. The
+     CSS scale property, not transform, so it adds to any transform these
+     already have; typing, the caret and clicks work through it. Exports
+     and the read-only reader are untouched. */
+  .poem-card.is-mirror :is(.poem-text, .poem-title, .poem-writer-title, .series-part-title),
+  .poem-title-compact.is-mirror, .preview-page.is-mirror { scale: -1 1; }
   .preview-full .preview-page { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); border: none; }
   .preview-full-close {
     position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border-radius: 50%;
@@ -2904,7 +2906,6 @@
               <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
               <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
               <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
-              <label class="prefs-row"><input type="checkbox" data-pref="mirrorText"><span>Mirror writing<small>Shows the words back to front, as in a mirror, in the editor and the preview; the rest of the page and what you export stay as they are</small></span></label>
               <label class="prefs-row is-select"><span>Tab indent<small>How far a Tab moves a line; also a prose paragraph's first-line indent</small></span>
                 <select data-pref-select="tabIndentPt" aria-label="Tab indent">
                   <option value="18">¼ inch</option>
@@ -4216,6 +4217,7 @@
   <button type="button" role="menuitem" data-action="focus">Focus mode</button>
   <button type="button" role="menuitem" data-action="snapshots">Snapshots…</button>
   <button type="button" role="menuitem" data-action="subs">Submissions…</button>
+  <button type="button" role="menuitem" data-action="mirror" title="Show this one back to front, as in a mirror, while you write it and in the preview. What you export stays the right way round.">Mirror writing</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <div class="menu-sep" data-sub-sep></div>
   <!-- Move › and Copy › open submenus beside the menu (see openEntrySub).
@@ -4385,7 +4387,7 @@
   // ---------------------------------------------------------------------
   var PREFS_KEY = 'bookbug.prefs.v1';
   var PREF_DEFAULTS = { showCounts: true, showNumbers: true, showWrapWarning: true, spellcheck: true, smartPunctuation: false,
-    showSpreadNumbers: true, showGuides: true, showArtNotes: true, tabIndentPt: 36, mirrorText: false };
+    showSpreadNumbers: true, showGuides: true, showArtNotes: true, tabIndentPt: 36 };
   var prefs = Object.assign({}, PREF_DEFAULTS);
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch (e) {}
   function applyPrefClasses() {
@@ -4395,7 +4397,6 @@
     document.body.classList.toggle('pref-no-spread-numbers', !prefs.showSpreadNumbers);
     document.body.classList.toggle('pref-no-guides', !prefs.showGuides);
     document.body.classList.toggle('pref-no-art-notes', !prefs.showArtNotes);
-    document.body.classList.toggle('pref-mirror', !!prefs.mirrorText);
   }
   applyPrefClasses();
 
@@ -11902,6 +11903,9 @@
     entryMenu.querySelector('[data-action="focus"]').hidden = !poem || isSection(poem) || writerMQ.matches;
     entryMenu.querySelector('[data-action="snapshots"]').hidden = !poem || isSection(poem);
     entryMenu.querySelector('[data-action="subs"]').hidden = !poem || isSection(poem);
+    var mirrorBtn = entryMenu.querySelector('[data-action="mirror"]');
+    mirrorBtn.hidden = !poem || isSection(poem);
+    mirrorBtn.textContent = poem && poem.mirror ? 'Stop mirror writing' : 'Mirror writing';
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
     seriesBtn.hidden = !poem || isSection(poem) || entryFormOf(poem) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
@@ -12472,12 +12476,24 @@
     else if (item.dataset.action === 'move-section') openSectionDialog(idx, false);
     else if (item.dataset.action === 'copy-section') openSectionDialog(idx, true);
     else if (item.dataset.action === 'series') toggleSeries(idx);
+    else if (item.dataset.action === 'mirror') toggleMirror(idx);
     else duplicatePoem(idx);
   });
   document.addEventListener('click', function (e) { if (!entryMenu.contains(e.target)) closeEntryMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeEntryMenu(); });
   window.addEventListener('scroll', closeEntryMenu, true);
   window.addEventListener('resize', closeEntryMenu);
+
+  // Mirror writing, one entry at a time: `poem.mirror` (synced with the
+  // book, so every device shows it the same), shown by the CSS above.
+  function toggleMirror(index) {
+    var poem = state.poems[index];
+    if (!poem || isSection(poem)) return;
+    if (poem.mirror) delete poem.mirror; else poem.mirror = true;
+    persist();
+    renderAll();
+    showToast('“' + (poem.title || entryLabel(poem)) + '”' + (poem.mirror ? ' now shows in mirror writing. Exports stay the right way round.' : ' is the right way round again.'));
+  }
 
   function toggleSeries(index) {
     var poem = state.poems[index];
@@ -12758,7 +12774,7 @@
 
   function makeCard(poem, index, initialPlan, entryNum) {
     var card = document.createElement('div');
-    card.className = 'poem-card' + (poem.sample ? ' is-sample' : '');
+    card.className = 'poem-card' + (poem.sample ? ' is-sample' : '') + (poem.mirror ? ' is-mirror' : '');
     card.dataset.poemId = poem.id;
     // makeCard IS the open editor for this entry -- keeping it draggable
     // meant a click-and-drag gesture anywhere on the card (not just the
@@ -13192,7 +13208,7 @@
     // in the editor's real title field.
     var titleBtn = document.createElement('button');
     titleBtn.type = 'button';
-    titleBtn.className = 'poem-title-compact poem-title-compact-toggle';
+    titleBtn.className = 'poem-title-compact poem-title-compact-toggle' + (poem.mirror ? ' is-mirror' : '');
     titleBtn.textContent = poem.title || entryLabel(poem);
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
@@ -15280,6 +15296,7 @@
     box.parentNode.style.setProperty('--preview-h', (Math.round(plan.PAGE_H * scale) + 6) + 'px');
     box.style.boxSizing = 'border-box';
     box.style.fontFamily = printStackFor(state.bodyFontChoice);
+    box.classList.remove('is-mirror');
 
     if (item.type === 'cover') {
       renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
@@ -15306,6 +15323,7 @@
     } else {
       var bm = item.matter != null ? plan.backMatter[item.matter] : null;
       var poem = bm ? bm.poem : state.poems[item.index];
+      if (poem && poem.mirror && !document.documentElement.classList.contains('reader-mode')) box.classList.add('is-mirror');
       var layout = bm ? bm.layout : plan.layouts[item.index];
       var pageIndex = item.pageIndex || 0;
       var isFirstPoemPage = pageIndex === 0;
