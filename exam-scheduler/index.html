@@ -156,6 +156,7 @@
   .gf-list, .en-steps { list-style: none; margin: 14px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
   .gf-list li, .en-steps li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
   .gf-list li:last-child, .en-steps li:last-child { border-bottom: none; }
+  .en-steps li { display: block; }
   .gf-list .gf-name { flex: 1; min-width: 0; font-weight: 600; }
   .gf-meta { font-size: 11.5px; color: var(--ink-faint); font-weight: 400; }
   .gf-list li.done .gf-name { color: var(--ink-faint); }
@@ -170,6 +171,15 @@
   .sit .who { font-weight: 600; }
   .sit .who span { font-weight: 400; color: var(--ink-soft); }
 
+  .ensettings { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .ensettings > summary { cursor: pointer; font-weight: 600; }
+  .ensettings .sub { font-weight: 400; font-size: 12.5px; color: var(--ink-soft); }
+  .engroup { margin-top: 12px; }
+  .engroup h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--maroon); }
+  .enrow { display: grid; grid-template-columns: 1fr 230px; gap: 10px; align-items: center; padding: 4px 0; }
+  .enrow select, .enrow input { padding: 4px 7px; font-size: 13px; }
+  .enrow.changed > span { font-weight: 600; }
+  .enreq { display: flex; flex-wrap: wrap; gap: 4px 14px; grid-column: 1 / -1; }
   #printArea { display: none; }
   @media print {
     header.top, main.page, .layout, dialog.modal { display: none !important; }
@@ -250,17 +260,22 @@
       <div class="panel-title">Exam.net <span class="seg" id="enSeg"><button type="button" data-v="no">Not Exam.net</button><button type="button" data-v="yes">Exam.net</button></span></div>
       <div id="enBody">
         <div class="field-grid">
-          <div class="field"><label for="enSource">Your class's exam in Exam.net</label><input id="enSource" placeholder="e.g. Chapter 5 Test"></div>
+          <div class="field"><label for="enSource">Your class's exam (its name or exam key)</label><input id="enSource" placeholder="e.g. Chapter 5 Test, or nXnuQL"></div>
           <div class="field"><label for="enName">Testing Center copy's name</label><input id="enName" placeholder="e.g. Chapter 5 Test TC"></div>
-          <div class="field"><label for="enKey">Testing Center copy's exam key</label><input id="enKey" class="num" placeholder="e.g. AqY2Wt"></div>
+          <div class="field"><label for="enKey">Testing Center copy's exam key</label><input id="enKey" class="num" placeholder="Filled in when it's built"></div>
         </div>
+        <details class="ensettings" id="enSettingsWrap">
+          <summary>Testing Center Copy's Settings <span class="sub" id="enSetSummary"></span></summary>
+          <p class="note" style="margin:6px 0 4px">What isn't changed here stays as in your class's exam.</p>
+          <div id="enSettings"></div>
+        </details>
         <div class="check-grid" style="margin-top:14px">
           <span class="lbl">The Testing Center copy</span>
           <label class="check-row"><input type="checkbox" id="enCopy"> Is a new copy of the exam, made for the Testing Center</label>
           <label class="check-row"><input type="checkbox" id="enTimeLimit"> Has its time limit turned off</label>
-          <label class="check-row"><input type="checkbox" id="enCoTeacher"> Has testingcenterud@horacemann.org as a co-teacher</label>
+          <label class="check-row"><input type="checkbox" id="enCoTeacher"> Has testingcenterud@horacemann.org as an invigilator (Access)</label>
         </div>
-        <div class="addrow"><button class="btn btn-primary" id="enBuild" type="button">Build it in Exam.net…</button></div>
+        <div class="addrow"><button class="btn btn-primary" id="enBuild" type="button">Build it in Exam.net…</button><span class="note" id="enBuilt"></span></div>
       </div>
     </div>
 
@@ -361,18 +376,169 @@
 <dialog class="modal" id="enBox">
   <div class="modal-inner">
     <div class="modal-head"><h2>Build It in Exam.net</h2><button class="xbtn" type="button" data-close aria-label="Close">✕</button></div>
-    <p class="note" style="margin:0" id="enIntro"></p>
+    <div id="enSetup">
+      <p class="note" style="margin:0 0 10px"><b>Once:</b> drag this button to your bookmarks bar. It's how the Exam Scheduler works inside Exam.net, signed in as you.</p>
+      <p style="margin:0 0 6px"><a class="btn btn-primary" id="enBookmark" href="#" draggable="true" style="text-decoration:none;cursor:grab">TC Builder</a></p>
+      <p class="hint" style="margin:0 0 14px" id="enBookmarkNote">Already have it? It only needs dragging again when this page says it's been updated.</p>
+    </div>
     <ol class="en-steps" id="enSteps"></ol>
-    <div class="field" style="margin-top:14px"><label for="enKey2">Then paste the Testing Center copy's exam key here</label><input id="enKey2" class="num" placeholder="e.g. AqY2Wt"></div>
+    <div class="tally" id="enResult" hidden></div>
+    <details style="margin-top:12px"><summary class="note" style="cursor:pointer">Or do it by hand</summary>
+      <ol class="en-steps" id="enManual"></ol>
+      <div class="field" style="margin-top:10px"><label for="enKey2">Then paste the copy's exam key here</label><input id="enKey2" class="num" placeholder="e.g. AqY2Wt"></div>
+    </details>
     <div class="modal-actions">
       <button class="btn" type="button" data-close>Close</button>
-      <a class="btn btn-primary" id="enOpen" href="https://exam.net/" target="_blank" rel="noopener" style="text-decoration:none">Open Exam.net</a>
+      <button class="btn btn-primary" id="enOpen" type="button">Open Exam.net</button>
     </div>
   </div>
 </dialog>
 
 <div id="printArea"></div>
 
+<script>
+/* The TC Builder: the bookmark's code, run on exam.net as the signed-in
+   teacher. It reads what to build from the address (#tcbuild=…, put there
+   by the Exam Scheduler), duplicates the class's exam through Exam.net's own
+   API (POST /api/duplicate/<id>), saves the copy's settings (PUT
+   /api/exams/<id>), gives the Testing Center Access (POST /api/share/<id>),
+   reads the copy back to check, and sends the exam key back to the
+   Exam Scheduler tab (postMessage). No comments of the // kind in here:
+   it becomes a javascript: URL. */
+function examNetBuilder() {
+  var V = 1, OK_FROM = ["https://jake-goldwasser.com", "https://www.jake-goldwasser.com", "http://localhost:8765"];
+  var old = document.getElementById("tcb-panel"); if (old) old.remove();
+  var P = document.createElement("div"); P.id = "tcb-panel";
+  P.style.cssText = "position:fixed;top:14px;right:14px;z-index:2147483647;width:400px;max-height:92vh;overflow:auto;background:#fff;color:#1c1b19;border:2px solid #7A1F2E;border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.32);font:14px/1.45 -apple-system,Helvetica,Arial,sans-serif;padding:16px 18px;text-align:left";
+  document.body.appendChild(P);
+  function el(tag, css, text) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (text != null) e.textContent = text; return e; }
+  function btn(text, primary, fn) { var b = el("button", "border-radius:999px;padding:8px 16px;font:600 13px -apple-system,Helvetica,sans-serif;cursor:pointer;margin:10px 8px 0 0;border:1px solid " + (primary ? "#7A1F2E;background:#7A1F2E;color:#fff" : "#C6BFA9;background:#fff;color:#1c1b19"), text); b.type = "button"; b.onclick = fn; return b; }
+  function head(t) { P.innerHTML = ""; var h = el("div", "display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"); h.appendChild(el("b", "font-size:17px", t)); var x = el("button", "border:none;background:none;font-size:18px;cursor:pointer;color:#96917F", "✕"); x.onclick = function () { P.remove(); }; h.appendChild(x); P.appendChild(h); }
+  function say(t, css) { var p = el("p", "margin:6px 0;" + (css || ""), t); P.appendChild(p); return p; }
+  var spec = null;
+  try { var m = location.hash.match(/tcbuild=([A-Za-z0-9_-]+)/); if (m) spec = JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, "+").replace(/_/g, "/"))))); } catch (e) {}
+  head("TC Builder");
+  if (location.hostname !== "exam.net") { say("Use this on Exam.net: open it from the Exam Scheduler's Build it in Exam.net, then click TC Builder on that tab."); return; }
+  if (!spec) { say("Nothing to build here. In the Exam Scheduler, open the assessment, click Build it in Exam.net…, then Open Exam.net, and click TC Builder on the tab it opens."); return; }
+  if (spec.v !== V) { say("This bookmark is out of date. In the Exam Scheduler's Build it in Exam.net…, drag TC Builder to your bookmarks bar again.", "color:#93630F"); return; }
+  if (location.pathname !== "/admin/exams") { say("Go to your exam list (Exams), then click TC Builder again."); P.appendChild(btn("Go to my exams", true, function () { location.href = "/admin/exams" + location.hash; })); return; }
+  var xs = (document.cookie.match(/XSRF-TOKEN=([^;]+)/) || [])[1];
+  var H = { "Accept": "application/json", "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" };
+  if (xs) H["X-XSRF-TOKEN"] = decodeURIComponent(xs);
+  async function api(method, url, body) {
+    var r = await fetch(url, { method: method, headers: H, credentials: "same-origin", body: body == null ? undefined : JSON.stringify(body) });
+    var t = await r.text(), j = null; try { j = JSON.parse(t); } catch (e) {}
+    if (!r.ok) throw new Error((j && j.message) || ("Exam.net said " + r.status));
+    return j;
+  }
+  var rows = [].slice.call(document.querySelectorAll("tr input[type=checkbox]")).filter(function (i) { return /^\d+$/.test(i.value); }).map(function (i) {
+    var c = [].slice.call(i.closest("tr").cells).map(function (td) { return td.innerText.trim(); });
+    return { id: i.value, name: c[1] || "", key: (c[2] || "").split(/\s/)[0] };
+  });
+  function norm(s) { return String(s || "").trim().toLowerCase().replace(/\s+/g, " "); }
+  var src = rows.find(function (r) { return spec.source.key && r.key === spec.source.key; }) || rows.find(function (r) { return norm(r.name) === norm(spec.source.name); }) || rows.find(function (r) { return spec.source.key && r.key.toLowerCase() === spec.source.key.toLowerCase(); });
+  var existing = rows.find(function (r) { return norm(r.name) === norm(spec.name); });
+  if (existing && src && existing.id === src.id) existing = null;
+  say("Copy this exam for the Testing Center:", "font-weight:600");
+  var sel = el("select", "width:100%;padding:6px;border:1px solid #C6BFA9;border-radius:6px;font:14px -apple-system,Helvetica,sans-serif");
+  sel.appendChild(new Option(src ? "" : "Pick your class's exam…", ""));
+  rows.forEach(function (r) { var o = new Option(r.name + " · " + r.key, r.id); if (src && r.id === src.id) o.selected = true; sel.appendChild(o); });
+  if (!src) sel.options[0].selected = true;
+  P.appendChild(sel);
+  if (!src) say("Couldn't find “" + spec.source.name + "” in this list" + (rows.length ? ": pick it above." : ". Is it in a folder or the archive? Open that, then click TC Builder again."), "color:#93630F");
+  say("as “" + spec.name + "”, give testingcenterud@horacemann.org access as an invigilator, and set:", "");
+  var S = spec.settings || {}, LBL = { timeLimit: "Time limit", anonymous: "Anonymize", selfResume: "Self-resume", requirements: "Students give", writeArea: "Writing area", wordLimit: "Word limit", spell: "Spellcheck", fileUpload: "Uploads", audioRecording: "Audio recording", calculator: "Calculator", desmos: "Desmos", drawingArea: "Drawing area", formula: "Formula sheet", chem: "Periodic table", tts: "Text to speech", stt: "Speech to text", translate: "Translation", enThesaurus: "English synonyms", lockdown: "Lockdown", leave: "Leaving full screen", screenMonitoring: "Screen monitoring" };
+  var ul = el("ul", "margin:4px 0 0;padding-left:20px;font-size:13px");
+  Object.keys(S).forEach(function (k) { if (S[k] == null || (k === "leave" && S.lockdown && S.lockdown !== "medium")) return; ul.appendChild(el("li", "", (LBL[k] || k) + ": " + (Array.isArray(S[k]) ? S[k].join(", ") : k === "wordLimit" && !S[k] ? "none" : S[k]))); });
+  if (!ul.children.length) ul.appendChild(el("li", "", "nothing else: as in the class's exam"));
+  P.appendChild(ul);
+  var mode = "new";
+  if (existing) {
+    say("There's already an exam called “" + spec.name + "” (" + existing.key + ").", "color:#93630F;margin-top:10px");
+    var lab = el("label", "display:flex;gap:6px;align-items:center;font-size:13px"); var cb = el("input"); cb.type = "checkbox"; cb.checked = true; cb.onchange = function () { mode = cb.checked ? "update" : "new"; };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(" Update that one instead of making another copy")); P.appendChild(lab); mode = "update";
+  }
+  P.appendChild(btn("Build it", true, function () { if (!sel.value) { sel.focus(); return; } run(sel.value); }));
+  P.appendChild(btn("Cancel", false, function () { P.remove(); }));
+  function on(v) { return v === "on"; }
+  function who(x) { var t = x.teacher || {}; return { id: x.teacher_id || t.id || x.id, email: t.email || x.email || "" }; }
+  function apply(g) {
+    var b = Object.assign({}, g); ["id", "created_at", "updated_at", "deleted_at", "archived_at", "lti", "readonly", "creation_source", "external_owner", "external_redirect_url"].forEach(function (k) { delete b[k]; });
+    var res = {}, ex = {}; try { res = JSON.parse(b.resources || "{}"); } catch (e) {} try { ex = JSON.parse(b.extra_settings || "{}"); } catch (e) {}
+    var want = {};
+    function set(k, v) { b[k] = v; want[k] = v; }
+    function setR(k, v) { res[k] = v; want["resources." + k] = v; }
+    b.name = spec.name; want.name = spec.name;
+    if (S.timeLimit === "off") set("automatic_submission_timer", null);
+    if (S.anonymous) set("anonymous", on(S.anonymous) ? 1 : 0);
+    if (S.selfResume) set("student_self_resume", on(S.selfResume));
+    if (Array.isArray(S.requirements) && S.requirements.length) set("requirements", JSON.stringify(S.requirements));
+    if (S.writeArea) set("writeArea", on(S.writeArea) ? 1 : 0);
+    if (S.wordLimit != null) setR("writeAreaSettings", Object.assign({}, res.writeAreaSettings || { limitEnforcement: "soft" }, { wordLimit: Number(S.wordLimit) || 0 }));
+    if (S.spell) set("spellChecking", S.spell);
+    if (S.fileUpload) setR("fileUpload", on(S.fileUpload));
+    if (S.audioRecording) setR("audioRecording", on(S.audioRecording));
+    if (S.calculator) set("calculator", on(S.calculator) ? 1 : 0);
+    if (S.desmos) setR("desmos", on(S.desmos));
+    if (S.drawingArea) setR("drawingArea", on(S.drawingArea));
+    if (S.formula) set("formulaChosen", S.formula);
+    if (S.chem) setR("chemistryFormulaChosen", S.chem);
+    if (S.tts) set("allow_tts", on(S.tts) ? 1 : 0);
+    if (S.stt) setR("speechToTextSettings", Object.assign({}, res.speechToTextSettings || { locale: "" }, { enabled: on(S.stt) }));
+    if (S.translate) set("translate", on(S.translate) ? 1 : 0);
+    if (S.enThesaurus) setR("enThesaurus", on(S.enThesaurus));
+    if (S.lockdown === "high") set("device_security", "ONLY_SEB");
+    if (S.lockdown === "medium") { set("device_security", "NO_SEB"); set("browserSecurityMode", String(S.leave || "5")); }
+    if (S.lockdown === "disabled") { set("device_security", "NO_SEB"); set("browserSecurityMode", "6"); }
+    if (S.screenMonitoring) { ex.screenMonitoring = Object.assign({}, ex.screenMonitoring || {}, { enabled: on(S.screenMonitoring) }); b.extra_settings = JSON.stringify(ex); want["extra.screenMonitoring.enabled"] = on(S.screenMonitoring); }
+    b.resources = JSON.stringify(res);
+    return { body: b, want: want };
+  }
+  function check(g, want) {
+    var res = {}, ex = {}; try { res = JSON.parse(g.resources || "{}"); } catch (e) {} try { ex = JSON.parse(g.extra_settings || "{}"); } catch (e) {}
+    return Object.keys(want).filter(function (k) {
+      var got = k.indexOf("resources.") === 0 ? res[k.slice(10)] : k === "extra.screenMonitoring.enabled" ? (ex.screenMonitoring || {}).enabled : g[k];
+      return JSON.stringify(got) !== JSON.stringify(want[k]) && String(got) !== String(want[k]) && !(want[k] === 0 && got === false) && !(want[k] === 1 && got === true);
+    }).map(function (k) { return (LBL[k] || k.replace(/^resources\.|^extra\./, "")) + " didn't take"; });
+  }
+  async function run(srcId) {
+    head("TC Builder"); var log = el("ol", "margin:4px 0;padding-left:20px;font-size:13px"); P.appendChild(log);
+    function step(t) { log.appendChild(el("li", "", t)); }
+    try {
+      var id;
+      if (mode === "update" && existing) { id = existing.id; step("Updating “" + spec.name + "”…"); }
+      else { step("Copying the exam…"); var d = await api("POST", "/api/duplicate/" + srcId, { examName: spec.name }); id = d.exam_id; if (!id) throw new Error("Exam.net didn't say which exam it made"); }
+      step("Setting its settings…");
+      var g = await api("GET", "/api/exams/" + id), ap = apply(g);
+      await api("PUT", "/api/exams/" + id, ap.body);
+      step("Giving the Testing Center access…");
+      var sh = await api("GET", "/api/share/" + id), shared = (sh.shared || []).map(who).filter(function (x) { return x.id; });
+      var tc = (sh.teachers || []).concat(shared).find(function (t) { return norm(t.email) === norm(spec.share); });
+      var problems = [];
+      if (!tc) problems.push(spec.share + " wasn't in Exam.net's list of teachers: share it by email in Share");
+      else if (!shared.some(function (x) { return x.id === tc.id; })) { shared.push({ id: tc.id, email: tc.email }); await api("POST", "/api/share/" + id, { shares: JSON.stringify(shared) }); }
+      step("Checking…");
+      var g2 = await api("GET", "/api/exams/" + id);
+      problems = problems.concat(check(g2, ap.want));
+      var sh2 = await api("GET", "/api/share/" + id);
+      if (tc && !(sh2.shared || []).map(who).some(function (x) { return norm(x.email) === norm(spec.share); })) problems.push("the Testing Center's access didn't take");
+      head("Built");
+      say("“" + g2.name + "”", "font-weight:600");
+      var k = el("div", "font:600 30px ui-monospace,Menlo,monospace;letter-spacing:.06em;margin:6px 0;color:#7A1F2E", g2.examkey); P.appendChild(k);
+      say(problems.length ? "Check these in Exam.net: " + problems.join("; ") + "." : "All set: settings saved and the Testing Center has access.", problems.length ? "color:#93630F" : "color:#2F6B3A");
+      var sent = false;
+      if (window.opener && OK_FROM.indexOf(spec.from) >= 0) { try { window.opener.postMessage({ type: "tcbuild-done", aid: spec.aid, key: g2.examkey, name: g2.name, examId: id, problems: problems }, spec.from); sent = true; } catch (e) {} }
+      try { await navigator.clipboard.writeText(g2.examkey); } catch (e) {}
+      say(sent ? "The exam key is in the Exam Scheduler now (and copied)." : "The exam key is copied: paste it into the Exam Scheduler.", "font-size:13px;color:#57534A");
+      P.appendChild(btn("Open its settings", false, function () { location.href = "/admin/exam-creator/" + id + "/edit"; }));
+      P.appendChild(btn("Done", true, function () { history.replaceState(null, "", "/admin/exams"); location.reload(); }));
+    } catch (e) {
+      step("Stopped: " + e.message);
+      P.appendChild(btn("Close", false, function () { P.remove(); }));
+    }
+  }
+}
+</script>
 <script>
 (function () {
   "use strict";
@@ -403,11 +569,11 @@
   // in the tab's memory.
   // ---------------------------------------------------------------
   var KEY = "examScheduler.v1";
-  var db = { teacher: { email: "", ext: "" }, exams: [], roster: {} };
+  var db = { teacher: { email: "jake_goldwasser", ext: "3983" }, exams: [], roster: {} };
   try { var saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (saved) db = Object.assign(db, saved); } catch (e) {}
-  if (!db.teacher.email) {
-    try { var old = JSON.parse(localStorage.getItem("tc-coversheets-teacher") || "null"); if (old) db.teacher = { email: old.email || "", ext: old.ext || "" }; } catch (e) {}
-  }
+  // Jake's own email and extension unless something else is typed in.
+  if (!db.teacher.email) db.teacher = { email: "jake_goldwasser", ext: db.teacher.ext || "3983" };
+  if (!db.teacher.ext && db.teacher.email === "jake_goldwasser") db.teacher.ext = "3983";
   var KNOWN_EXT = { "jake_goldwasser": "3983" };
   var saveTimer = null;
   function save() { clearTimeout(saveTimer); saveTimer = setTimeout(function () { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }, 250); }
@@ -630,7 +796,7 @@
       .forEach(function (pair) { var p = pair.split(":"); $(p[0]).value = a[p[1]] == null ? "" : a[p[1]]; });
     ["enCopy", "enTimeLimit", "enCoTeacher"].forEach(function (k) { $(k).checked = !!a[k]; });
     document.querySelectorAll("#examPage input[data-k]").forEach(function (el) { el.checked = !!a[el.dataset.k]; });
-    drawExamNet(); drawSummaries(); drawStudents(); drawAttach(); drawPreview();
+    drawExamNet(); drawEnSettings(); $("enBuilt").textContent = a.enKey ? "Exam key " + a.enKey : ""; drawSummaries(); drawStudents(); drawAttach(); drawPreview();
     show("exam");
   }
   $("aDelete").addEventListener("click", function () {
@@ -998,26 +1164,144 @@
   $("formNext").addEventListener("click", function () { var x = allSittings(cur).find(function (y) { return !opened[sitKey(y)]; }); if (x) openForm(x); });
 
   // ---------------------------------------------------------------
-  // Exam.net
+  // Exam.net: the Testing Center copy's settings, as Exam.net's own
+  // settings page has them. null = as in the class's exam. The TC
+  // Builder bookmark (examNetBuilder, below) applies them in Exam.net.
   // ---------------------------------------------------------------
+  var ONOFF = [["on", "On"], ["off", "Off"]];
+  var ENSET = [
+    ["General", [
+      ["timeLimit", "Time limit", [["off", "Off (the Testing Center times it)"]]],
+      ["anonymous", "Anonymize exam", ONOFF],
+      ["selfResume", "Student self-resume", ONOFF]]],
+    ["Student Information", [
+      ["requirements", "Students give", "req"]]],
+    ["Student Workspace", [
+      ["writeArea", "Writing area", [["on", "Yes"], ["off", "No"]]],
+      ["wordLimit", "Limit the number of words", "num"],
+      ["spell", "Spellcheck", [["0", "No"], ["en_US", "English"], ["fr_FR", "French"], ["es_ES", "Spanish"], ["de_DE", "German"], ["it_IT", "Italian"], ["pt_PT", "Portuguese"], ["nl_NL", "Dutch"], ["sv_SE", "Swedish"], ["da_DK", "Danish"], ["nb_NO", "Norwegian (Bokmål)"]]],
+      ["fileUpload", "Student uploads", ONOFF],
+      ["audioRecording", "Audio recording", ONOFF],
+      ["calculator", "Calculator", ONOFF],
+      ["desmos", "Desmos", ONOFF],
+      ["drawingArea", "Drawing area", ONOFF],
+      ["formula", "Formula sheet", [["0", "None"], ["9_21", "Basic"], ["5_21", "Advanced"], ["ib_aa", "IB Analysis and Approaches"], ["ib_ai", "IB Applications and Interpretation"]]],
+      ["chem", "Periodic table", [["0", "None"], ["ps", "Only the periodic table"], ["fs", "Formulas, tables and the periodic table"]]]]],
+    ["Accommodations", [
+      ["tts", "Text to speech", ONOFF],
+      ["stt", "Speech to text", ONOFF],
+      ["translate", "Translation", ONOFF],
+      ["enThesaurus", "English synonyms", ONOFF]]],
+    ["Cheat Prevention", [
+      ["lockdown", "Lockdown mode", [["high", "High (the Exam.net app)"], ["medium", "Medium (browser)"], ["disabled", "Disabled"]]],
+      ["leave", "If they leave full screen", [["1", "Explain, unlocked at once"], ["2", "Explain, wait 30 seconds"], ["3", "Explain, wait 60 seconds"], ["4", "Explain, wait 90 seconds"], ["5", "Explain, the teacher unlocks"], ["10", "Notify the teacher, don't lock"]]],
+      ["screenMonitoring", "Screen monitoring", ONOFF]]]
+  ];
+  var REQS = [["firstName", "First name"], ["lastName", "Last name"], ["email", "Email"], ["class", "Class"], ["teacher", "Teacher name"], ["phone", "Phone number"], ["studentId", "Student number"]];
+  var BUILDER_V = 1;
+  function enSetOf(a) { if (!a.enSet) a.enSet = Object.assign({ timeLimit: "off" }, db.enDefaults || {}); return a.enSet; }
+  function drawEnSettings() {
+    var set = enSetOf(cur), box = $("enSettings"); box.innerHTML = "";
+    ENSET.forEach(function (g) {
+      var gd = document.createElement("div"); gd.className = "engroup"; gd.innerHTML = "<h4>" + esc(g[0]) + "</h4>";
+      g[1].forEach(function (f) {
+        var k = f[0], row = document.createElement("div"); row.className = "enrow" + (set[k] != null ? " changed" : "");
+        if (k === "leave" && set.lockdown && set.lockdown !== "medium") return;
+        row.appendChild(Object.assign(document.createElement("span"), { textContent: f[1] }));
+        if (f[2] === "req") {
+          var sel = document.createElement("select"); sel.innerHTML = '<option value="">Same as your class\'s exam</option><option value="set">These:</option>';
+          sel.value = set.requirements ? "set" : "";
+          sel.addEventListener("change", function () { set.requirements = sel.value ? (set.requirements || ["firstName", "lastName"]) : null; enChanged(); });
+          row.appendChild(sel);
+          if (set.requirements) {
+            var wrap = document.createElement("div"); wrap.className = "enreq";
+            REQS.forEach(function (r) {
+              var l = document.createElement("label"); l.className = "check-row"; var c = document.createElement("input"); c.type = "checkbox"; c.checked = set.requirements.indexOf(r[0]) >= 0;
+              c.addEventListener("change", function () { set.requirements = REQS.map(function (x) { return x[0]; }).filter(function (x) { return x === r[0] ? c.checked : set.requirements.indexOf(x) >= 0; }); save(); drawEnSummary(); });
+              l.appendChild(c); l.appendChild(document.createTextNode(" " + r[1])); wrap.appendChild(l);
+            });
+            row.appendChild(wrap);
+          }
+        } else if (f[2] === "num") {
+          var inp = document.createElement("input"); inp.type = "number"; inp.min = 0; inp.placeholder = "Same as your class's exam"; inp.title = "0 means no limit";
+          inp.value = set[k] == null ? "" : set[k];
+          inp.addEventListener("input", function () { set[k] = inp.value === "" ? null : Math.max(0, Math.round(Number(inp.value) || 0)); save(); drawEnSummary(); row.classList.toggle("changed", set[k] != null); });
+          row.appendChild(inp);
+        } else {
+          var se = document.createElement("select");
+          se.innerHTML = '<option value="">Same as your class\'s exam</option>' + f[2].map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + "</option>"; }).join("");
+          se.value = set[k] == null ? "" : set[k];
+          se.addEventListener("change", function () { set[k] = se.value || null; if (k === "lockdown" && se.value === "medium" && !set.leave) set.leave = "5"; enChanged(); });
+          row.appendChild(se);
+        }
+        gd.appendChild(row);
+      });
+      box.appendChild(gd);
+    });
+    drawEnSummary();
+  }
+  function enChanged() { save(); drawEnSettings(); }
+  function drawEnSummary() {
+    var set = enSetOf(cur), n = Object.keys(set).filter(function (k) { return set[k] != null; }).length;
+    $("enSetSummary").textContent = n ? n + (n === 1 ? " setting changed" : " settings changed") : "As in your class's exam";
+    $("enTimeLimit").closest("label").title = set.timeLimit === "off" ? "The TC Builder turns it off" : "";
+  }
+  function enSpec(a) {
+    var set = enSetOf(a), src = a.enSource.trim(), keyLike = /^[A-Za-z0-9]{6}$/.test(src) && !/\s/.test(src);
+    return { v: BUILDER_V, from: location.origin, aid: a.id, source: { key: keyLike ? src : "", name: src }, name: a.enName.trim() || (src + " TC"),
+      share: "testingcenterud@horacemann.org", settings: set };
+  }
   $("enBuild").addEventListener("click", function () {
-    var a = cur, src = a.enSource.trim() || "your class's exam", name = a.enName.trim() || src + " TC";
-    $("enIntro").textContent = "Sign in to Exam.net, then:";
+    var a = cur, src = a.enSource.trim(), name = a.enName.trim() || (src ? src + " TC" : "");
+    if (!a.enName.trim() && name) { a.enName = name; $("enName").value = name; save(); }
+    $("enSetup").hidden = db.builderV === BUILDER_V;
+    $("enBookmarkNote").textContent = db.builderV && db.builderV !== BUILDER_V ? "The TC Builder has been updated: drag it to your bookmarks bar again (and delete the old one)." : "Already have it? It only needs dragging again when this page says it's been updated.";
     $("enSteps").innerHTML = [
-      "Find “" + src + "” and make a copy of it.",
-      "Name the copy “" + name + "”.",
-      "In the copy's settings, turn the time limit off.",
-      "Add testingcenterud@horacemann.org as a co-teacher of the copy.",
-      "Copy the copy's exam key."
-    ].map(function (t, i) { return "<li><b>" + (i + 1) + "</b> " + esc(t) + "</li>"; }).join("");
+      "Click <b>Open Exam.net</b> (sign in if it asks).",
+      "On that tab, click <b>TC Builder</b> in your bookmarks bar.",
+      "Check what it found and click <b>Build it</b>: it copies " + (src ? "“" + esc(src) + "”" : "your class's exam") + " as “" + esc(name || "… TC") + "”, sets its settings and gives testingcenterud@horacemann.org access as an invigilator. The key comes back here."
+    ].map(function (t, i) { return "<li><b>" + (i + 1) + "</b>&nbsp;" + t + "</li>"; }).join("");
+    $("enManual").innerHTML = ["Duplicate “" + (src || "your class's exam") + "” as “" + (name || "… TC") + "”.", "In the copy's settings, turn the time limit off (and set the rest as above).", "Share it: give testingcenterud@horacemann.org Access.", "Copy the copy's exam key."]
+      .map(function (t, i) { return "<li><b>" + (i + 1) + "</b>&nbsp;" + esc(t) + "</li>"; }).join("");
     $("enKey2").value = a.enKey || "";
+    $("enResult").hidden = true;
     $("enBox").showModal();
+  });
+  $("enBookmark").href = "javascript:" + encodeURIComponent("(" + examNetBuilder.toString() + ")()");
+  $("enBookmark").addEventListener("click", function (e) { e.preventDefault(); $("enBookmarkNote").textContent = "Drag it (don't click it) to your bookmarks bar. If the bar is hidden, press ⌘⇧B."; });
+  $("enBookmark").addEventListener("dragend", function () { db.builderV = BUILDER_V; save(); });
+  $("enOpen").addEventListener("click", function () {
+    if (!cur.enSource.trim()) { $("enResult").hidden = false; $("enResult").className = "tally warn"; $("enResult").textContent = "Fill in your class's exam (its name or key) first."; return; }
+    db.builderV = db.builderV || BUILDER_V; save();
+    window.open("https://exam.net/admin/exams#tcbuild=" + btoa(unescape(encodeURIComponent(JSON.stringify(enSpec(cur))))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""), "examnetBuild");
+    $("enResult").hidden = false; $("enResult").className = "tally"; $("enResult").textContent = "Waiting for the TC Builder in the Exam.net tab…";
+  });
+  function markBuilt(a, key, name) {
+    a.enKey = key || a.enKey; if (name) a.enName = name;
+    a.enCopy = a.enCoTeacher = true; if (enSetOf(a).timeLimit === "off") a.enTimeLimit = true;
+    if (cur === a) {
+      $("enKey").value = a.enKey; $("enName").value = a.enName;
+      ["enCopy", "enTimeLimit", "enCoTeacher"].forEach(function (k) { $(k).checked = !!a[k]; });
+      drawPreview();
+    }
+    save();
+  }
+  window.addEventListener("message", function (e) {
+    if (e.origin !== "https://exam.net" || !e.data || e.data.type !== "tcbuild-done") return;
+    var a = db.exams.find(function (x) { return x.id === e.data.aid; }); if (!a) return;
+    markBuilt(a, e.data.key, e.data.name);
+    db.enDefaults = Object.assign({}, enSetOf(a)); save();
+    if (cur === a) {
+      $("enBuilt").textContent = "Built: " + e.data.name + " · " + e.data.key;
+      var r = $("enResult"); r.hidden = false;
+      r.className = "tally " + (e.data.problems && e.data.problems.length ? "warn" : "ok");
+      r.textContent = "Built “" + e.data.name + "”, exam key " + e.data.key + "." + (e.data.problems && e.data.problems.length ? " Check in Exam.net: " + e.data.problems.join("; ") + "." : "");
+    }
   });
   $("enKey2").addEventListener("input", function () {
     if (!cur) return;
-    cur.enKey = this.value.trim(); $("enKey").value = cur.enKey;
-    if (cur.enKey) { cur.enCopy = cur.enTimeLimit = cur.enCoTeacher = true; ["enCopy", "enTimeLimit", "enCoTeacher"].forEach(function (k) { $(k).checked = true; }); }
-    save(); drawPreview();
+    var k = this.value.trim();
+    if (k) markBuilt(cur, k); else { cur.enKey = ""; $("enKey").value = ""; save(); drawPreview(); }
   });
 
   document.querySelectorAll("dialog [data-close]").forEach(function (b) { b.addEventListener("click", function () { b.closest("dialog").close(); }); });
