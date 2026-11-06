@@ -1327,6 +1327,12 @@
   .preview-full[hidden] { display: none; }
   html.preview-full-open, html.preview-full-open body { overflow: hidden; }
   .preview-full-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  /* Mirror writing (Preferences): the words flip left to right in a text
+     book's editor and preview, nothing else. The CSS scale property, not
+     transform, so it adds to any transform these already have; typing,
+     the caret and clicks still work through it. Exports are untouched. */
+  body.pref-mirror :is(.poem-text, .poem-title, .poem-writer-title, .poem-title-compact, .section-title,
+    .series-part-title, .stage-edit-title, .stage-edit-body, #bookTitleInput, .preview-page) { scale: -1 1; }
   .preview-full .preview-page { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); border: none; }
   .preview-full-close {
     position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border-radius: 50%;
@@ -2898,6 +2904,7 @@
               <label class="prefs-row"><input type="checkbox" data-pref="showCounts"><span>Show line and page counts</span></label>
               <label class="prefs-row"><input type="checkbox" data-pref="showNumbers"><span>Show numbers in the list</span></label>
               <label class="prefs-row"><input type="checkbox" data-pref="showWrapWarning"><span>Warn when a line will wrap</span></label>
+              <label class="prefs-row"><input type="checkbox" data-pref="mirrorText"><span>Mirror writing<small>Shows the words back to front, as in a mirror, in the editor and the preview; the rest of the page and what you export stay as they are</small></span></label>
               <label class="prefs-row is-select"><span>Tab indent<small>How far a Tab moves a line; also a prose paragraph's first-line indent</small></span>
                 <select data-pref-select="tabIndentPt" aria-label="Tab indent">
                   <option value="18">¼ inch</option>
@@ -4378,7 +4385,7 @@
   // ---------------------------------------------------------------------
   var PREFS_KEY = 'bookbug.prefs.v1';
   var PREF_DEFAULTS = { showCounts: true, showNumbers: true, showWrapWarning: true, spellcheck: true, smartPunctuation: false,
-    showSpreadNumbers: true, showGuides: true, showArtNotes: true, tabIndentPt: 36 };
+    showSpreadNumbers: true, showGuides: true, showArtNotes: true, tabIndentPt: 36, mirrorText: false };
   var prefs = Object.assign({}, PREF_DEFAULTS);
   try { Object.assign(prefs, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch (e) {}
   function applyPrefClasses() {
@@ -4388,6 +4395,7 @@
     document.body.classList.toggle('pref-no-spread-numbers', !prefs.showSpreadNumbers);
     document.body.classList.toggle('pref-no-guides', !prefs.showGuides);
     document.body.classList.toggle('pref-no-art-notes', !prefs.showArtNotes);
+    document.body.classList.toggle('pref-mirror', !!prefs.mirrorText);
   }
   applyPrefClasses();
 
