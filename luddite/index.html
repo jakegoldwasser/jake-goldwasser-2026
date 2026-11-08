@@ -787,6 +787,12 @@
   .offlinenote { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 90; max-width: calc(100vw - 32px); pointer-events: none;
     font: 400 14px var(--ui); color: var(--ink); background: var(--card); border: 1.5px solid var(--rule); border-radius: 999px; padding: 6px 14px; box-shadow: 0 2px 8px rgba(43, 33, 24, .12); }
   .offlinenote[hidden] { display: none; }
+  /* The Google test says so on every page, students' too, so nobody mistakes
+     it for the usual Luddite. Above the test-account switcher when that shows. */
+  .gtest { position: fixed; left: 12px; bottom: 12px; z-index: 41; pointer-events: none; font: 600 12px var(--ui); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--paper); background: var(--ink); border-radius: 999px; padding: 5px 12px; }
+  body:has(.acctswitch) .gtest { bottom: 56px; }
+  .gtest[hidden] { display: none; }
   .acctswitch { position: fixed; left: 12px; bottom: 12px; z-index: 40; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 24px);
     background: var(--card); border: 1.5px solid var(--edge); border-radius: 999px; padding: 5px 6px 5px 14px; font: 600 12px var(--ui); color: var(--muted); }
   .acctswitch .k { letter-spacing: .06em; text-transform: uppercase; }
@@ -2194,6 +2200,7 @@
 </div>
 
 <!-- Jake's own test accounts: one click to switch between them (only shown to those accounts) -->
+<div class="gtest no-print" id="gtestPill" hidden title="This computer is using the test of Luddite kept in Google, apart from the usual one">Google test</div>
 <div class="offlinenote no-print" id="offlineNote" role="status" hidden>Offline. Your work is saved on this computer and goes to the server when it’s back online.</div>
 <div class="acctswitch no-print" id="acctSwitch" hidden><span class="k">Testing as</span><span id="acctList"></span></div>
 
@@ -2244,6 +2251,8 @@
       <div class="switchrow"><span class="nm">Students see you as <b id="displayName" style="font-weight:600"></b></span>
         <button class="btn small ghost" id="changeNameBtn" type="button">Change</button></div>
       <div class="switchrow"><span class="nm">Google Drive</span><div id="driveBox" style="margin:0"></div></div>
+      <div class="switchrow" id="backendRow" hidden><span class="nm">Saved in <b id="backendName" style="font-weight:600"></b> <span class="q" tabindex="0" data-tip="A test of keeping everything in Horace Mann’s Google account instead of on Amazon Web Services. Each has its own writing sessions, classes and papers, and you sign in to each once on this computer. Students join the test through a session’s link (Session options › Copy link).">?</span></span>
+        <button class="btn small ghost" id="backendBtn" type="button"></button></div>
       <div class="switchrow"><span class="nm"><span class="who-email" style="font-weight:400"></span></span>
         <span class="row" style="gap:8px"><button class="btn small ghost" id="soloBtn" type="button">Write on my own</button><button class="btn small ghost" data-signout type="button">Sign out</button></span></div>
     </div>
@@ -2431,6 +2440,28 @@
   // Luddite's own Google app (Google Cloud project "Luddite"); Bookbug keeps its own.
   var GOOGLE_CLIENT_ID = '522963753495-m1qigb1q8ct9rmmrh56fkv7r3hs2psap.apps.googleusercontent.com';
   var API = 'https://2zzmrvoptttg6stc5cfjdsz3za0cryjt.lambda-url.us-east-1.on.aws'; // luddite-api (luddite-backend/), Luddite's own server
+  // A test, Luddite HM only: the same backend running as a Google Apps
+  // Script web app, everything kept in a Google Sheet in the account that
+  // deployed it (luddite-google/). GOOGLE_API is its /exec address; until
+  // it's filled in nothing is offered. A device switches with Settings ›
+  // Account or a link ending ?backend=google (?backend=aws switches back),
+  // and keeps its own sign-in and saved writing for each (lsKey), so the
+  // two never mix. Only these fixed addresses: a link can't point the
+  // page at any other server.
+  var GOOGLE_API = location.hostname === 'localhost' ? 'http://localhost:8787' : '';
+  var BACKEND_KEY = 'luddite.backend';
+  var googleOffered = !!GOOGLE_API && (location.hostname === 'jakegoldwasser-hm.github.io' || location.hostname === 'localhost');
+  var onGoogle = (function () {
+    if (!googleOffered) return false;
+    try {
+      var asked = (location.search.match(/[?&]backend=(google|aws)\b/) || [])[1];
+      if (asked) {
+        if (asked === 'google') localStorage.setItem(BACKEND_KEY, 'google'); else localStorage.removeItem(BACKEND_KEY);
+        history.replaceState(null, '', location.pathname + location.search.replace(/([?&])backend=(google|aws)\b&?/, '$1').replace(/[?&]$/, '') + location.hash);
+      }
+      return localStorage.getItem(BACKEND_KEY) === 'google';
+    } catch (e) { return false; }
+  })();
   var AUTH_KEY = 'luddite.auth.v1';
   // Jake's test accounts. Signed in as one of them, a switcher at the bottom
   // left swaps between them in one click, using each one's own saved session
@@ -2474,8 +2505,11 @@
     q.setAttribute('data-tip', text);
     return q;
   }
-  function store(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) {} }
-  function load(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  // On the Google test, everything this page saves on the device goes under
+  // luddite.g.* instead of luddite.*, apart from the AWS copy's.
+  function lsKey(key) { return onGoogle && key.indexOf('luddite.') === 0 ? 'luddite.g.' + key.slice(8) : key; }
+  function store(key, value) { key = lsKey(key); try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch (e) {} }
+  function load(key) { try { return localStorage.getItem(lsKey(key)); } catch (e) { return null; } }
 
   // Luddite's own pop-up, in place of the browser's alert/confirm/prompt.
   // ask({ title, text, ok, cancel, danger, input: 'line' | 'area', value })
@@ -2892,11 +2926,27 @@
   // ---------------------------------------------------------------------
   // Server
   // ---------------------------------------------------------------------
+  // One request to the server, AWS or the Google test. Apps Script can't
+  // read headers or set a status, so there everything goes in one text/plain
+  // POST (no CORS preflight) and its { s: status, b: body } answer is
+  // handed back looking like fetch's.
+  function send(path, body, keepalive) {
+    if (!onGoogle) {
+      var headers = { Authorization: 'Bearer ' + authToken };
+      if (body) headers['Content-Type'] = 'application/json';
+      return fetch(API + path, { method: body ? 'PUT' : 'GET', headers: headers, keepalive: !!keepalive, body: body ? JSON.stringify(body) : undefined });
+    }
+    return fetch(GOOGLE_API, { method: 'POST', keepalive: !!keepalive, headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ m: body ? 'PUT' : 'GET', p: path, a: authToken, o: location.origin, b: body ? JSON.stringify(body) : '' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (w) {
+        var data; try { data = w.b ? JSON.parse(w.b) : {}; } catch (e) { data = {}; }
+        return { status: w.s, ok: w.s >= 200 && w.s < 300, json: function () { return Promise.resolve(data); } };
+      });
+  }
   async function api(path, body) {
-    var headers = { Authorization: 'Bearer ' + authToken };
-    if (body) headers['Content-Type'] = 'application/json';
     var res;
-    try { res = await fetch(API + path, { method: body ? 'PUT' : 'GET', headers: headers, body: body ? JSON.stringify(body) : undefined }); }
+    try { res = await send(path, body); }
     catch (e) { setNetDown(true); var off = new Error('offline'); off.offline = true; throw off; }
     setNetDown(false);
     var data = await res.json().catch(function () { return {}; });
@@ -4988,8 +5038,7 @@
     save();
     if (!writing || mode !== 'room' || previewing || !roomCode || shadow === lastBackedUp) return;
     try {
-      fetch(API + '/luddite/event', { method: 'PUT', keepalive: true, headers: { Authorization: 'Bearer ' + authToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: roomCode, type: 'idle', words: wordCount(shadow), text: shadow, baseAt: Number(load(textKey() + '.base') || 0) }) });
+      send('/luddite/event', { code: roomCode, type: 'idle', words: wordCount(shadow), text: shadow, baseAt: Number(load(textKey() + '.base') || 0) }, true).catch(function () {});
     } catch (e) {}
   });
   window.addEventListener('beforeunload', function (e) {
@@ -5806,6 +5855,15 @@
     if (setTrog(!trogOn)) { savePrefs({ trog: trogOn }); redrawTeacher(); }
   });
   $('prefsClose').addEventListener('click', function () { $('prefsBox').hidden = true; });
+  // Settings › Account: AWS or the Google test (see GOOGLE_API). Switching
+  // reloads the page on the other one, at Home (its own sessions).
+  $('gtestPill').hidden = !onGoogle;
+  if (googleOffered) {
+    $('backendRow').hidden = false;
+    $('backendName').textContent = onGoogle ? 'Google (test)' : 'Amazon Web Services';
+    $('backendBtn').textContent = onGoogle ? 'Switch back to AWS' : 'Try Google (test)';
+    $('backendBtn').addEventListener('click', function () { location.replace(location.pathname + '?backend=' + (onGoogle ? 'aws' : 'google')); });
+  }
 
   var classes = [];
   var extraTime = {}; // email -> 1.5, 2, ...: extra time on assessments (the teacher's own list)
@@ -7012,7 +7070,8 @@
   // Teachers: one room, live
   // ---------------------------------------------------------------------
   // ?room=starry-whale -- readable, and the server ignores the dash.
-  function joinLink(room) { return location.origin + location.pathname + '?room=' + (room.codeLabel || room.code).toLowerCase().replace(/\s+/g, '-'); }
+  // On the Google test the link carries it, so students who open it join there.
+  function joinLink(room) { return location.origin + location.pathname + '?room=' + (room.codeLabel || room.code).toLowerCase().replace(/\s+/g, '-') + (onGoogle ? '&backend=google' : ''); }
 
   // Owners: one class of everyone who can make writing sessions.
   $('teacherClassBtn').addEventListener('click', async function () {
@@ -8037,6 +8096,7 @@
   // thing. A title the page set itself (a padlock, a bubble) is kept.
   // By id first, then by label, then by where the button is.
   var TIP_ID = {
+    backendBtn: 'Reloads Luddite on the other one, where you sign in once. Nothing moves between them',
     proctorHomeBtn: 'Opens the writing sessions you proctor',
     leaveRoomBtn: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
     leaveRoomBtn2: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
@@ -11569,7 +11629,7 @@
   function pendingOf(kind, code) { try { return code ? JSON.parse(load(pendingKey(kind, code)) || 'null') : null; } catch (e) { return null; } }
   function setPending(kind, code, v) { if (code) store(pendingKey(kind, code), v ? JSON.stringify(v) : null); }
   function pendingCodes(kind) {
-    var pre = pendingKey(kind, ''), out = [];
+    var pre = lsKey(pendingKey(kind, '')), out = [];
     try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0) out.push(k.slice(pre.length)); } } catch (e) {}
     return out;
   }
