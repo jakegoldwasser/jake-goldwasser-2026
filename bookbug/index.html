@@ -1327,6 +1327,14 @@
   .preview-full[hidden] { display: none; }
   html.preview-full-open, html.preview-full-open body { overflow: hidden; }
   .preview-full-stage { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  /* Mirror writing (an entry's ⋯ menu, `poem.mirror`): that one poem,
+     chapter, essay or scene shows back to front, left to right, in its
+     editor, its Title View row and its preview pages; nothing else. The
+     CSS scale property, not transform, so it adds to any transform these
+     already have; typing, the caret and clicks work through it. Exports
+     and the read-only reader are untouched. */
+  .poem-card.is-mirror :is(.poem-text, .poem-title, .poem-writer-title, .series-part-title),
+  .poem-title-compact.is-mirror, .preview-page.is-mirror { scale: -1 1; }
   .preview-full .preview-page { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); border: none; }
   .preview-full-close {
     position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border-radius: 50%;
@@ -2101,6 +2109,10 @@
   .pb-h-w { right: -14px; top: 50%; margin-top: -7px; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-wl { left: -14px; top: 50%; cursor: ew-resize; border-radius: 3px; width: 10px; height: 18px; margin-top: -9px; }
   .pb-h-size { right: -8px; bottom: -8px; cursor: nwse-resize; border-radius: 3px; }
+  .pb-h-c { width: 12px; height: 12px; border-radius: 2px; }
+  .pb-h-nw { left: -7px; top: -7px; cursor: nwse-resize; } .pb-h-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+  .pb-h-ne { right: -7px; top: -7px; cursor: nesw-resize; } .pb-h-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+  #pbView.is-gray .pb-stage img, #pbView.is-gray .pbt-pic img { filter: grayscale(1); }
   .pb-h-rot { left: 50%; top: -34px; margin-left: -7px; cursor: grab; }
   .pb-h-rot::after { content: ''; position: absolute; left: 50%; top: 12px; height: 18px; border-left: 1.5px solid var(--accent); }
   .pb-h-move {
@@ -2244,15 +2256,27 @@
   .scan-tabs button { flex: 0 0 auto; padding: 6px 18px; }
   .scan-keep polygon { fill: none; }
   .scan-veil { fill: rgba(27, 26, 24, 0.55); }
+  .scan-lasso { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .scan-lasso polygon { fill: color-mix(in srgb, var(--danger) 12%, transparent); stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .scan-lasso-keep { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .scan-shape { display: inline-flex; vertical-align: middle; margin-left: 6px; }
+  .scan-shape button { padding: 2px 10px; font-size: 12px; }
+  .scan-sel { border: 1.5px dashed var(--accent); cursor: move; z-index: 3; }
+  .scan-hole { position: absolute; background: #FFFFFF; pointer-events: none; }
+  .scan-piece { position: absolute; pointer-events: none; z-index: 2; max-width: none !important; max-height: none !important; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
   .scan-region.is-erasing { border-color: var(--danger); background: color-mix(in srgb, var(--surface) 70%, transparent); }
   .scan-box.is-phone .scan-tabs { display: none; }
   /* A phone only takes the photos in (picture books): the settings, the
      spread picker and the page's boxes are for a computer. */
   .scan-box.is-phone .scan-main { grid-template-columns: 1fr; }
   .scan-box.is-phone .scan-controls, .scan-box.is-phone .scan-assign, .scan-box.is-phone .scan-note { display: none; }
+  .scan-box .modal-actions [data-act="undo"] { margin-right: auto; }
+  /* Transparent paper shows as a checkerboard, so it's plain it's see-through. */
+  .scan-view.is-clear .scan-stage canvas { background: repeating-conic-gradient(#E6E1D8 0% 25%, #FFFFFF 0% 50%) 0 0 / 16px 16px; }
+  .scan-box.is-phone .modal-actions [data-act="undo"], .scan-box.is-phone .modal-actions [data-act="next"] { display: none; }
   .scan-box.is-phone .scan-view { height: auto; min-height: 0; }
   .scan-box.is-phone .scan-view canvas { max-height: 46vh; }
-  @media (max-width: 860px) { #pbImgAdjust { display: none; } }
+  @media (max-width: 860px) { #pbImgAdjust, #pbImgCleanField { display: none; } }
   .scan-assign { margin: 4px 0 2px; font-size: 13px; color: var(--ink-soft); }
   .scan-assign select { font: inherit; font-size: 16px; color: var(--ink); margin-left: 6px; max-width: calc(100% - 70px); padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
   /* What the photo was taken in: plain checkboxes under one small label. */
@@ -3157,16 +3181,11 @@
                 <label>Angle</label>
                 <div class="pb-range"><input type="range" id="pbImgRot" min="-90" max="90" step="15"><output id="pbImgRotOut"></output></div>
               </div>
-              <div class="field">
+              <div class="field" id="pbImgCleanField">
                 <label>Scanned art</label>
                 <div class="pb-btn-row">
-                  <button type="button" class="btn btn-sm" id="pbImgAdjust" title="Straighten, shadows, the light, contrast and brightness, for this illustration alone">Adjust photo…</button>
-                  <button type="button" class="btn btn-sm" id="pbImgShadows" title="Evens out the gray of a scan or phone photo so the paper comes out white">Remove paper shadows</button>
-                  <button type="button" class="btn btn-sm" id="pbImgTransparent" title="Lifts the drawing off its paper, so whatever is behind shows through">Make paper transparent</button>
-                  <button type="button" class="btn btn-sm" id="pbImgInk" title="Makes a photo or scan of a drawing into crisp black ink on white">Clean up line art</button>
-                  <button type="button" class="btn btn-sm" id="pbImgOriginal" hidden>Use original</button>
+                  <button type="button" class="btn btn-sm" id="pbImgAdjust" title="Straighten, crop, shadows, the light, contrast, white or transparent paper and crisp line art, for this illustration alone">Edit…</button>
                 </div>
-                <p class="field-note" style="margin:4px 0 0;">Works best on drawings and paintings on white paper.</p>
               </div>
               <div class="pb-btn-row">
                 <button type="button" class="btn btn-sm" data-item-action="replace">Replace…</button>
@@ -3221,6 +3240,11 @@
               <label for="pbSnapOuter" style="text-transform:none;letter-spacing:0;font-weight:400;">Snap story text to the top or bottom of the page</label>
             </div>
             <p class="field-note" style="margin:-4px 0 12px;">Each story text box sits against its page's outer margin, set flush toward the edge.</p>
+            <div class="checkline">
+              <input type="checkbox" id="pbGrayArt">
+              <label for="pbGrayArt" style="text-transform:none;letter-spacing:0;font-weight:400;">All illustrations in grayscale</label>
+            </div>
+            <p class="field-note" style="margin:-4px 0 12px;">Shown, printed and exported in shades of gray. The illustrations keep their color, so unchecking this brings it back.</p>
             <div class="field">
               <label>Page numbers</label>
               <div class="seg seg-3" id="pbPageNums"><button type="button" data-val="outer">Outer corners</button><button type="button" data-val="center">Center</button><button type="button" data-val="none">None</button></div>
@@ -3258,6 +3282,10 @@
               <div class="checkline export-check">
                 <input type="checkbox" id="pbNotesInPdf">
                 <label for="pbNotesInPdf" style="text-transform:none;letter-spacing:0;font-weight:400;">Include illustration notes</label>
+              </div>
+              <div class="checkline export-check" title="The words alone, laid out on their pages, with no illustrations: for reading the text through, or sketching on">
+                <input type="checkbox" id="pbTextOnly">
+                <label for="pbTextOnly" style="text-transform:none;letter-spacing:0;font-weight:400;">Text only (leave out the illustrations)</label>
               </div>
               <button class="btn" id="pbExportPrintBtn" type="button" style="width:100%; justify-content:center;">Export printable dummy</button>
               <p class="pb-export-note">Prints double-sided on US Letter, landscape. Fold the stack in half and staple along the fold.</p>
@@ -3378,7 +3406,7 @@
               <button class="btn" id="cbExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two cartoons to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
               <div class="checkline export-check">
                 <input type="checkbox" id="cbCutLinesCheck" checked>
-                <label for="cbCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+                <label for="cbCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
               </div>
               <div class="export-status" id="cbExportStatus"></div>
             </div>
@@ -3551,7 +3579,7 @@
               <button class="btn" id="cmExportPrintBtn" type="button" style="width:100%; justify-content:center;" title="Two pages to a side of each Letter sheet, in booklet order: print double-sided, fold the stack in half and staple the fold">Export printable booklet</button>
               <div class="checkline export-check">
                 <input type="checkbox" id="cmCutLinesCheck" checked>
-                <label for="cmCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+                <label for="cmCutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
               </div>
               <div class="export-status" id="cmExportStatus"></div>
             </div>
@@ -4151,7 +4179,7 @@
             <button class="btn" id="exportPrintBtn" style="width:100%; justify-content:center;">Export printable booklet</button>
             <div class="checkline export-check">
               <input type="checkbox" id="cutLinesCheck" checked>
-              <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show cut &amp; fold lines</label>
+              <label for="cutLinesCheck" style="text-transform:none;letter-spacing:0;font-weight:400;">Show crop &amp; fold marks</label>
             </div>
             <button class="btn" id="exportDocxBtn" style="width:100%; justify-content:center;">Export as .docx</button>
             <button class="btn" id="exportManuscriptBtn" style="width:100%; justify-content:center;" title="Standard manuscript format for submitting to journals, agents and presses: Times 12, double-spaced prose, your contact details and a word count on page one">Export submission manuscript</button>
@@ -4189,6 +4217,7 @@
   <button type="button" role="menuitem" data-action="focus">Focus mode</button>
   <button type="button" role="menuitem" data-action="snapshots">Snapshots…</button>
   <button type="button" role="menuitem" data-action="subs">Submissions…</button>
+  <button type="button" role="menuitem" data-action="mirror" title="Show this one back to front, as in a mirror, while you write it and in the preview. What you export stays the right way round.">Mirror writing</button>
   <button type="button" role="menuitem" data-action="series" title="One poem in numbered parts (I., II., …), each part starting on a new page">Make a series</button>
   <div class="menu-sep" data-sub-sep></div>
   <!-- Move › and Copy › open submenus beside the menu (see openEntrySub).
@@ -5122,7 +5151,7 @@
       bind: ['title', 'author', 'byline', 'copyright'].indexOf(it.bind) !== -1 ? it.bind : null,
       rel: typeof it.rel === 'number' ? it.rel : null,
       auto: it.auto || null, autoText: typeof it.autoText === 'string' ? it.autoText : null,
-      copyright: !!it.copyright || undefined, placed: !!it.placed || undefined, path: pbNormPath(it.path) };
+      copyright: !!it.copyright || undefined, placed: !!it.placed || undefined, wSet: !!it.wSet || undefined, path: pbNormPath(it.path) };
   }
   // A text box's path (see pbPathLayout): points in pt from the box's
   // corner, and whether it closes into a shape.
@@ -5205,6 +5234,9 @@
       textW: typeof d.textW === 'number' ? d.textW : PB_STANDARD.textW,
       margin: typeof d.margin === 'number' ? d.margin : PB_STANDARD.margin,
       gutter: typeof d.gutter === 'number' ? d.gutter : PB_STANDARD.gutter,
+      // Every illustration shown and printed in grayscale (the art itself
+      // is kept in color, so switching it off brings the color back).
+      gray: !!d.gray,
       spreads: spreads, archived: (d.archived || []).map(pbNormalizeSpread),
       // Recently deleted spreads: { deletedAt, spread, from: 'book' | 'archive', at }.
       deleted: freshDeleted(d.deleted).map(function (x) { return { deletedAt: x.deletedAt, spread: pbNormalizeSpread(x.spread), from: x.from === 'book' ? 'book' : 'archive', at: typeof x.at === 'number' ? x.at : null }; }),
@@ -5998,6 +6030,7 @@
       // Lambda); Bookbug's data lives under state.chapbookbuilder, the
       // key from before it was renamed.
       var ours = (data.state && data.state.chapbookbuilder) || {};
+      await tbFillImagesFromCloud(ours.chapbooks);
       // Fold whatever is cached here (edits made while a sign-in had
       // lapsed, or books from before sign-in was required) into the
       // account rather than letting either side overwrite the other.
@@ -6486,6 +6519,89 @@
     syncBookUrl();
   }
 
+  // ---- A text book's pictures go to the picture store ----
+  // An account's books are saved as one item, which the database caps at
+  // 400 KB, and pictures in a text book (a hybrid book's cartoons, a
+  // converted cartoon batch) are kept in it as data URLs: one book's
+  // drawings took an account past the cap, and every save failed (Jake,
+  // 2026-11-04). So each is sent to the picture store picture books use
+  // (`?image=`), under an id made from its contents, and the save carries
+  // just { cloud: id, w, h }; on the way back in, each is filled in again
+  // from this device's own copy, else fetched. A picture that can't be
+  // sent stays in the book as before.
+  var TB_IMG_SENT_KEY = 'bookbug.tbImagesSent.v1';
+  function tbImgSent() { try { return JSON.parse(localStorage.getItem(TB_IMG_SENT_KEY) || '{}'); } catch (e) { return {}; } }
+  function tbMarkImgSent(id) { var m = tbImgSent(); m[id] = 1; try { localStorage.setItem(TB_IMG_SENT_KEY, JSON.stringify(m)); } catch (e) {} }
+  function tbImgId(data) {
+    var h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (var i = 0; i < data.length; i++) { var c = data.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 + c, 2246822519) ^ (h2 >>> 13); }
+    return 'tb' + (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36) + data.length.toString(36);
+  }
+  async function tbSendImage(id, dataUrl) {
+    var m = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
+    if (!m || !/^image\/(jpeg|png|webp)$/.test(m[1]) || m[2].length > 400 * 1024) return false;
+    try {
+      var res = await fetch(CLOUD_API_URL + '?image=' + encodeURIComponent(id), {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: m[1], data: m[2] })
+      });
+      return res.ok;
+    } catch (e) { return false; }
+  }
+  // The library as it's saved: each book's pictures swapped for their ids
+  // in the store (this device's books are left as they are).
+  async function tbLibraryForCloud(lib) {
+    var sent = tbImgSent(), out = [];
+    for (var b = 0; b < lib.length; b++) {
+      var entry = lib[b], imgs = entry && entry.data && entry.data.images;
+      if (!imgs || typeof imgs !== 'object' || !Object.keys(imgs).length) { out.push(entry); continue; }
+      var swapped = {}, changed = false;
+      for (var key in imgs) {
+        var im = imgs[key];
+        if (!im || typeof im.data !== 'string' || im.data.indexOf('data:') !== 0) { swapped[key] = im; continue; }
+        var id = tbImgId(im.data);
+        if (!sent[id] && await tbSendImage(id, im.data)) { tbMarkImgSent(id); sent[id] = 1; }
+        if (sent[id]) {
+          var ref = Object.assign({}, im, { cloud: id });
+          delete ref.data;
+          swapped[key] = ref; changed = true;
+        } else swapped[key] = im;
+      }
+      out.push(changed ? Object.assign({}, entry, { data: Object.assign({}, entry.data, { images: swapped }) }) : entry);
+    }
+    return out;
+  }
+  // Fills in the pictures of books from the account (in place), before
+  // they're merged with this device's.
+  async function tbFillImagesFromCloud(cloudLib) {
+    var have = null;
+    function local(id) {
+      if (!have) {
+        have = {};
+        library.forEach(function (en) {
+          var imgs = en && en.data && en.data.images;
+          if (imgs) Object.keys(imgs).forEach(function (k) { var im = imgs[k]; if (im && typeof im.data === 'string') have[tbImgId(im.data)] = im.data; });
+        });
+      }
+      return have[id];
+    }
+    for (var b = 0; b < (cloudLib || []).length; b++) {
+      var imgs = cloudLib[b] && cloudLib[b].data && cloudLib[b].data.images;
+      if (!imgs) continue;
+      for (var key in imgs) {
+        var im = imgs[key];
+        if (!im || !im.cloud || typeof im.data === 'string') continue;
+        var data = local(im.cloud);
+        if (!data) {
+          var blob = await pbFetchCloudImage(im.cloud);
+          if (blob) data = await new Promise(function (done) { var r = new FileReader(); r.onload = function () { done(String(r.result)); }; r.onerror = function () { done(null); }; r.readAsDataURL(blob); });
+        }
+        if (data) { im.data = data; delete im.cloud; }
+      }
+    }
+  }
+
   async function syncLibraryToCloud() {
     // Never push before this page load's first pull has merged the
     // account's books in -- the local copy could be empty or stale (a new
@@ -6506,6 +6622,7 @@
       if (!got.ok) { cloudFailed('Signed in — couldn’t save to the cloud'); return; }
       var cur = await got.json();
       var theirs = (cur.state && cur.state.chapbookbuilder) || {};
+      await tbFillImagesFromCloud(theirs.chapbooks);
       flushPendingSave();
       await reconcileEditedEntries(theirs.chapbooks || []);
       var merged = mergeLibraries(library, trash, theirs.chapbooks || [], theirs.trash || []);
@@ -6517,11 +6634,12 @@
       renderChapbooksList();
       if (isHomeShown()) renderHome();
       var sent = syncBaseEntriesNow();
+      var libraryOut = await tbLibraryForCloud(library);
       var res = await fetch(CLOUD_API_URL, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + cloudAuthToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ app: 'chapbookbuilder', data: {
-          chapbooks: library, trash: trash, lastOpened: getLastOpened(),
+          chapbooks: libraryOut, trash: trash, lastOpened: getLastOpened(),
           pictureBooks: pbLibrary, pictureBookTrash: pbTrash, homeForms: storedHomeForms(),
           cartoonBooks: cbLibrary, cartoonBookTrash: cbTrash, comicBooks: cmLibrary, comicBookTrash: cmTrash, recentlyDeleted: freshDeleted(recentlyDeleted),
           poemTiers: poemTiersForCloud(), tierView: tierViewForCloud()
@@ -9303,11 +9421,35 @@
   // simply placed (scaled, positioned) twice per sheet.
   var IMPOSE_SHEET_W = 792, IMPOSE_SHEET_H = 612, IMPOSE_OUTER_MARGIN = 36;
 
-  function pdfDashedRectStr(x, y, w, h) {
-    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x.toFixed(2) + ' ' + y.toFixed(2) + ' ' + w.toFixed(2) + ' ' + h.toFixed(2) + ' re\nS\n';
+  // Printer's crop marks for a booklet sheet: at each corner of the
+  // spread (x, y, w, h), two short lines in the margin lined up with its
+  // edges, starting `gap` clear of the corner and `len` long, and a fold
+  // tick above and below the fold at `foldX`. Nothing is drawn on the
+  // page itself. Returns [x1, y1, x2, y2] segments, in any units.
+  function cropMarkSegs(x, y, w, h, foldX, gap, len) {
+    var segs = [], x1 = x + w, y1 = y + h;
+    [[x, -1], [x1, 1]].forEach(function (cx) {
+      [[y, -1], [y1, 1]].forEach(function (cy) {
+        segs.push([cx[0] + cx[1] * gap, cy[0], cx[0] + cx[1] * (gap + len), cy[0]]);
+        segs.push([cx[0], cy[0] + cy[1] * gap, cx[0], cy[0] + cy[1] * (gap + len)]);
+      });
+    });
+    segs.push([foldX, y - gap, foldX, y - gap - len], [foldX, y1 + gap, foldX, y1 + gap + len]);
+    return segs;
   }
-  function pdfDashedLineStr(x1, y1, x2, y2) {
-    return '0.6 G\n[6 3] 0 d\n1.2 w\n' + x1.toFixed(2) + ' ' + y1.toFixed(2) + ' m\n' + x2.toFixed(2) + ' ' + y2.toFixed(2) + ' l\nS\n';
+  // In points: 1/8 in clear of the page, 1/4 in long, a hairline in black.
+  function pdfCropMarksStr(x, y, w, h, foldX) {
+    return '0 G\n[] 0 d\n0.5 w\n' + cropMarkSegs(x, y, w, h, foldX, 9, 18).map(function (sg) {
+      return sg[0].toFixed(2) + ' ' + sg[1].toFixed(2) + ' m ' + sg[2].toFixed(2) + ' ' + sg[3].toFixed(2) + ' l S';
+    }).join('\n') + '\n';
+  }
+  function canvasCropMarks(ctx, x, y, w, h, foldX, dpi) {
+    ctx.save();
+    ctx.strokeStyle = '#000000'; ctx.lineWidth = Math.max(1, dpi / 144); ctx.setLineDash([]);
+    ctx.beginPath();
+    cropMarkSegs(x, y, w, h, foldX, dpi / 8, dpi / 4).forEach(function (sg) { ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); });
+    ctx.stroke();
+    ctx.restore();
   }
 
   async function buildImposedBookletPdf(state) {
@@ -9349,8 +9491,7 @@
     function emitSheetFace(leftIdx, rightIdx, rotate180, label) {
       var bytes = [];
       if (state.showCutLines) {
-        pushAscii(bytes, pdfDashedRectStr(startX, startY, boxW * 2, boxH));
-        pushAscii(bytes, pdfDashedLineStr(startX + boxW, startY, startX + boxW, startY + boxH));
+        pushAscii(bytes, pdfCropMarksStr(startX, startY, boxW * 2, boxH, startX + boxW));
       }
       placeForm(bytes, leftIdx, startX, startY);
       placeForm(bytes, rightIdx, startX + boxW, startY);
@@ -11762,6 +11903,9 @@
     entryMenu.querySelector('[data-action="focus"]').hidden = !poem || isSection(poem) || writerMQ.matches;
     entryMenu.querySelector('[data-action="snapshots"]').hidden = !poem || isSection(poem);
     entryMenu.querySelector('[data-action="subs"]').hidden = !poem || isSection(poem);
+    var mirrorBtn = entryMenu.querySelector('[data-action="mirror"]');
+    mirrorBtn.hidden = !poem || isSection(poem);
+    mirrorBtn.textContent = poem && poem.mirror ? 'Stop mirror writing' : 'Mirror writing';
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
     seriesBtn.hidden = !poem || isSection(poem) || entryFormOf(poem) !== 'collection';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
@@ -12332,12 +12476,24 @@
     else if (item.dataset.action === 'move-section') openSectionDialog(idx, false);
     else if (item.dataset.action === 'copy-section') openSectionDialog(idx, true);
     else if (item.dataset.action === 'series') toggleSeries(idx);
+    else if (item.dataset.action === 'mirror') toggleMirror(idx);
     else duplicatePoem(idx);
   });
   document.addEventListener('click', function (e) { if (!entryMenu.contains(e.target)) closeEntryMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeEntryMenu(); });
   window.addEventListener('scroll', closeEntryMenu, true);
   window.addEventListener('resize', closeEntryMenu);
+
+  // Mirror writing, one entry at a time: `poem.mirror` (synced with the
+  // book, so every device shows it the same), shown by the CSS above.
+  function toggleMirror(index) {
+    var poem = state.poems[index];
+    if (!poem || isSection(poem)) return;
+    if (poem.mirror) delete poem.mirror; else poem.mirror = true;
+    persist();
+    renderAll();
+    showToast('“' + (poem.title || entryLabel(poem)) + '”' + (poem.mirror ? ' now shows in mirror writing. Exports stay the right way round.' : ' is the right way round again.'));
+  }
 
   function toggleSeries(index) {
     var poem = state.poems[index];
@@ -12618,7 +12774,7 @@
 
   function makeCard(poem, index, initialPlan, entryNum) {
     var card = document.createElement('div');
-    card.className = 'poem-card' + (poem.sample ? ' is-sample' : '');
+    card.className = 'poem-card' + (poem.sample ? ' is-sample' : '') + (poem.mirror ? ' is-mirror' : '');
     card.dataset.poemId = poem.id;
     // makeCard IS the open editor for this entry -- keeping it draggable
     // meant a click-and-drag gesture anywhere on the card (not just the
@@ -13052,7 +13208,7 @@
     // in the editor's real title field.
     var titleBtn = document.createElement('button');
     titleBtn.type = 'button';
-    titleBtn.className = 'poem-title-compact poem-title-compact-toggle';
+    titleBtn.className = 'poem-title-compact poem-title-compact-toggle' + (poem.mirror ? ' is-mirror' : '');
     titleBtn.textContent = poem.title || entryLabel(poem);
     titleBtn.style.fontFamily = displayStackFor(state.titleFontChoice);
     if (!poem.title) titleBtn.classList.add('is-placeholder');
@@ -15140,6 +15296,7 @@
     box.parentNode.style.setProperty('--preview-h', (Math.round(plan.PAGE_H * scale) + 6) + 'px');
     box.style.boxSizing = 'border-box';
     box.style.fontFamily = printStackFor(state.bodyFontChoice);
+    box.classList.remove('is-mirror');
 
     if (item.type === 'cover') {
       renderItemsPreview(box, layoutFrontCover(state, plan), plan, scale);
@@ -15166,6 +15323,7 @@
     } else {
       var bm = item.matter != null ? plan.backMatter[item.matter] : null;
       var poem = bm ? bm.poem : state.poems[item.index];
+      if (poem && poem.mirror && !document.documentElement.classList.contains('reader-mode')) box.classList.add('is-mirror');
       var layout = bm ? bm.layout : plan.layouts[item.index];
       var pageIndex = item.pageIndex || 0;
       var isFirstPoemPage = pageIndex === 0;
@@ -18108,7 +18266,7 @@
     if (!pbState) return;
     pbUndoStack.push(JSON.stringify({ spreads: pbState.spreads, archived: pbState.archived, trim: pbState.trim, font: pbState.font, size: pbState.size,
       snapText: pbState.snapText, pageNums: pbState.pageNums, sizeAuto: pbState.sizeAuto, lh: pbState.lh,
-      textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter }));
+      textW: pbState.textW, margin: pbState.margin, gutter: pbState.gutter, gray: !!pbState.gray }));
     if (pbUndoStack.length > 40) pbUndoStack.shift();
   }
   function pbUndo() {
@@ -18570,19 +18728,6 @@
     ctx.putImageData(im, 0, 0);
     return c;
   }
-  async function pbCleanImage(it, mode) {
-    var srcId = it.orig || it.img;
-    var src = await pbLoadImage(srcId);
-    if (!src) throw new Error('This illustration isn’t on this device yet.');
-    var c = pbFlattenPaper(pbCanvasFrom(src, PB_IMG_MAX_DIM), mode === 'transparent');
-    if (mode === 'ink') c = pbInkify(c);
-    var enc = await pbEncode(c, mode === 'transparent');
-    var id = await pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
-    pbCheckpoint();
-    it.orig = srcId;
-    it.img = id;
-    it.clean = mode;
-  }
 
   // ---------------------------------------------------------------------
   // Drawing a spread (preview, flatplan, exports)
@@ -18633,8 +18778,10 @@
     }
     var snapped = pbSnapText(it, s, g);
     g.y = Math.max(m.top, Math.min(1 - m.top - g.h, g.y));
+    // Its words kept inside the text area, not the box: a box wider than
+    // its lines may hang past the margin, so its words can sit centered.
     var L = pbLive('left'), R = pbLive('right');
-    if (!snapped) g.x = Math.max(L.x0, Math.min(R.x1 - g.w, g.x));
+    if (!snapped) { var ws = pbWordsSpan(it, g); g.x = Math.max(L.x0 - ws.off, Math.min(R.x1 - ws.off - ws.w, g.x)); }
     pbGeomCache.set(it, { key: key, g: g });
     return g;
   }
@@ -18653,15 +18800,28 @@
     if (!sp || sp[side].role !== 'story' || !pbSpreadPages(s, pbState.spreads.length)[side] || !text.trim()) return false;
     var mid = g.y + g.h / 2;
     if (Math.abs(mid - 0.5) < 0.1) return false;
-    var Wpt = 2 * pbTrim(pbState.trim).pageW * 72, bw = g.w * Wpt, tw = 0;
-    pbWrapRich(pbMeasureCtx2, it, text, g.size, bw).forEach(function (ln) { tw = Math.max(tw, ln.w); });
-    var off = g.align === 'left' ? 0 : g.align === 'right' ? bw - tw : (bw - tw) / 2;
-    var l = pbLive(side), x0 = (side === 'left' ? 0.25 : 0.75) - tw / Wpt / 2;
-    // The words kept inside the text area (the box itself may hang past it).
-    x0 = Math.max(l.x0, Math.min(l.x1 - tw / Wpt, x0));
-    g.x = x0 - off / Wpt;
+    g.x = pbWordsCenterX(it, side, g);
     g.y = mid < 0.5 ? pbMargins().top : PB_BOTTOM;
     return true;
+  }
+  // Where a box's printed words sit inside it, as fractions of the
+  // spread: `off` from the box's left edge to the words' left, and `w`,
+  // the longest line's width. A box is often wider than its lines, so
+  // centering the box doesn't center the words; centering is by these.
+  function pbWordsSpan(it, g) {
+    var Wpt = 2 * pbTrim(pbState.trim).pageW * 72, bw = g.w * Wpt, tw = 0, text = pbItemText(it);
+    if (!text.trim()) return { off: 0, w: g.w };
+    pbWrapRich(pbMeasureCtx2, it, text, g.size, bw).forEach(function (ln) { tw = Math.max(tw, ln.w); });
+    tw = Math.min(tw, bw);
+    var off = g.align === 'left' ? 0 : g.align === 'right' ? bw - tw : (bw - tw) / 2;
+    return { off: off / Wpt, w: tw / Wpt };
+  }
+  // The box's x that puts its words in the middle of its page, kept
+  // inside the text area (the box itself may hang past it).
+  function pbWordsCenterX(it, side, g) {
+    var sp = pbWordsSpan(it, g), l = pbLive(side), x0 = (side === 'left' ? 0.25 : 0.75) - sp.w / 2;
+    x0 = Math.max(l.x0, Math.min(l.x1 - sp.w, x0));
+    return x0 - sp.off;
   }
   // Folios: story pages only, in the outer bottom corners or centered,
   // 0.4 in from the trim.
@@ -18687,6 +18847,17 @@
     return it.auto && pbState.sizeAuto ? Math.round(it.size * pbAutoSize(pbState.trim) / 17 * 2) / 2 : it.size;
   }
   function pbLh(it) { return it.lh || pbState.lh; }
+  // The change that sets a box's type size to `pt`: a box sized relative
+  // to the story's type (a title, the copyright) keeps being relative, so
+  // its own size used to be ignored (Jake, 2026-11-04: the size buttons did
+  // nothing there).
+  function pbSizeChange(it, pt) {
+    pt = Math.max(6, Math.min(200, pt));
+    if (it.rel) return { rel: pt / pbBookSize() };
+    // An automatic box's size follows the trim while type size is automatic.
+    if (it.auto && it.size && pbState.sizeAuto) return { size: Math.round(pt * 17 / pbAutoSize(pbState.trim) * 2) / 2 };
+    return { size: pt };
+  }
   // The margins as fractions of the spread: outer (and top/bottom) and
   // the gutter each side of the fold.
   function pbMargins() {
@@ -19063,6 +19234,22 @@
     else { ox = 0; oy = 0; }
     return { x: ax + aw / 2 + ox * aw - dw / 2, y: H / 2 + oy * H - dh / 2, w: dw, h: dh, ax: ax, aw: aw, ox: ox, oy: oy };
   }
+  // A gray copy of an illustration, for a book in grayscale (made once
+  // per image; canvas filters aren't in every browser).
+  var pbGrayCache = new WeakMap();
+  function pbGrayOf(el) {
+    var c = pbGrayCache.get(el);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = el.naturalWidth || el.width; c.height = el.naturalHeight || el.height;
+    var x = c.getContext('2d');
+    x.drawImage(el, 0, 0);
+    var im = x.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (var i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = Math.round(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+    x.putImageData(im, 0, 0);
+    pbGrayCache.set(el, c);
+    return c;
+  }
   // opts: text / art (default both), nonPages ('shade' | 'blank'),
   // placeholders (draw a gray box for a picture not on this device).
   function pbDrawSpread(ctx, sp, s, W, opts) {
@@ -19085,6 +19272,7 @@
           return;
         }
         var r = pbImgRect(it, W, H, el);
+        if (pbState.gray) el = pbGrayOf(el);
         ctx.save();
         if (r.free) {
           ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
@@ -19191,7 +19379,7 @@
     ctx.translate(x, y);
     ctx.beginPath(); ctx.rect(0, 0, w, w * pbTrim(pbState.trim).pageH / pbTrim(pbState.trim).pageW); ctx.clip();
     if (spot.side === 'right') ctx.translate(-w, 0);
-    pbDrawSpread(ctx, pbState.spreads[spot.s], spot.s, w * 2, { nonPages: 'blank' });
+    pbDrawSpread(ctx, pbState.spreads[spot.s], spot.s, w * 2, { nonPages: 'blank', art: !pbExportTextOnly });
     ctx.restore();
   }
   function pbCanvasFor(canvas, cssW, cssH) {
@@ -19746,6 +19934,7 @@
     var mine = pbPageTexts(toS, side);
     var w = it.path ? it.w : pbStraddles(it) ? pbStoryW(side) : Math.min(it.w, pbStoryW(side));
     Object.assign(it, { x: pbCenterX(side, w), w: w, y: PB_BOTTOM, rot: 0 });
+    if (!it.path) { var mg = pbGeom(it, toS); it.x += pbWordsCenterX(it, side, mg) - mg.x; }
     pbState.spreads[toS].items.push(it);
     pbMakeRoomBelow(toS, mine, pbGeom(it, toS).h || 2 * pbLineFrac(it));
     pbSel = { s: toS, id: it.id };
@@ -20038,7 +20227,25 @@
       notesBtn.classList.toggle('is-open', open);
       notesBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
-    actions.append(notesBtn, addPic, dots);
+    actions.append(notesBtn);
+    // + Text box (Spread view; Text view has its own on each page): on a
+    // page of the spread with no words yet, else the left one, at the
+    // bottom, open to type in. Double-clicking a page still does it there.
+    if (pbViewMode !== 'text') {
+      var addText = document.createElement('button');
+      addText.type = 'button'; addText.className = 'pb-add-btn'; addText.textContent = '+ Text box';
+      addText.title = 'Add a text box to this spread and start typing (or double-click a page to put one there)';
+      addText.addEventListener('click', function () {
+        var pages = pbSpreadPages(s, pbState.spreads.length), sp = pbState.spreads[s];
+        function hasWords(side) {
+          return sp.items.some(function (x) { return x.type === 'text' && !x.bind && (x.text || '').trim() && ((x.x + x.w / 2 < 0.5) === (side === 'left')); });
+        }
+        var side = pages.left && !hasWords('left') ? 'left' : pages.right && !hasWords('right') ? 'right' : pages.left ? 'left' : 'right';
+        pbAddText(s, side === 'left' ? 0.25 : 0.75, null, 'bottom');
+      });
+      actions.append(addText);
+    }
+    actions.append(addPic, dots);
     head.appendChild(actions);
     card.appendChild(head);
 
@@ -20361,16 +20568,20 @@
     var sw = stage.clientWidth, sh = stage.clientHeight;
     var wF = box.offsetWidth / sw, hF = box.offsetHeight / sh;
     var my = pbMargins().top, L = pbLive('left'), R = pbLive('right');
+    // Centers and margins catch the printed words, not the box (often
+    // wider than its lines): `wo` is where the words start in the box,
+    // `ww` how wide they are.
+    var span = it.path ? { off: 0, w: wF } : pbWordsSpan(it, g), wo = span.off, ww = span.w;
     // Each target: where the box's left (or top) would go, and where to draw the line.
     var xs = [
-      { v: x0, line: x0 + wF / 2, start: true, label: 'Where it started' },
-      { v: 0.25 - wF / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wF / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wF / 2, line: 0.5, label: 'Spread center' },
-      { v: (L.x0 + L.x1) / 2 - wF / 2, line: (L.x0 + L.x1) / 2, label: 'Text area center' }, { v: (R.x0 + R.x1) / 2 - wF / 2, line: (R.x0 + R.x1) / 2, label: 'Text area center' },
-      { v: L.x0, line: L.x0, label: 'Outer margin' }, { v: L.x1 - wF, line: L.x1, label: 'Gutter' }, { v: R.x0, line: R.x0, label: 'Gutter' }, { v: R.x1 - wF, line: R.x1, label: 'Outer margin' }
+      { v: x0, line: x0 + wo + ww / 2, start: true, label: 'Where it started' },
+      { v: 0.25 - wo - ww / 2, line: 0.25, label: 'Page center' }, { v: 0.75 - wo - ww / 2, line: 0.75, label: 'Page center' }, { v: 0.5 - wo - ww / 2, line: 0.5, label: 'Spread center' },
+      { v: (L.x0 + L.x1) / 2 - wo - ww / 2, line: (L.x0 + L.x1) / 2, label: 'Text area center' }, { v: (R.x0 + R.x1) / 2 - wo - ww / 2, line: (R.x0 + R.x1) / 2, label: 'Text area center' },
+      { v: L.x0 - wo, line: L.x0, label: 'Outer margin' }, { v: L.x1 - wo - ww, line: L.x1, label: 'Gutter' }, { v: R.x0 - wo, line: R.x0, label: 'Gutter' }, { v: R.x1 - wo - ww, line: R.x1, label: 'Outer margin' }
     ];
     // Where it rested before its last move, too, so a slip bigger than
     // the snap distance can still be dragged straight back.
-    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wF / 2, start: true, label: 'Where it was' });
+    if (typeof it._prevX === 'number') xs.push({ v: x0 + (it._prevX - it.x), line: x0 + (it._prevX - it.x) + wo + ww / 2, start: true, label: 'Where it was' });
     var ys = [
       { v: y0, line: y0 + hF / 2, start: true, label: 'Where it started' },
       { v: 0.5 - hF / 2, line: 0.5, label: 'Page middle' }, { v: my, line: my, label: 'Top margin' }, { v: 1 - my - hF, line: 1 - my, label: 'Bottom margin' }
@@ -20529,15 +20740,30 @@
       pbQb('<b>B</b>', styled ? 'Bold (select words first to bold just those)' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
       pbQb('<i>I</i>', styled ? 'Italic (select words first to italicize just those)' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
       pbQbSep(),
-      pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
+      pbQb('−', 'Smaller', false, function () { pbPopSet(pbSizeChange(it, pbFontSize(it) - 1)); }),
       (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it) + ' pt'; return sz; })(),
-      pbQb('+', 'Larger', false, function () { pbSetItem({ size: Math.min(200, pbFontSize(it) + 1) }); }),
+      pbQb('+', 'Larger', false, function () { pbPopSet(pbSizeChange(it, pbFontSize(it) + 1)); }),
       pbQbSep(),
-      pbQb('⟸', 'Align left', it.align === 'left', function () { pbSetItem({ align: 'left' }); }),
-      pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
-      pbQb('⟹', 'Align right', it.align === 'right', function () { pbSetItem({ align: 'right' }); })
+      pbQb('⟸', 'Align left', it.align === 'left', function () { pbPopSet({ align: 'left' }); }),
+      pbQb('⟺', 'Center', it.align === 'center', function () { pbPopSet({ align: 'center' }); }),
+      pbQb('⟹', 'Align right', it.align === 'right', function () { pbPopSet({ align: 'right' }); })
     );
     autoGrow(pbPopText);
+  }
+  // A change from the pop-up's own bar: made to the box being typed in
+  // (whatever is selected), and the pop-up redrawn to show it.
+  function pbPopSet(changes) {
+    var it = pbPopItem();
+    if (!it) return;
+    pbCheckpoint();
+    Object.assign(it, changes);
+    pbPersist();
+    pbRefreshSpread(pbPopFor.s);
+    // The pop-up stays where it is, so the next click lands on the same
+    // button (a story box grows upward from the bottom margin, and the
+    // pop-up used to jump with it; Jake, 2026-11-04).
+    pbStylePopup(); pbPlacePopup(true);
+    pbPopText.focus();
   }
   function pbPopBox() {
     var stage = pbPopFor && pbStageEl(pbPopFor.s);
@@ -20545,11 +20771,12 @@
   }
   // Over the box: the magnified words' middle on the box's own middle,
   // kept inside the window.
-  function pbPlacePopup() {
+  function pbPlacePopup(stay) {
     if (pbPop.hidden || !pbPopFor) return;
     var box = pbPopBox();
     var vw = document.documentElement.clientWidth, w = Math.min(vw - 24, Math.max(380, pbPopText.offsetWidth + 23));
     pbPop.style.width = w + 'px';
+    if (stay) return;
     var r = box ? box.getBoundingClientRect() : { top: 120, bottom: 120, left: vw / 2, width: 0, height: 0 };
     var h = pbPop.offsetHeight;
     var top = r.top + r.height / 2 - (pbPopText.offsetTop + pbPopText.offsetHeight / 2);
@@ -20659,8 +20886,12 @@
   var pbPopRaf = null;
   pbPop.querySelector('.pb-pop-done').addEventListener('click', function () { pbClosePopup(); });
   pbPop.addEventListener('mousedown', function (e) { if (e.target.closest('button')) e.preventDefault(); });
+  // Return (or Enter) is done, as in Slides' text boxes on a phone or a
+  // chat box; Shift+Return starts a new line (Jake, 2026-11-04).
   pbPopText.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); pbClosePopup(); }
+    else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); e.stopPropagation(); pbClosePopup(); }
+    else if (e.key === 'Enter' && e.shiftKey && !e.isComposing) { e.preventDefault(); document.execCommand('insertLineBreak'); }
   });
   document.addEventListener('pointerdown', function (e) {
     if (!pbPop.hidden && !pbPop.contains(e.target) && !e.target.closest('.pb-tb[data-id="' + (pbPopFor && pbPopFor.id) + '"]')) pbClosePopup();
@@ -20698,16 +20929,24 @@
           // Keep the far edge put (the box turns about its center, so this
           // is close, not exact, for a turned box).
           var x = fromLeft ? x0 + (w0 - w) : x0;
-          box.style.width = (w * 100) + '%';
-          box.style.left = (x * 100) + '%';
           it._w = w; it._x = x;
+          // The words rewrap as it goes, like PowerPoint or Slides: the box
+          // is laid out as it would be at this width (snapping, shrinking
+          // to fit and all) and its lines set again.
+          var tmp = Object.assign({}, it, { w: w, x: x }), g = pbGeom(tmp, s), ed = box.querySelector('.pb-tb-text');
+          box.style.width = (g.w * 100) + '%';
+          box.style.left = (g.x * 100) + '%';
+          box.style.top = (g.y * 100) + '%';
+          if (ed) { ed.innerHTML = pbSetLines(tmp, g); pbStyleText(ed, tmp, g); }
+          box.classList.toggle('is-shrunk', !!g.shrunk);
           pbPositionQuickbar(box);
         }, function (ev, moved) {
           if (!moved) return;
           pbCheckpoint();
-          it.w = it._w; it.x = it._x;
+          it.w = it._w; it.x = it._x; it.wSet = true;
           delete it._w; delete it._x;
           pbPersist();
+          pbRefreshSpread(s);
           pbSyncFormatting();
         });
       });
@@ -20901,6 +21140,12 @@
           it.ox = ox; it.oy = oy;
           var r = pbImgRect(it, rw, rh, el), img = node.querySelector('img');
           if (img) { img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / rh * 100) + '%'; }
+          // Its selection border follows (the part on its page(s)).
+          var sel = stage.querySelector('.pb-sel[data-for="' + it.id + '"]');
+          if (sel) {
+            var bx0 = Math.max(r.x, r.ax), bx1 = Math.min(r.x + r.w, r.ax + r.aw), by0 = Math.max(r.y, 0), by1 = Math.min(r.y + r.h, rh);
+            pbPlaceOverlay(sel, bx0 / rw, by0 / rh, Math.max(0, bx1 - bx0) / rw, Math.max(0, by1 - by0) / rh, 0);
+          }
           placeGhost();
         }
       }, function (ev, moved) {
@@ -20954,25 +21199,25 @@
     if (it.fit === 'free') {
       var ratio = el ? el.naturalHeight / el.naturalWidth : 0.75;
       pbPlaceOverlay(ov, it.x, it.y, it.w, it.w * W * ratio / H, it.rot);
-      var size = document.createElement('div');
-      size.className = 'pb-h pb-h-size';
-      size.title = 'Drag to resize';
-      size.addEventListener('pointerdown', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        var w0 = it.w;
-        pbTrack(e, function (ev, dx) {
-          var r = stage.getBoundingClientRect();
-          it._w = Math.max(0.03, w0 + dx / r.width);
-          var node = pbImgNode(stage, it);
-          node.style.width = (it._w * 100) + '%';
-          node.style.height = (it._w * W * ratio / H * 100) + '%';
-          pbPlaceOverlay(ov, it.x, it.y, it._w, it._w * W * ratio / H, it.rot);
-        }, function (ev, moved) {
-          if (!moved) return;
-          pbCheckpoint();
-          it.w = it._w; delete it._w;
-          pbPersist();
-        });
+      // Its four corners resize it about its middle.
+      pbCornerHandles(ov, function () {
+        var w0 = it.w, cx = it.x + w0 / 2, cy = it.y + w0 * W * ratio / H / 2, node = pbImgNode(stage, it);
+        return {
+          apply: function (k) {
+            var w = Math.max(0.03, Math.min(2, w0 * k)), h = w * W * ratio / H;
+            it._w = w; it._x = cx - w / 2; it._y = cy - h / 2;
+            node.style.width = (w * 100) + '%'; node.style.height = (h * 100) + '%';
+            node.style.left = (it._x * 100) + '%'; node.style.top = (it._y * 100) + '%';
+            pbPlaceOverlay(ov, it._x, it._y, w, h, it.rot);
+          },
+          end: function () {
+            if (typeof it._w !== 'number') return;
+            pbCheckpoint();
+            it.w = it._w; it.x = it._x; it.y = it._y;
+            delete it._w; delete it._x; delete it._y;
+            pbPersist(); pbSyncFormatting();
+          }
+        };
       });
       var rot = document.createElement('div');
       rot.className = 'pb-h pb-h-rot';
@@ -20995,12 +21240,58 @@
           pbSyncFormatting();
         });
       });
-      ov.append(size, rot);
+      ov.append(rot);
     } else {
       var ax = it.area === 'right' ? 0.5 : 0, aw = it.area === 'spread' ? 1 : 0.5;
       pbPlaceOverlay(ov, ax, 0, aw, 1, 0);
+      // The border follows the illustration as it shows (the part on its
+      // page(s)), with a resize handle at each corner.
+      var showOn = function (r) {
+        var x0 = Math.max(r.x, r.ax), x1 = Math.min(r.x + r.w, r.ax + r.aw), y0 = Math.max(r.y, 0), y1 = Math.min(r.y + r.h, H);
+        pbPlaceOverlay(ov, x0 / W, y0 / H, Math.max(0, x1 - x0) / W, Math.max(0, y1 - y0) / H, 0);
+      };
+      if (el) showOn(pbImgRect(it, W, H, el));
+      // Full bleed and centered resize from a handle at the illustration's
+      // corner (kept on its page(s)): dragging away from its middle makes it
+      // larger, toward it smaller, the same as Zoom / Size in Formatting.
+      if (el) pbCornerHandles(ov, function () {
+        var node = pbImgNode(stage, it), img = node && node.querySelector('img'), bleed = it.fit === 'bleed';
+        var v0 = bleed ? (it.zoom || 1) : it.scale, v = v0;
+        return {
+          apply: function (k) {
+            v = v0 * k;
+            v = bleed ? Math.min(4, Math.max(0.5, v)) : Math.min(1, Math.max(0.1, v));
+            v = Math.round(v * 100) / 100;
+            var r = pbImgRect(Object.assign({}, it, bleed ? { zoom: v } : { scale: v }), W, H, el);
+            if (img) {
+              img.style.left = ((r.x - r.ax) / r.aw * 100) + '%'; img.style.top = (r.y / H * 100) + '%';
+              img.style.width = (r.w / r.aw * 100) + '%'; img.style.height = (r.h / H * 100) + '%';
+            }
+            showOn(r);
+          },
+          end: function () { if (v !== v0) pbSetItem(bleed ? { zoom: v } : { scale: v }); }
+        };
+      });
     }
     stage.appendChild(ov);
+  }
+  // Resize handles at a selection's four corners: dragging one away from
+  // the middle makes the illustration larger, toward it smaller, as in
+  // Slides. `start()` gives { apply(k), end() } for each drag, k being the
+  // pointer's distance from the middle over where it started.
+  function pbCornerHandles(ov, start) {
+    ['nw', 'ne', 'sw', 'se'].forEach(function (c) {
+      var h = document.createElement('div');
+      h.className = 'pb-h pb-h-c pb-h-' + c;
+      h.title = 'Drag to make it larger or smaller';
+      h.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var r = ov.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        var d0 = Math.max(8, Math.hypot(e.clientX - cx, e.clientY - cy)), op = start();
+        pbTrack(e, function (ev) { op.apply(Math.hypot(ev.clientX - cx, ev.clientY - cy) / d0); }, function (ev, moved) { if (moved) op.end(); });
+      });
+      ov.appendChild(h);
+    });
   }
   function pbImgNode(stage, it) {
     var idx = pbState.spreads[+stage.closest('.pb-spread').dataset.spread].items.filter(function (x) { return x.type === 'image'; }).indexOf(it);
@@ -21019,6 +21310,7 @@
   // Selecting: one item at a time, anywhere in the book.
   function pbSelect(sel) {
     var prev = pbSel;
+    if (!sel || !prev || sel.id !== prev.id) pbQbHold = null;
     if (prev && sel && prev.s === sel.s && prev.id === sel.id) { pbSyncFormatting(); return; }
     // An empty text box you've left is removed.
     if (prev) {
@@ -21167,7 +21459,7 @@
   }
   // Each illustration onto the spread it was given (or the archive), with
   // the photo it came from and how it was cleaned (`raw`, `scan`), so
-  // Adjust photo can redo it.
+  // Clean up can redo it.
   function pbPlaceScanned(list) {
     if (!list.length) return;
     pbCheckpoint();
@@ -21195,21 +21487,35 @@
     if (extra) showToast((extra === 1 ? 'One illustration' : extra + ' illustrations') + ' had no spread, so ' + (extra === 1 ? 'it’s' : 'they’re') + ' in the archive.');
     else if (list.length > 1) showToast('Added ' + list.length + ' illustrations.', 'Undo', pbUndo);
   }
-  // Adjust photo…: the illustration's photo back in the importer, with the
+  // Edit…: the illustration's photo back in the importer, with the
   // settings it came in with, to change for this one alone. One from
   // before photos were kept starts from the illustration itself.
-  async function pbAdjustPicture(it, s) {
-    var rawId = it.raw || it.orig || it.img, img = await pbLoadImage(rawId);
+  async function pbAdjustPicture(it, s, fromPhoto) {
+    // An illustration brought in before Crop and Erase (its settings a box
+    // cut from a sheet, cropped to the drawing: `scan` without `crop`)
+    // can't be remade from its photo the same way, and opening it from the
+    // photo showed a different picture from the book's (Jake, 2026-11-04).
+    // It opens as the book has it, edits going on from there; Start over
+    // from the photo as taken goes back to the photo.
+    var legacy = !!(it.scan && !it.scan.crop && it.raw) && !fromPhoto;
+    var rawId = legacy ? it.img : it.raw || it.orig || it.img, img = await pbLoadImage(rawId);
     if (!img) { await confirmDialog('This illustration isn’t on this device yet.'); return; }
     var canvas = pbCanvasFrom(img, 2400), onWhite = document.createElement('canvas');
     onWhite.width = canvas.width; onWhite.height = canvas.height;
     var wctx = onWhite.getContext('2d');
     wctx.fillStyle = '#fff'; wctx.fillRect(0, 0, onWhite.width, onWhite.height); wctx.drawImage(canvas, 0, 0);
     var made = null;
+    // The book's next illustration, in spread order, for Next image.
+    var all = [];
+    pbState.spreads.forEach(function (sp, k) { sp.items.forEach(function (x) { if (x.type === 'image' && x.img) all.push({ it: x, s: k }); }); });
+    var at = all.findIndex(function (x) { return x.it === it; }), after = at >= 0 ? all[at + 1] : null;
     openCartoonImport(undefined, null, {
-      title: 'Adjust the illustration', one: 'illustration', many: 'illustrations', mode: (it.scan && it.scan.mode) || 'color',
-      hint: '', crop: true, aspect: pbSpreadAspect(), adjust: { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw },
+      title: 'Edit the Illustration', one: 'illustration', many: 'illustrations', mode: legacy ? 'color' : (it.scan && it.scan.mode) || 'color',
+      hint: '', crop: true, aspect: pbSpreadAspect(),
+      adjust: legacy ? { canvas: onWhite, raw: rawId, scan: null, noRaw: true, clean: null, restart: function () { pbAdjustPicture(it, s, true); } }
+        : { canvas: onWhite, raw: rawId, scan: it.scan, noRaw: !it.raw, clean: it.clean },
       store: function (enc, meta) { return pbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = { id: id, scan: meta && meta.scan }; }); },
+      next: after ? function () { pbSelect({ s: after.s, id: after.it.id }); pbAdjustPicture(after.it, after.s); } : null,
       done: function () {
         if (!made) return;
         pbCheckpoint();
@@ -21236,9 +21542,16 @@
     return b;
   }
   function pbQbSep() { var d = document.createElement('span'); d.className = 'pb-qb-sep'; return d; }
+  // Changing a box's size keeps the bar where it was (the box may grow
+  // upward), so − and + stay under the pointer; moving or selecting
+  // something else lets it follow again.
+  var pbQbHold = null;
+  function pbHoldQuickbar() { if (pbSel && !pbQuickbar.hidden) pbQbHold = { id: pbSel.id, top: pbQuickbar.style.top, left: pbQuickbar.style.left }; }
   function pbPositionQuickbar(boxOverride) {
     var it = pbSelected();
     if (!it || !isPictureBookShown() || pbViewMode !== 'spreads' || !pbPop.hidden) { pbQuickbar.hidden = true; return; }
+    if (pbQbHold && pbQbHold.id === it.id && !boxOverride) { pbQuickbar.hidden = false; pbQuickbar.style.top = pbQbHold.top; pbQuickbar.style.left = pbQbHold.left; return; }
+    pbQbHold = null;
     var stage = pbStageEl(pbSel.s);
     var target = boxOverride || (stage && (it.type === 'text' ? stage.querySelector('.pb-tb[data-id="' + it.id + '"]') : stage.querySelector('.pb-sel')));
     if (!target) { pbQuickbar.hidden = true; return; }
@@ -21263,9 +21576,9 @@
         pbQb('<b>B</b>', styled ? 'Bold' : 'This typeface has no bold', it.bold && styled, function () { pbToggleStyle('bold', it); }, !styled),
         pbQb('<i>I</i>', styled ? 'Italic' : 'This typeface has no italic', it.italic && styled, function () { pbToggleStyle('italic', it); }, !styled),
         pbQbSep(),
-        pbQb('−', 'Smaller', false, function () { pbSetItem({ size: Math.max(6, pbFontSize(it) - 1) }); }),
+        pbQb('−', 'Smaller', false, function () { pbHoldQuickbar(); pbSetItem(pbSizeChange(it, pbFontSize(it) - 1)); }),
         (function () { var sz = document.createElement('span'); sz.className = 'pb-qb-size'; sz.textContent = pbFontSize(it); return sz; })(),
-        pbQb('+', 'Larger', false, function () { pbSetItem({ size: Math.min(200, pbFontSize(it) + 1) }); }),
+        pbQb('+', 'Larger', false, function () { pbHoldQuickbar(); pbSetItem(pbSizeChange(it, pbFontSize(it) + 1)); }),
         pbQbSep(),
         pbQb('⟸', 'Align left', it.align === 'left', function () { pbSetItem({ align: 'left' }); }),
         pbQb('⟺', 'Center', it.align === 'center', function () { pbSetItem({ align: 'center' }); }),
@@ -21326,19 +21639,10 @@
       [['bleed', 'Bleed'], ['center', 'Centered'], ['free', 'Free']].forEach(function (f) {
         pbQuickbar.appendChild(pbQb(f[1], f[0] === 'bleed' ? 'Fill to the edges; drag to choose what shows' : f[0] === 'center' ? 'Whole illustration, centered' : 'Place it anywhere, any size and angle', it.fit === f[0], function () { pbSetFit(it, f[0]); }));
       });
-      var cleanBtn = pbQb('Clean up ▾', 'Tidy a scanned or photographed drawing', !!it.clean, function (e) {
-        e.stopPropagation();
-        pbCleanMenu.innerHTML = (pbPhoneWidth() ? '' : '<button type="button" role="menuitem" data-clean="adjust">Adjust photo…</button>') +
-          '<button type="button" role="menuitem" data-clean="shadows">Remove paper shadows</button>' +
-          '<button type="button" role="menuitem" data-clean="transparent">Make paper transparent</button>' +
-          '<button type="button" role="menuitem" data-clean="ink">Clean up line art</button>' +
-          (it.orig ? '<button type="button" role="menuitem" data-clean="original">Use original</button>' : '');
-        pbCleanMenu.hidden = false;
-        var r = cleanBtn.getBoundingClientRect();
-        pbCleanMenu.style.left = Math.max(8, Math.min(window.innerWidth - pbCleanMenu.offsetWidth - 8, r.left)) + 'px';
-        pbCleanMenu.style.top = (r.bottom + 6) + 'px';
-      });
-      pbQuickbar.append(pbQbSep(), cleanBtn, pbQbSep(), pbQb('Archive', 'Send this illustration to the archive', false, function () { pbItemAction('delete'); }));
+      // Every fix for a photo or scan is in the one Edit window (on a
+      // computer: photos are cleaned up there, not on a phone).
+      if (!pbPhoneWidth()) pbQuickbar.append(pbQbSep(), pbQb('Edit…', 'Straighten, crop, erase, move parts, shadows, contrast, white or transparent paper, crisp line art', false, function () { pbAdjustPicture(it, pbSel.s); }));
+      pbQuickbar.append(pbQbSep(), pbQb('Archive', 'Send this illustration to the archive', false, function () { pbItemAction('delete'); }));
     }
     pbPositionQuickbar();
   }
@@ -21368,12 +21672,6 @@
       pbSetPath(cs, cit, pre.pts, pre.closed);
       return;
     }
-    var b = e.target.closest('[data-clean]');
-    if (!b) return;
-    pbCleanMenu.hidden = true;
-    if (b.dataset.clean === 'adjust') { var ait = pbSelected(); if (ait) pbAdjustPicture(ait, pbSel.s); }
-    else if (b.dataset.clean === 'original') { var it = pbSelected(); if (it && it.orig) pbSetItem({ img: it.orig, orig: null, clean: null }); }
-    else pbRunClean(b.dataset.clean);
   });
   document.addEventListener('click', function (e) { if (!pbCleanMenu.contains(e.target)) pbCleanMenu.hidden = true; });
   window.addEventListener('scroll', function () { pbCleanMenu.hidden = true; }, true);
@@ -21419,7 +21717,7 @@
     var stage = pbStageEl(s), box = stage && stage.querySelector('.pb-tb[data-id="' + it.id + '"]');
     var hF = box ? box.offsetHeight / stage.clientHeight : 2 * pbLineFrac(it), m = pbMargins(), l = pbLive(side);
     var y = where === 'top' ? m.top : where === 'middle' ? 0.5 - hF / 2 : PB_BOTTOM;
-    pbSetItem({ x: it.x + (pbCenterX(side, g.w) - g.x), y: y, rot: 0 });
+    pbSetItem({ x: it.x + (pbWordsCenterX(it, side, g) - g.x), y: y, rot: 0 });
   }
   function pbItemHasInfo(it) { return it.type === 'image' || (!it.bind && !!(it.text || '').trim()); }
   function pbItemAction(action) {
@@ -21737,10 +22035,6 @@
       pbFmt('pbImgScale').value = pct; pbRangeOut('pbImgScale', pct + '%');
       pbFmt('pbImgRotField').hidden = it.fit !== 'free';
       pbFmt('pbImgRot').value = it.rot; pbRangeOut('pbImgRot', it.rot + '°');
-      pbFmt('pbImgOriginal').hidden = !it.orig;
-      pbFmt('pbImgShadows').classList.toggle('btn-primary', it.clean === 'shadows');
-      pbFmt('pbImgTransparent').classList.toggle('btn-primary', it.clean === 'transparent');
-      pbFmt('pbImgInk').classList.toggle('btn-primary', it.clean === 'ink');
     }
   }
   pbFmt('pbFmtScope').addEventListener('click', function (e) {
@@ -21848,7 +22142,7 @@
       if (b.dataset.place === 'top') ch.y = my;
       else if (b.dataset.place === 'middle') ch.y = 0.5 - hFrac / 2;
       else if (b.dataset.place === 'bottom') ch.y = PB_BOTTOM;
-      else ch.x = pbCenterX(pbPageSide(it), it.w);
+      else { var cg = pbGeom(it, pbSel.s); ch.x = it.x + (pbWordsCenterX(it, pbPageSide(it), cg) - cg.x); }
       pbSetItem(ch);
     });
   });
@@ -21861,32 +22155,7 @@
   pbFmt('pbImgFit').querySelectorAll('button').forEach(function (b) {
     b.addEventListener('click', function () { var it = pbSelected(); if (it) pbSetFit(it, b.dataset.val); });
   });
-  async function pbRunClean(mode) {
-    var it = pbSelected();
-    if (!it) return;
-    var btn = pbFmt(mode === 'transparent' ? 'pbImgTransparent' : mode === 'ink' ? 'pbImgInk' : 'pbImgShadows');
-    var label = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Working…';
-    setPbExportStatus('');
-    try {
-      await pbCleanImage(it, mode);
-      pbPersist();
-      if (pbSel) pbRefreshSpread(pbSel.s);
-    } catch (err) {
-      await confirmDialog(err && err.message ? err.message : 'Couldn’t clean up that illustration.');
-    }
-    btn.disabled = false; btn.textContent = label;
-    pbSyncFormatting();
-  }
   pbFmt('pbImgAdjust').addEventListener('click', function () { var it = pbSelected(); if (it && it.type === 'image') pbAdjustPicture(it, pbSel.s); });
-  pbFmt('pbImgShadows').addEventListener('click', function () { pbRunClean('shadows'); });
-  pbFmt('pbImgTransparent').addEventListener('click', function () { pbRunClean('transparent'); });
-  pbFmt('pbImgInk').addEventListener('click', function () { pbRunClean('ink'); });
-  pbFmt('pbImgOriginal').addEventListener('click', function () {
-    var it = pbSelected();
-    if (!it || !it.orig) return;
-    pbSetItem({ img: it.orig, orig: null, clean: null });
-  });
 
   // Whole book: shape and size, and the type new boxes start with.
   function pbRenderTrimGrid() {
@@ -21923,8 +22192,10 @@
   function pbRefreshAll() { pbState.spreads.forEach(function (sp, s) { pbRefreshSpread(s); }); pbSyncFormatting(); }
   wireSeg('pbFontSeg', function (val) {
     pbCheckpoint();
+    // Book-wide settings reach every box that follows the book (its own
+    // font, size, spacing or width unset); a box changed on its own keeps
+    // its change (Jake, 2026-11-04).
     pbState.font = val;
-    pbStoryBoxes(function (it) { it.font = null; });
     pbPersist(); pbRefreshAll();
   });
   function pbSetGlobalSize(v) {
@@ -21932,7 +22203,6 @@
     pbCheckpoint();
     pbState.size = v;
     pbState.sizeAuto = false;
-    pbStoryBoxes(function (it) { it.size = null; });
     pbPersist(); pbRefreshAll(); pbSyncBookLayout();
   }
   pbFmt('pbGlobalSizeDown').addEventListener('click', function () { pbSetGlobalSize(pbBookSize() - 1); });
@@ -21949,7 +22219,7 @@
   function pbApplyTextW() {
     pbState.spreads.forEach(function (sp, s) {
       sp.items.forEach(function (it) {
-        if (it.type !== 'text' || it.auto || sp[pbPageSide(it)].role !== 'story' || pbStraddles(it)) return;
+        if (it.type !== 'text' || it.auto || it.wSet || sp[pbPageSide(it)].role !== 'story' || pbStraddles(it)) return;
         var side = pbPageSide(it), l = pbLive(side), w = pbStoryW(side);
         var x = it.align === 'right' ? it.x + it.w - w : it.align === 'center' ? it.x + it.w / 2 - w / 2 : it.x;
         it.w = w;
@@ -21969,7 +22239,7 @@
     el.addEventListener('change', function () { started = false; pbSyncBookLayout(); });
   }
   function pbInches(v) { return (Math.round(v * 1000) / 1000) + ' in'; }
-  pbWireBookRange('pbBookLh', function (v) { pbState.lh = v; pbStoryBoxes(function (it) { it.lh = null; }); }, function (v) { return Math.round(v * 100) + '%'; });
+  pbWireBookRange('pbBookLh', function (v) { pbState.lh = v; }, function (v) { return Math.round(v * 100) + '%'; });
   pbWireBookRange('pbBookTextW', function (v) { pbState.textW = v / 100; pbApplyTextW(); }, function (v) { return v + '% of the page'; });
   pbWireBookRange('pbBookMargin', function (v) { pbState.margin = v; }, pbInches);
   pbWireBookRange('pbBookGutter', function (v) { pbState.gutter = v; }, pbInches);
@@ -21993,6 +22263,12 @@
     pbFmt('pbBookMargin').value = pbState.margin; pbFmt('pbBookMarginOut').textContent = pbInches(pbState.margin);
     pbFmt('pbBookGutter').value = pbState.gutter; pbFmt('pbBookGutterOut').textContent = pbInches(pbState.gutter);
   }
+  pbFmt('pbGrayArt').addEventListener('change', function () {
+    pbCheckpoint();
+    pbState.gray = pbFmt('pbGrayArt').checked;
+    pbPersist(); pbSyncGray(); pbRefreshAll();
+  });
+  function pbSyncGray() { pbView.classList.toggle('is-gray', !!(pbState && pbState.gray)); }
   pbFmt('pbSnapOuter').addEventListener('change', function () {
     pbCheckpoint();
     pbState.snapText = pbFmt('pbSnapOuter').checked;
@@ -22240,15 +22516,44 @@
   // A standard layout: the matter pages go back to story (words you've
   // written on them stay), then the layout's roles are set in page
   // order, each following from the page before -- as for a new book.
+  // Whether page p has the story on it: words or an illustration of the
+  // author's (not a matter page's own text).
+  function pbPageHasStory(book, p) {
+    var spot = pbPageSpot(p, book.spreads.length), sp = book.spreads[spot.s];
+    if (!sp || sp[spot.side].role !== 'story') return false;
+    return sp.items.some(function (it) {
+      if (it.type === 'image') return it.fit === 'free' ? pbPageSide(it) === spot.side : (it.area === spot.side || it.area === 'spread');
+      return !it.bind && !it.auto && (it.text || '').trim() && (pbStraddles(it) || pbPageSide(it) === spot.side);
+    });
+  }
+  // A layout with more matter pages than the book has room for never
+  // writes over the story: a blank spread goes in before the first story
+  // page it would take (front matter) or after the last (back matter),
+  // moving the story along, until none is in the way (Jake, 2026-11-04).
+  // Returns how many spreads went in.
+  function pbMakeRoomForLayout(book, layout) {
+    var added = 0;
+    for (var guard = 0; guard < 12; guard++) {
+      var n = book.spreads.length, total = pbTotalPagesFor(n), roles = layout.roles(total), hit = 0;
+      for (var p = 2; p < total && !hit; p++) if (roles[p] && roles[p] !== 'story' && pbPageHasStory(book, p)) hit = p;
+      if (!hit) break;
+      var at = pbPageSpot(hit, n).s + (hit > total / 2 ? 1 : 0);
+      book.spreads.splice(Math.max(1, Math.min(n - 1, at)), 0, pbBlankSpread());
+      added++;
+    }
+    return added;
+  }
   function pbApplyLayout(book, key) {
     var layout = PB_LAYOUTS.filter(function (l) { return l.key === key; })[0];
-    if (!layout) return;
+    if (!layout) return 0;
+    var added = pbMakeRoomForLayout(book, layout);
     var total = pbTotalPagesFor(book.spreads.length);
     [total, total - 1, total - 2, 5, 4, 3, 2, 1].forEach(function (p, i, a) {
       if (p >= 1 && p <= total && a.indexOf(p) === i && pbRoleAt(book, p) !== 'story') pbApplyRole(book, p, 'story');
     });
     var roles = layout.roles(total);
     for (var p = 1; p <= total; p++) if (roles[p] && pbRoleAt(book, p) !== roles[p]) pbApplyRole(book, p, roles[p]);
+    return added;
   }
   // The box on page p holding its dedication (the italic line a
   // dedication page is laid out with) or its copyright.
@@ -22277,11 +22582,12 @@
       lab.querySelector('span').textContent = l.about(pages.total);
       lab.querySelector('input').addEventListener('change', function () {
         pbCheckpoint();
-        pbApplyLayout(pbState, l.key);
+        var added = pbApplyLayout(pbState, l.key);
         pbValidateRoles(pbState);
         pbSel = null;
         pbPersist();
         pbRenderView();
+        if (added) showToast('Added ' + (added === 1 ? 'a spread' : added + ' spreads') + ' so the matter pages don’t go over the story (now ' + pbTotalPagesFor(pbState.spreads.length) + ' pages).', 'Undo', pbUndo);
       });
       box.appendChild(lab);
     });
@@ -22593,6 +22899,7 @@
     setFontSelect(pbFmt('pbFontSeg'), pbState.font);
     pbSyncBookLayout();
     pbFmt('pbSnapOuter').checked = pbState.snapText;
+    pbFmt('pbGrayArt').checked = !!pbState.gray; pbSyncGray();
     pbFmt('pbPageNums').querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === pbState.pageNums); });
     pbRenderTrimGrid();
     updatePbBookMenuBtn();
@@ -22831,7 +23138,7 @@
       c.width = W; c.height = H + band;
       var ctx = c.getContext('2d');
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, c.width, c.height);
-      pbDrawSpread(ctx, sp, s, W, { nonPages: 'shade' });
+      pbDrawSpread(ctx, sp, s, W, { nonPages: 'shade', art: !pbExportTextOnly });
       ctx.fillStyle = '#C9D2D9'; ctx.fillRect(W / 2, 0, 1, H);
       var cap = Math.round(PB_DPI * 0.12), p = pbSpreadPages(s, n);
       if (p.left) pbLabel(ctx, 'p. ' + p.left, W / 4, H + cap * 2, cap, null, 'center');
@@ -22871,11 +23178,7 @@
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, SW, SH);
         pbDrawPage(ctx, face[0], x0, y0, pw);
         pbDrawPage(ctx, face[1], x0 + pw, y0, pw);
-        ctx.save();
-        ctx.strokeStyle = '#999999'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]);
-        ctx.strokeRect(x0, y0, 2 * pw, ph);
-        ctx.beginPath(); ctx.moveTo(x0 + pw, y0); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
-        ctx.restore();
+        canvasCropMarks(ctx, x0, y0, 2 * pw, ph, x0 + pw, PB_DPI);
         var lp = Math.round(PB_DPI * 0.11);
         [face[0], face[1]].forEach(function (p, k) {
           pbLabel(ctx, p > real ? 'blank' : 'p. ' + p, x0 + pw * k + pw / 2, y0 + ph + lp * 1.8, lp, null, 'center');
@@ -22913,11 +23216,7 @@
           ctx.drawImage(await drawPage(face[k] - 1, pw, ph), x0 + k * pw, y0, pw, ph);
         }
         if (cutLines) {
-          ctx.save();
-          ctx.strokeStyle = '#999999'; ctx.lineWidth = 2; ctx.setLineDash([12, 6]);
-          ctx.strokeRect(x0, y0, 2 * pw, ph);
-          ctx.beginPath(); ctx.moveTo(x0 + pw, y0); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
-          ctx.restore();
+          canvasCropMarks(ctx, x0, y0, 2 * pw, ph, x0 + pw, DPI);
           var lp = Math.round(DPI * 0.11);
           [face[0], face[1]].forEach(function (p, k) {
             pbLabel(ctx, p > n ? 'blank' : 'p. ' + p, x0 + pw * k + pw / 2, y0 + ph + lp * 1.8, lp, null, 'center');
@@ -23079,7 +23378,7 @@
       if (hasArt) {
         var c = document.createElement('canvas');
         c.width = W; c.height = Math.round(pbSpreadH(W));
-        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, pathText: true, nonPages: 'shade' });
+        pbDrawSpread(c.getContext('2d'), sp, k - 1, W, { text: false, pathText: true, nonPages: 'shade', art: !pbExportTextOnly });
         add('ppt/media/image' + k + '.jpeg', await pbJpeg(c));
       }
       add('ppt/slides/slide' + k + '.xml', pptxSlide(sp, k - 1, SWe, SHe, hasArt));
@@ -23095,8 +23394,11 @@
     return makeZip(files);
   }
 
+  // Export › Text only: every export leaves the illustrations out.
+  var pbExportTextOnly = false;
   async function runPbExport(kind) {
     pbFlushPending();
+    pbExportTextOnly = pbFmt('pbTextOnly').checked;
     var btns = ['pbExportDigitalBtn', 'pbExportPrintBtn', 'pbExportPptxBtn'].map(pbFmt);
     btns.forEach(function (b) { b.disabled = true; });
     setPbExportStatus(kind === 'pptx' ? 'Building PowerPoint…' : 'Building PDF…');
@@ -23109,7 +23411,7 @@
         mime = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
       } else {
         bytes = await (kind === 'print' ? buildPrintableDummyPdf() : buildDigitalDummyPdf(pbFmt('pbNotesInPdf').checked));
-        filename = pbSlug() + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
+        filename = pbSlug() + (pbExportTextOnly ? '-text' : '') + (kind === 'print' ? '-printable-dummy.pdf' : '-digital-dummy.pdf');
         mime = 'application/pdf';
       }
       var note = missing ? ' Some illustrations aren’t on this device yet, so they’re left out.' : '';
@@ -23125,6 +23427,7 @@
       else setPbExportStatus('Couldn’t export' + (err && err.message ? ': ' + err.message : '') + '.');
     }
     btns.forEach(function (b) { b.disabled = false; });
+    pbExportTextOnly = false;
   }
   pbFmt('pbExportDigitalBtn').addEventListener('click', function () { runPbExport('digital'); });
   pbFmt('pbExportPrintBtn').addEventListener('click', function () { runPbExport('print'); });
@@ -23683,7 +23986,7 @@
     ['pencil', 'Drawn in pencil', 'Graphite shines; darkens the shiny, faint parts of the lines']
   ];
   // Checking one also sets the sliders it needs, where they're lower (and
-  // they show it); unchecking leaves them.
+  // they show it); unchecking puts them back, unless moved since.
   var SCAN_CONDITION_SLIDERS = { lamp: { shadow: 80 }, cast: { shadow: 100 }, glare: { shadow: 80 }, pencil: { contrast: 30 } };
   function scanClean(src, o, maxDim) {
     var c = pbCanvasFrom(src, maxDim);
@@ -24775,7 +25078,7 @@
       '<div class="scan-cam" hidden><video playsinline muted></video>' +
         '<div class="scan-cam-row"><span class="scan-cam-count"></span><button class="btn" type="button" data-cam="done">Done</button><button class="btn btn-primary" type="button" data-cam="shoot">Take photo</button></div></div>' +
       '<p class="snap-empty scan-empty">' + (sink ? sink.hint : 'Each page of the PDF, or each photo, becomes a cartoon, in order, ready for its caption. On a page of several drawings, tap the ones to bring in, each as its own cartoon.') + '</p>' +
-      '<div class="scan-main" hidden><div><div class="seg scan-tabs" hidden><button type="button" data-view="crop">Crop</button><button type="button" data-view="erase">Erase</button></div><div class="scan-view"></div><p class="scan-note"></p>' +
+      '<div class="scan-main" hidden><div><div class="seg scan-tabs" hidden><button type="button" data-view="crop">Crop</button><button type="button" data-view="erase">Erase</button><button type="button" data-view="move">Select and move</button></div><div class="scan-view"></div><p class="scan-note"></p>' +
         '<div class="scan-assign" hidden><label>Goes on <select data-assign></select></label></div><div class="scan-strip"></div></div>' +
       '<div class="scan-controls">' +
         '<div class="field"><label>Scan as</label><div class="seg seg-3" data-mode><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
@@ -24783,6 +25086,10 @@
         '<fieldset class="scan-conds" data-conds><legend>The photo</legend>' + SCAN_CONDITIONS.map(function (c) {
           return '<label class="checkline scan-check" title="' + c[2] + '"><input type="checkbox" data-cond="' + c[0] + '"> ' + c[1] + '</label>';
         }).join('') + '</fieldset>' +
+        '<fieldset class="scan-conds" data-paper hidden><legend>Paper and lines</legend>' +
+          '<label class="checkline scan-check" title="Evens out the gray of a scan or phone photo so the paper comes out white"><input type="checkbox" data-post="flatten"> Whiten the paper</label>' +
+          '<label class="checkline scan-check" title="Lifts the drawing off its paper, so whatever is behind shows through"><input type="checkbox" data-post="clear"> Make the paper transparent</label>' +
+          '<label class="checkline scan-check" title="Makes the drawing crisp black ink on white"><input type="checkbox" data-post="ink"> Crisp line art</label></fieldset>' +
         '<div class="field"><label>Remove shadows <output data-out="shadow"></output></label><input type="range" min="0" max="100" step="5" data-k="shadow"></div>' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
         '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
@@ -24791,21 +25098,40 @@
         '<label class="checkline" style="text-transform:none;letter-spacing:0;font-weight:400;"><input type="checkbox" data-k="trim"> Crop to the drawing (cut away blank paper round it)</label>' +
       '</div></div>' +
       '<p class="scan-status" aria-live="polite"></p>' +
-      '<div class="modal-actions"><button class="btn" type="button" data-act="cancel">Cancel</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add ' + many + '</button></div>');
+      '<div class="modal-actions"><button class="btn" type="button" data-act="undo" title="Undo the last change (⌘Z)" disabled>Undo</button><button class="btn" type="button" data-act="cancel">Cancel</button>' +
+        '<button class="btn" type="button" data-act="next" hidden>Next image</button><button class="btn btn-primary" type="button" data-act="add" disabled>Add ' + many + '</button></div>');
     var box = d.box, sources = [], cur = 0, busy = false, editingEdges = false, adjust = sink && sink.adjust;
     var pp = scanPhotoPrefs();
     var o = { mode: (sink && sink.mode) || 'gray', shadow: 60, contrast: 20, brightness: 0, threshold: 160, trim: true, marks: 0,
-      edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}) };
+      edges: pp.edges !== false, cond: Object.assign({}, pp.cond || {}), flatten: false, clear: false, ink: false };
     if (adjust) {
       // An illustration from before photos were kept as taken has no
       // settings: it's already cleaned, so it starts with nothing more done.
       if (adjust.scan) o = Object.assign(o, adjust.scan, { cond: Object.assign({}, adjust.scan.cond || {}) });
       else Object.assign(o, { shadow: 0, contrast: 0, brightness: 0, edges: false, cond: {}, trim: false });
+      // A fix from the old Clean up menu, made on top of the photo's
+      // cleanup, is one of the Clean up checkboxes now.
+      if (adjust.clean) { o.flatten = true; o.clear = adjust.clean === 'transparent'; o.ink = adjust.clean === 'ink'; }
     }
-    // A condition's sliders, raised to what it needs.
+    // A condition's sliders, raised to what it needs; `lifted` keeps what
+    // each was before, so unchecking it puts them back (to what the other
+    // conditions still checked need, at least). A condition already on
+    // when the dialog opened goes back to a photo's usual settings.
+    var lifted = {}, PHOTO_BASE = { shadow: 60, contrast: 20 };
     function liftFor(k) {
       var lift = SCAN_CONDITION_SLIDERS[k] || {};
-      Object.keys(lift).forEach(function (s) { o[s] = Math.max(o[s], lift[s]); });
+      lifted[k] = {};
+      Object.keys(lift).forEach(function (s) { lifted[k][s] = o[s]; o[s] = Math.max(o[s], lift[s]); });
+    }
+    function dropFor(k) {
+      var lift = SCAN_CONDITION_SLIDERS[k] || {}, was = lifted[k] || {};
+      Object.keys(lift).forEach(function (s) {
+        if (o[s] !== Math.max(s in was ? was[s] : o[s], lift[s])) return;
+        var back = s in was ? was[s] : Math.min(o[s], PHOTO_BASE[s] || 0);
+        Object.keys(o.cond).forEach(function (c) { if (c !== k && SCAN_CONDITION_SLIDERS[c] && s in SCAN_CONDITION_SLIDERS[c]) back = Math.max(back, SCAN_CONDITION_SLIDERS[c][s]); });
+        o[s] = back;
+      });
+      delete lifted[k];
     }
     function savePhotoPrefs() {
       if (adjust) return;
@@ -24819,7 +25145,20 @@
     if (phone) box.classList.add('is-phone');
     // Picture books: one Keep outline per photo. The Erase view (what comes
     // in) is the one shown first; a phone only ever shows that.
-    var cropMode = !!(sink && sink.crop), cropView = 'erase';
+    var cropMode = !!(sink && sink.crop), cropView = 'erase', eraseShape = 'box', cropShape = 'outline';
+    // A small two-way switch in the note (Box | Lasso, Outline | Lasso).
+    function shapeSwitch(list, current, pick) {
+      var seg = document.createElement('span');
+      seg.className = 'seg scan-shape';
+      list.forEach(function (o) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = o[1]; b.title = o[2];
+        b.classList.toggle('active', o[0] === current);
+        b.addEventListener('click', function () { pick(o[0]); renderView(); });
+        seg.appendChild(b);
+      });
+      note.appendChild(seg);
+    }
     var tabs = box.querySelector('.scan-tabs');
     tabs.hidden = !cropMode || phone;
     tabs.addEventListener('click', function (e) {
@@ -24830,7 +25169,66 @@
     function syncTabs() { tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('active', b.dataset.view === cropView); }); }
     syncTabs();
     var view = box.querySelector('.scan-view'), strip = box.querySelector('.scan-strip'), status = box.querySelector('.scan-status'), note = box.querySelector('.scan-note');
-    var addBtn = box.querySelector('[data-act="add"]');
+    var addBtn = box.querySelector('[data-act="add"]'), undoBtn = box.querySelector('[data-act="undo"]'), nextBtn = box.querySelector('[data-act="next"]');
+    // Undo (the button, or Cmd/Ctrl+Z): each change to the settings or to
+    // a photo (its corners, outline, turn, boxes, what's erased, where it
+    // goes, leaving it out) is taken back in turn, newest first. Photos
+    // brought in since stay. Canvases are never changed in place (a turn
+    // makes a new one), so they're kept by reference.
+    var undoStack = [], seq = 0;
+    function srcState(s) {
+      return { photo: s.photo, canvas: s.canvas, thumb: s.thumb, turn: s.turn, quad: s.quad, guess: s.guess, frame: s.frame, off: s.off, aw: s.aw, ah: s.ah,
+        prev: s.prev, photoView: s.photoView, multi: s.multi, spread: s.spread, erase: s.erase && s.erase.slice(), moves: s.moves && s.moves.slice(), sel: s.sel, keepLoop: s.keepLoop,
+        regions: s.regions && s.regions.map(function (r) { return Object.assign({}, r); }) };
+    }
+    // The button names what it would take back ("Undo lamplight").
+    function syncUndo() {
+      var top = undoStack[undoStack.length - 1];
+      undoBtn.disabled = !top;
+      undoBtn.textContent = top && top.what ? 'Undo ' + top.what.charAt(0).toLowerCase() + top.what.slice(1) : 'Undo';
+      undoBtn.title = top ? 'Take back the last change (⌘Z)' : 'Nothing to undo yet';
+    }
+    function checkpoint(what) {
+      undoStack.push({ what: what || '', o: Object.assign({}, o, { cond: Object.assign({}, o.cond) }), cur: cur, seq: seq, list: sources.slice(), states: sources.map(srcState) });
+      if (undoStack.length > 60) undoStack.shift();
+      syncUndo();
+    }
+    function undoLast() {
+      var u = undoStack.pop();
+      syncUndo();
+      if (!u) return;
+      editingEdges = false;
+      Object.assign(o, u.o, { cond: Object.assign({}, u.o.cond) });
+      var later = sources.filter(function (s) { return s.seq > u.seq && u.list.indexOf(s) === -1; });
+      sources.splice.apply(sources, [0, sources.length].concat(u.list, later));
+      u.list.forEach(function (s, i) { Object.assign(s, u.states[i]); });
+      cur = Math.min(u.cur, sources.length - 1);
+      savePhotoPrefs();
+      refresh();
+    }
+    undoBtn.addEventListener('click', undoLast);
+    function onUndoKey(e) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
+      var a = document.activeElement;
+      if (a && (a.isContentEditable || /^(TEXTAREA)$/.test(a.tagName) || (a.tagName === 'INPUT' && /^(text|search|email|number)$/.test(a.type)))) return;
+      // Here, not the book underneath.
+      e.preventDefault(); e.stopPropagation();
+      undoLast();
+    }
+    document.addEventListener('keydown', onUndoKey, true);
+    // Next image: the next photo in the batch; adjusting an illustration,
+    // this one is saved (if anything changed) and the book's next opens.
+    var afterSave = null;
+    nextBtn.addEventListener('click', function () {
+      finishEdges();
+      if (adjust) {
+        if (!sink.next) return;
+        if (undoStack.length) { afterSave = sink.next; addBtn.click(); }
+        else { d.close(); sink.next(); }
+        return;
+      }
+      if (cur < sources.length - 1) { cur++; refresh(); }
+    });
     // Take photos: the camera opens live in the dialog (a phone's back
     // camera, a laptop's webcam) and each Take photo adds one to the batch,
     // as many as you like, until Done. Where the browser can't show the
@@ -24878,7 +25276,7 @@
     cam.querySelector('[data-cam="done"]').addEventListener('click', stopCamera);
     // However the dialog closes (Cancel, Add, Escape, a click outside), the
     // camera goes off with it.
-    new MutationObserver(function (m, obs) { if (!d.ov.isConnected) { stopCamera(); obs.disconnect(); } }).observe(document.body, { childList: true });
+    new MutationObserver(function (m, obs) { if (!d.ov.isConnected) { stopCamera(); document.removeEventListener('keydown', onUndoKey, true); obs.disconnect(); } }).observe(document.body, { childList: true });
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
     // Art made on a computer comes in as it is: the photo fixes (shadows,
     // contrast, brightness) are for paper, and are hidden while it's shown.
@@ -24900,6 +25298,9 @@
       box.querySelector('[data-edges-line]').hidden = !photos || cropMode;
       box.querySelector('input[data-k="edges"]').checked = o.edges;
       box.querySelector('[data-conds]').hidden = dig;
+      box.querySelector('[data-paper]').hidden = !cropMode;
+      box.querySelectorAll('input[data-post]').forEach(function (cb) { cb.checked = !!o[cb.dataset.post]; });
+      view.classList.toggle('is-clear', !!o.clear);
       box.querySelectorAll('input[data-cond]').forEach(function (cb) { cb.checked = !!o.cond[cb.dataset.cond]; });
     }
     var renderTimer = null;
@@ -24913,7 +25314,7 @@
         if (editingEdges) { renderEdges(src); return; }
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
-        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 900), stage = document.createElement('div');
+        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 2400), stage = document.createElement('div');
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
@@ -24929,14 +25330,17 @@
       turns.addEventListener('click', function (e) {
         var b = e.target.closest('[data-turn]');
         if (!b) return;
+        checkpoint('turn');
         if (cropMode) turnKeep(src, Number(b.dataset.turn)); else turnSource(src, Number(b.dataset.turn));
         refresh();
       });
       return turns;
     }
     // ---- The Keep outline (picture books) ----
-    // The kept part, straightened, at about `maxDim`: a smaller copy of the
-    // photo is flattened for the views, and the cleanup runs on that.
+    // The kept part, straightened, at about `maxDim`. The view is cleaned
+    // up at the same size as what's saved (and only shown smaller): thin
+    // pencil lines go lighter in a smaller copy, and the cleanup then read
+    // them differently, so the view didn't match the book.
     function keepWarp(src, maxDim) {
       // The outline still on the ruled frame: the spread's exact shape, so
       // a full-bleed illustration isn't zoomed (and cut) to fill it. The
@@ -24947,11 +25351,45 @@
         Math.abs(scanSheetAspect(src.quad, src.photo.width, src.photo.height, true).aspect / sink.aspect - 1) < 0.15 ? sink.aspect : 0;
       return scanWarp(maxDim >= 2400 ? src.photo : pbCanvasFrom(src.photo, maxDim), src.quad, maxDim, true, shape);
     }
-    function keepResult(src, warped, maxDim) {
-      return scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad);
+    // The Clean up checkboxes go last, on what the photo's cleanup made,
+    // in the preview, the thumbnails and what's saved alike.
+    function keepResult(src, warped, maxDim, noLoop) {
+      return paperFix(keepInside(movesOn(scanEraseOn(scanClean(warped, Object.assign(optsFor(src), { trim: false, frames: false }), maxDim), src.erase, src.quad), src.moves), noLoop ? null : src.keepLoop));
+    }
+    // Lasso crop: white everywhere outside the loop, which is drawn on the
+    // picture as it comes in (after erasing and moving), in its fractions.
+    function keepInside(c, loop) {
+      if (!loop || loop.length < 3) return c;
+      var w = c.width, h = c.height, ctx = c.getContext('2d');
+      ctx.beginPath(); ctx.rect(0, 0, w, h);
+      loop.forEach(function (p, k) { if (k) ctx.lineTo(p[0] * w, p[1] * h); else ctx.moveTo(p[0] * w, p[1] * h); });
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF'; ctx.fill('evenodd');
+      return c;
+    }
+    // Select and move: each move lifts a box of the drawing (in fractions
+    // of what comes in), leaves white paper where it was, and sets it down
+    // dx, dy away; moves are made in turn, so a part can be moved again.
+    function movesOn(c, moves) {
+      if (!moves || !moves.length) return c;
+      var ctx = c.getContext('2d'), W = c.width, H = c.height;
+      moves.forEach(function (m) {
+        var x = Math.round(m.x * W), y = Math.round(m.y * H), w = Math.max(1, Math.round(m.w * W)), h = Math.max(1, Math.round(m.h * H));
+        var piece = document.createElement('canvas'); piece.width = w; piece.height = h;
+        piece.getContext('2d').drawImage(c, x, y, w, h, 0, 0, w, h);
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(x, y, w, h);
+        ctx.drawImage(piece, Math.round((m.x + m.dx) * W), Math.round((m.y + m.dy) * H));
+      });
+      return c;
+    }
+    function paperFix(c) {
+      if (!o.flatten && !o.clear && !o.ink) return c;
+      c = pbFlattenPaper(c, o.clear && !o.ink);
+      if (o.ink) { c = pbInkify(c); if (o.clear) c = pbFlattenPaper(c, true); }
+      return c;
     }
     function keepPreview(src) {
-      if (!src.prev) src.prev = keepWarp(src, 1200);
+      if (!src.prev) src.prev = keepWarp(src, 2400);
       return src.prev;
     }
     function keepThumb(src) {
@@ -24971,6 +25409,13 @@
       var wasRuled = src.guess.ruled;
       src.quad = quadT(src.quad); src.guess = quadT(src.guess); src.guess.ruled = wasRuled;
       src.erase = src.erase.map(function (poly) { return poly.map(pt); });
+      // The loop is in the result's fractions, which turn with it.
+      if (src.keepLoop) src.keepLoop = src.keepLoop.map(function (p) { return dir < 0 ? [p[1], 1 - p[0]] : [1 - p[1], p[0]]; });
+      // Moves are in the result's own fractions, which turn with it.
+      src.moves = (src.moves || []).map(function (m) {
+        return dir < 0 ? { x: m.y, y: 1 - m.x - m.w, w: m.h, h: m.w, dx: m.dy, dy: -m.dx } : { x: 1 - m.y - m.h, y: m.x, w: m.h, h: m.w, dx: -m.dy, dy: m.dx };
+      });
+      src.sel = null;
       src.photoView = null;
       keepChanged(src);
     }
@@ -24984,7 +25429,7 @@
     }
     // Erase view: what comes in. A drag across it whites that area out.
     function renderKept(src) {
-      var cv = keepResult(src, keepPreview(src), 900), stage = document.createElement('div');
+      var cv = keepResult(src, keepPreview(src), 2400), stage = document.createElement('div');
       stage.className = 'scan-stage';
       stage.appendChild(cv);
       view.appendChild(stage);
@@ -24993,11 +25438,15 @@
       if (t) t.style.backgroundImage = 'url(' + src.thumb + ')';
       if (phone) { note.textContent = ''; return; }
       view.appendChild(turnButtons(src));
-      note.textContent = 'Drag across anything you want gone; it turns white. The rest stays.';
-      if (src.erase.length) noteLink('Undo erase', function () { src.erase.pop(); keepThumb(src); refresh(); });
+      if (cropView === 'move') { renderMove(src, stage, cv); return; }
+      // Box or Lasso: a box drawn across what's to go, or a loop drawn
+      // round it by hand (for a stray mark tucked in beside the drawing).
+      note.textContent = eraseShape === 'lasso' ? 'Draw a loop round anything you want gone; inside it turns white. ' : 'Drag across anything you want gone; it turns white. The rest stays. ';
+      shapeSwitch([['box', 'Box', 'Erase inside a box you drag'], ['lasso', 'Lasso', 'Erase inside a loop you draw']], eraseShape, function (v) { eraseShape = v; });
       stage.addEventListener('pointerdown', function (e) {
         if (e.button > 0) return;
         e.preventDefault();
+        if (eraseShape === 'lasso') { lassoErase(e); return; }
         var r0 = cv.getBoundingClientRect(), rect = document.createElement('div');
         function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
         var a = at(e), b = a;
@@ -25015,10 +25464,107 @@
           if (e.type === 'pointercancel' || Math.abs(b[0] - a[0]) < 0.01 || Math.abs(b[1] - a[1]) < 0.01) return;
           // From the result's corners back onto the photo, through the
           // outline's perspective.
+          checkpoint('erase');
           var M = scanHomography(SCAN_WHOLE, src.quad), x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
           src.erase.push([[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(function (p) { return scanHApply(M, p[0], p[1]); }));
           refresh();
         }
+        stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      });
+      // The loop is drawn over the view as it's made, and closed on its
+      // own when let go; it goes onto the photo through the outline, like
+      // a box, so it stays put if the outline or settings change.
+      function lassoErase(e) {
+        var r0 = cv.getBoundingClientRect(), NS = 'http://www.w3.org/2000/svg';
+        function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
+        var pts = [at(e)], svg = document.createElementNS(NS, 'svg'), line = document.createElementNS(NS, 'polygon');
+        svg.setAttribute('viewBox', '0 0 1 1'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'scan-lasso');
+        line.setAttribute('vector-effect', 'non-scaling-stroke');
+        svg.appendChild(line); stage.appendChild(svg);
+        stage.setPointerCapture(e.pointerId);
+        function draw() { line.setAttribute('points', pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ')); }
+        function move(e) {
+          var p = at(e), q = pts[pts.length - 1];
+          if (Math.hypot((p[0] - q[0]) * r0.width, (p[1] - q[1]) * r0.height) >= 3) { pts.push(p); draw(); }
+        }
+        function up(e) {
+          stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', up);
+          svg.remove();
+          var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+          if (e.type === 'pointercancel' || pts.length < 3 || Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.01 || Math.max.apply(null, ys) - Math.min.apply(null, ys) < 0.01) return;
+          checkpoint('lasso erase');
+          var M = scanHomography(SCAN_WHOLE, src.quad);
+          src.erase.push(pts.map(function (p) { return scanHApply(M, p[0], p[1]); }));
+          refresh();
+        }
+        stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      }
+    }
+    // Select and move: drag a box round part of the drawing (it stays
+    // selected), then drag inside it to move that part; where it was turns
+    // white. Dragging outside the box starts a new one.
+    function renderMove(src, stage, cv) {
+      note.textContent = src.sel ? 'Drag inside the box to move that part. Where it was turns white. Drag elsewhere to select something else.'
+        : 'Drag a box round the part you want to move.';
+      var selEl = null;
+      function placeEl(el, r) {
+        el.style.left = r.x * 100 + '%'; el.style.top = r.y * 100 + '%'; el.style.width = r.w * 100 + '%'; el.style.height = r.h * 100 + '%';
+      }
+      if (src.sel) {
+        selEl = document.createElement('div');
+        selEl.className = 'scan-region scan-sel';
+        placeEl(selEl, src.sel);
+        stage.appendChild(selEl);
+      }
+      function at(e) { var r0 = cv.getBoundingClientRect(); return [(e.clientX - r0.left) / r0.width, (e.clientY - r0.top) / r0.height]; }
+      function clamp(v) { return Math.max(0, Math.min(1, v)); }
+      stage.addEventListener('pointerdown', function (e) {
+        if (e.button > 0) return;
+        e.preventDefault();
+        stage.setPointerCapture(e.pointerId);
+        var a = at(e), sel = src.sel;
+        var inside = sel && a[0] >= sel.x && a[0] <= sel.x + sel.w && a[1] >= sel.y && a[1] <= sel.y + sel.h;
+        var up, move;
+        if (inside) {
+          // The part lifted off the page as it moves, white paper under it.
+          var px = Math.round(sel.x * cv.width), py = Math.round(sel.y * cv.height), pw = Math.max(1, Math.round(sel.w * cv.width)), ph = Math.max(1, Math.round(sel.h * cv.height));
+          var hole = document.createElement('div'), piece = document.createElement('canvas');
+          hole.className = 'scan-hole'; placeEl(hole, sel); stage.appendChild(hole);
+          piece.width = pw; piece.height = ph; piece.className = 'scan-piece';
+          piece.getContext('2d').drawImage(cv, px, py, pw, ph, 0, 0, pw, ph);
+          placeEl(piece, sel); stage.appendChild(piece);
+          stage.appendChild(selEl);
+          var dx = 0, dy = 0;
+          move = function (e) {
+            var b = at(e);
+            dx = Math.max(-sel.x, Math.min(1 - sel.x - sel.w, b[0] - a[0])); dy = Math.max(-sel.y, Math.min(1 - sel.y - sel.h, b[1] - a[1]));
+            var r = { x: sel.x + dx, y: sel.y + dy, w: sel.w, h: sel.h };
+            placeEl(piece, r); placeEl(selEl, r);
+          };
+          up = function (e) {
+            done();
+            if (e.type === 'pointercancel' || (Math.abs(dx) < 0.002 && Math.abs(dy) < 0.002)) { refresh(); return; }
+            checkpoint('move');
+            src.moves = (src.moves || []).concat([{ x: sel.x, y: sel.y, w: sel.w, h: sel.h, dx: dx, dy: dy }]);
+            src.sel = { x: sel.x + dx, y: sel.y + dy, w: sel.w, h: sel.h };
+            keepThumb(src); refresh();
+          };
+        } else {
+          var rect = document.createElement('div'), b = a;
+          rect.className = 'scan-region scan-sel is-drawing';
+          stage.appendChild(rect);
+          if (selEl) selEl.remove();
+          var box = function () { return { x: clamp(Math.min(a[0], b[0])), y: clamp(Math.min(a[1], b[1])), w: 0, h: 0 }; };
+          var span = function () { var r = box(); r.w = clamp(Math.max(a[0], b[0])) - r.x; r.h = clamp(Math.max(a[1], b[1])) - r.y; return r; };
+          move = function (e) { b = at(e); placeEl(rect, span()); };
+          up = function (e) {
+            done();
+            var r = span();
+            src.sel = e.type === 'pointercancel' || r.w < 0.01 || r.h < 0.01 ? null : r;
+            refresh();
+          };
+        }
+        function done() { stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', up); }
         stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
       });
     }
@@ -25026,6 +25572,7 @@
     // Drag a corner to move it, or inside the outline to move it whole.
     function renderCrop(src) {
       if (!src.photoView) src.photoView = pbCanvasFrom(src.photo, 900);
+      if (cropShape === 'lasso') { renderLassoCrop(src); return; }
       var cv = src.photoView, stage = document.createElement('div');
       stage.className = 'scan-stage scan-edges scan-keep';
       stage.appendChild(cv);
@@ -25047,6 +25594,7 @@
           if (e.button > 0) return;
           e.preventDefault(); e.stopPropagation();
           h.setPointerCapture(e.pointerId);
+          checkpoint('outline');
           function mv(e) { var p = at(e); q[k] = [clamp(p[0]), clamp(p[1])]; draw(); }
           function up() { h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); done(); }
           h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
@@ -25063,6 +25611,7 @@
         if (e.button > 0 || !inside(at(e))) return;
         e.preventDefault();
         stage.setPointerCapture(e.pointerId);
+        checkpoint('outline');
         var p0 = at(e), q0 = q.map(function (p) { return p.slice(); });
         var minX = Math.min.apply(null, q0.map(function (p) { return p[0]; })), maxX = Math.max.apply(null, q0.map(function (p) { return p[0]; }));
         var minY = Math.min.apply(null, q0.map(function (p) { return p[1]; })), maxY = Math.max.apply(null, q0.map(function (p) { return p[1]; }));
@@ -25080,14 +25629,61 @@
         dots.forEach(function (h, k) { h.style.left = q[k][0] * 100 + '%'; h.style.top = q[k][1] * 100 + '%'; });
       }
       function renderNote() {
-        note.textContent = 'Only what’s inside the outline is kept; everything outside is cut away.';
-        if (!sameQuad(src.quad, src.guess)) noteLink('Best guess', function () { src.quad = src.guess.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
-        if (!sameQuad(src.quad, SCAN_WHOLE)) noteLink('Whole photo', function () { src.quad = SCAN_WHOLE.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
+        note.textContent = 'Only what’s inside the outline is kept; everything outside is cut away. ';
+        shapeSwitch(CROP_SHAPES, cropShape, function (v) { cropShape = v; });
+        if (!sameQuad(src.quad, src.guess)) noteLink('Best guess', function () { checkpoint('outline'); src.quad = src.guess.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
+        if (!sameQuad(src.quad, SCAN_WHOLE)) noteLink('Whole photo', function () { checkpoint('outline'); src.quad = SCAN_WHOLE.map(function (p) { return p.slice(); }); keepChanged(src); renderView(); });
       }
       draw();
       view.appendChild(stage);
       view.appendChild(turnButtons(src));
       renderNote();
+    }
+    var CROP_SHAPES = [['outline', 'Outline', 'Four corners: what comes in, straightened'], ['lasso', 'Lasso', 'A loop drawn round the drawing: everything outside it turns white']];
+    // Lasso crop: a loop drawn by hand round what to keep, on the picture
+    // as it comes in; everything outside it turns white (the outline still
+    // sets the shape that comes in). Drawing again replaces it.
+    function renderLassoCrop(src) {
+      var cv = keepResult(src, keepPreview(src), 2400, true), stage = document.createElement('div'), NS = 'http://www.w3.org/2000/svg';
+      stage.className = 'scan-stage scan-edges';
+      stage.appendChild(cv);
+      var svg = document.createElementNS(NS, 'svg'), veil = document.createElementNS(NS, 'path'), loop = document.createElementNS(NS, 'polygon');
+      svg.setAttribute('viewBox', '0 0 1 1'); svg.setAttribute('preserveAspectRatio', 'none');
+      veil.setAttribute('fill-rule', 'evenodd'); veil.setAttribute('class', 'scan-veil');
+      loop.setAttribute('vector-effect', 'non-scaling-stroke'); loop.setAttribute('class', 'scan-lasso-keep');
+      svg.append(veil, loop); stage.appendChild(svg);
+      function show(pts) {
+        var str = (pts || []).map(function (p) { return p[0] + ',' + p[1]; });
+        loop.setAttribute('points', str.join(' '));
+        veil.setAttribute('d', pts && pts.length > 2 ? 'M0,0H1V1H0Z M' + str.join(' L') + 'Z' : '');
+      }
+      show(src.keepLoop);
+      view.appendChild(stage);
+      view.appendChild(turnButtons(src));
+      note.textContent = src.keepLoop ? 'Only what’s inside the loop is kept; outside it turns white. Draw again to change it. ' : 'Draw a loop round the drawing to keep; everything outside it turns white. ';
+      shapeSwitch(CROP_SHAPES, cropShape, function (v) { cropShape = v; });
+      if (src.keepLoop) noteLink('Keep everything', function () { checkpoint('lasso crop'); src.keepLoop = null; keepChanged(src); renderView(); });
+      stage.addEventListener('pointerdown', function (e) {
+        if (e.button > 0) return;
+        e.preventDefault();
+        var r0 = cv.getBoundingClientRect();
+        function at(e) { return [Math.max(0, Math.min(1, (e.clientX - r0.left) / r0.width)), Math.max(0, Math.min(1, (e.clientY - r0.top) / r0.height))]; }
+        var pts = [at(e)];
+        stage.setPointerCapture(e.pointerId);
+        function move(e) {
+          var p = at(e), q = pts[pts.length - 1];
+          if (Math.hypot((p[0] - q[0]) * r0.width, (p[1] - q[1]) * r0.height) >= 3) { pts.push(p); show(pts); }
+        }
+        function up(e) {
+          stage.removeEventListener('pointermove', move); stage.removeEventListener('pointerup', up); stage.removeEventListener('pointercancel', up);
+          var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+          if (e.type === 'pointercancel' || pts.length < 3 || Math.max.apply(null, xs) - Math.min.apply(null, xs) < 0.02 || Math.max.apply(null, ys) - Math.min.apply(null, ys) < 0.02) { show(src.keepLoop); return; }
+          checkpoint('lasso crop');
+          src.keepLoop = pts;
+          keepChanged(src); renderView();
+        }
+        stage.addEventListener('pointermove', move); stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      });
     }
     function edgesButton(label, title, fn) {
       var b = document.createElement('button');
@@ -25115,6 +25711,7 @@
           if (e.button > 0) return;
           e.preventDefault(); e.stopPropagation();
           h.setPointerCapture(e.pointerId);
+          checkpoint('corners');
           function mv(e) {
             var r = cv.getBoundingClientRect();
             q[k] = [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))];
@@ -25205,13 +25802,13 @@
           '<i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i>';
         place(el, rg.fx, rg.fy, rg.fw, rg.fh);
         el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(rg); refresh(); }
-          if ((e.key === 'Delete' || e.key === 'Backspace') && rg.on) { e.preventDefault(); unchoose(rg); refresh(); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); checkpoint('box'); toggle(rg); refresh(); }
+          if ((e.key === 'Delete' || e.key === 'Backspace') && rg.on) { e.preventDefault(); checkpoint('box'); unchoose(rg); refresh(); }
         });
         el.addEventListener('pointerdown', function (e) {
           if (e.button > 0) return;
           e.stopPropagation(); e.preventDefault();
-          if (e.target.closest('.scan-x')) { unchoose(rg); refresh(); return; }
+          if (e.target.closest('.scan-x')) { checkpoint('box'); unchoose(rg); refresh(); return; }
           var corner = e.target.dataset && e.target.dataset.c, p0 = toPage(e), sx = e.clientX, sy = e.clientY, moved = false;
           var r0 = { fx: rg.fx, fy: rg.fy, fw: rg.fw, fh: rg.fh }, r = r0;
           el.setPointerCapture(e.pointerId);
@@ -25233,6 +25830,7 @@
           function up(e) {
             el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
             if (e.type === 'pointercancel') { refresh(); return; }
+            checkpoint('box');
             if (!moved) toggle(rg);
             else {
               rg.fx = r.fx; rg.fy = r.fy; rg.fw = r.fw; rg.fh = r.fh; rg.edited = true; choose(rg);
@@ -25259,6 +25857,7 @@
         several.textContent = src.multi ? 'Just one ' + one + ' from this page' : 'Several ' + many + ' on this page…';
         several.addEventListener('click', function () {
           if (src.multi) {
+            checkpoint('box');
             var keep = null;
             src.regions.forEach(function (r) { if (r.on && !keep) keep = r; });
             src.multi = false;
@@ -25270,7 +25869,7 @@
           var yes = document.createElement('button'), no = document.createElement('button');
           yes.type = no.type = 'button'; yes.className = no.className = 'btn-link scan-all';
           yes.textContent = 'Yes, several'; no.textContent = 'No, just one'; no.style.marginLeft = '12px';
-          yes.addEventListener('click', function () { src.multi = true; refresh(); });
+          yes.addEventListener('click', function () { checkpoint('box'); src.multi = true; refresh(); });
           no.addEventListener('click', function () { refresh(); });
           note.appendChild(yes); note.appendChild(no);
         });
@@ -25280,7 +25879,7 @@
         var all = document.createElement('button');
         all.type = 'button'; all.className = 'btn-link scan-all'; all.textContent = 'Choose all';
         all.style.marginLeft = '12px';
-        all.addEventListener('click', function () { regs.forEach(function (r) { r.on = true; }); refresh(); });
+        all.addEventListener('click', function () { checkpoint('box'); regs.forEach(function (r) { r.on = true; }); refresh(); });
         note.appendChild(all);
       }
       stage.addEventListener('pointerdown', function (e) {
@@ -25301,6 +25900,7 @@
           var r = rect(e);
           if (e.type === 'pointercancel' || r.fw < 0.03 || r.fh < 0.03) return;
           r.mask = null; r.edited = true; r.drawn = true;
+          checkpoint('box');
           src.regions = src.regions.concat([r]);
           choose(r);
           src.regions = scanReadingOrder(src.regions);
@@ -25421,6 +26021,7 @@
     assignEl.addEventListener('change', function () {
       var src = sources[cur];
       if (!src) return;
+      checkpoint('where it goes');
       src.spread = assignEl.value === 'archive' ? 'archive' : Number(assignEl.value);
       refresh();
     });
@@ -25437,7 +26038,7 @@
           (assigning && plan[i].length ? '<em>' + spreadShort(plan[i][0]) + '</em>' : '');
         t.addEventListener('click', function (e) {
           finishEdges();
-          if (e.target.tagName === 'SPAN') { sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
+          if (e.target.tagName === 'SPAN') { checkpoint('leaving it out'); sources.splice(i, 1); if (cur >= sources.length) cur = Math.max(0, sources.length - 1); refresh(); return; }
           cur = i; refresh();
         });
         strip.appendChild(t);
@@ -25451,19 +26052,24 @@
       var n = cartoonCount();
       addBtn.disabled = !n || busy;
       addBtn.textContent = addBtn.dataset.label || (n ? 'Add ' + n + ' ' + (n === 1 ? one : many) : 'Add ' + many);
+      nextBtn.hidden = adjust ? !sink.next : sources.length < 2;
+      nextBtn.disabled = busy || (!adjust && cur >= sources.length - 1);
+      nextBtn.title = adjust ? 'Save this one and adjust the next illustration in the book' : 'Show the next photo';
       syncControls();
       renderStrip();
       renderAssign();
       if (has) renderView(); else view.innerHTML = '';
     }
     function addSource(canvas, fromPdf, digital, given) {
-      var src = { photo: canvas, canvas: canvas, regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital, spread: null };
+      var src = { photo: canvas, canvas: canvas, regions: null, turn: 0, fromPdf: !!fromPdf, digital: !!digital, spread: null, seq: ++seq };
       if (cropMode) {
         // The best guess at what to keep; a photo adjusted again keeps its
         // own outline and erasing.
         src.guess = digital ? SCAN_WHOLE : scanGuessKeep(canvas, sink.aspect);
         src.quad = ((given && given.quad) || src.guess).map(function (p) { return p.slice(); });
         src.erase = given && given.erase ? given.erase.map(function (poly) { return poly.map(function (p) { return p.slice(); }); }) : [];
+        src.moves = given && given.moves ? given.moves.map(function (m) { return Object.assign({}, m); }) : [];
+        src.keepLoop = given && given.keepLoop ? given.keepLoop.map(function (p) { return p.slice(); }) : null;
         src.regions = [];
       } else {
         // A photo of paper: where the sheet's corners are, to flatten it to.
@@ -25501,8 +26107,15 @@
       // before outlines (or none) gets the best guess, and an illustration
       // with no photo kept is its own whole picture.
       var given = !cropMode ? { quad: aScan ? aScan.quad : null, frame: !!(aScan && aScan.frame), box: aScan ? aScan.box : null }
-        : aScan && aScan.crop ? { quad: aScan.quad, erase: aScan.erase } : adjust.noRaw ? { quad: SCAN_WHOLE } : null;
+        : aScan && aScan.crop ? { quad: aScan.quad, erase: aScan.erase, moves: aScan.moves, keepLoop: aScan.keepLoop } : adjust.noRaw ? { quad: SCAN_WHOLE } : null;
       addSource(turnCanvas(adjust.canvas, adjustTurn), !!(aScan && aScan.fromPdf), false, given);
+      if (adjust.restart) {
+        status.textContent = 'Brought in before Crop and Erase, so it opens just as it is in the book. ';
+        var again = document.createElement('button');
+        again.type = 'button'; again.className = 'btn-link scan-all'; again.textContent = 'Start over from the photo as taken';
+        again.addEventListener('click', function () { d.close(); adjust.restart(); });
+        status.appendChild(again);
+      }
     }
     // Opened from the list's own buttons: the choice is made, so the
     // dialog's buttons and intro line stay out of the way.
@@ -25549,13 +26162,17 @@
       takeImages(e.target.files).then(function () { if (sources.length) status.textContent = sources.length + ' so far. Take photos again for the next one.'; });
     });
     box.querySelectorAll('[data-mode] button').forEach(function (b) {
-      b.addEventListener('click', function () { o.mode = b.dataset.val; syncControls(); renderView(); });
+      b.addEventListener('click', function () { if (o.mode !== b.dataset.val) checkpoint(b.textContent); o.mode = b.dataset.val; syncControls(); renderView(); });
     });
     box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
-      r.addEventListener('input', function () { o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
+      // One drag of a slider is one change to undo.
+      var sliding = false;
+      r.addEventListener('input', function () { if (!sliding) { checkpoint(r.closest('.field').querySelector('label').firstChild.textContent.trim()); sliding = true; } o[r.dataset.k] = Number(r.value); syncControls(); renderView(); });
+      r.addEventListener('change', function () { sliding = false; });
     });
-    box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { o.trim = e.target.checked; renderView(); });
+    box.querySelector('input[type="checkbox"][data-k="trim"]').addEventListener('change', function (e) { checkpoint('crop'); o.trim = e.target.checked; renderView(); });
     box.querySelector('input[data-k="edges"]').addEventListener('change', function (e) {
+      checkpoint('straightening');
       o.edges = e.target.checked; editingEdges = false; savePhotoPrefs();
       sources.forEach(function (src) {
         if (src.digital || src.fromPdf) return;
@@ -25564,11 +26181,23 @@
       });
       refresh();
     });
+    box.querySelectorAll('input[data-post]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        checkpoint(cb.closest('label').textContent.trim());
+        o[cb.dataset.post] = cb.checked;
+        // Transparent paper and crisp lines both start from white paper.
+        if (cb.checked && cb.dataset.post !== 'flatten') o.flatten = true;
+        if (!cb.checked && cb.dataset.post === 'flatten') { o.clear = false; o.ink = false; }
+        sources.forEach(keepThumb);
+        syncControls(); renderView();
+      });
+    });
     box.querySelectorAll('input[data-cond]').forEach(function (cb) {
       cb.addEventListener('change', function () {
         var k = cb.dataset.cond;
+        checkpoint(cb.closest('label').textContent.trim());
         if (cb.checked) { o.cond[k] = true; liftFor(k); }
-        else delete o.cond[k];
+        else { delete o.cond[k]; dropFor(k); }
         savePhotoPrefs(); syncControls(); renderView();
       });
     });
@@ -25588,9 +26217,9 @@
             status.textContent = 'Adding ' + (++done) + ' of ' + n + '…';
             var kept = keepResult(src, keepWarp(src, 2400), 2400), keptRaw = adjust ? adjust.raw : null;
             if (!adjust && sink.storeRaw && !src.digital) try { keptRaw = await sink.storeRaw(await pbEncode(src.photo, false)); } catch (e) { keptRaw = null; }
-            await sink.store(await pbEncode(kept, o.mode === 'bw'), { spread: assigning ? plan[i][0] : null, raw: keptRaw,
+            await sink.store(await pbEncode(kept, o.mode === 'bw' || o.clear), { spread: assigning ? plan[i][0] : null, raw: keptRaw,
               scan: src.digital ? null : { crop: true, mode: o.mode, shadow: o.shadow, contrast: o.contrast, brightness: o.brightness, threshold: o.threshold, marks: o.marks || 0,
-                cond: Object.assign({}, o.cond), quad: src.quad, erase: src.erase, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
+                cond: Object.assign({}, o.cond), flatten: !!o.flatten, clear: !!o.clear, ink: !!o.ink, quad: src.quad, erase: src.erase, moves: src.moves, keepLoop: src.keepLoop, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf } });
             continue;
           }
           function placed(c, x0, y0) {
@@ -25647,13 +26276,13 @@
             cbState.cartoons.push(nc);
           }
         }
-        if (sink) { d.close(); sink.done(n); return; }
+        if (sink) { d.close(); sink.done(n); if (afterSave) afterSave(); return; }
         cbPersist();
         cbRenderList();
         d.close();
         showToast('Added ' + n + (n === 1 ? ' cartoon.' : ' cartoons.') + ' Write their captions beside them.');
       } catch (err) {
-        busy = false; addBtn.disabled = false;
+        busy = false; addBtn.disabled = false; afterSave = null;
         status.textContent = 'Couldn’t add them: ' + (err && err.message ? err.message : 'unknown error');
       }
     });
