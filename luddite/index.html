@@ -594,6 +594,25 @@
   .extrarow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 18px; font: 600 14px var(--ui); }
   .schedfield { margin-top: 14px; }
   .schedfield .lbl { display: block; margin-bottom: 6px; font: 600 12px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  /* Bring In Exam.net Papers: files, where they go, then each exam matched to a student. */
+  #examBox .box { max-width: 720px; }
+  .actions #examImportBtn { justify-self: start; }
+  .examdrop { border: 1.5px dashed var(--edge); border-radius: 14px; padding: 18px; text-align: center; background: var(--paper); }
+  .examdrop.over { background: var(--hover); border-color: var(--ink); }
+  .examdrop .fine { margin: 8px 0 0; }
+  .examwhere { display: grid; gap: 10px; margin-top: 16px; }
+  .examwhere .newbits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .examwhere select.field, .examwhere input.field { width: 100%; padding: 9px 14px; }
+  .examrows { margin-top: 14px; display: grid; gap: 6px; max-height: 46vh; overflow-y: auto; padding: 2px; }
+  .examrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--rule); background: var(--card); }
+  .examrow .who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .examrow .who .fine { margin: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .examrow select.field { width: 100%; padding: 7px 12px; }
+  .examrow .pill.ok { background: var(--mint-tint); color: var(--mint-deep); }
+  .examrow .pill.check { background: var(--sun-tint); color: var(--sun-deep); }
+  .examrow .pill.need { background: var(--tomato-tint); color: var(--tomato-deep); }
+  .examrow.out { opacity: .6; }
+  @media (max-width: 620px) { .examrow { grid-template-columns: 1fr; } .examwhere .newbits { grid-template-columns: 1fr; } }
   .schedrange { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .schedrange .field { border: 1.5px solid var(--ink); box-shadow: none; border-radius: 10px; padding: 6px 10px; }
   .schedbtns { gap: 8px; margin-top: 18px; flex-wrap: wrap; justify-content: flex-end; }
@@ -1701,6 +1720,7 @@
     <!-- New writing session, first under the toggle on both of Home's tabs (Overview and Classes) -->
     <div class="actions">
       <button class="btn bigaction" id="newBtn" type="button">+ New writing session</button>
+      <button class="btn small ghost" id="examImportBtn" type="button">Bring in Exam.net papers…</button>
     </div>
 
     <section class="panel" id="newRoomBox" hidden>
@@ -1845,6 +1865,7 @@
             <div class="popsec">Papers</div>
             <button type="button" class="trogx" id="reflectBtn">Ask for a reflection…</button>
             <button type="button" id="reflectOffBtn" hidden>Stop asking for reflections</button>
+            <button type="button" id="examImportRoomBtn">Bring in Exam.net papers…</button>
             <button type="button" id="printAllRoom">Print all papers</button>
             <button type="button" class="trogx" id="rereadBtn">Let students reread their papers</button>
             <button type="button" id="handBackAllBtn">Share all grading</button>
@@ -2320,6 +2341,36 @@
     <div class="row" style="justify-content:flex-end; margin-top:18px">
       <button class="btn small ghost" id="pickTimeNo" type="button">Cancel</button>
       <button class="btn small" id="pickTimeYes" type="button" disabled>Save my time</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay no-print" id="examBox" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="examTitle">
+    <h2 id="examTitle">Bring In Exam.net Papers</h2>
+    <p class="asktext">Each student’s exam becomes their paper in a writing session, handed in and ready to grade. In Exam.net, download the class’s answers as PDFs (the zip of one PDF per student, or one PDF of everyone), or as Word files.</p>
+    <div class="examdrop" id="examDrop">
+      <button class="btn small" id="examPick" type="button">Choose files…</button>
+      <p class="fine" id="examDropNote">or drop the zip or PDFs here</p>
+      <input type="file" id="examFiles" multiple accept=".zip,.pdf,.docx,.txt,application/zip,application/pdf" hidden>
+    </div>
+    <div class="examwhere" id="examWhereBox" hidden>
+      <div><label class="lbl" for="examWhere">Bring Them Into</label><select class="field" id="examWhere"></select></div>
+      <div class="newbits" id="examNewBits">
+        <div><label class="lbl" for="examName">Writing session name</label><input class="field" id="examName" maxlength="80" autocomplete="off"></div>
+        <div><label class="lbl" for="examClass">Class</label><select class="field" id="examClass"></select></div>
+      </div>
+    </div>
+    <div id="examMatchBox" hidden>
+      <h3>Who Wrote Each Exam</h3>
+      <p class="fine" id="examSummary" style="margin-top:0"></p>
+      <div class="examrows" id="examRows"></div>
+      <p class="fine" id="examMissing"></p>
+    </div>
+    <p class="fine warn" id="examNote" hidden></p>
+    <div class="row" style="justify-content:flex-end; margin-top:18px; gap:8px">
+      <button class="btn small ghost" id="examCancel" type="button">Cancel</button>
+      <button class="btn small" id="examGo" type="button" disabled>Bring in the papers</button>
     </div>
   </div>
 </div>
@@ -7976,6 +8027,8 @@
       : new Date(x.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
     var words = x ? x.words : s && s.words;
     if (words) bits.push(plural(words, 'word', 'words'));
+    // A paper brought in (Bring in Exam.net papers) says where it came from.
+    if (x && x.imported) bits.push('from ' + x.imported);
     if (bits.length) line.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
     var leaves = x ? x.leaves : s && s.leaves;
     if (leaves) line.appendChild(el('em', 'warntext', ' · left the page ' + leaves + '×'));
@@ -8097,6 +8150,11 @@
   // thing. A title the page set itself (a padlock, a bubble) is kept.
   // By id first, then by label, then by where the button is.
   var TIP_ID = {
+    examImportBtn: 'Brings a class’s Exam.net exams into Luddite, each one a student’s paper, handed in and ready to grade',
+    examImportRoomBtn: 'Brings a class’s Exam.net exams into this writing session, each one a student’s paper, handed in and ready to grade',
+    examPick: 'Picks the zip, PDFs or Word files Exam.net downloaded for the class',
+    examGo: 'Makes each matched exam its student’s paper, handed in, so it shows as Grade! on the session’s page',
+    examCancel: 'Closes this without bringing anything in',
     backendBtn: 'Reloads Luddite on the other one, where you sign in once. Nothing moves between them',
     proctorHomeBtn: 'Opens the writing sessions you proctor',
     leaveRoomBtn: 'Leaves this writing session and goes back to where you type an Entry Phrase. Your writing is kept',
@@ -11592,6 +11650,416 @@
     var ids = latestPerStudent(room.submissions).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });
     openPrintAll(ids, room.title + ': ' + plural(ids.length, 'paper', 'papers'), function () { openRoom(room.code); });
   });
+
+  // ---------------------------------------------------------------------
+  // Bringing in Exam.net papers (Home, and a session's Session options ›
+  // Papers). Exam.net downloads a class's answers as a zip of one PDF per
+  // student ("<Exam>-<FirstLast>.pdf"), one PDF of everyone, or Word files.
+  // Each PDF page has the student's name at its top right, then "Question 1",
+  // "300 words, no limit - Max points: 100", the question, "Answer" and the
+  // answer. Each student's answers become their paper in a writing session
+  // (PUT /luddite/import, one student at a time), handed in and ready to grade.
+  // ---------------------------------------------------------------------
+  var exam = null; // { files, found: [{ name, fileName, text, prompt, words, email, how }], code, roster }
+
+  // A zip's files, read with the browser's own inflater (no library).
+  async function examUnzip(bytes) {
+    var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), out = [], e = -1;
+    for (var k = bytes.length - 22; k >= Math.max(0, bytes.length - 65557); k--) if (dv.getUint32(k, true) === 0x06054b50) { e = k; break; }
+    if (e < 0) throw new Error('bad_zip');
+    var n = dv.getUint16(e + 10, true), p = dv.getUint32(e + 16, true);
+    for (var i = 0; i < n && dv.getUint32(p, true) === 0x02014b50; i++) {
+      var method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true), local = dv.getUint32(p + 42, true);
+      var nameLen = dv.getUint16(p + 28, true), name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+      if (/\/$/.test(name) || /(^|\/)(__MACOSX|\.)/.test(name)) continue;
+      var at = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+      var data = bytes.subarray(at, at + size);
+      if (method === 8) data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      else if (method !== 0) continue;
+      out.push({ name: name.split('/').pop(), bytes: data });
+    }
+    return out;
+  }
+
+  // Exam.net's PDFs put a space before punctuation ("the sea ' s edge", "the end ."); the writing goes in without it.
+  function examTidy(t) {
+    return t.replace(/[  ]+([.,;:!?)\]’”])/g, '$1').replace(/[  ]+(['’])(?=\s|s\b|$)/g, '$1').replace(/([(\[]) +/g, '$1').replace(/[ \t]+$/gm, '');
+  }
+  // Brought-in text is plain: a * or _ in it is a character, not bold or italics.
+  function examEscape(t) { return t.replace(/[\\*_]/g, '\\$&'); }
+
+  // A page's text as lines, top to bottom: { y, x, right, text }.
+  async function examPdfPages(bytes) {
+    var lib = await loadPdfjs();
+    var doc = await lib.getDocument({ data: bytes }).promise, pages = [];
+    for (var pn = 1; pn <= doc.numPages; pn++) {
+      var page = await doc.getPage(pn), vp = page.getViewport({ scale: 1 }), tc = await page.getTextContent(), lines = [];
+      tc.items.forEach(function (it) {
+        if (!it.str || !it.str.trim()) return;
+        var x = it.transform[4], y = it.transform[5], line = null;
+        for (var i = 0; i < lines.length; i++) if (Math.abs(lines[i].y - y) < 1.5 && (x - lines[i].right < 60)) { line = lines[i]; break; }
+        if (!line) lines.push(line = { y: y, x: x, right: x, parts: [] });
+        line.parts.push({ x: x, w: it.width, str: it.str });
+        line.x = Math.min(line.x, x); line.right = Math.max(line.right, x + it.width);
+      });
+      lines.forEach(function (l) {
+        l.parts.sort(function (a, b) { return a.x - b.x; });
+        var t = '', end = null;
+        l.parts.forEach(function (q) { if (end != null && q.x - end > 1.5 && !/\s$/.test(t) && !/^\s/.test(q.str)) t += ' '; t += q.str; end = q.x + q.w; });
+        l.text = t.replace(/\s+/g, ' ').trim();
+      });
+      lines.sort(function (a, b) { return b.y - a.y || a.x - b.x; });
+      pages.push({ w: vp.width, h: vp.height, lines: lines });
+    }
+    return pages;
+  }
+
+  // Lines back into paragraphs: a gap bigger than a line's is a new
+  // paragraph; a short line ends one (or is a line of its own, as in a poem).
+  function examParas(lines) {
+    if (!lines.length) return '';
+    var steps = [], right = 0;
+    lines.forEach(function (l, i) { right = Math.max(right, l.right - l.x); if (i && l.page === lines[i - 1].page) steps.push(lines[i - 1].y - l.y); });
+    steps.sort(function (a, b) { return a - b; });
+    var step = steps.length ? steps[Math.floor(steps.length / 2)] : 14, out = lines[0].text;
+    for (var i = 1; i < lines.length; i++) {
+      var a = lines[i - 1], b = lines[i], short = (a.right - a.x) < right * 0.8;
+      var gap = b.page === a.page ? a.y - b.y > step * 1.5 : false;
+      out += gap ? '\n\n' : short ? '\n' : ' ';
+      out += b.text;
+    }
+    return examTidy(out);
+  }
+
+  // One exam's questions and answers, from its lines (PDF) or paragraphs (Word).
+  function examSplit(lines) {
+    var qs = [], q = null, mode = '';
+    lines.forEach(function (l) {
+      var t = l.text, qm = /^Question\s*(\d+)$/i.exec(t);
+      if (qm) { q = { n: +qm[1], prompt: [], answer: [] }; qs.push(q); mode = 'prompt'; return; }
+      if (q && mode === 'prompt' && !q.prompt.length && /\bwords?\b.*\bpoints?\b/i.test(t) && t.length < 90) return;
+      if (q && /^Answer:?$/i.test(t)) { mode = 'answer'; return; }
+      if (!q) { q = { n: 1, prompt: [], answer: [] }; qs.push(q); mode = 'answer'; }
+      q[mode].push(l);
+    });
+    return qs;
+  }
+  function examFromQuestions(qs, join) {
+    var answered = qs.filter(function (q) { return q.answer.length; });
+    var text = answered.length === 1 ? join(answered[0].answer) : answered.map(function (q) { return '**Question ' + q.n + '**\n\n' + join(q.answer); }).join('\n\n');
+    var prompt = qs.length === 1 ? join(qs[0].prompt) : qs.filter(function (q) { return q.prompt.length; }).map(function (q) { return 'Question ' + q.n + ': ' + join(q.prompt); }).join('\n\n');
+    return { text: text, prompt: prompt };
+  }
+  function examTextOf(joined) { return examEscape(joined.replace(/\n{3,}/g, '\n\n').trim()); }
+
+  // Every student in one PDF: a name at a page's top right starts the next.
+  async function examReadPdf(bytes, fileName) {
+    var pages = await examPdfPages(bytes), people = [], cur = null;
+    pages.forEach(function (pg, pi) {
+      var head = pg.lines.filter(function (l) { return l.x > pg.w * 0.45 && l.y > pg.h - 70 && !/^Question\b/i.test(l.text) && !/^\d+$/.test(l.text) && !/\bpage\b/i.test(l.text); });
+      var name = head.map(function (l) { return l.text; }).join(' ').trim();
+      if (!cur || (name && examKey(name) !== examKey(cur.name))) people.push(cur = { name: name, lines: [] });
+      pg.lines.forEach(function (l) { if (head.indexOf(l) === -1) cur.lines.push({ text: l.text, y: l.y, x: l.x, right: l.right, page: pi }); });
+    });
+    return people.map(function (pp) {
+      var r = examFromQuestions(examSplit(pp.lines), examParas);
+      return { name: pp.name || examNameFromFile(fileName), fileName: fileName, text: examTextOf(r.text), prompt: examTidy(r.prompt) };
+    });
+  }
+  async function examReadDocx(bytes, fileName) {
+    var files = await examUnzip(bytes), docXml = null;
+    for (var i = 0; i < files.length; i++) if (files[i].name === 'document.xml') docXml = files[i].bytes;
+    if (!docXml) throw new Error('bad_docx');
+    var xml = new DOMParser().parseFromString(new TextDecoder().decode(docXml), 'application/xml'), W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    var paras = Array.prototype.map.call(xml.getElementsByTagNameNS(W, 'p'), function (p) {
+      var t = '';
+      Array.prototype.forEach.call(p.getElementsByTagNameNS(W, '*'), function (n) { if (n.localName === 't') t += n.textContent; else if (n.localName === 'tab') t += '\t'; else if (n.localName === 'br') t += '\n'; });
+      return { text: t.trim() };
+    }).filter(function (p) { return p.text; });
+    var r = examFromQuestions(examSplit(paras), function (ls) { return ls.map(function (l) { return l.text; }).join('\n\n'); });
+    return [{ name: examNameFromFile(fileName), fileName: fileName, text: examTextOf(examTidy(r.text)), prompt: examTidy(r.prompt) }];
+  }
+
+  // "Unit2Essay-RosaQuill.pdf": the exam, then the student.
+  function examDecamel(t) { return t.replace(/[_]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2').replace(/\s+/g, ' ').trim(); }
+  function examBase(f) { return f.replace(/\.[^.]+$/, ''); }
+  function examNameFromFile(f) {
+    var base = examBase(f), pre = exam && exam.prefix ? exam.prefix : '';
+    var rest = pre && base.indexOf(pre) === 0 && base.length > pre.length ? base.slice(pre.length) : base.split('-').pop();
+    return examDecamel(rest.replace(/^[-_ ]+/, ''));
+  }
+  // The part every file name shares, up to a dash: the exam's name.
+  function examPrefix(names) {
+    var bases = names.map(examBase);
+    if (bases.length < 2) { var one = bases[0] || ''; return one.indexOf('-') > 0 ? one.slice(0, one.lastIndexOf('-') + 1) : ''; }
+    var pre = bases[0];
+    bases.forEach(function (b) { while (pre && b.indexOf(pre) !== 0) pre = pre.slice(0, -1); });
+    var cut = pre.lastIndexOf('-');
+    return cut > 0 ? pre.slice(0, cut + 1) : '';
+  }
+  function examKey(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim(); }
+  function examToks(t) { return examKey(t).split(' ').filter(Boolean); }
+  function examGuessName(email) {
+    return email.split('@')[0].split(/[._\-\d]+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+  }
+
+  // How sure a name and a student on the list are the same person: 5 the
+  // whole name, 4 first and last, 3 last name and first initial, 2 last name only.
+  function examScore(name, c) {
+    var nt = examToks(name);
+    if (!nt.length) return 0;
+    var first = nt[0], last = nt[nt.length - 1], ct = examToks(c.name), local = c.email.split('@')[0].toLowerCase();
+    var lt = examToks(local.replace(/[^a-z]+/g, ' ')), flat = local.replace(/[^a-z]/g, ''), all = nt.join('');
+    if ((ct.length && nt.length === ct.length && nt.every(function (t) { return ct.indexOf(t) !== -1; })) || flat === all || flat === nt.slice().reverse().join('')) return 5;
+    if ((lt.indexOf(first) !== -1 && lt.indexOf(last) !== -1) || (ct.indexOf(first) !== -1 && ct.indexOf(last) !== -1)) return 4;
+    if (nt.length > 1 && (flat.indexOf(first + last) !== -1 || flat.indexOf(last + first) !== -1)) return 4;
+    if (nt.length > 1 && (flat.indexOf(first.charAt(0) + last) === 0 || flat.indexOf(last + first.charAt(0)) === 0)) return 3;
+    if (nt.length > 1 && (lt.indexOf(last) !== -1 || ct.indexOf(last) !== -1)) return 2;
+    return 0;
+  }
+  // Each exam to the student it most likely is, surest first, no student twice.
+  function examAutoMatch() {
+    var pairs = [];
+    exam.found.forEach(function (f, i) {
+      f.email = ''; f.how = 'need';
+      exam.roster.forEach(function (c) { var sc = examScore(f.name, c); if (sc >= 2) pairs.push({ i: i, c: c, sc: sc }); });
+    });
+    pairs.sort(function (a, b) { return b.sc - a.sc; });
+    var taken = {};
+    pairs.forEach(function (p) {
+      var f = exam.found[p.i];
+      if (f.email || taken[p.c.email]) return;
+      // Two students as likely as each other: the teacher picks.
+      var rivals = pairs.filter(function (q) { return q.i === p.i && q.sc === p.sc && !taken[q.c.email]; }).length;
+      if (rivals > 1) return;
+      f.email = p.c.email; f.how = p.sc >= 3 ? 'ok' : 'check'; taken[p.c.email] = 1;
+    });
+  }
+
+  async function examRosterFor(code, classId) {
+    var list = {}, add = function (email, name) {
+      email = String(email || '').trim().toLowerCase();
+      if (!email) return;
+      var known = students.filter(function (s) { return s.email.toLowerCase() === email; })[0];
+      list[email] = { email: email, name: name || (list[email] && list[email].name) || (known && known.name) || '' };
+    };
+    if (!students.length) { try { students = (await api('/luddite/students')).students || []; } catch (e) {} }
+    if (code) {
+      var d = await api('/luddite/assignment?code=' + encodeURIComponent(code));
+      ((d.roster && d.roster.emails) || []).forEach(function (e) { add(e); });
+      (d.room.emails || []).forEach(function (e) { add(e); });
+      Object.keys(d.room.students || {}).forEach(function (k) { var st = d.room.students[k]; add(st.email, st.name); });
+    } else if (classId) {
+      var c = (await api('/luddite/class?id=' + encodeURIComponent(classId))).class;
+      (c.emails || []).forEach(function (e) { add(e); });
+    }
+    return Object.keys(list).map(function (k) { var c = list[k]; c.shown = c.name || examGuessName(c.email); return c; })
+      .sort(function (a, b) { return a.shown.localeCompare(b.shown); });
+  }
+
+  function openExamImport(code) {
+    exam = { files: [], found: [], code: code || '', roster: [], prefix: '' };
+    $('examFiles').value = '';
+    $('examDropNote').textContent = 'or drop the zip or PDFs here';
+    $('examWhereBox').hidden = true;
+    $('examMatchBox').hidden = true;
+    $('examNote').hidden = true;
+    $('examGo').disabled = true;
+    $('examGo').textContent = 'Bring in the papers';
+    $('examBox').hidden = false;
+    $('examPick').focus();
+  }
+  function examSay(t) { $('examNote').textContent = t || ''; $('examNote').hidden = !t; }
+
+  async function examTakeFiles(list) {
+    examSay('');
+    var files = [];
+    $('examDropNote').textContent = 'Reading…';
+    try {
+      for (var i = 0; i < list.length; i++) {
+        var f = list[i], bytes = new Uint8Array(await f.arrayBuffer());
+        if (/\.zip$/i.test(f.name)) (await examUnzip(bytes)).forEach(function (z) { files.push(z); });
+        else files.push({ name: f.name, bytes: bytes });
+      }
+      files = files.filter(function (f) { return /\.(pdf|docx|txt)$/i.test(f.name); })
+        .sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true }); });
+      if (!files.length) { $('examDropNote').textContent = 'or drop the zip or PDFs here'; examSay('There were no PDFs or Word files in that. Choose the zip or PDFs Exam.net downloaded.'); return; }
+      exam.prefix = examPrefix(files.map(function (f) { return f.name; }));
+      var found = [];
+      for (var j = 0; j < files.length; j++) {
+        var fl = files[j];
+        $('examDropNote').textContent = 'Reading ' + (j + 1) + ' of ' + files.length + '…';
+        try {
+          var got = /\.pdf$/i.test(fl.name) ? await examReadPdf(fl.bytes, fl.name)
+            : /\.docx$/i.test(fl.name) ? await examReadDocx(fl.bytes, fl.name)
+            : [{ name: examNameFromFile(fl.name), fileName: fl.name, text: examEscape(new TextDecoder().decode(fl.bytes).replace(/\r\n?/g, '\n').trim()), prompt: '' }];
+          got.forEach(function (g) { g.words = (plainOf(g.text).match(/\S+/g) || []).length; found.push(g); });
+        } catch (e) { found.push({ name: examNameFromFile(fl.name), fileName: fl.name, text: '', words: 0, unread: true }); }
+      }
+      exam.found = found;
+      exam.files = files;
+    } catch (e) {
+      $('examDropNote').textContent = 'or drop the zip or PDFs here';
+      examSay(e.message === 'pdfjs' ? 'Couldn’t load the PDF reader. Check your connection and try again.' : 'Couldn’t read those files. Try downloading them from Exam.net again.');
+      return;
+    }
+    $('examDropNote').textContent = plural(exam.found.length, 'exam', 'exams') + ' from ' + plural(exam.files.length, 'file', 'files') + '. Choose files again to start over.';
+    examWhereFill();
+  }
+
+  function examWhereFill() {
+    var where = $('examWhere');
+    where.innerHTML = '';
+    var op = el('option', null, 'A new writing session'); op.value = '';
+    where.appendChild(op);
+    (sessionList || []).filter(function (r) { return !r.casual; }).forEach(function (r) {
+      var c = r.classId && classes.filter(function (x) { return x.id === r.classId; })[0];
+      var o = el('option', null, r.title + (c ? ' · ' + c.name : ''));
+      o.value = r.code;
+      where.appendChild(o);
+    });
+    if (exam.code && !(sessionList || []).some(function (r) { return r.code === exam.code; }) && teacherRoom && teacherRoom.code === exam.code) {
+      var o2 = el('option', null, teacherRoom.title || 'This writing session'); o2.value = exam.code; where.appendChild(o2);
+    }
+    where.value = exam.code || '';
+    var cls = $('examClass');
+    cls.innerHTML = '';
+    var none = el('option', null, 'Pick a class'); none.value = ''; cls.appendChild(none);
+    classes.forEach(function (c) { var o = el('option', null, c.name); o.value = c.id; cls.appendChild(o); });
+    $('examName').value = examDecamel((exam.prefix || '').replace(/[-_ ]+$/, '')) || 'Exam.net exam';
+    $('examWhereBox').hidden = false;
+    examWhereChanged();
+  }
+
+  var examRosterSeq = 0;
+  async function examWhereChanged() {
+    var code = $('examWhere').value, classId = $('examClass').value, seq = ++examRosterSeq;
+    $('examNewBits').hidden = !!code;
+    exam.code = code;
+    $('examMatchBox').hidden = false;
+    $('examSummary').textContent = code || classId ? 'Finding the class list…' : 'Pick a class, so each exam can be matched to a student on its list.';
+    $('examRows').innerHTML = '';
+    $('examMissing').textContent = '';
+    exam.roster = [];
+    if (code || classId) {
+      try { exam.roster = await examRosterFor(code, classId); }
+      catch (e) { if (seq === examRosterSeq) examSay('Couldn’t get the class list. Try again.'); }
+    }
+    if (seq !== examRosterSeq) return;
+    examAutoMatch();
+    examDraw();
+  }
+
+  function examDraw() {
+    var box = $('examRows'), used = {};
+    box.innerHTML = '';
+    exam.found.forEach(function (f) { if (f.email) used[f.email] = (used[f.email] || 0) + 1; });
+    exam.found.forEach(function (f, i) {
+      var row = el('div', 'examrow' + (f.how === 'out' ? ' out' : ''));
+      var who = el('div', 'who');
+      who.appendChild(el('b', null, f.name || 'No name'));
+      who.appendChild(el('div', 'fine', f.unread ? f.fileName + ' · couldn’t be read' : f.fileName + ' · ' + plural(f.words, 'word', 'words')));
+      row.appendChild(who);
+      var sel = el('select', 'field');
+      sel.setAttribute('aria-label', 'Who wrote ' + (f.name || f.fileName));
+      var add = function (v, t) { var o = el('option', null, t); o.value = v; sel.appendChild(o); };
+      add('', 'Pick a student…');
+      exam.roster.forEach(function (c) { add(c.email, c.shown + (c.name || c.shown.toLowerCase() === examGuessName(c.email).toLowerCase() ? ' · ' + c.email : '')); });
+      if (f.email && !exam.roster.some(function (c) { return c.email === f.email; })) add(f.email, f.email);
+      add('*other', 'Someone not on the list…');
+      add('*out', 'Leave this one out');
+      sel.value = f.how === 'out' ? '*out' : f.email || '';
+      sel.disabled = !!f.unread || !f.text;
+      sel.onchange = async function () {
+        if (sel.value === '*out') { f.email = ''; f.how = 'out'; }
+        else if (sel.value === '*other') {
+          var typed = await ask({ title: 'Who Wrote This Exam?', text: 'Type the student’s email address. The paper is theirs: they see it when you share grading.', input: 'line', placeholder: 'name@school.org', ok: 'Use this address' });
+          typed = String(typed || '').trim().toLowerCase();
+          if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(typed)) { f.email = typed; f.how = 'ok'; }
+        } else { f.email = sel.value; f.how = sel.value ? 'ok' : 'need'; }
+        examDraw();
+      };
+      row.appendChild(sel);
+      var st = f.unread || !f.text ? ['need', f.unread ? 'Unreadable' : 'No answer'] : f.how === 'out' ? ['', 'Left out']
+        : !f.email ? ['need', 'Pick a student'] : used[f.email] > 1 ? ['need', 'Picked twice'] : f.how === 'check' ? ['check', 'Check this'] : ['ok', 'Matched'];
+      row.appendChild(el('span', 'pill ' + st[0], st[1]));
+      box.appendChild(row);
+    });
+    var ready = exam.found.filter(function (f) { return f.email && f.text && f.how !== 'out' && used[f.email] === 1; });
+    var open = exam.found.filter(function (f) { return f.how !== 'out' && !(f.email && f.text && used[f.email] === 1); }).length;
+    if (!exam.code && !$('examClass').value && classes.length) $('examSummary').textContent = 'Pick a class, so each exam can be matched to a student on its list.';
+    else if (open) $('examSummary').textContent = ready.length + ' matched; ' + open + ' to pick (or leave out). Check each before you bring them in.';
+    else $('examSummary').textContent = 'All ' + ready.length + ' matched. Check each before you bring them in.';
+    var missing = exam.roster.filter(function (c) { return !exam.found.some(function (f) { return f.email === c.email && f.how !== 'out'; }); });
+    $('examMissing').textContent = missing.length && exam.roster.length ? 'No exam for ' + missing.map(function (c) { return c.shown; }).join(', ') + '.' : '';
+    var needClass = !exam.code && !$('examClass').value && classes.length > 0;
+    $('examGo').disabled = !ready.length || open > 0 || (!exam.code && !$('examName').value.trim());
+    $('examGo').textContent = ready.length ? 'Bring in ' + plural(ready.length, 'paper', 'papers') : 'Bring in the papers';
+    if (needClass) $('examGo').disabled = true;
+    exam.ready = ready;
+  }
+
+  async function examGo() {
+    var ready = (exam.ready || []).slice();
+    if (!ready.length) return;
+    $('examGo').disabled = true;
+    examSay('');
+    var code = exam.code;
+    try {
+      if (!code) {
+        var first = ready.filter(function (f) { return f.prompt; })[0];
+        var made = (await api('/luddite/assignments', { title: $('examName').value.trim(), prompt: first ? examEscape(first.prompt) : '', classId: $('examClass').value || null, startAt: Date.now() })).room;
+        code = exam.code = made.code;
+        // Nobody writes in it: it's over as soon as it's made.
+        await api('/luddite/assignment', { code: code, action: 'close' });
+        lastDrawn = '';
+      }
+    } catch (e) {
+      if (e.message === 'signed_out') return;
+      examSay('Couldn’t make the writing session. Try again.');
+      $('examGo').disabled = false;
+      return;
+    }
+    var label = examDecamel((exam.prefix || '').replace(/[-_ ]+$/, '')) || 'Exam.net';
+    var failed = [];
+    for (var i = 0; i < ready.length; i++) {
+      var f = ready[i];
+      $('examGo').textContent = 'Bringing in ' + (i + 1) + ' of ' + ready.length + '…';
+      try {
+        await api('/luddite/import', { code: code, email: f.email, name: f.name, text: f.text, label: label, source: 'Exam.net' });
+        f.done = true;
+      } catch (e) {
+        if (e.message === 'signed_out') return;
+        failed.push(f);
+      }
+    }
+    exam.found = exam.found.filter(function (f) { return !f.done; });
+    if (failed.length) {
+      // The session is made: what's left goes into it on the next try.
+      exam.code = code;
+      examWhereFill();
+      examSay(plural(ready.length - failed.length, 'paper is', 'papers are') + ' in. Couldn’t bring in ' + failed.map(function (f) { return f.name; }).join(', ') + ': try again.');
+      return;
+    }
+    $('examBox').hidden = true;
+    exam = null;
+    loadRooms().catch(function () {});
+    openRoom(code);
+  }
+
+  $('examImportBtn').addEventListener('click', function () { openExamImport(''); });
+  $('examImportRoomBtn').addEventListener('click', function () { $('roomMenu').open = false; openExamImport(teacherRoom && teacherRoom.code); });
+  $('examPick').addEventListener('click', function () { $('examFiles').click(); });
+  $('examFiles').addEventListener('change', function () { if (this.files.length) examTakeFiles(Array.prototype.slice.call(this.files)); });
+  $('examDrop').addEventListener('dragover', function (e) { e.preventDefault(); this.classList.add('over'); });
+  $('examDrop').addEventListener('dragleave', function () { this.classList.remove('over'); });
+  $('examDrop').addEventListener('drop', function (e) { e.preventDefault(); this.classList.remove('over'); if (e.dataTransfer.files.length) examTakeFiles(Array.prototype.slice.call(e.dataTransfer.files)); });
+  $('examWhere').addEventListener('change', examWhereChanged);
+  $('examClass').addEventListener('change', examWhereChanged);
+  $('examName').addEventListener('input', function () { if (exam) examDraw(); });
+  $('examCancel').addEventListener('click', function () { $('examBox').hidden = true; exam = null; });
+  $('examGo').addEventListener('click', examGo);
 
   // ---------------------------------------------------------------------
   // Offline

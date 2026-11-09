@@ -58,6 +58,25 @@ ok(call(teacher, 'PUT', '/luddite/handback', { ids: [paperId], back: true }));
 const mine = ok(call(student, 'GET', '/luddite/mypaper?id=' + paperId));
 assert.ok(JSON.stringify(mine).includes('Vivid!'), 'the student sees the comment once shared');
 
+// An Exam.net exam brought in for a student who has never signed in here:
+// a handed-in paper in an ended session, theirs by address once shared.
+const exm = ok(call(teacher, 'PUT', '/luddite/assignments', { title: 'Unit 2 In-Class Essay', prompt: 'Themes?' })).room;
+ok(call(teacher, 'PUT', '/luddite/assignment', { code: exm.code, action: 'close' }));
+assert.equal(call(student, 'PUT', '/luddite/import', { code: exm.code, email: 'rosa_quill@example.com', name: 'Rosa Quill', text: 'x' }).status, 403, 'only its teacher brings papers in');
+const imp = ok(call(teacher, 'PUT', '/luddite/import', { code: exm.code, email: 'Rosa_Quill@example.com', name: 'Rosa Quill', text: 'The storm came in.\n\nThe role of the divine.', label: 'Unit 2 In-Class Essay', source: 'Exam.net' }));
+assert.equal(imp.submission.imported, 'Exam.net');
+const again = ok(call(teacher, 'PUT', '/luddite/import', { code: exm.code, email: 'rosa_quill@example.com', name: 'Rosa Quill', text: 'The storm came in, again.', source: 'Exam.net' }));
+assert.equal(again.submission.id, imp.submission.id, 'bringing the same student in again keeps one paper');
+const exRoom = ok(call(teacher, 'GET', '/luddite/assignment?code=' + exm.code)).room;
+assert.equal(exRoom.submissions.length, 1);
+assert.ok(Object.values(exRoom.students).some((s) => s.email === 'rosa_quill@example.com' && s.handedIn && s.imported), 'they are in the session, handed in');
+ok(call(teacher, 'PUT', '/luddite/marks', { id: imp.submission.id, marks: [], endComment: 'Good start.', grade: 'B+' }));
+ok(call(teacher, 'PUT', '/luddite/handback', { ids: [imp.submission.id], back: true }));
+const rosa = sessionFor(SECRET, { sub: 'g-rosa', email: 'rosa_quill@example.com', name: 'Rosa Quill' });
+assert.ok(ok(call(rosa, 'GET', '/luddite/returned')).papers.some((x) => x.id === imp.submission.id), 'the student finds it when they sign in');
+assert.ok(JSON.stringify(ok(call(rosa, 'GET', '/luddite/mypaper?id=' + imp.submission.id))).includes('Good start.'));
+assert.equal(call(student, 'GET', '/luddite/mypaper?id=' + imp.submission.id).status, 404, 'no one else does');
+
 // What's in the Sheet
 const book = Object.values(gas.books)[0];
 for (const tab of book.sheets) {

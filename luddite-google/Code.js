@@ -1,6 +1,6 @@
 // Code.js: Luddite's backend for Google Apps Script. Made by
 // luddite-google/build.mjs from luddite-backend/index.mjs; don't edit it
-// here, edit those and run `npm run build`. Built 2026-11-08.
+// here, edit those and run `npm run build`. Built 2026-11-09.
 
 // Luddite's backend on Google Apps Script: the web app's doPost, and the
 // `__gas` object the bundled backend (luddite-backend/index.mjs) runs on.
@@ -2033,12 +2033,12 @@ var __luddite = (() => {
         const { state: mine } = yield readItem("luddite:mine:" + lower(me.email));
         const items = yield Promise.all((mine && mine.returned || []).map((id) => myShared(id, me).catch(() => null)));
         const seen = {};
-        const papers = items.filter((x) => x && x.returnedAt && x.sub === me.sub && !seen[x.id] && (seen[x.id] = 1)).map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS })).sort((a, b) => b.returnedAt - a.returnedAt);
+        const papers = items.filter((x) => x && x.returnedAt && isMine(x, me) && !seen[x.id] && (seen[x.id] = 1)).map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS })).sort((a, b) => b.returnedAt - a.returnedAt);
         return respond(200, { papers });
       }
       if (path === "/luddite/mypaper" && (method === "GET" || method === "PUT")) {
         let paper = yield myShared(String((method === "GET" ? q.id : body.id) || ""), me);
-        if (!paper || !paper.returnedAt || paper.sub !== me.sub) throw new HttpError(404, "no_sub");
+        if (!paper || !paper.returnedAt || !isMine(paper, me)) throw new HttpError(404, "no_sub");
         if (method === "PUT") {
           const ep = paper.early ? "luddite:early:" + paper.code + ":" + paper.sub : null;
           const counted = yield mutate(ep || "luddite:sub:" + paper.id, (x) => {
@@ -2599,6 +2599,41 @@ var __luddite = (() => {
           done.push({ id: piece.id, returnedAt: at });
         }));
         return respond(200, { done });
+      }
+      if (path === "/luddite/import" && method === "PUT") {
+        const code = cleanCode(body.code);
+        const room = yield getRoom(code);
+        if (!ownsRoom(room, info, role)) throw new HttpError(403, "not_your_room");
+        const email = lower(body.email);
+        if (!EMAIL_RE.test(email)) throw new HttpError(400, "bad_email");
+        const name = String(body.name || "").replace(/\s+/g, " ").trim().slice(0, 80);
+        const text = String(body.text || "").replace(/\r\n?/g, "\n");
+        if (!text.trim()) throw new HttpError(400, "empty");
+        if (text.length > MAX_SUBMISSION_CHARS) throw new HttpError(413, "too_long");
+        const source = ["Exam.net"].includes(body.source) ? body.source : "Exam.net";
+        const label = String(body.label || "").replace(/[\r\n\/\\]/g, " ").trim().slice(0, 60) || source;
+        const found = Object.entries(room.students || {}).find(([, st]) => lower(st.email) === email);
+        const sub = found ? found[0] : "imp" + createHmac("sha256", "luddite-import").update(email).digest("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, 22);
+        const now = Date.now();
+        const fresh = yield mutate("luddite:room:" + code, (r) => {
+          const st = r.students[sub];
+          const entry = __spreadProps(__spreadValues({}, st || { email, requestedAt: now, leaves: 0, words: 0 }), {
+            email: st ? st.email : email,
+            name: name || st && st.name || "",
+            status: "admitted",
+            decidedAt: st && st.decidedAt || now,
+            imported: source,
+            handedIn: false,
+            autoHandedIn: false,
+            lockedOut: false,
+            writing: false
+          });
+          return __spreadProps(__spreadValues({}, r), { students: __spreadProps(__spreadValues({}, r.students), { [sub]: entry }) });
+        });
+        const me2 = { sub, email, name: fresh.students[sub].name };
+        const saved = yield handInFor(fresh, code, me2, fresh.students[sub], text, label, false, source);
+        const submission = (saved.submissions || []).find((x) => x.sub === sub);
+        return respond(200, { submission, sub });
       }
       if (path === "/luddite/students" && method === "GET") {
         const { state } = yield readItem("luddite:teacher:" + me.sub);
@@ -3258,7 +3293,7 @@ var __luddite = (() => {
       });
     });
   }
-  function handInFor(room, code, me, s, text, label, auto) {
+  function handInFor(room, code, me, s, text, label, auto, imported) {
     return __async(this, null, function* () {
       const words = (text.trim().match(/\S+/g) || []).length;
       const who = me.name || me.email;
@@ -3268,14 +3303,14 @@ var __luddite = (() => {
       if (!prev) try {
         file = yield saveToDrive(room, {
           name: who + " \u2014 " + label,
-          description: (auto ? "Handed in by Luddite when the session ended, for " : "Submitted through Luddite by ") + who + " (" + me.email + "), writing session " + titleOf(room) + " (" + code + "). " + words + " words. Left the page " + (s.leaves || 0) + (s.leaves === 1 ? " time." : " times."),
+          description: (imported ? "Brought in from " + imported + " for " : auto ? "Handed in by Luddite when the session ended, for " : "Submitted through Luddite by ") + who + " (" + me.email + "), writing session " + titleOf(room) + " (" + code + "). " + words + " words. Left the page " + (s.leaves || 0) + (s.leaves === 1 ? " time." : " times."),
           text
         });
       } catch (e) {
         if (!(e instanceof HttpError)) throw e;
         driveError = e.message;
       }
-      yield saveDraft(code, me.sub, text, s.lastSeen || 0).catch(() => {
+      if (!imported) yield saveDraft(code, me.sub, text, s.lastSeen || 0).catch(() => {
       });
       const stored = text.length <= MAX_STORED_CHARS;
       if (!file && !stored) throw new HttpError(409, driveError);
@@ -3284,7 +3319,7 @@ var __luddite = (() => {
       const win = windowOf(room, lower(me.email), s);
       const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
       const replaces = earlier.flatMap((x) => [x.id, ...x.replaces || []]).filter((x) => x !== id);
-      const submission = __spreadValues(__spreadProps(__spreadValues({
+      const submission = __spreadValues(__spreadProps(__spreadValues(__spreadProps(__spreadValues({
         id,
         sub: me.sub
       }, auto ? { auto: true } : {}), {
@@ -3296,8 +3331,9 @@ var __luddite = (() => {
         link: prev ? prev.link || null : file ? file.webViewLink : null,
         stored,
         driveError,
-        marked: 0,
-        late: !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS)
+        marked: 0
+      }), imported ? { imported } : {}), {
+        late: !imported && !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS)
       }), replaces.length ? { replaces } : {});
       if (stored) {
         const { state: chatState } = yield readItem("luddite:chat:" + code + ":" + me.sub);
@@ -3324,7 +3360,7 @@ var __luddite = (() => {
         else if (early1 && early1.returnedAt) Object.assign(carried, { returnedAt: early1.returnedAt, view: early1.view }), submission.returnedAt = early1.returnedAt;
         if (early1) yield mutate("luddite:early:" + code + ":" + me.sub, (x) => x ? __spreadProps(__spreadValues({}, x), { usedAt: Date.now(), paperId: id }) : void 0);
         if (early1 && early1.returnedAt) yield sharedNowPaper(me.email, "early:" + code + ":" + me.sub, id);
-        const paper = yield mutate("luddite:sub:" + id, () => __spreadValues(__spreadValues(__spreadProps(__spreadValues(__spreadValues({}, prev || {}), prev ? { gathered: prev.gathered || !(prev.replaces || []).length } : {}), {
+        const paper = yield mutate("luddite:sub:" + id, () => __spreadValues(__spreadValues(__spreadValues(__spreadProps(__spreadValues(__spreadValues({}, prev || {}), prev ? { gathered: prev.gathered || !(prev.replaces || []).length } : {}), {
           id,
           code,
           roomTitle: titleOf(room),
@@ -3338,7 +3374,7 @@ var __luddite = (() => {
           leaves: s.leaves || 0,
           at,
           link: submission.link
-        }), carried), chat.length ? { chat } : {}));
+        }), carried), imported ? { imported } : {}), chat.length ? { chat } : {}));
         if (prev && paper.link) yield updateDriveDoc(room.teacher.sub, paper).catch((e) => console.warn("drive update failed", e.detail || e.message));
         const email = me.email.toLowerCase();
         yield mutate("luddite:tstudent:" + room.teacher.sub + ":" + email, (t) => ({
@@ -3444,6 +3480,9 @@ var __luddite = (() => {
       askedAt: rf.askedAt || 0,
       leaves: rf.leaves || 0
     };
+  }
+  function isMine(paper, me) {
+    return paper.sub === me.sub || !!paper.imported && lower(paper.email) === lower(me.email);
   }
   function myShared(id, me) {
     return __async(this, null, function* () {

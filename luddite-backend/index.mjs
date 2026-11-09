@@ -1348,7 +1348,7 @@ async function routeLuddite(event, method, path, info) {
     const { state: mine } = await readItem('luddite:mine:' + lower(me.email));
     const items = await Promise.all(((mine && mine.returned) || []).map((id) => myShared(id, me).catch(() => null)));
     const seen = {};
-    const papers = items.filter((x) => x && x.returnedAt && x.sub === me.sub && !seen[x.id] && (seen[x.id] = 1))
+    const papers = items.filter((x) => x && x.returnedAt && isMine(x, me) && !seen[x.id] && (seen[x.id] = 1))
       .map((x) => ({ id: x.id, roomTitle: x.roomTitle, at: x.at, words: x.words, returnedAt: x.returnedAt, gradeReady: viewedMs(x) >= GRADE_AFTER_MS }))
       .sort((a, b) => b.returnedAt - a.returnedAt);
     return respond(200, { papers });
@@ -1358,7 +1358,7 @@ async function routeLuddite(event, method, path, info) {
   // PUT /luddite/mypaper { id } -- "still reading": counts toward the grade.
   if (path === '/luddite/mypaper' && (method === 'GET' || method === 'PUT')) {
     let paper = await myShared(String((method === 'GET' ? q.id : body.id) || ''), me);
-    if (!paper || !paper.returnedAt || paper.sub !== me.sub) throw new HttpError(404, 'no_sub');
+    if (!paper || !paper.returnedAt || !isMine(paper, me)) throw new HttpError(404, 'no_sub');
     if (method === 'PUT') {
       const ep = paper.early ? 'luddite:early:' + paper.code + ':' + paper.sub : null;
       const counted = await mutate(ep || 'luddite:sub:' + paper.id, (x) => {
@@ -1988,6 +1988,41 @@ async function routeLuddite(event, method, path, info) {
       done.push({ id: piece.id, returnedAt: at });
     });
     return respond(200, { done });
+  }
+
+  // PUT /luddite/import { code, email, name, text, label, source } -- one paper
+  // brought in from elsewhere (a class's Exam.net exam): handed in to this
+  // session for that student, as if they'd written it here, so it's marked up,
+  // shared and printed like any other. The page sends one student at a time.
+  // A student who isn't in the session yet is added, admitted and handed in,
+  // under their sign-in if they have one here, else a stand-in id from their
+  // address; bringing the same student in again replaces their paper's text
+  // (one document per student: its comments move onto the new text).
+  if (path === '/luddite/import' && method === 'PUT') {
+    const code = cleanCode(body.code);
+    const room = await getRoom(code);
+    if (!ownsRoom(room, info, role)) throw new HttpError(403, 'not_your_room');
+    const email = lower(body.email);
+    if (!EMAIL_RE.test(email)) throw new HttpError(400, 'bad_email');
+    const name = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const text = String(body.text || '').replace(/\r\n?/g, '\n');
+    if (!text.trim()) throw new HttpError(400, 'empty');
+    if (text.length > MAX_SUBMISSION_CHARS) throw new HttpError(413, 'too_long');
+    const source = ['Exam.net'].includes(body.source) ? body.source : 'Exam.net';
+    const label = String(body.label || '').replace(/[\r\n\/\\]/g, ' ').trim().slice(0, 60) || source;
+    const found = Object.entries(room.students || {}).find(([, st]) => lower(st.email) === email);
+    const sub = found ? found[0] : 'imp' + createHmac('sha256', 'luddite-import').update(email).digest('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 22);
+    const now = Date.now();
+    const fresh = await mutate('luddite:room:' + code, (r) => {
+      const st = r.students[sub];
+      const entry = { ...(st || { email, requestedAt: now, leaves: 0, words: 0 }), email: st ? st.email : email, name: name || (st && st.name) || '',
+        status: 'admitted', decidedAt: (st && st.decidedAt) || now, imported: source, handedIn: false, autoHandedIn: false, lockedOut: false, writing: false };
+      return { ...r, students: { ...r.students, [sub]: entry } };
+    });
+    const me2 = { sub, email, name: fresh.students[sub].name };
+    const saved = await handInFor(fresh, code, me2, fresh.students[sub], text, label, false, source);
+    const submission = (saved.submissions || []).find((x) => x.sub === sub);
+    return respond(200, { submission, sub });
   }
 
   // GET /luddite/students -- everyone who has handed work in to this teacher.
@@ -2731,7 +2766,9 @@ async function sharedNowPaper(email, earlyId, paperId) {
   }).catch(() => {});
 }
 
-async function handInFor(room, code, me, s, text, label, auto) {
+// `imported`: where a paper brought in from elsewhere came from ('Exam.net'):
+// handed in as it is, with no writing log, never late (PUT /luddite/import).
+async function handInFor(room, code, me, s, text, label, auto, imported) {
   const words = (text.trim().match(/\S+/g) || []).length;
   const who = me.name || me.email;
   // One document: a student who handed in before (and was let back in)
@@ -2744,7 +2781,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
   if (!prev) try {
     file = await saveToDrive(room, {
       name: who + ' — ' + label,
-      description: (auto ? 'Handed in by Luddite when the session ended, for ' : 'Submitted through Luddite by ') + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
+      description: (imported ? 'Brought in from ' + imported + ' for ' : auto ? 'Handed in by Luddite when the session ended, for ' : 'Submitted through Luddite by ') + who + ' (' + me.email + '), writing session ' + titleOf(room) + ' (' + code + '). ' +
         words + ' words. Left the page ' + (s.leaves || 0) + (s.leaves === 1 ? ' time.' : ' times.'),
       text
     });
@@ -2753,7 +2790,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
     driveError = e.message;
   }
   // What they typed since the last backup goes in the writing log too.
-  await saveDraft(code, me.sub, text, s.lastSeen || 0).catch(() => {});
+  if (!imported) await saveDraft(code, me.sub, text, s.lastSeen || 0).catch(() => {});
   const stored = text.length <= MAX_STORED_CHARS;
   if (!file && !stored) throw new HttpError(409, driveError);
   const at = Date.now();
@@ -2764,7 +2801,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
   const earlier = (room.submissions || []).filter((x) => x.sub === me.sub);
   const replaces = earlier.flatMap((x) => [x.id, ...(x.replaces || [])]).filter((x) => x !== id);
   const submission = { id, sub: me.sub, ...(auto ? { auto: true } : {}), email: me.email, name: me.name, words, leaves: s.leaves || 0, at,
-    link: prev ? prev.link || null : file ? file.webViewLink : null, stored, driveError, marked: 0, late: !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS),
+    link: prev ? prev.link || null : file ? file.webViewLink : null, stored, driveError, marked: 0, ...(imported ? { imported } : {}), late: !imported && !!(win.end && at > win.end + (win.own ? OWN_GRACE_MS : 0) + LATE_GRACE_MS),
     ...(replaces.length ? { replaces } : {}) };
   if (stored) {
     // The chat with the teacher while they wrote goes with the paper (the most
@@ -2798,7 +2835,7 @@ async function handInFor(room, code, me, s, text, label, auto) {
       ...(prev || {}),
       ...(prev ? { gathered: prev.gathered || !(prev.replaces || []).length } : {}),
       id, code, roomTitle: titleOf(room), teacherSub: room.teacher.sub, sub: me.sub, email: me.email, name: me.name,
-      label, text, words, leaves: s.leaves || 0, at, link: submission.link, ...carried,
+      label, text, words, leaves: s.leaves || 0, at, link: submission.link, ...carried, ...(imported ? { imported } : {}),
       ...(chat.length ? { chat } : {})
     }));
     // The Drive copy is the same file, rewritten.
@@ -2914,6 +2951,12 @@ function reflectView(room, sub, paper) {
 // A shared paper as its student reads it: a paper ('luddite:sub:<id>'), or
 // their writing so far ('early:<code>:<sub>', which reads as the paper once
 // they've handed in), with the teacher's marks moved onto their writing now.
+// A paper is a student's own by their sign-in, or (brought in from Exam.net,
+// before Luddite knew their sign-in) by their address.
+function isMine(paper, me) {
+  return paper.sub === me.sub || (!!paper.imported && lower(paper.email) === lower(me.email));
+}
+
 async function myShared(id, me) {
   const ep = /^early:([^:]+):(.+)$/.exec(id);
   if (ep) {
