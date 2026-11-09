@@ -2914,7 +2914,7 @@
                   <option value="72">1 inch</option>
                 </select></label>
               <!-- Poem tiers: the poet names them; synced with the account. -->
-              <label class="prefs-row"><input type="checkbox" id="tiersOnBox"><span>Mark poems by tier<small>In poetry collections, a label on each poem for where it stands</small></span></label>
+              <label class="prefs-row"><input type="checkbox" id="tiersOnBox"><span>Mark by tier<small>A label on each poem, chapter, essay, scene or piece for where it stands. Each book can hide them from its ⋯ menu.</small></span></label>
               <div class="tier-edit" id="tierEdit">
                 <div class="tier-edit-list" id="tierEditList"></div>
                 <button class="btn-link tier-add" id="tierAddBtn" type="button">+ Add tier</button>
@@ -3689,7 +3689,7 @@
               <button type="button" class="view-menu-btn" id="viewMenuBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="entriesViewSeg">View Options<svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
               <div class="entry-menu view-menu" id="entriesViewSeg" role="menu" aria-label="View options" hidden>
               <button type="button" role="menuitemradio" data-view="sections" title="Just the section titles, to rename or reorder whole sections"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h12M1 10h12"/><path d="M4 6h6" stroke-width="1.2"/></svg><span class="vs-label">Section View</span></button>
-              <button type="button" role="menuitemradio" data-view="tiers" title="Poems grouped by tier, to see what needs work" hidden><svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor" aria-hidden="true"><circle cx="7" cy="6" r="3"/></svg><span class="vs-label">Tier View</span></button>
+              <button type="button" role="menuitemradio" data-view="tiers" title="Grouped by tier, to see what needs work" hidden><svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor" aria-hidden="true"><circle cx="7" cy="6" r="3"/></svg><span class="vs-label">Tier View</span></button>
               <button type="button" role="menuitemradio" data-view="titles" title="One row per item; click a title to open it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M1 2h1M1 6h1M1 10h1M5 2h8M5 6h8M5 10h8"/></svg><span class="vs-label">Title View</span></button>
               <button type="button" role="menuitemradio" data-view="entries" title="Every entry open in full"><svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1h10v12H1z"/><path d="M3.5 4.5h5M3.5 7h5M3.5 9.5h3"/></svg><span class="vs-label">Entry View</span></button>
                 <button type="button" role="menuitemradio" data-view="split" title="The list on the left; click titles to open them beside it"><svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><rect x="0.75" y="0.75" width="12.5" height="10.5" rx="1.5"/><path d="M5 1v10"/><path d="M2.5 4h1M2.5 6.5h1" stroke-linecap="round"/></svg><span class="vs-label">Poem and List View</span></button>
@@ -4201,6 +4201,8 @@
   <button type="button" role="menuitem" data-action="share" hidden>Share a read-only link…</button>
   <button type="button" role="menuitem" data-action="duplicate">Duplicate</button>
   <button type="button" role="menuitem" data-action="hybrid" hidden>Convert to hybrid book…</button>
+  <button type="button" role="menuitem" data-action="unhybrid" hidden>Convert to another book type…</button>
+  <button type="button" role="menuitem" data-action="tiers" hidden>Hide tiers in this book</button>
   <button type="button" role="menuitem" data-action="archive">Archive</button>
   <button type="button" role="menuitem" data-action="delete" class="is-danger" hidden>Delete…</button>
 </div>
@@ -4476,7 +4478,10 @@
     }
     return tierViewPref.at > (cloud ? Number(cloud.at) || 0 : 0);
   }
-  function tiersShown() { return poemTiers.on && bookFormOf(state) === 'collection'; }
+  // Tiers are for every text book (Jake, 2026-11-09), each book able to
+  // switch them off for itself (book ⋯ › Hide tiers in this book,
+  // `tiersOff`). Picture books, cartoon batches and comics have none.
+  function tiersShown(st) { st = st || state; return poemTiers.on && !!st && !st.tiersOff; }
   function tierById(id) { return id ? poemTiers.tiers.filter(function (t) { return t.id === id; })[0] || null : null; }
   function tierColor(t) {
     var i = poemTiers.tiers.indexOf(t);
@@ -11484,6 +11489,21 @@
     data.form = 'hybrid';
     addHomeForm('hybrid');
   }
+  // And back (Jake, 2026-11-09: Desert News was converted by mistake): a
+  // hybrid book becomes a book of one type, every piece (archived and
+  // recently deleted ones too) that book's kind of entry. Nothing else in
+  // the book changed when it became hybrid, so a book converted from a
+  // poetry collection comes back exactly as it was. A cartoon piece keeps
+  // its drawing as an image in the text, its caption the lines under it.
+  function convertHybridToText(data, form) {
+    if (bookFormOf(data) !== 'hybrid' || !TEXT_FORMS[form] || form === 'hybrid') return;
+    (data.poems || []).concat(data.archivedPoems || [], (data.deletedPoems || []).map(function (d) { return d && d.poem; })).forEach(function (p) {
+      if (p && !isSection(p)) delete p.genre;
+    });
+    data.form = form;
+    addHomeForm(form);
+  }
+  var FORM_BOOK_NAMES = { collection: 'poetry collection', novel: 'novel', essays: 'essay collection', screenplay: 'screenplay', play: 'stage play' };
   // Puts copies of `poems` at the end of the text book `target` (with
   // `keep`, under new ids; otherwise they leave this book).
   function sendToTextBook(poems, target, keep) {
@@ -11564,12 +11584,13 @@
     finishSend(poems, entry.title || 'Untitled cartoon batch', keep);
   }
   // Asks before a book changes type. Resolves to the chosen button's key.
-  function askDialog(title, text, buttons) {
+  function askDialog(title, text, buttons, opts) {
     return new Promise(function (resolve) {
       var d = makeDialog('move-box', title, '<h2 class="ask-title"></h2><p class="ask-text"></p><div class="modal-actions"></div>');
       d.box.querySelector('.ask-title').textContent = title;
       d.box.querySelector('.ask-text').textContent = text;
       var row = d.box.querySelector('.modal-actions'), done = false;
+      if (opts && opts.wrap) { row.style.flexWrap = 'wrap'; row.style.justifyContent = 'flex-end'; }
       function onEsc(e) { if (e.key === 'Escape') pick(null); }
       function pick(k) { if (done) return; done = true; document.removeEventListener('keydown', onEsc, true); d.close(); resolve(k); }
       buttons.forEach(function (b) {
@@ -12197,6 +12218,73 @@
       if (i >= 0) editor.dataset.lastLine = i;
       openPartMenu(e.clientX, e.clientY, function () { addPart(false); });
     });
+    // Joining parts (Jake, 2026-11-09): Backspace at the start of a part
+    // (its number, the line under it, or the blank line above it), or
+    // Delete at the end of the part before, takes out the boundary: the
+    // part's stanzas join the part above, the number and its title go, and
+    // the parts after it are renumbered.
+    function caretAtLineEdge(el, atEnd) {
+      var sel = window.getSelection();
+      if (!sel.rangeCount || !sel.isCollapsed || !el) return false;
+      var r = document.createRange();
+      r.selectNodeContents(el);
+      var c = sel.getRangeAt(0);
+      if (atEnd) r.setStart(c.endContainer, c.endOffset); else r.setEnd(c.startContainer, c.startOffset);
+      return r.toString().replace(/[\u200b\u00a0]/g, '').trim() === '' && !r.cloneContents().querySelector('[data-token]');
+    }
+    function joinPart(k, lines, starts) {
+      var before = lines.slice(), titlesBefore = poem.partTitles;
+      var at = starts[k], style = seriesStyleFor(poem);
+      lines = lines.slice();
+      lines.splice(at, 1);
+      // Keep one blank line between the stanzas that meet, never two.
+      if (at < lines.length && !(lines[at] || '').trim() && at > 0 && !(lines[at - 1] || '').trim()) lines.splice(at, 1);
+      if (at > 0 && (lines[at - 1] || '').trim() && at < lines.length && (lines[at] || '').trim()) lines.splice(at, 0, '');
+      var caret = at;
+      while (caret < lines.length && !(lines[caret] || '').trim()) caret++;
+      if (caret >= lines.length) caret = Math.max(0, at - 1);
+      if (poem.partTitles) {
+        var titles = poem.partTitles.slice();
+        titles.splice(k, 1);
+        if (titles.some(function (t) { return (t || '').trim(); })) poem.partTitles = titles; else delete poem.partTitles;
+      }
+      poem.seriesStyle = style;
+      var mark = stripFormatMarkers(before[at]).trim().replace(/[.:]$/, ''), prev = stripFormatMarkers(before[starts[k - 1]]).trim().replace(/[.:]$/, '');
+      setLines(renumberedLines(lines, partLineIndexes(lines, style), style), caret);
+      if (!partsList.hidden) paintParts();
+      showToast('Joined part ' + mark + ' to part ' + prev + '.', 'Undo', function () {
+        if (titlesBefore === undefined) delete poem.partTitles; else poem.partTitles = titlesBefore;
+        setLines(before, at);
+        if (!partsList.hidden) paintParts();
+      });
+    }
+    editor.addEventListener('keydown', function (e) {
+      if ((e.key !== 'Backspace' && e.key !== 'Delete') || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (!isSeriesOn(poem)) return;
+      var i = caretLineIndex(editor);
+      if (i < 0) return;
+      var lines = serializeEditor(editor);
+      var starts = partLineIndexes(lines, poem.seriesStyle || null);
+      if (starts.length < 1) return;
+      var el = editor.children[i], k = -1;
+      var blank = !(lines[i] || '').trim();
+      if (e.key === 'Backspace') {
+        if (!caretAtLineEdge(el, false)) return;
+        if (starts.indexOf(i) !== -1) k = starts.indexOf(i);
+        else if (starts.indexOf(i - 1) !== -1) k = starts.indexOf(i - 1);
+        else if (blank && starts.indexOf(i + 1) !== -1) k = starts.indexOf(i + 1);
+      } else {
+        if (!caretAtLineEdge(el, true)) return;
+        if (starts.indexOf(i + 1) !== -1) k = starts.indexOf(i + 1);
+        else if (!(lines[i + 1] || '').trim() && starts.indexOf(i + 2) !== -1 && !blank) k = starts.indexOf(i + 2);
+        else if (starts.indexOf(i) !== -1 && starts.indexOf(i) > 0) k = starts.indexOf(i);
+      }
+      if (k < 0) return;
+      e.preventDefault();
+      // The first part has nothing above it to join; leave its number.
+      if (k === 0) { showToast('This is the first part, so there’s no part above it to join.'); return; }
+      joinPart(k, lines, starts);
+    });
     // Remember the last line the cursor was in, for + Add part.
     editor.addEventListener('keyup', function () { var i = caretLineIndex(editor); if (i >= 0) editor.dataset.lastLine = i; });
     editor.addEventListener('mouseup', function () { var i = caretLineIndex(editor); if (i >= 0) editor.dataset.lastLine = i; });
@@ -12495,17 +12583,71 @@
     showToast('“' + (poem.title || entryLabel(poem)) + '”' + (poem.mirror ? ' now shows in mirror writing. Exports stay the right way round.' : ' is the right way round again.'));
   }
 
+  // A poem's stanzas: runs of lines between blank lines.
+  function poemStanzas(lines) {
+    var out = [], cur = [];
+    (lines || []).forEach(function (l) {
+      if ((l || '').trim()) cur.push(l);
+      else if (cur.length) { out.push(cur); cur = []; }
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+  // Make a series (Jake, 2026-11-09): a poem without parts of its own
+  // gets one part per stanza, numbered I., II., III. (poem.seriesAuto),
+  // so Not a series can take those numbers out again. A poem that already
+  // has its parts typed in keeps them.
   function toggleSeries(index) {
     var poem = state.poems[index];
     if (!poem || isSection(poem)) return;
-    if (poem.series) delete poem.series; else poem.series = true;
+    var before = { lines: (poem.lines || []).slice(), series: poem.series, seriesStyle: poem.seriesStyle, seriesAuto: poem.seriesAuto, partTitles: poem.partTitles };
+    var label = '“' + (poem.title || 'Untitled') + '”';
+    function undo() {
+      var p = state.poems.filter(function (x) { return x.id === poem.id; })[0];
+      if (!p) return;
+      ['lines', 'series', 'seriesStyle', 'seriesAuto', 'partTitles'].forEach(function (k) {
+        if (before[k] === undefined) delete p[k]; else p[k] = before[k];
+      });
+      persist();
+      renderAll();
+    }
+    var auto = false;
+    if (poem.series) {
+      // Numbers Bookbug put in come out again; parts typed by hand stay.
+      if (poem.seriesAuto && poem.seriesStyle) {
+        var marks = partLineIndexes(poem.lines || [], poem.seriesStyle), drop = {};
+        marks.forEach(function (i) { drop[i] = true; });
+        var kept = (poem.lines || []).filter(function (l, i) { return !drop[i]; });
+        while (kept.length && !(kept[0] || '').trim()) kept.shift();
+        poem.lines = kept;
+      }
+      delete poem.series; delete poem.seriesAuto; delete poem.partTitles;
+    } else {
+      poem.series = true;
+      var stanzas = poemStanzas(poem.lines);
+      if (seriesParts(poem).length < 2 && stanzas.length > 1) {
+        var style = poem.seriesStyle || { kind: 'roman', period: true, prefix: '' };
+        var out = [];
+        stanzas.forEach(function (st, k) {
+          if (out.length) out.push('');
+          out.push(seriesMarker(k + 1, style));
+          out = out.concat(st);
+        });
+        poem.lines = out;
+        poem.seriesStyle = style;
+        poem.seriesAuto = true;
+        delete poem.partTitles;
+        auto = true;
+      }
+    }
     state.isExample = false;
     persist();
     renderAll();
     var n = poem.series ? seriesParts(poem).length : 0;
-    if (!poem.series) showToast('“' + (poem.title || 'Untitled') + '” is no longer a series.');
-    else if (n < 2) showToast('Now a series. Use + Add part above the poem to add numbered parts; each begins a new page.');
-    else showToast('Now a series: ' + n + ' parts, each starting a new page.');
+    if (!poem.series) showToast(label + ' is no longer a series.', 'Undo', undo);
+    else if (auto) showToast('Now a series: each stanza is a part (' + n + '). Backspace over a part’s number to join it to the part before.', 'Undo', undo);
+    else if (n < 2) showToast('Now a series. Use + Add part above the poem to add numbered parts; each begins a new page.', 'Undo', undo);
+    else showToast('Now a series: ' + n + ' parts, each starting a new page.', 'Undo', undo);
   }
 
   function duplicatePoem(index) {
@@ -16132,8 +16274,15 @@
     bookMenu.querySelector('[data-action="delete"]').hidden = !entry.archived;
     // Any text book but a hybrid one, or a cartoon batch, can become a hybrid book.
     var isText = library.indexOf(entry) !== -1;
+    var textData = isText ? (entry.id === state.chapbookId ? state : entry.data) : null;
     bookMenu.querySelector('[data-action="hybrid"]').hidden = entry.archived ||
-      !(cbEntry(entry.id) === entry || (isText && bookFormOf(entry.id === state.chapbookId ? state : entry.data) !== 'hybrid'));
+      !(cbEntry(entry.id) === entry || (isText && bookFormOf(textData) !== 'hybrid'));
+    // A hybrid book can go back to being a book of one type.
+    bookMenu.querySelector('[data-action="unhybrid"]').hidden = entry.archived || !(isText && bookFormOf(textData) === 'hybrid');
+    // Tiers are on in every text book unless switched off for this one.
+    var tierItem = bookMenu.querySelector('[data-action="tiers"]');
+    tierItem.hidden = !(isText && textData && poemTiers.on);
+    if (!tierItem.hidden) tierItem.textContent = (textData.tiersOff ? 'Show tiers in this book' : 'Hide tiers in this book');
     // From inside the book, once signed in (links live in the account).
     // Picture books, cartoon batches and comics need the backend that
     // shares every kind (cloud-sync-backend's SHARE_LIBRARIES) deployed.
@@ -16155,6 +16304,8 @@
     closeBookMenu();
     if (item.dataset.action === 'share') { openShareDialog(); return; }
     if (item.dataset.action === 'hybrid') { askConvertToHybrid(entry); return; }
+    if (item.dataset.action === 'unhybrid') { askConvertFromHybrid(entry); return; }
+    if (item.dataset.action === 'tiers') { toggleBookTiers(entry); return; }
     if (cmEntry(entry.id) === entry) {
       if (item.dataset.action === 'duplicate') duplicateComic(entry.id, fromEditor);
       else if (item.dataset.action === 'archive') setComicArchived(entry.id, !entry.archived);
@@ -16201,6 +16352,56 @@
     }
     renderChapbooksList();
     showToast('“' + title + '” is a hybrid book now.');
+  }
+  // Book menu › Convert to another book type… (hybrid books only). The
+  // type most of its pieces are comes first.
+  async function askConvertFromHybrid(entry) {
+    var title = entry.title || 'Untitled book';
+    var cur = entry.id === state.chapbookId;
+    var data = cur ? state : entry.data;
+    if (cur) flushPendingSave();
+    var pieces = (data.poems || []).filter(function (p) { return p && !isSection(p); });
+    var count = {};
+    pieces.forEach(function (p) { var g = genreOf(p); count[g] = (count[g] || 0) + 1; });
+    var formFor = { poem: 'collection', chapter: 'novel', essay: 'essays', scene: 'play' };
+    var best = 'collection', most = 0;
+    Object.keys(count).forEach(function (g) { if (formFor[g] && count[g] > most) { most = count[g]; best = formFor[g]; } });
+    var order = ['collection', 'novel', 'essays', 'play', 'screenplay'];
+    order.splice(order.indexOf(best), 1);
+    order.unshift(best);
+    var mixed = Object.keys(count).length > 1, cartoons = count.cartoon || 0;
+    var text = 'Every piece becomes that book’s kind: poems in a poetry collection, chapters in a novel, and so on. Nothing is lost, and you can convert it back to a hybrid book any time.' +
+      (mixed ? ' Its pieces are of more than one genre, so some will be set differently.' : '') +
+      (cartoons ? ' Cartoons keep their drawings, with the caption as text under each.' : '');
+    var buttons = [{ key: null, label: 'Cancel' }].concat(order.map(function (f, i) {
+      return { key: f, label: Cap(FORM_BOOK_NAMES[f]), primary: i === 0 };
+    }));
+    var form = await askDialog('Convert “' + title + '” to which kind of book?', text, buttons, { wrap: true });
+    if (!form) return;
+    var undoForm = 'hybrid', before = pieces.concat(data.archivedPoems || [], (data.deletedPoems || []).map(function (d) { return d && d.poem; }))
+      .filter(Boolean).map(function (p) { return [p, p.genre]; });
+    function apply(fn) {
+      if (cur) { fn(state); persist(); renderAll(); }
+      else { fn(entry.data); entry.updatedAt = Date.now(); persistLibrary(); if (cloudAuthToken) syncLibraryToCloud(); }
+      renderChapbooksList();
+    }
+    apply(function (d) { convertHybridToText(d, form); });
+    showToast('“' + title + '” is a ' + FORM_BOOK_NAMES[form] + ' now.', 'Undo', function () {
+      apply(function (d) {
+        d.form = undoForm;
+        before.forEach(function (pg) { if (pg[1] === undefined) delete pg[0].genre; else pg[0].genre = pg[1]; });
+      });
+    });
+  }
+  // Book menu › Hide / Show tiers in this book (each book its own; on
+  // unless switched off, `tiersOff`).
+  function toggleBookTiers(entry) {
+    var cur = entry.id === state.chapbookId, data = cur ? state : entry.data;
+    if (!data) return;
+    if (data.tiersOff) delete data.tiersOff; else data.tiersOff = true;
+    if (cur) { persist(); renderAll(); }
+    else { entry.updatedAt = Date.now(); persistLibrary(); if (cloudAuthToken) syncLibraryToCloud(); }
+    showToast((data.tiersOff ? 'Tiers are hidden in “' : 'Tiers show in “') + (entry.title || 'Untitled book') + '”. ' + (data.tiersOff ? 'Each entry keeps its tier.' : ''));
   }
   document.addEventListener('click', function (e) { if (!bookMenu.contains(e.target)) closeBookMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeBookMenu(); });
