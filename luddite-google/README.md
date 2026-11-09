@@ -19,9 +19,10 @@ runs on:
 So a backend change reaches the Google copy by running `npm run build` and
 pasting `Code.js` in again.
 
-## On Luddite HM
+## On Luddite
 
-The page offers it only on Luddite HM (and on localhost), and only once
+The page offers it only on regular Luddite, jake-goldwasser.com/luddite/
+(and on localhost), never on Luddite HM (Jake, 2026-11-09), and only once
 `GOOGLE_API` in `luddite/index.html` has the script's address. Then:
 
 - **Settings › Account › Saved in**: **Try Google (test)** / **Switch back
@@ -65,10 +66,8 @@ Deploy**. The URL stays the same.
 ## Before relying on it
 
 - **Who can read it.** Whoever owns the deploying account can open the
-  spreadsheet and read everything. Deployed from Jake's own account, Jake can
-  read Luddite HM's writing, which Luddite HM otherwise prevents, so test it
-  with test sessions only, and have IT deploy it from a school account for
-  real classes.
+  spreadsheet and read everything. It's deployed from Jake's school account, so
+  Jake can read everything written on the test.
 - **Speed.** Each request takes about half a second to two seconds, against
   a fraction of a second on AWS. A class writing makes about three requests a
   second (heartbeats every 10 seconds, the teacher's page every 3), and Apps
@@ -98,5 +97,4 @@ Apps Script project **Luddite** in jake_goldwasser@horacemann.org's account
 (the "Luddite data" Sheet is made there on first use), web app Version 1,
 Execute as Me, Anyone. No `LUDDITE_GOOGLE_CLIENT_SECRET` yet, so Drive
 copies don't work on the test. `GOOGLE_API` in `luddite/index.html` has its
-`/exec` address on the branch `luddite-google-live`, held off `main` (and so
-off Luddite HM) until Jake says to turn it on.
+`/exec` address, and it's offered on regular Luddite only.
