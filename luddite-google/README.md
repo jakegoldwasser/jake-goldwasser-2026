@@ -91,3 +91,12 @@ Apps Script's services (`dev/fake-gas.mjs`; a Sheet in memory, saved to
 `dev/data.json` by the dev server). Google sign-in may not work on
 localhost; the dev server prints sign-in tokens for a test teacher and
 student to paste into the page's localStorage as `luddite.g.auth.v1`.
+
+## Deployed (2026-11-09)
+
+Apps Script project **Luddite** in jake_goldwasser@horacemann.org's account
+(the "Luddite data" Sheet is made there on first use), web app Version 1,
+Execute as Me, Anyone. No `LUDDITE_GOOGLE_CLIENT_SECRET` yet, so Drive
+copies don't work on the test. `GOOGLE_API` in `luddite/index.html` has its
+`/exec` address on the branch `luddite-google-live`, held off `main` (and so
+off Luddite HM) until Jake says to turn it on.
