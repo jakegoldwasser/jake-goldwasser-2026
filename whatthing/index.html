@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WHAT THING ARE YOU</title>
-<meta name="description" content="Twelve binaries. No fence-sitting. Find out which yogurt, roofing material, Succession character, Victorian cause of death and twenty-six other things you are.">
+<meta name="description" content="Sixteen binaries. No fence-sitting. Find out which yogurt, roofing material, Succession character, Victorian cause of death and twenty-six other things you are.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://jake-goldwasser.com/whatthing/">
 <meta property="og:title" content="WHAT THING ARE YOU">
-<meta property="og:description" content="Platonic or Aristotelian? Tolstoy or Dostoevsky? Twelve binaries, thirty things.">
+<meta property="og:description" content="Platonic or Aristotelian? Vampire or werewolf? Sixteen binaries, thirty things.">
 <meta property="og:image" content="https://jake-goldwasser.com/whatthing/og/default.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -241,7 +241,7 @@
   <section class="screen on" id="intro">
     <div class="intro">
       <h1>What thing<br>are <em>you?</em></h1>
-      <p>Twelve binaries. No fence-sitting. Choose whichever feels more like you, and we'll tell you what you are, in thirty different categories.</p>
+      <p>Sixteen binaries. No fence-sitting. Choose whichever feels more like you, and we'll tell you what you are, in thirty different categories.</p>
       <button class="btn" id="start">Begin the inquiry</button>
       <div class="ticker" id="ticker"></div>
     </div>
@@ -313,8 +313,14 @@ const $ = s => document.querySelector(s);
 const show = id => { document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on')); $('#'+id).classList.add('on'); window.scrollTo(0,0); if(id==='intro') startShifting(); else stopShifting(); };
 const esc = t => String(t).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ans = (a,k) => a[k] ? Q[k].b : Q[k].a;
-const encode = a => a.reduce((n,v,k)=>n|(v<<k),0).toString(36);
-const decode = c => { if(!/^[0-9a-z]{1,3}$/.test(c||'')) return null; const n=parseInt(c,36); return n>4095?null:Q.map((_,k)=>(n>>k)&1); };
+const O = WT.order;   // the order questions are asked in
+const encode = a => a.reduce((n,v,k)=>n|(v<<k),0).toString(36).padStart(4,'0');
+const decode = c => {   // 4 characters: all 16 answers; 1-3 (links from before 2026-11-08): the first 12
+  if(!/^[0-9a-z]{1,4}$/.test(c||'')) return null;
+  const n = parseInt(c,36), len = c.length===4 ? 16 : 12;
+  if(n >= 2**len) return null;
+  return Q.map((_,k)=> k<len ? (n>>k)&1 : undefined);
+};
 
 let i = 0, answers = [], busy = false;
 let mine = null, friend = null;   // finished answer sets
@@ -357,14 +363,14 @@ document.addEventListener('visibilitychange', ()=>{
 
 // ---- quiz ----
 function render(){
-  const q = Q[i];
+  const q = Q[O[i]];
   $('#qnum').textContent = `Binary ${i+1} of ${Q.length}`;
   $('#qhint').textContent = q.hint;
   const opts = document.querySelectorAll('.opt');
   [[q.a,q.ad],[q.b,q.bd]].forEach(([t,d],k)=>{
     opts[k].querySelector('h2').textContent = t;
     opts[k].querySelector('p').textContent = d;
-    opts[k].classList.toggle('picked', answers[i]===k);
+    opts[k].classList.toggle('picked', answers[O[i]]===k);
   });
   $('#back').disabled = i===0;
   $('#count').textContent = `${i+1} / ${Q.length}`;
@@ -372,7 +378,7 @@ function render(){
 }
 function pick(side){
   if(busy) return; busy = true;
-  answers[i] = side;
+  answers[O[i]] = side;
   document.querySelectorAll('.opt')[side].classList.add('picked');
   setTimeout(()=>{
     busy = false;
@@ -418,15 +424,17 @@ function drawShape(){
 }
 
 function drawVs(){
-  const same = Q.filter((_,k)=>friend[k]===mine[k]).length;
+  const both = O.filter(k=>friend[k]!==undefined && mine[k]!==undefined);
+  const same = both.filter(k=>friend[k]===mine[k]).length, total = both.length;
   const cat = C[ci];
   const myTop = WT.rank(cat, WT.shape(mine))[0], frTop = WT.rank(cat, WT.shape(friend))[0];
-  const diffs = Q.map((_,k)=>friend[k]!==mine[k] ? `<span class="me">${esc(ans(mine,k))}</span><span>${esc(ans(friend,k))}</span>` : '').join('');
+  const diffs = both.map(k=>friend[k]!==mine[k] ? `<span class="me">${esc(ans(mine,k))}</span><span>${esc(ans(friend,k))}</span>` : '').join('');
   const line = myTop.slug===frTop.slug
     ? `As ${cat.as}, you're both <b>${esc(myTop.name)}</b>.`
     : `As ${cat.as}, you're <b>${esc(myTop.name)}</b> and they're <b>${esc(frTop.name)}</b>.`;
-  const verdict = same===12 ? 'The same person, possibly.' : same>=9 ? 'Kindred spirits.' : same>=6 ? 'Different shelves, same store.' : same>=3 ? 'You may need separate refrigerators.' : 'Opposites. Have you considered a podcast?';
-  $('#vs').innerHTML = `<div class="vs-head"><h3>You vs. your friend</h3><div class="vs-score">${same}<small> / ${Q.length} agree</small></div></div>
+  const r = same/total;
+  const verdict = r===1 ? 'The same person, possibly.' : r>=.75 ? 'Kindred spirits.' : r>=.5 ? 'Different shelves, same store.' : r>=.25 ? 'You may need separate refrigerators.' : 'Opposites. Have you considered a podcast?';
+  $('#vs').innerHTML = `<div class="vs-head"><h3>You vs. your friend</h3><div class="vs-score">${same}<small> / ${total} agree</small></div></div>
     <p class="vs-line">${verdict} ${line}</p>` +
     (diffs ? `<div class="diff"><span class="h">You</span><span class="h">Them</span>${diffs}</div>` : '');
   $('#vs').hidden = false;
@@ -440,7 +448,7 @@ function showResults(){
   $('#fActions').hidden = isMe; $('#meActions').hidden = !isMe;
   $('#vs').hidden = !(isMe && friend);
   $('#ansTitle').textContent = isMe ? 'Your answers' : 'Their answers';
-  $('#chips').innerHTML = current().map((_,k)=>`<span class="chip">${esc(ans(current(),k))}</span>`).join('');
+  $('#chips').innerHTML = O.filter(k=>current()[k]!==undefined).map(k=>`<span class="chip">${esc(ans(current(),k))}</span>`).join('');
   drawCats(); drawThing(); drawShape();
   show('result');
 }

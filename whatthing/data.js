@@ -53,8 +53,24 @@ WT.questions = [
    hint:"As Tertullian asked: what has one to do with the other?", ax:'M', s:-1},
   {a:"Lumper", ad:"These are all basically the same thing.",
    b:"Splitter", bd:"Actually, these are four different things.",
-   hint:"How do you sort the world?", ax:'F', s:-1}
+   hint:"How do you sort the world?", ax:'F', s:-1},
+  // added 2026-11-08; shown mixed in among the first twelve (WT.order), but kept last here so old share codes still read
+  {a:"Vampire", ad:"Velvet, candlelight, centuries of excellent taste.",
+   b:"Werewolf", bd:"Mud, moonlight, and a ruined pair of trousers.",
+   hint:"Choose your affliction.", ax:'O', s:1},
+  {a:"Bog", ad:"Peat, mist, and an Iron Age man perfectly preserved.",
+   b:"Meadow", bd:"Wildflowers, bees, a picnic that goes fine.",
+   hint:"Where would you rather lie down?", ax:'H', s:1},
+  {a:"Tarot deck", ad:"The Tower, reversed. You knew this was coming.",
+   b:"Slide rule", bd:"Line up the scales and read off the answer.",
+   hint:"Consult something.", ax:'M', s:1},
+  {a:"Octopus", ad:"Eight arms, three hearts, into everything at once.",
+   b:"Snail", bd:"One shell, one silver trail, gets there.",
+   hint:"Pick your mollusk.", ax:'F', s:1}
 ];
+
+// the order the quiz asks them in (indexes into questions)
+WT.order = [0,1,2,12,3,4,5,13,6,7,8,14,9,10,11,15];
 
 WT.categories = [
 {id:'yogurt', name:'Yogurt', as:'a yogurt', color:'#c8553d', items:[
@@ -498,11 +514,11 @@ WT.categories = [
 
 WT.slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 
-// answers: array of 12 zeros (left) and ones (right) -> {M,O,H,F}
+// answers: zeros (left) and ones (right), by question index; old 12-answer links leave the last four undefined -> {M,O,H,F}
 WT.shape = answers => {
   const s = {M:0,O:0,H:0,F:0}, n = {M:0,O:0,H:0,F:0};
-  WT.questions.forEach((q,k)=>{ s[q.ax] += answers[k] ? -q.s : q.s; n[q.ax]++; });
-  for(const k in s) s[k] /= n[k];
+  WT.questions.forEach((q,k)=>{ if(answers[k]===undefined) return; s[q.ax] += answers[k] ? -q.s : q.s; n[q.ax]++; });
+  for(const k in s) s[k] = n[k] ? s[k]/n[k] : 0;
   return s;
 };
 
