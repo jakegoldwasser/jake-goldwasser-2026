@@ -6474,7 +6474,11 @@
     if (!state || !state.chapbookId) return;
     var entry = library.filter(function (c) { return c.id === state.chapbookId; })[0];
     if (!entry || !entry.data || !Array.isArray(entry.data.poems)) return;
-    var entries = function (d) { return JSON.stringify([d.poems, d.archivedPoems || []]); };
+    // Compared without the `editedAt` stamps (and key order): saving an
+    // entry only this device changed restamps it in the library
+    // (reconcileEditedEntries), and redrawing over that took the cursor
+    // out of the poem a couple of seconds into every pause in typing.
+    var entries = function (d) { return canonEntry([d.poems || [], d.archivedPoems || []]); };
     if (entries(entry.data) !== entries(state)) {
       var id = state.chapbookId;
       state = migrateFontKeys(JSON.parse(JSON.stringify(entry.data)));
@@ -6484,6 +6488,12 @@
       renderAll();
       return;
     }
+    // Same words: just take the merged copy's stamps, quietly.
+    var stamps = entriesById(entry.data);
+    (state.poems || []).concat(state.archivedPoems || []).forEach(function (p) {
+      var m = p && p.id && stamps[p.id];
+      if (m && m.editedAt) p.editedAt = m.editedAt;
+    });
     ['deletedPoems', 'gone'].forEach(function (k) {
       if (entry.data[k] === undefined) delete state[k];
       else state[k] = JSON.parse(JSON.stringify(entry.data[k]));
