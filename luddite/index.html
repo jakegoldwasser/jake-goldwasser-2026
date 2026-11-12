@@ -5928,6 +5928,8 @@
     if (data.prefs) { teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs); if (setTrog(teacherPrefs.trog)) lastDrawn = ''; }
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (data.extraTime) extraTime = data.extraTime;
+    examRoomsReady = true;
+    if (examSent) setTimeout(examTakeSent, 0);
     if (!changed(data)) return;
     renderDrive($('driveBox'), data.drive);
     fillClassSelects();
@@ -11823,7 +11825,9 @@
     var pairs = [];
     exam.found.forEach(function (f, i) {
       f.email = ''; f.how = 'need';
-      exam.roster.forEach(function (c) { var sc = examScore(f.name, c); if (sc >= 2) pairs.push({ i: i, c: c, sc: sc }); });
+      // Sent from Exam.net with the address the student gave there: that's them.
+      var same = f.sentEmail && exam.roster.filter(function (c) { return c.email.toLowerCase() === f.sentEmail; })[0];
+      exam.roster.forEach(function (c) { var sc = c === same ? 6 : examScore(f.name, c); if (sc >= 2) pairs.push({ i: i, c: c, sc: sc }); });
     });
     pairs.sort(function (a, b) { return b.sc - a.sc; });
     var taken = {};
@@ -11871,6 +11875,68 @@
     $('examPick').focus();
   }
   function examSay(t) { $('examNote').textContent = t || ''; $('examNote').hidden = !t; }
+
+  // Papers sent straight from Exam.net, with no file to download: the Exam
+  // Scheduler's Testing Center Builder bookmark, run on an exam's Monitoring /
+  // Results page there, opens Luddite (#examnet) and posts the class's
+  // answers ({ type: 'examnet-papers', exam, papers: [{ name, email,
+  // answers: [html…] }] }). They land in Bring In Exam.net Papers as if
+  // their files had just been read; the teacher still says where they go
+  // and who wrote each. Only messages from exam.net are taken.
+  var examSent = null, examRoomsReady = false;
+  // Exam.net's answer (lines in <div>s, <strong>/<em>/<u>) as a paper's text.
+  function examHtmlText(html) {
+    var doc = new DOMParser().parseFromString('<body>' + String(html || '') + '</body>', 'text/html'), lines = [], runs = [];
+    function flush() {
+      var out = '', prev = null;
+      runs.forEach(function (r) { if (prev && prev.b === r.b && prev.i === r.i && prev.u === r.u) prev.t += r.t; else { prev = { t: r.t, b: r.b, i: r.i, u: r.u }; (flush.list = flush.list || []).push(prev); } });
+      (flush.list || []).forEach(function (r) {
+        var m = r.t.match(/^(\s*)([\s\S]*?)(\s*)$/), open = (r.b ? '**' : '') + (r.i ? '*' : '') + (r.u ? '__' : ''), close = (r.u ? '__' : '') + (r.i ? '*' : '') + (r.b ? '**' : '');
+        out += m[2] ? m[1] + open + examEscape(m[2]) + close + m[3] : r.t;
+      });
+      flush.list = null; runs = [];
+      lines.push(out.replace(/\s+/g, ' ').trim());
+    }
+    function walk(node, st) {
+      Array.prototype.forEach.call(node.childNodes, function (n) {
+        if (n.nodeType === 3) { if (n.nodeValue) runs.push({ t: n.nodeValue.replace(/\u00a0/g, ' '), b: st.b, i: st.i, u: st.u }); return; }
+        if (n.nodeType !== 1) return;
+        var t = n.tagName;
+        if (t === 'BR') { flush(); return; }
+        if (/^(SCRIPT|STYLE|IMG|SVG|IFRAME)$/.test(t)) return;
+        var block = /^(DIV|P|LI|UL|OL|H[1-6]|BLOCKQUOTE|TABLE|TR|PRE)$/.test(t);
+        if (block && runs.length) flush();
+        walk(n, { b: st.b || t === 'B' || t === 'STRONG', i: st.i || t === 'I' || t === 'EM', u: st.u || t === 'U' });
+        if (block && runs.length) flush();
+      });
+    }
+    walk(doc.body, { b: false, i: false, u: false });
+    if (runs.length) flush();
+    return lines.filter(function (l) { return l; }).join('\n\n');
+  }
+  function examTakeSent() {
+    var d = examSent;
+    if (!d || !examRoomsReady) return;
+    examSent = null;
+    openExamImport('');
+    exam.prefix = String(d.exam || '').replace(/\s+-\s+[A-H]( Period)?$/i, '');
+    exam.sentName = String(d.exam || '');
+    exam.files = [{ name: 'Exam.net' }];
+    exam.found = d.papers.slice(0, 400).map(function (pp) {
+      var parts = (pp.answers || []).map(examHtmlText).filter(function (t) { return t; });
+      var text = parts.length < 2 ? (parts[0] || '') : parts.map(function (t, i) { return '**Question ' + (i + 1) + '**\n\n' + t; }).join('\n\n');
+      return { name: String(pp.name || '').trim(), sentEmail: String(pp.email || '').trim().toLowerCase(), fileName: String(pp.email || 'Exam.net'), text: text, prompt: '', words: (plainOf(text).match(/\S+/g) || []).length, unread: !text };
+    });
+    $('examDropNote').textContent = plural(exam.found.length, 'exam', 'exams') + ' sent from Exam.net' + (exam.sentName ? ': ' + exam.sentName : '') + '.';
+    examWhereFill();
+    if (exam.sentName) $('examName').value = exam.sentName;
+  }
+  window.addEventListener('message', function (e) {
+    if (e.origin !== 'https://exam.net' || !e.data || e.data.type !== 'examnet-papers' || !Array.isArray(e.data.papers)) return;
+    examSent = e.data;
+    examTakeSent();
+  });
+  if (window.opener && /^#?examnet/.test(location.hash)) { try { window.opener.postMessage({ type: 'luddite-ready' }, 'https://exam.net'); } catch (e) {} }
 
   async function examTakeFiles(list) {
     examSay('');
