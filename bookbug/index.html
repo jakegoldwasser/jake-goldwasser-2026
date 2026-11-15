@@ -21407,9 +21407,12 @@
         if (moved) pbRefreshSpread(s);
       });
     });
-    // Pinch (or Ctrl/Cmd + scroll) zooms a full-bleed picture.
+    // Pinch (or Ctrl/Cmd + scroll) zooms a full-bleed picture, but only once
+    // it's selected: a scroll or pinch that merely passes over an unselected
+    // picture must never resize it (Jake, 2026-11-15).
     node.addEventListener('wheel', function (e) {
       if (!(e.ctrlKey || e.metaKey) || it.fit !== 'bleed') return;
+      if (!pbSel || pbSel.id !== it.id) return;
       e.preventDefault();
       pbZoomPicture(it, s, Math.exp(-e.deltaY / 200));
     }, { passive: false });
