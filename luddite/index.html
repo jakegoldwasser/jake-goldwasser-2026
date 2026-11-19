@@ -622,6 +622,11 @@
   .stockdel { flex: none; width: 24px; height: 24px; margin-top: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 600 16px/1 var(--ui); cursor: pointer; opacity: 0; }
   .stockitem:hover .stockdel, .stockdel:focus-visible { opacity: 1; }
   .stockdel:hover { background: var(--rule); color: var(--ink); }
+  .stockpen { font-size: 14px; }
+  .stockcat { display: flex; align-items: center; gap: 4px; }
+  .stockcat .stockdel { margin-top: 0; width: 22px; height: 22px; letter-spacing: 0; }
+  .stockcat:hover .stockdel { opacity: 1; }
+  .endwrap .stockinline { display: block; width: 100%; box-sizing: border-box; min-height: 0; margin: 2px 0; padding: 4px 10px; font: 400 14px/1.4 var(--ui); color: var(--ink); resize: none; overflow: hidden; }
   @media (hover: none) { .stockdel { opacity: 1; } }
   .stockgone { display: flex; gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; color: var(--muted); }
   .stockgone span { flex: 1; }
@@ -5928,6 +5933,7 @@
     if (data.prefs) { teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs); if (setTrog(teacherPrefs.trog)) lastDrawn = ''; }
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (data.extraTime) extraTime = data.extraTime;
+    if ('stock' in data) stockFromAccount(data.stock);
     examRoomsReady = true;
     if (examSent) setTimeout(examTakeSent, 0);
     if (!changed(data)) return;
@@ -8256,7 +8262,7 @@
     markWlog: 'Opens this student’s writing log: how and when the writing came, minute by minute, with earlier versions',
     markDrive: 'Opens this paper’s copy in Google Drive, in a new tab',
     markPrint: 'Prints this paper with your comments in the margin',
-    stockEdit: 'Opens your stock comments as text to change, add or remove them (saved on this computer)',
+    stockEdit: 'Opens your stock comments as text to change, add or remove them all at once (saved to your account, for every paper)',
     sideUnread: 'Shows this student’s live comments as new again, and closes them',
     sideMin: 'Minimizes the live comments. Live comments in the bar brings them back',
     studentPrint: 'Prints this page: just your comments on this student’s papers',
@@ -8465,8 +8471,9 @@
     if (b.closest('#schedPick')) return 'They pick ' + b.textContent.trim().toLowerCase();
     if (b.closest('#pickDays')) return 'Shows the times you can pick on this day';
     if (b.closest('#pickSlots')) return 'Picks this time';
-    if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved on this computer; Undo brings it back). Papers it’s already on keep it';
-    if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved on this computer)';
+    if (b.matches('.stockpen')) return b.closest('.stockcat') ? 'Renames this category (saved to your account, for every paper)' : 'Edits the words of this stock comment (saved to your account, for every paper; you can also double-click the words). Other papers it’s already on keep the old words';
+    if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved to your account, for every paper; Undo brings it back). Papers it’s already on keep it';
+    if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved to your account, for every paper)';
     if (b.closest('.stockgone') && k === 'undo') return 'Puts this stock comment back in your list';
     if (b.closest('.stockform')) return k === 'add' ? 'Adds this comment to your stock comments, at the end of its category' : 'Closes this without adding anything';
     if (b.matches('.odel')) return 'Deletes this comment on deleted words';
@@ -10499,8 +10506,11 @@
   // for Improvement. Checking one puts its goal in the "On the Next Essay"
   // section at the end of the end comment, under its kind's heading
   // (rewritten from the checked ones each time); what's checked is read
-  // back from that section. The list is the teacher's own, kept on this
-  // device (luddite.stock.<email>); STOCK_DEFAULT is where it starts.
+  // back from that section. The list is the teacher's own, kept with their
+  // account (`stock` from /luddite/assignments, PUT /luddite/stock; Jake,
+  // 2026-11-19: the same list on every paper, every computer and Luddite HM)
+  // and cached on the device (luddite.stock.<email>); STOCK_DEFAULT is where
+  // it starts.
   var STOCK_GOOD = [
     ['Thesis', 'A bold, arguable thesis.', 'Keep making bold claims someone could argue with.'],
     ['Thesis', 'A true, defensible thesis.', 'Keep making claims the text actually supports, and defending them with evidence.'],
@@ -10584,9 +10594,20 @@
   // Open unless the teacher folds it, remembered on the device.
   if (load('luddite.stockShut') === '1') $('stockBox').open = false;
   $('stockBox').addEventListener('toggle', function () { store('luddite.stockShut', $('stockBox').open ? null : '1'); });
+  // The grading window asks for the account's list when it draws (at most
+  // once a minute), since a session or paper opened from its link doesn't
+  // load Home's /luddite/assignments.
+  var stockAskedAt = 0;
+  function askStock() {
+    if (stockNoRoute || Date.now() - stockAskedAt < 60000) return;
+    stockAskedAt = Date.now();
+    api('/luddite/stock').then(function (d) { if (d && 'stock' in d) stockFromAccount(d.stock); },
+      function (e) { if (e && e.status === 404) stockNoRoute = true; });
+  }
   function drawStock() {
     var box = $('stockList');
     if (!box) return;
+    if (!reading) askStock();
     box.innerHTML = '';
     var goals = stockSplit(piece && piece.endComment).goals.map(function (g) { return g.text; }), list = stockList();
     STOCK_KINDS.forEach(function (k) {
@@ -10594,17 +10615,21 @@
       if (!items.length) return;
       box.appendChild(el('div', 'stockkind', k[1]));
       items.forEach(function (it) {
-        if (it[0] !== cat) { cat = it[0]; box.appendChild(el('div', 'stockcat', cat)); }
+        if (it[0] !== cat) { cat = it[0]; box.appendChild(stockCatRow(cat, k[0])); }
         var on = goals.indexOf(it[2]) !== -1;
         var row = el('label', 'stockitem' + (on ? ' on' : ''));
         var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
         cb.addEventListener('change', function () { setStockGoal(it[2], k[0], cb.checked); });
         var tx = el('span');
         tx.appendChild(document.createTextNode(it[2]));
+        var ed = el('button', 'stockdel stockpen', '✎'); ed.type = 'button';
+        ed.setAttribute('aria-label', 'Edit this stock comment');
+        ed.addEventListener('click', function (e) { e.preventDefault(); editStock(it, row, tx); });
+        tx.addEventListener('dblclick', function (e) { e.preventDefault(); editStock(it, row, tx); });
         var del = el('button', 'stockdel', '×'); del.type = 'button';
         del.setAttribute('aria-label', 'Delete this stock comment');
         del.addEventListener('click', function (e) { e.preventDefault(); deleteStock(it); });
-        row.appendChild(cb); row.appendChild(tx); row.appendChild(del);
+        row.appendChild(cb); row.appendChild(tx); row.appendChild(ed); row.appendChild(del);
         box.appendChild(row);
         if (stockGone && stockSame(stockGone.after, it)) box.appendChild(stockGoneRow());
       });
@@ -10615,11 +10640,44 @@
     });
   }
   // Adding and deleting stock comments right in the list (Jake, 2026-10-29),
-  // saved on this device as Edit stock comments… does. A deleted one leaves an
+  // saved to the account as Edit stock comments… does. A deleted one leaves an
   // Undo in its place until the list is next changed.
   var stockGone = null;
   function stockSame(a, b) { return !!a && !!b && JSON.stringify(a) === JSON.stringify(b); }
-  function saveStock(list) { store(stockKey(), JSON.stringify(list)); }
+  // Saved on the device at once, then to the account. A change the server
+  // hasn't got yet (offline) is marked waiting, so the account's older list
+  // never replaces it; it goes up the next time Home loads.
+  function saveStock(list) {
+    store(stockKey(), list && list.length ? JSON.stringify(list) : null);
+    store(stockKey() + '.waiting', '1');
+    pushStock();
+  }
+  var stockPushing = null, stockNoRoute = false;
+  function pushStock() {
+    if (stockNoRoute) return;
+    var t = load(stockKey()), list = null;
+    if (t) { try { list = JSON.parse(t); } catch (e) {} }
+    var mine = stockPushing = api('/luddite/stock', { stock: list || [] }).then(function () {
+      if (stockPushing === mine && load(stockKey()) === t) store(stockKey() + '.waiting', null);
+    }, function (e) { if (e && e.status === 404) stockNoRoute = true; });
+    return mine;
+  }
+  // The account's list, from /luddite/assignments: it wins unless this device
+  // has a change waiting to go up. null means the account has never had one,
+  // so a device list from before lists were kept with the account goes up;
+  // [] means the teacher went back to Luddite's own list.
+  function stockFromAccount(list) {
+    if (load(stockKey() + '.waiting') === '1') { pushStock(); return; }
+    if (!Array.isArray(list)) {
+      if (load(stockKey())) pushStock();
+      return;
+    }
+    var t = list.length ? JSON.stringify(list) : null;
+    if (t === load(stockKey())) return;
+    store(stockKey(), t);
+    stockGone = null;
+    if (!stockEditing) drawStock();
+  }
   function deleteStock(it) {
     var list = stockList().slice(), i = -1;
     list.forEach(function (x, j) { if (i === -1 && stockSame(x, it)) i = j; });
@@ -10642,6 +10700,77 @@
       drawStock();
     });
     row.appendChild(undo);
+    return row;
+  }
+  // Editing in place (Jake, 2026-11-19): ✎ (or a double-click on the words)
+  // turns a comment into a box; Enter or clicking away saves, Esc puts it back.
+  // A category's ✎ renames it. Saved to the account like every other change;
+  // on this paper a checked comment stays checked with its new words, and
+  // other papers it's already on keep theirs.
+  var stockEditing = false;
+  function stockInline(holder, value, onSave, area) {
+    var inp = el(area ? 'textarea' : 'input', 'field stockinline');
+    inp.value = value;
+    if (area) {
+      inp.rows = 1;
+      var fit = function () { inp.style.height = 'auto'; inp.style.height = inp.scrollHeight + 2 + 'px'; };
+      inp.addEventListener('input', fit);
+      setTimeout(fit, 0);
+    }
+    var done = false;
+    function finish(save) {
+      if (done) return;
+      done = true; stockEditing = false;
+      var v = inp.value.replace(/\s+/g, ' ').trim();
+      if (save && v && v !== value) onSave(v); else drawStock();
+    }
+    inp.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); });
+    inp.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('blur', function () { finish(true); });
+    stockEditing = true;
+    holder.replaceWith(inp);
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+    return inp;
+  }
+  function editStock(it, row, tx) {
+    stockInline(row, it[2], function (text) {
+      var list = stockList().slice(), i = -1;
+      list.forEach(function (x, j) { if (i === -1 && stockSame(x, it)) i = j; });
+      if (i === -1) { drawStock(); return; }
+      var kind = stockKind(it);
+      list[i] = kind ? [it[0], text, text, kind] : [it[0], text, text];
+      stockGone = null;
+      saveStock(list);
+      if (piece && !reading) {
+        var sp = stockSplit(piece.endComment);
+        if (sp.goals.some(function (g) { return g.text === it[2]; })) { setStockGoal(it[2], kind, false); setStockGoal(text, kind, true); return; }
+      }
+      drawStock();
+    }, true);
+  }
+  function stockCatRow(cat, kind) {
+    var row = el('div', 'stockcat');
+    row.appendChild(el('span', '', cat));
+    var ed = el('button', 'stockdel stockpen', '✎'); ed.type = 'button';
+    ed.setAttribute('aria-label', 'Rename this category');
+    ed.addEventListener('click', function (e) {
+      e.preventDefault();
+      stockInline(row, cat, function (name) {
+        var list = stockList().map(function (x) {
+          if (stockKind(x) !== kind || x[0] !== cat) return x;
+          var y = x.slice(); y[0] = name; return y;
+        });
+        stockGone = null;
+        saveStock(list);
+        drawStock();
+      });
+    });
+    row.appendChild(ed);
     return row;
   }
   // The form under a kind: a category (one of the kind's, or a new one) and
@@ -10712,7 +10841,7 @@
         lines.push(it[2]);
       });
     });
-    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each line under it one comment, as the student will read it. Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each line under it one comment, as the student will read it. Saved to your account, for every paper. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
     if (t === null) return;
     var out = [], c = 'Comments', kind = '';
     t.split('\n').forEach(function (l) {
@@ -10723,8 +10852,8 @@
       var parts = l.split('=>'), say = (parts.length > 1 ? parts.slice(1).join('=>') : l).trim();
       if (say) out.push(kind ? [c, say, say, kind] : [c, say, say]);
     });
-    store(stockKey(), out.length ? JSON.stringify(out) : null);
     stockGone = null;
+    saveStock(out);
     drawStock();
   });
 
