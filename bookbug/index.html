@@ -3405,7 +3405,7 @@
             </div>
             <div class="field">
               <label>Drawing size</label>
-              <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="100" step="5"><output id="cbArtSizeOut"></output></div>
+              <div class="pb-range"><input type="range" id="cbArtSize" min="50" max="150" step="5"><output id="cbArtSizeOut"></output></div>
             </div>
             <div class="checkline">
               <input type="checkbox" id="cbQuoted">
@@ -27270,16 +27270,31 @@
     var capH = lines.length * lh, gap = lines.length ? 0.28 * s : 0, numH = cbState.numbers ? 0.35 * s : 0;
     var el = c.img && pbImgEls[c.img];
     if (c.img && !el) pbLoadImage(c.img);
-    var boxW = (W - 2 * m) * cbState.artSize, boxH = (H - 2 * m - capH - gap - numH) * cbState.artSize;
-    var dw = 0, dh = 0;
+    // Every drawing gets the same box, sized to the caption as the New
+    // Yorker sizes them (Jake, 2026-11-22: a wide drawing filled the page
+    // while others sat small): a cartoon there runs two of the page's three
+    // columns, about 4.6 in by 3.5 in, over a caption of about 12 pt, so
+    // the box is 27.5 times the caption's size across and three quarters
+    // of that high. Drawing size scales it (the default, 90%, is the
+    // magazine's), and it never runs past the page. What's fitted is the
+    // ink, not the paper round it (cbInkBox), so a drawing cropped with a
+    // wide margin comes out the same size as one cropped tight.
+    var nyW = 27.5 * capPx * cbState.artSize / 0.9, nyH = nyW * 0.75;
+    var roomW = W - 2 * m, roomH = H - 2 * m - capH - gap - numH, fitK = Math.min(1, roomW / nyW, roomH / nyH);
+    var boxW = nyW * fitK, boxH = nyH * fitK;
+    var dw = 0, dh = 0, ink = null, sc = 1;
     if (el) {
-      var iw = el.naturalWidth, ih = el.naturalHeight, sc = Math.min(boxW / iw, boxH / ih);
-      dw = iw * sc; dh = ih * sc;
+      var iw = el.naturalWidth, ih = el.naturalHeight;
+      ink = cbInkBox(c.img, el);
+      sc = Math.min(boxW / (ink.w * iw), boxH / (ink.h * ih));
+      dw = ink.w * iw * sc; dh = ink.h * ih * sc;
     } else if (c.img && placeholders) { dw = boxW * 0.6; dh = boxH * 0.6; }
     // Drawing and caption as one block, a touch above the page's middle.
     var blockH = dh + gap + capH;
     var top = m + Math.max(0, (H - 2 * m - numH - blockH) * 0.45);
-    if (el) ctx.drawImage(el, (W - dw) / 2, top, dw, dh);
+    // The whole picture is drawn (its paper is white on white), placed so
+    // its ink fills the box.
+    if (el) ctx.drawImage(el, (W - dw) / 2 - ink.x * el.naturalWidth * sc, top - ink.y * el.naturalHeight * sc, el.naturalWidth * sc, el.naturalHeight * sc);
     else if (dw && placeholders) { ctx.fillStyle = '#EFECE6'; ctx.fillRect((W - dw) / 2, top, dw, dh); ctx.fillStyle = '#1B1A18'; }
     ctx.font = cbCaptionCss(cbState, capPx);
     var from = 0;
@@ -27304,6 +27319,26 @@
       ctx.fillText(String(pg.n), W / 2, H - m * 0.6);
     }
     return H;
+  }
+  // Where a drawing's ink is, in fractions of the picture ({ x, y, w, h }),
+  // measured once per picture on a small copy; the whole picture when
+  // there's none to find.
+  var cbInkBoxes = {};
+  function cbInkBox(id, el) {
+    if (cbInkBoxes[id]) return cbInkBoxes[id];
+    var whole = { x: 0, y: 0, w: 1, h: 1 };
+    try {
+      var cv = pbCanvasFrom(el, 400), W = cv.width, H = cv.height, d = cv.getContext('2d').getImageData(0, 0, W, H).data;
+      var x0 = W, y0 = H, x1 = -1, y1 = -1;
+      for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+        var t = (y * W + x) * 4;
+        if (d[t + 3] > 40 && 0.299 * d[t] + 0.587 * d[t + 1] + 0.114 * d[t + 2] < 190) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      // Nothing, or a speck: keep the whole picture.
+      cbInkBoxes[id] = x1 - x0 < W * 0.05 || y1 - y0 < H * 0.05 ? whole
+        : { x: x0 / W, y: y0 / H, w: (x1 - x0 + 1) / W, h: (y1 - y0 + 1) / H };
+    } catch (e) { cbInkBoxes[id] = whole; }
+    return cbInkBoxes[id];
   }
   var cbPreviewCanvas = cbFmt('cbPreview');
   function renderCbPreview() {
