@@ -2196,14 +2196,30 @@
   .scan-region .scan-x { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 999px; background: var(--surface); color: var(--ink); border: 1.5px solid var(--ink-soft); font: 600 16px/21px system-ui, sans-serif; text-align: center; cursor: pointer; z-index: 2; }
   .scan-region .scan-x::before { content: ''; position: absolute; inset: -9px; }
   .scan-region.is-off .scan-x { display: none; }
-  .scan-region.is-off { border-style: dashed; border-color: var(--ink-faint); background: color-mix(in srgb, var(--surface) 60%, transparent); }
-  .scan-region.is-drawing { border-style: dashed; pointer-events: none; }
+  /* A drawing not chosen shows nothing until it's pointed at (Jake,
+     2026-11-22: the dashed boxes over the photo read as clutter); it can
+     still be tapped to choose it. */
+  .scan-region.is-off { border-color: transparent; background: transparent; }
+  .scan-region.is-off:hover { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+  .scan-region.is-drawing { pointer-events: none; }
+  .scan-pills { position: absolute; top: 8px; left: 8px; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+  .scan-pills .scan-edges-btn { position: static; }
+  .scan-edges-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   /* Framing a cartoon: its page with a frame over it to move and size. */
   .cbf-box { max-width: 760px; width: 100%; }
   .cbf-view { display: flex; justify-content: center; background: var(--surface-2); border-radius: 8px; padding: 10px; touch-action: none; }
   .cbf-stage { position: relative; overflow: hidden; touch-action: none; }
   .cbf-stage canvas { display: block; width: 100%; height: 100%; }
-  .cbf-stage .scan-region { box-shadow: 0 0 0 9999px rgba(27, 26, 24, 0.38); background: transparent; }
+  /* What's cropped away is hidden (the view's own color, a trace of it
+     left) until it's wanted: while the frame is dragged, so you can see
+     what a corner is reaching for, and with Whole page on. */
+  .cbf-stage { cursor: grab; }
+  .cbf-stage.is-panning { cursor: grabbing; }
+  .cbf-stage .scan-region { box-shadow: 0 0 0 9999px color-mix(in srgb, var(--surface-2) 90%, transparent); background: transparent; transition: box-shadow .15s ease; }
+  .cbf-stage.show-page .scan-region, .cbf-stage.is-dragging .scan-region { box-shadow: 0 0 0 9999px rgba(27, 26, 24, 0.38); }
+  .cbf-stage.is-oval .scan-region { border-radius: 50%; }
+  .cbf-zoom .btn.cbf-z { width: 44px; padding-left: 0; padding-right: 0; justify-content: center; text-align: center; font-size: 18px; line-height: 1; }
+  .cbf-zoom .btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .cbf-stage .scan-region:hover { background: transparent; }
   .cbf-zoom { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .cbf-zoom .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -2618,20 +2634,23 @@
   .cb-cap-mode { display: inline-flex; border-radius: 999px; margin-left: auto; }
   .cb-cap-mode button { flex: 0 0 auto; padding: 6px 14px; }
   #cbList.is-side .cb-sheet { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: center; padding: 24px; }
-  #cbList.is-side textarea.cb-caption { margin-top: 0; font-size: 28px; line-height: 1.35; }
+  #cbList.is-side .cb-caption { margin-top: 0; font-size: 28px; line-height: 1.35; }
   @container (max-width: 519px) {
     #cbList.is-side .cb-sheet { display: block; padding: 18px 24px 48px; }
-    #cbList.is-side textarea.cb-caption { margin-top: 10px; font-size: 20px; }
+    #cbList.is-side .cb-caption { margin-top: 10px; font-size: 20px; }
   }
-  textarea.cb-caption {
-    display: block; width: 100%; resize: none; overflow: hidden; min-height: 0; margin-top: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
+  /* The caption is a rich field (a contenteditable), so ⌘U can underline
+     words in it; it's set as the page sets it. */
+  .cb-caption {
+    position: relative; display: block; width: 100%; box-sizing: border-box; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 0; margin-top: 10px; padding: 4px 8px; border-radius: 4px; border: 1px solid transparent;
     background: #FFFFFF; color: #1B1A18; outline: none; text-align: center; line-height: 1.4;
     font-family: var(--cb-cap-font, 'Adobe Caslon Pro', 'EB Garamond', Georgia, serif); font-size: 20px; font-style: var(--cb-cap-style, italic); font-weight: var(--cb-cap-weight, 400);
     transition: border-color .15s ease;
   }
-  textarea.cb-caption:hover { border-color: var(--line); }
-  textarea.cb-caption:focus { border-color: var(--accent); }
-  textarea.cb-caption::placeholder { color: var(--ink-faint); font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif; font-style: normal; font-size: 14px; }
+  .cb-caption:hover { border-color: var(--line); }
+  .cb-caption:focus { border-color: var(--accent); }
+  .cb-caption u { text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
+  .cb-caption.is-empty::before { content: attr(data-placeholder); position: absolute; left: 0; right: 0; pointer-events: none; color: var(--ink-faint); font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif; font-style: normal; font-weight: 400; font-size: 14px; line-height: 1.9; }
   .cb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cb-row .checkline { margin: 0; }
   .cb-row .dots-btn { margin-left: auto; }
@@ -3333,9 +3352,8 @@
           <p class="panel-sub" style="margin:-6px 0 14px;">Drop drawings anywhere on this list (several at once is fine) and each becomes a cartoon; write its caption with it.</p>
           <div id="cbList"></div>
           <div class="pb-sheet-foot">
-            <button class="btn add-poem-btn" id="cbImportBtn" type="button" title="One drawing, photographed or from your files, cleaned up like a scan, as a new cartoon">+ Add cartoon</button>
+            <button class="btn add-poem-btn" id="cbImportBtn" type="button" title="Photos of drawings from your files, cleaned up like a scan, each a new cartoon. Whole photo brings one in exactly as taken">+ Add cartoon</button>
             <button class="btn" type="button" id="cbBatchBtn" title="Many drawings at once, from photos, a PDF or the camera, each cleaned up like a scan and made a cartoon">+ Add cartoon batch</button>
-            <button class="btn" type="button" id="cbPhotoBtn" title="A photo, just as it is: no cleanup, no cropping, no change to its color, contrast or brightness">+ Add photo</button>
           </div>
           <input type="file" id="cbFileInput" accept="image/*" multiple hidden>
         </div>
@@ -5472,6 +5490,11 @@
     if (c.tone && (c.tone.contrast || c.tone.brightness)) {
       out.tone = { contrast: +c.tone.contrast || 0, brightness: +c.tone.brightness || 0 };
     }
+    if (c.shape === 'oval') out.shape = 'oval';
+    if (c.look === 'gray' || c.look === 'bw') out.look = c.look;
+    // The photo as taken (`raw`) and how it was brought in (`scan`), so a
+    // drawing the import cut wrong can be brought in again from the photo.
+    if (typeof c.raw === 'string' && c.raw) { out.raw = c.raw; if (c.scan && typeof c.scan === 'object') out.scan = c.scan; }
     return out;
   }
   function normalizeCartoonBook(d) {
@@ -19845,6 +19868,7 @@
       parseInlineRuns(line).forEach(function (run) {
         if (!run.text) return;
         var n = document.createTextNode(run.text);
+        if (run.underline) { var u = document.createElement('u'); u.appendChild(n); n = u; }
         if (run.italic) { var i = document.createElement('i'); i.appendChild(n); n = i; }
         if (run.bold) { var b = document.createElement('b'); b.appendChild(n); n = b; }
         d.appendChild(n);
@@ -23948,6 +23972,23 @@
   cbAuthorInput.addEventListener('input', function () { cbState.author = cbAuthorInput.value; cbPersist(); });
 
   // ---- Captions, set the New Yorker way ----
+  // A caption's words without its ++underline++ (and any bold/italic)
+  // markers.
+  function cbPlainCaption(t) { return parseInlineRuns(String(t || '')).map(function (r) { return r.text; }).join(''); }
+  // The caret's place in a rich field's words (lines joined by \n).
+  function cbRichCaret(f) {
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !f.contains(sel.focusNode)) return f.textContent.length;
+    var rows = Array.prototype.filter.call(f.childNodes, function (n) { return n.nodeType === 1; }), off = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] === sel.focusNode || rows[i].contains(sel.focusNode)) {
+        var r = document.createRange(); r.setStart(rows[i], 0); r.setEnd(sel.focusNode, sel.focusOffset);
+        return off + r.toString().length;
+      }
+      off += rows[i].textContent.length + 1;
+    }
+    return off;
+  }
   function cbTypeset(text, spoken) {
     var t = String(text || '').trim().replace(/\s+/g, ' ');
     if (!t) return '';
@@ -23965,7 +24006,6 @@
       var on = (b.dataset.cap === 'side') === side;
       b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on));
     });
-    cbList.querySelectorAll('textarea.cb-caption').forEach(autoGrow);
   }
   document.querySelectorAll('.cb-cap-mode [data-cap]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -24077,23 +24117,29 @@
     var sheet = document.createElement('div');
     sheet.className = 'cb-sheet';
     sheet.appendChild(art);
-    var ta = document.createElement('textarea');
-    ta.className = 'cb-caption';
-    ta.rows = 1;
+    var ta = pbRichField('cb-caption');
     ta.placeholder = 'Caption';
     ta.spellcheck = prefs.spellcheck;
     // The field shows the caption as it will be set: curly quotes, dashes
     // and ellipses as they're typed (cbShownCaption). In a batch with
     // captions in quotation marks, a caption started from empty gets them
     // round it; taking them out of one caption by hand leaves it so.
+    // Underlined words are kept as ++underline++, the book editor's marker
+    // (⌘/Ctrl+U). The caret is followed by its place in the words alone,
+    // since the markers aren't typed.
     ta.value = cbShownCaption(c.caption, false);
     ta.addEventListener('input', function () {
-      var wrapNew = cbState.quoted && !c.caption.trim();
-      var at = ta.selectionStart, v = cbShownCaption(ta.value, wrapNew), lead = cbShownCaption(ta.value.slice(0, at), false).length;
-      if (cbState.quoted && /^“\s*”$/.test(v)) v = '';
-      if (wrapNew && v && !/^[“‘"]/.test(ta.value)) lead++;
-      if (v !== ta.value) { ta.value = v; ta.setSelectionRange(Math.min(lead, v.length), Math.min(lead, v.length)); }
-      c.caption = v; autoGrow(ta); cbPersist();
+      var wrapNew = cbState.quoted && !c.caption.trim(), raw = ta.value, plain = cbPlainCaption(raw);
+      var at = cbRichCaret(ta), v = cbShownCaption(raw, wrapNew), lead = cbShownCaption(plain.slice(0, at), false).length;
+      if (cbState.quoted && /^“\s*”$/.test(cbPlainCaption(v))) v = '';
+      if (wrapNew && v && !/^[“‘"]/.test(plain)) lead++;
+      if (v !== raw) { ta.value = v; var len = cbPlainCaption(v).length; ta.setSelectionRange(Math.min(lead, len), Math.min(lead, len)); }
+      c.caption = v; cbPersist();
+    });
+    ta.addEventListener('keydown', function (e) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'u') return;
+      e.preventDefault();
+      document.execCommand('underline');
     });
     ta.addEventListener('focus', function () { cbFollow(cbPageIndexOf(c)); });
     sheet.appendChild(ta);
@@ -24112,7 +24158,6 @@
     card.appendChild(body);
     if ((c.comments || []).length) card.appendChild(commentListFor(c, function () { cbPersist(); cbRenderList(); }));
     wrap.appendChild(card);
-    requestAnimationFrame(function () { autoGrow(ta); });
     return wrap;
   }
   function cbRenderList() {
@@ -24139,12 +24184,12 @@
     e.preventDefault();
     cbAddFiles(Array.prototype.slice.call(e.dataTransfer.files), null);
   });
-  // The list's three ways in (Jake, 2026-10-28). + Add cartoon: one
-  // drawing (a phone offers its camera too), opened in the import dialog
-  // and cleaned up like a scan. + Add cartoon batch: the import dialog, for
-  // photos, a PDF or the live camera. + Add photo: photos come in just as
-  // they are (cbAddFiles), what you see is what prints: no Scan as, shadow,
-  // contrast or brightness fixes, no trimming or cutting apart.
+  // The list's ways in. + Add cartoon: photos from the files (a phone
+  // offers its camera too), opened in the import dialog and cleaned up
+  // like a scan, or brought in exactly as taken with Whole photo (which
+  // replaced + Add photo, Jake 2026-11-22). + Add cartoon batch: the
+  // import dialog, for photos, a PDF or the live camera. Files dropped on
+  // the list still come in just as they are (cbAddFiles).
   function cbChooseImages(multiple, then) {
     var inp = document.createElement('input');
     inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = multiple;
@@ -24152,18 +24197,9 @@
     inp.click();
   }
   cbFmt('cbImportBtn').addEventListener('click', function () {
-    cbChooseImages(false, function (files) { openCartoonImport('photos', files); });
+    cbChooseImages(true, function (files) { openCartoonImport('photos', files); });
   });
   cbFmt('cbBatchBtn').addEventListener('click', function () { openCartoonImport(); });
-  cbFmt('cbPhotoBtn').addEventListener('click', function () {
-    cbChooseImages(true, function (files) {
-      var n = cbState.cartoons.length;
-      cbAddFiles(files, null).then(function () {
-        var c = cbState.cartoons[n], item = c && cbList.querySelector('.cb-item[data-id="' + c.id + '"]');
-        if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
-  });
 
   // ---------------------------------------------------------------------
   // Importing cartoons from a PDF (each page a cartoon; read with PDF.js,
@@ -24518,7 +24554,7 @@
   // inside the box are whited out.
   function scanFindDrawings(ink, W, H) {
     var N = W * H, r = Math.max(4, Math.round(Math.max(W, H) / 45)), D = scanGrow(ink, W, H, r);
-    var lab = new Int32Array(N), queue = new Int32Array(N), blobs = [], id = 0, minSide = Math.max(W, H) * 0.04;
+    var lab = new Int32Array(N), queue = new Int32Array(N), blobs = [], id = 0, minSide = Math.max(W, H) * 0.04, clutter = 0;
     for (var s = 0; s < N; s++) {
       if (!D[s] || lab[s]) continue;
       var b = { id: ++id, x0: W, y0: H, x1: -1, y1: -1, ink: 0 }, qh = 0, qt = 0;
@@ -24534,10 +24570,13 @@
       }
       var bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1, edges = (b.x0 <= 1) + (b.y0 <= 1) + (b.x1 >= W - 2) + (b.y1 >= H - 2);
       if (Math.max(bw, bh) < minSide || b.ink < N * 0.0002) continue;
-      if (edges >= 2 || (edges && b.ink > bw * bh * 0.35) || bw * bh > N * 0.8) continue;
+      if (edges >= 2 || (edges && b.ink > bw * bh * 0.35) || bw * bh > N * 0.8) { if (edges) clutter++; continue; }
       blobs.push(b);
     }
-    if (blobs.length < 2) return [];
+    // One drawing alone is still found when what's round it was set aside
+    // (a cutting mat or tape down the sides): trimming to the ink would
+    // take that in too (Jake, 2026-11-22).
+    if (blobs.length < 2 && !(blobs.length === 1 && clutter)) return [];
     return blobs.map(function (b) {
       var mw = b.x1 - b.x0 + 1, mh = b.y1 - b.y0 + 1, mask = new Uint8Array(mw * mh);
       for (var y = 0; y < mh; y++) for (var x = 0; x < mw; x++) if (lab[(y + b.y0) * W + x + b.x0] === b.id) mask[y * mw + x] = 1;
@@ -25519,9 +25558,17 @@
     box.querySelector('[data-act="cancel"]').addEventListener('click', d.close);
     // Art made on a computer comes in as it is: the photo fixes (shadows,
     // contrast, brightness) are for paper, and are hidden while it's shown.
-    function optsFor(src) { var c = Object.assign({}, o); if (src && src.digital) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; } if (framed(src)) c.trim = false; return c; }
+    // Whole photo is the photo as taken (it took over + Add photo, Jake
+    // 2026-11-22): no cleanup and nothing cropped; Scan as still applies.
+    function optsFor(src) {
+      var c = Object.assign({}, o);
+      if (src && (src.digital || src.whole)) { c.shadow = 0; c.contrast = 0; c.brightness = 0; c.cond = {}; }
+      if (src && src.whole) c.marks = 0;
+      if (framed(src) || (src && src.whole)) c.trim = false;
+      return c;
+    }
     function syncControls() {
-      var dig = !!(sources[cur] && sources[cur].digital);
+      var dig = !!(sources[cur] && (sources[cur].digital || sources[cur].whole));
       ['shadow', 'contrast', 'brightness', 'marks'].forEach(function (k) { box.querySelector('input[data-k="' + k + '"]').closest('.field').hidden = dig; });
       box.querySelectorAll('[data-mode] button').forEach(function (b) { b.classList.toggle('active', b.dataset.val === o.mode); });
       box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
@@ -25538,6 +25585,12 @@
       box.querySelector('input[data-k="edges"]').checked = o.edges;
       box.querySelector('[data-conds]').hidden = dig;
       box.querySelector('[data-paper]').hidden = !cropMode;
+      // A whole photo comes in as taken: none of the cropping or Scan as
+      // applies to it.
+      if (sources[cur] && sources[cur].whole) {
+        box.querySelector('input[type="checkbox"][data-k="trim"]').closest('label').hidden = true;
+        box.querySelector('[data-edges-line]').hidden = true;
+      }
       box.querySelectorAll('input[data-post]').forEach(function (cb) { cb.checked = !!o[cb.dataset.post]; });
       view.classList.toggle('is-clear', !!o.clear);
       box.querySelectorAll('input[data-cond]').forEach(function (cb) { cb.checked = !!o.cond[cb.dataset.cond]; });
@@ -25553,12 +25606,25 @@
         if (editingEdges) { renderEdges(src); return; }
         // A page coming in whole is shown as it will come in, its printed
         // box line taken out.
-        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital }), 2400), stage = document.createElement('div');
+        var cv = scanClean(src.canvas, Object.assign(optsFor(src), { frames: wholePage(src) && !src.digital && !src.whole }), 2400), stage = document.createElement('div');
         stage.className = 'scan-stage';
         stage.appendChild(cv);
         view.appendChild(stage);
         if (!phone) view.appendChild(turnButtons(src));
-        if (!phone && !src.digital && !src.fromPdf && o.edges) view.appendChild(edgesButton('Edges', 'Move the corners onto the paper’s corners', function () { editingEdges = true; renderView(); }));
+        // Whole photo: the photo just as it is, with no straightening,
+        // box or trim (Jake, 2026-11-22: one photo couldn't be brought in
+        // uncropped); pressed again, the crops come back.
+        if (!phone) {
+          var pills = document.createElement('div');
+          pills.className = 'scan-pills';
+          if (!src.whole && !src.digital && !src.fromPdf && o.edges) pills.appendChild(edgesButton('Edges', 'Move the corners onto the paper’s corners', function () { editingEdges = true; renderView(); }));
+          var wb = edgesButton('Whole photo', src.whole ? 'Crop it again to the paper and the drawing' : 'Bring in the photo as taken: nothing cropped or cleaned up (Scan as still applies)', function () {
+            src.whole = !src.whole; straighten(src); src.regions = null; findRegions(src); refresh();
+          });
+          wb.setAttribute('aria-pressed', String(!!src.whole));
+          pills.appendChild(wb);
+          view.appendChild(pills);
+        }
         drawRegions(src, stage, cv);
       }, 30);
     }
@@ -25989,9 +26055,9 @@
       var r = src.digital || src.fromPdf ? null : scanFindEdges(src.photo);
       src.quad = r ? r.quad : null; src.frame = !!(r && r.frame);
     }
-    function framed(src) { return !!(src && src.frame && src.quad && o.edges); }
+    function framed(src) { return !!(src && src.frame && src.quad && o.edges && !src.whole); }
     function straighten(src) {
-      src.canvas = o.edges && src.quad && !src.digital && !src.fromPdf ? scanWarp(src.photo, src.quad, 2400, src.frame) : src.photo;
+      src.canvas = !src.whole && o.edges && src.quad && !src.digital && !src.fromPdf ? scanWarp(src.photo, src.quad, 2400, src.frame) : src.photo;
       src.thumb = pbCanvasFrom(src.canvas, 120).toDataURL('image/jpeg', 0.7);
     }
     // A page's circled doodles, as boxes over it (tap one to leave it out
@@ -26000,6 +26066,7 @@
     // trimmed, so they're placed through its crop.
     function drawRegions(src, stage, cv) {
       if (phone) { note.textContent = ''; return; }
+      if (src.whole) { note.textContent = 'The whole photo comes in as taken.'; return; }
       var cb = cv.cropBox || { x: 0, y: 0, W: cv.width, H: cv.height };
       function toView(fx, fy) { return [(fx * cb.W - cb.x) / cv.width * 100, (fy * cb.H - cb.y) / cv.height * 100]; }
       function toPage(e) {
@@ -26201,6 +26268,8 @@
               var bySize = src.regions.slice().sort(function (a, b) { return b.fw * b.fh - a.fw * a.fh; });
               if (bySize.length && !src.regions.some(function (r) { return r.on; }) &&
                   (bySize.length === 1 || bySize[0].fw * bySize[0].fh >= 3 * bySize[1].fw * bySize[1].fh)) bySize[0].on = true;
+              // Whole photo: nothing cropped, nothing chosen.
+              if (src.whole) { src.regions.forEach(function (r) { r.on = false; }); src.preset = null; }
               // Adjusting an illustration again: the box it was cut with.
               if (src.preset) {
                 src.regions = [Object.assign({}, src.preset, { mask: null, ring: null, on: true, edited: true, drawn: true, loop: false })];
@@ -26475,14 +26544,21 @@
             scanWhiteRings(page, chosen(src), src.aw, src.ah);
           } else if (wholePage(src)) {
             page = scanClean(src.canvas, Object.assign(optsFor(src), { trim: false }), 2400);
-            if (src.off) scanWhiteMask(page, src.off, src.aw, src.ah);
-            if (!src.digital) scanStripFrame(page);
+            if (src.off && !src.whole) scanWhiteMask(page, src.off, src.aw, src.ah);
+            if (!src.digital && !src.whole) scanStripFrame(page);
             cuts = [placed(optsFor(src).trim ? scanTrim(page) : page, 0, 0)];
           } else continue;
           // The photo as taken, kept so the illustration can be adjusted
           // again from it, with the settings and box it came in with.
           var rawId = adjust ? adjust.raw : null;
           if (!adjust && sink && sink.storeRaw && !src.digital) try { rawId = await sink.storeRaw(await pbEncode(src.photo, false)); } catch (e) { rawId = null; }
+          // A cartoon batch keeps the photo too (Jake, 2026-11-22: a drawing
+          // the import cut short had to be photographed again), as a page
+          // that loads only when it's wanted.
+          if (!adjust && !sink && !src.digital && !src.fromPdf) try {
+            var renc = await pbEncode(src.photo, false);
+            rawId = await cbStoreImage(renc.blob, renc.canvas.width, renc.canvas.height, true);
+          } catch (e) { rawId = null; }
           var meta = function (j) {
             var r = chosen(src)[j];
             return { spread: assigning ? plan[i][j] : null, raw: rawId,
@@ -26490,7 +26566,7 @@
                 edges: o.edges, cond: Object.assign({}, o.cond), quad: src.quad, frame: src.frame, turn: adjust ? (adjustTurn + (src.turn || 0)) % 4 : 0, fromPdf: src.fromPdf, box: r ? { fx: r.fx, fy: r.fy, fw: r.fw, fh: r.fh } : null } };
           };
           var pageId = null;
-          if (!sink) try {
+          if (!sink || sink.keepPage) try {
             var penc = await pbEncode(page, false);
             pageId = await cbStoreImage(penc.blob, penc.canvas.width, penc.canvas.height, true);
           } catch (e) { pageId = null; }
@@ -26502,15 +26578,16 @@
             // (clockwise until then). It stays reframable: `rot` turns the
             // page and `crop` is redone in the turned page's fractions.
             var cv = cuts[j].canvas, cr = cuts[j].crop, rot = 0;
-            if (sink) { await sink.store(await pbEncode(cv, o.mode === 'bw'), meta(j)); continue; }
+            if (sink && !sink.keepPage) { await sink.store(await pbEncode(cv, o.mode === 'bw'), meta(j)); continue; }
             if (cv.height > cv.width * 1.1) {
               var q = cbTurnPref();
               cv = turnCanvas(cv, q); rot = q * 90;
               cr = q > 0 ? { fx: 1 - cr.fy - cr.fh, fy: cr.fx, fw: cr.fh, fh: cr.fw } : { fx: cr.fy, fy: 1 - cr.fx - cr.fw, fw: cr.fh, fh: cr.fw };
             }
             var enc = await pbEncode(cv, o.mode === 'bw');
+            if (sink) { await sink.store(enc, Object.assign(meta(j), { page: pageId, crop: cr, rot: rot })); continue; }
             var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
-            var nc = cbNormalizeCartoon({ img: id, page: pageId, crop: cr, rot: rot });
+            var nc = cbNormalizeCartoon({ img: id, page: pageId, crop: cr, rot: rot, raw: rawId, scan: meta(j).scan });
             if (rot) nc.autoTurn = rot;
             cbState.cartoons.push(nc);
           }
@@ -26552,6 +26629,20 @@
     ctx.putImageData(im, 0, 0);
     return cv;
   }
+  // Color, grayscale or black and white, set in Frame the drawing (`look`),
+  // in place on a canvas. Black and white cuts at a light gray so pencil
+  // lines stay ink.
+  function cbApplyLook(cv, look) {
+    if (look !== 'gray' && look !== 'bw') return cv;
+    var ctx = cv.getContext('2d'), im = ctx.getImageData(0, 0, cv.width, cv.height), d = im.data;
+    for (var i = 0; i < d.length; i += 4) {
+      var l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      if (look === 'bw') l = l < 170 ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = l;
+    }
+    ctx.putImageData(im, 0, 0);
+    return cv;
+  }
   async function cbOpenFrame(c) {
     var fromPage = !!(c.page && c.crop && cbState.images[c.page]);
     var srcId = fromPage ? c.page : c.img, src = await pbLoadImage(srcId);
@@ -26566,18 +26657,21 @@
     var work = pbCanvasFrom(src, 3200), wctx = work.getContext('2d');
     var PAD = 0.15, SW = work.width, SH = work.height;
     var wdata = wctx.getImageData(0, 0, SW, SH), wd = wdata.data, undo = [], toned = null;
-    function retone() { toned = cbApplyTone(pbCanvasFrom(work, 1600), tone); }
+    var look = c.look === 'gray' || c.look === 'bw' ? c.look : 'color';
+    function retone() { toned = cbApplyLook(cbApplyTone(pbCanvasFrom(work, 1600), tone), look); }
     retone();
     var d = makeDialog('cbf-box', 'Frame the drawing',
       '<p style="margin-top:0;">Frame the drawing</p>' +
       '<div class="cbf-view"><div class="cbf-stage"><canvas></canvas></div></div>' +
       '<div class="cbf-zoom"><div class="seg" data-mode><button type="button" data-val="frame" class="active">Frame</button><button type="button" data-val="erase">Erase</button></div>' +
-        '<button class="btn" type="button" data-z="out">Smaller</button><button class="btn" type="button" data-z="in">Larger</button>' +
-        (fromPage ? '<button class="btn" type="button" data-z="page">Whole page</button>' : '') +
+        '<div class="seg" data-shape><button type="button" data-val="rect">Rectangle</button><button type="button" data-val="oval">Oval</button></div>' +
         '<button class="btn" type="button" data-act="undo" disabled>Undo</button></div>' +
-      '<div class="cbf-zoom"><button class="btn" type="button" data-r="turn" title="Turn the page a quarter turn clockwise">↻ Turn 90°</button><button class="btn" type="button" data-r="free" aria-pressed="false">Any angle</button></div>' +
+      '<div class="cbf-zoom"><button class="btn cbf-z" type="button" data-z="out" title="Zoom out (pinch, or ⌘ + scroll)" aria-label="Zoom out">−</button><button class="btn cbf-z" type="button" data-z="in" title="Zoom in (spread two fingers, or ⌘ + scroll)" aria-label="Zoom in">+</button>' +
+        '<button class="btn" type="button" data-z="page" aria-pressed="false" title="Show the whole page round the frame">Whole page</button>' +
+        '<button class="btn" type="button" data-r="turn" title="Turn the page a quarter turn clockwise">↻ Turn 90°</button><button class="btn" type="button" data-r="free" aria-pressed="false">Any angle</button></div>' +
       '<div class="cbf-angle" hidden><input type="range" min="-45" max="45" step="0.5" value="0" aria-label="Angle"><output></output><button class="btn-link" type="button" data-r="zero">Reset</button></div>' +
       '<p class="scan-note"></p>' +
+      '<div class="cbf-zoom"><div class="seg" data-look><button type="button" data-val="color">Color</button><button type="button" data-val="gray">Grayscale</button><button type="button" data-val="bw">Black &amp; white</button></div></div>' +
       '<div class="scan-controls cbf-tone">' +
         '<div class="field"><label>Contrast <output data-out="contrast"></output></label><input type="range" min="-50" max="100" step="5" data-k="contrast"></div>' +
         '<div class="field"><label>Brightness <output data-out="brightness"></output></label><input type="range" min="-50" max="50" step="5" data-k="brightness"></div>' +
@@ -26591,7 +26685,7 @@
     function syncNote() {
       note.textContent = mode === 'erase' ? 'Erasing: anything inside a box you draw is wiped white. Tap a stray mark to wipe just that mark. Undo puts it back.'
         : freeMode ? 'Slide to straighten the drawing, or twist two fingers on it. The lines in the frame help line it up.'
-        : 'Drag the frame to move it; drag a corner, or spread or pinch two fingers, to make it larger or smaller.';
+        : 'Drag a corner to size the frame, or the frame to move it. Pinch to zoom; drag outside the frame to look around.';
     }
     syncNote();
     // The turned page's bounding box, in the page's pixels.
@@ -26615,37 +26709,55 @@
       if (quarter) { var t = w; w = h; h = t; }
       rot = deg; RW = nd[0]; RH = nd[1];
       crop = fit({ fx: (np[0] + RW / 2 - w / 2) / RW, fy: (np[1] + RH / 2 - h / 2) / RH, fw: w / RW, fh: h / RH });
-      sizeStage(); place(); syncAngle();
+      // A quarter turn fits the view again; a fine angle keeps the zoom
+      // and follows the frame.
+      if (quarter) fitView();
+      else if (showPage) fitPage();
+      else { view.cx = crop.fx + crop.fw / 2; view.cy = crop.fy + crop.fh / 2; }
+      draw(); place(); syncAngle();
     }
     function syncAngle() {
       var f = split(rot).fine;
       angleIn.value = f; angleOut.textContent = (Math.round(f * 10) / 10) + '°';
     }
-    // The stage shows a window `V` onto the turned page (fractions of its
-    // bounding box): in Frame, the whole page with a margin of PAD all
-    // round; in Erase, just the framed cartoon with a little round it, so
-    // the drawing fills the view and small marks are big enough to hit.
-    var VW = 1 + 2 * PAD, stageW = 0, V = { x: -PAD, y: -PAD, w: VW, h: VW };
-    function sizeStage() {
-      if (mode === 'erase') {
-        var mx = crop.fw * 0.06, my = crop.fh * 0.06;
-        V = { x: crop.fx - mx, y: crop.fy - my, w: crop.fw + 2 * mx, h: crop.fh + 2 * my };
-      } else V = { x: -PAD, y: -PAD, w: VW, h: VW };
-      var aspect = (V.w * RW) / (V.h * RH);
-      var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20), maxH = Math.max(220, window.innerHeight * 0.5);
-      var w = Math.min(avail, maxH * aspect), h = w / aspect;
-      stageW = w;
-      stage.style.width = Math.round(w) + 'px'; stage.style.height = Math.round(h) + 'px';
+    // The stage is a fixed window onto the turned page. What it shows is
+    // the view (`view`: its center in fractions of the turned page's
+    // bounding box, and `k`, stage pixels per page pixel), which zooms and
+    // pans on its own: zooming never changes the frame, which only its
+    // corners size (Jake, 2026-11-22: a scroll resized it by accident). It
+    // opens fitted to the frame, so the drawing is big and what's cropped
+    // away is hidden; Whole page shows the rest of the sheet.
+    var stageW = 0, stageH = 0, view = { cx: 0.5, cy: 0.5, k: 1 }, V = { x: 0, y: 0, w: 1, h: 1 }, showPage = false;
+    function layoutStage() {
+      var avail = Math.max(200, box.querySelector('.cbf-view').clientWidth - 20);
+      stageW = avail; stageH = Math.round(clamp(avail * 0.78, 240, Math.max(240, window.innerHeight * 0.56)));
+      stage.style.width = Math.round(stageW) + 'px'; stage.style.height = stageH + 'px';
+    }
+    function pageK() { return Math.min(stageW / (RW * (1 + 2 * PAD)), stageH / (RH * (1 + 2 * PAD))); }
+    function fitFrame() {
+      var m = 0.08;
+      view = { cx: crop.fx + crop.fw / 2, cy: crop.fy + crop.fh / 2, k: Math.min(stageW / (crop.fw * RW * (1 + 2 * m)), stageH / (crop.fh * RH * (1 + 2 * m))) };
+    }
+    function fitPage() { view = { cx: 0.5, cy: 0.5, k: pageK() }; }
+    function fitView() { if (showPage) fitPage(); else fitFrame(); }
+    function zoomView(f, px, py) {
+      var nk = clamp(view.k * f, pageK() * 0.6, pageK() * 40);
+      if (px == null) { px = view.cx; py = view.cy; }
+      view.cx = px - (px - view.cx) * view.k / nk; view.cy = py - (py - view.cy) * view.k / nk; view.k = nk;
+      draw(); place();
+    }
+    function draw() {
+      var w = stageW, h = stageH, k = view.k;
+      V = { w: w / (k * RW), h: h / (k * RH) };
+      V.x = view.cx - V.w / 2; V.y = view.cy - V.h / 2;
       var ctx = pbCanvasFor(cv, w, h);
       ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
-      var k = w / (V.w * RW);
       ctx.save();
       ctx.translate((0.5 - V.x) / V.w * w, (0.5 - V.y) / V.h * h); ctx.rotate(rot * Math.PI / 180); ctx.scale(k, k);
       ctx.drawImage(toned, -SW / 2, -SH / 2, SW, SH);
-      ctx.setLineDash([4 / k, 4 / k]); ctx.strokeStyle = 'rgba(27,26,24,0.35)'; ctx.lineWidth = 1 / k;
-      ctx.strokeRect(-SW / 2, -SH / 2, SW, SH);
       ctx.restore();
     }
+    function sizeStage() { layoutStage(); draw(); }
     var frame = document.createElement('div');
     frame.className = 'scan-region';
     frame.innerHTML = '<i data-c="nw"></i><i data-c="ne"></i><i data-c="sw"></i><i data-c="se"></i>';
@@ -26656,24 +26768,42 @@
       return { fx: clamp(r.fx, -PAD, 1 + PAD - fw), fy: clamp(r.fy, -PAD, 1 + PAD - fh), fw: fw, fh: fh };
     }
     function place() {
-      if (mode === 'erase') sizeStage();
       frame.style.left = (crop.fx - V.x) / V.w * 100 + '%'; frame.style.top = (crop.fy - V.y) / V.h * 100 + '%';
       frame.style.width = crop.fw / V.w * 100 + '%'; frame.style.height = crop.fh / V.h * 100 + '%';
-    }
-    function zoom(k) {
-      var cx = crop.fx + crop.fw / 2, cy = crop.fy + crop.fh / 2, fw = crop.fw * k, fh = crop.fh * k;
-      crop = fit({ fx: cx - fw / 2, fy: cy - fh / 2, fw: fw, fh: fh }); place();
     }
     function toPage(e) {
       var r = stage.getBoundingClientRect();
       return [(e.clientX - r.left) / r.width * V.w + V.x, (e.clientY - r.top) / r.height * V.h + V.y];
     }
+    var pageBtn = box.querySelector('[data-z="page"]');
+    function setShowPage(on) {
+      showPage = on;
+      pageBtn.setAttribute('aria-pressed', String(on)); pageBtn.classList.toggle('active', on);
+      stage.classList.toggle('show-page', on);
+      fitView(); draw(); place();
+    }
     box.querySelectorAll('[data-z]').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.dataset.z === 'page') { crop = { fx: 0, fy: 0, fw: 1, fh: 1 }; place(); }
-        else zoom(b.dataset.z === 'in' ? 1.2 : 1 / 1.2);
+        if (b.dataset.z === 'page') setShowPage(!showPage);
+        else zoomView(b.dataset.z === 'in' ? 1.25 : 1 / 1.25);
       });
     });
+    // Rectangle or oval: an oval frame comes out as the drawing in an oval
+    // vignette, the paper outside it white.
+    var shape = c.shape === 'oval' ? 'oval' : 'rect';
+    function syncShape() {
+      box.querySelectorAll('[data-shape] button').forEach(function (x) { x.classList.toggle('active', x.dataset.val === shape); });
+      stage.classList.toggle('is-oval', shape === 'oval');
+    }
+    box.querySelectorAll('[data-shape] button').forEach(function (b) {
+      b.addEventListener('click', function () { shape = b.dataset.val; syncShape(); });
+    });
+    syncShape();
+    function syncLook() { box.querySelectorAll('[data-look] button').forEach(function (x) { x.classList.toggle('active', x.dataset.val === look); }); }
+    box.querySelectorAll('[data-look] button').forEach(function (b) {
+      b.addEventListener('click', function () { look = b.dataset.val; syncLook(); retone(); draw(); });
+    });
+    syncLook();
     box.querySelector('[data-r="turn"]').addEventListener('click', function () { setRot(rot + 90 > 180 ? rot - 270 : rot + 90); });
     freeBtn.addEventListener('click', function () {
       freeMode = !freeMode;
@@ -26686,7 +26816,7 @@
     box.querySelectorAll('input[type="range"][data-k]').forEach(function (r) {
       var k = r.dataset.k, out = box.querySelector('[data-out="' + k + '"]');
       r.value = tone[k]; out.textContent = tone[k];
-      r.addEventListener('input', function () { tone[k] = +r.value; out.textContent = r.value; retone(); sizeStage(); });
+      r.addEventListener('input', function () { tone[k] = +r.value; out.textContent = r.value; retone(); draw(); });
     });
     box.querySelectorAll('[data-mode] button').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -26694,7 +26824,6 @@
         box.querySelectorAll('[data-mode] button').forEach(function (x) { x.classList.toggle('active', x === b); });
         stage.classList.toggle('is-erasing', mode === 'erase');
         box.querySelector('.cbf-view').classList.toggle('is-erasing', mode === 'erase');
-        sizeStage(); place();
         syncNote(); status.textContent = '';
       });
     });
@@ -26714,7 +26843,7 @@
     }
     function commit(x0, y0, x1, y1) {
       wctx.putImageData(wdata, 0, 0, x0, y0, x1 - x0, y1 - y0);
-      retone(); sizeStage();
+      retone(); draw();
       status.textContent = '';
     }
     // The box is square to the stage, so on a turned page it's a turned
@@ -26787,13 +26916,24 @@
     box.addEventListener('keydown', function (e) {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && undo.length) { e.preventDefault(); undoLast(); }
     });
-    // Scrolling up makes the frame larger, like spreading two fingers.
-    stage.addEventListener('wheel', function (e) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.08 : 1 / 1.08); }, { passive: false });
+    // A plain scroll is left alone (it scrolls the dialog); a trackpad
+    // pinch, or ⌘/Ctrl + scroll, zooms the view about the pointer. Neither
+    // ever sizes the frame.
+    stage.addEventListener('wheel', function (e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      var p = toPage(e);
+      zoomView(Math.exp(-e.deltaY / 200), p[0], p[1]);
+    }, { passive: false });
+    // Safari sends a trackpad pinch as gesture events instead.
+    var gScale = 1;
+    stage.addEventListener('gesturestart', function (e) { e.preventDefault(); gScale = 1; });
+    stage.addEventListener('gesturechange', function (e) { e.preventDefault(); var p = toPage(e); zoomView(e.scale / gScale, p[0], p[1]); gScale = e.scale; });
     // One finger (or the mouse) on the frame moves it, on a corner sizes
-    // it; two fingers anywhere spread or pinch it (or, in Any angle, twist
-    // the page). In Erase, one finger draws the box to clear (or taps a
-    // mark away).
-    var pts = {}, drag = null, pinch = null, rub = null;
+    // it, and anywhere else pans the view; two fingers zoom the view (or,
+    // in Any angle, twist the page). In Erase, one finger draws the box to
+    // clear (or taps a mark away).
+    var pts = {}, drag = null, pinch = null, rub = null, pan = null;
     function placeRub() {
       var a = rub.p0, b = rub.p1;
       rub.el.style.left = (Math.min(a[0], b[0]) - V.x) / V.w * 100 + '%'; rub.el.style.top = (Math.min(a[1], b[1]) - V.y) / V.h * 100 + '%';
@@ -26808,7 +26948,8 @@
       var ids = Object.keys(pts);
       if (ids.length === 2) {
         var a = pts[ids[0]], b = pts[ids[1]];
-        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, crop: Object.assign({}, crop) }; drag = null; dropRub();
+        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ang: Math.atan2(b[1] - a[1], b[0] - a[0]), rot: rot, k: view.k }; drag = null; pan = null; dropRub();
+        stage.classList.remove('is-dragging');
       } else if (mode === 'erase') {
         var el = document.createElement('div'), p0 = toPage(e);
         el.className = 'cbf-erase'; el.innerHTML = '<span>Erase</span>'; stage.appendChild(el);
@@ -26816,6 +26957,10 @@
         placeRub();
       } else if (frame.contains(e.target)) {
         drag = { corner: e.target.dataset && e.target.dataset.c, p0: toPage(e), r0: Object.assign({}, crop) };
+        stage.classList.add('is-dragging');
+      } else {
+        pan = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy };
+        stage.classList.add('is-panning');
       }
     });
     stage.addEventListener('pointermove', function (e) {
@@ -26831,10 +26976,16 @@
           setRot(q.q * 90 + clamp(q.fine + da, -45, 45));
           return;
         }
-        // Fingers spread apart: a larger frame.
-        var k = (Math.hypot(a[0] - b[0], a[1] - b[1]) || 1) / pinch.d, r0 = pinch.crop;
-        var cx = r0.fx + r0.fw / 2, cy = r0.fy + r0.fh / 2;
-        crop = fit({ fx: cx - r0.fw * k / 2, fy: cy - r0.fh * k / 2, fw: r0.fw * k, fh: r0.fh * k }); place();
+        // Fingers spread apart: zoomed in, about the point between them.
+        var want = pinch.k * (Math.hypot(a[0] - b[0], a[1] - b[1]) || 1) / pinch.d;
+        var mid = toPage({ clientX: (a[0] + b[0]) / 2, clientY: (a[1] + b[1]) / 2 });
+        zoomView(want / view.k, mid[0], mid[1]);
+        return;
+      }
+      if (pan) {
+        view.cx = pan.cx - (e.clientX - pan.x) / (view.k * RW);
+        view.cy = pan.cy - (e.clientY - pan.y) / (view.k * RH);
+        draw(); place();
         return;
       }
       if (rub) {
@@ -26857,7 +27008,7 @@
       var done = rub && e.type === 'pointerup' && Object.keys(pts).length === 1 ? rub : null;
       delete pts[e.pointerId];
       if (Object.keys(pts).length < 2) pinch = null;
-      if (!Object.keys(pts).length) { drag = null; dropRub(); }
+      if (!Object.keys(pts).length) { drag = null; pan = null; dropRub(); stage.classList.remove('is-dragging', 'is-panning'); }
       if (done) {
         if (done.moved) eraseRect(done.p0, done.p1);
         else if (done.p0[0] >= 0 && done.p0[1] >= 0 && done.p0[0] <= 1 && done.p0[1] <= 1) poof(done.p0);
@@ -26865,9 +27016,9 @@
     }
     stage.addEventListener('pointerup', lift);
     stage.addEventListener('pointercancel', lift);
-    function onResize() { if (!d.ov.isConnected) { window.removeEventListener('resize', onResize); return; } sizeStage(); }
+    function onResize() { if (!d.ov.isConnected) { window.removeEventListener('resize', onResize); return; } layoutStage(); fitView(); draw(); place(); }
     window.addEventListener('resize', onResize);
-    requestAnimationFrame(function () { sizeStage(); place(); syncAngle(); });
+    requestAnimationFrame(function () { layoutStage(); fitView(); draw(); place(); syncAngle(); });
     box.querySelector('[data-act="save"]').addEventListener('click', async function (e) {
       var btn = e.currentTarget;
       btn.disabled = true; status.textContent = 'Saving…';
@@ -26887,8 +27038,14 @@
         ctx.translate(-crop.fx * RW + RW / 2, -crop.fy * RH + RH / 2);
         ctx.rotate(rot * Math.PI / 180);
         ctx.drawImage(work, -SW / 2, -SH / 2, SW, SH);
-        cbApplyTone(out, tone);
-        scanStripFrame(out);
+        cbApplyLook(cbApplyTone(out, tone), look);
+        if (shape === 'oval') {
+          // White outside the oval: the drawing in a vignette.
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.beginPath(); ctx.rect(0, 0, out.width, out.height);
+          ctx.ellipse(out.width / 2, out.height / 2, out.width / 2, out.height / 2, 0, 0, 2 * Math.PI);
+          ctx.fill('evenodd');
+        } else scanStripFrame(out);
         var enc = await pbEncode(out, false);
         var id = await cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height);
         // A drawing added on its own becomes the page it's framed on.
@@ -26896,12 +27053,42 @@
         if (c.autoTurn && (rot === 90 || rot === -90) && rot !== c.autoTurn) { try { localStorage.setItem('bookbug.cartoonTurn', rot > 0 ? '1' : '-1'); } catch (err) {} }
         delete c.autoTurn;
         c.page = pageId; c.crop = crop; c.rot = rot; c.img = id; c.orig = null; c.clean = null;
+        if (shape === 'oval') c.shape = 'oval'; else delete c.shape;
+        if (look !== 'color') c.look = look; else delete c.look;
         if (tone.contrast || tone.brightness) c.tone = { contrast: tone.contrast, brightness: tone.brightness }; else delete c.tone;
         cbPersist(); cbRenderList();
         d.close();
       } catch (err) {
         btn.disabled = false;
         status.textContent = 'Couldn’t save it: ' + (err && err.message ? err.message : 'unknown error');
+      }
+    });
+  }
+
+  // Start over from the photo: the photo the cartoon came in from, back in
+  // the importer as it was brought in (the paper's edges and the box it
+  // found), to fix what it got wrong: drag the edges or the box, or turn
+  // off straightening for the whole photo. Saved, the cartoon gets the new
+  // drawing and page; the photo stays with it.
+  async function cbRedoFromPhoto(c) {
+    var img = await pbLoadImage(c.raw);
+    if (!img) { confirmDialog('The photo isn’t on this device yet.'); return; }
+    var made = null;
+    openCartoonImport(undefined, null, {
+      title: 'Start over from the photo', one: 'cartoon', many: 'cartoons', hint: '', keepPage: true,
+      mode: (c.scan && c.scan.mode) || 'gray',
+      adjust: { canvas: pbCanvasFrom(img, 2400), raw: c.raw, scan: c.scan || null },
+      store: function (enc, meta) {
+        if (made) return Promise.resolve();
+        return cbStoreImage(enc.blob, enc.canvas.width, enc.canvas.height).then(function (id) { made = Object.assign({ id: id }, meta); });
+      },
+      done: function () {
+        if (!made) return;
+        c.img = made.id; c.orig = null; c.clean = null; c.scan = made.scan || c.scan;
+        delete c.tone; delete c.shape; delete c.look; delete c.autoTurn;
+        if (made.page && made.crop) { c.page = made.page; c.crop = made.crop; c.rot = made.rot || 0; if (made.rot) c.autoTurn = made.rot; }
+        else { delete c.page; delete c.crop; delete c.rot; }
+        cbPersist(); cbRenderList();
       }
     });
   }
@@ -26918,7 +27105,8 @@
     cbMenuFor = c;
     cbItemMenu.innerHTML =
       (c.img ? '<button type="button" data-a="frame">Frame the drawing…</button><button type="button" data-a="replace">Replace drawing…</button><button type="button" data-a="shadows">Remove paper shadows</button><button type="button" data-a="ink">Clean up line art</button>' +
-        (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') : '') +
+        (c.orig ? '<button type="button" data-a="original">Use original drawing</button>' : '') +
+        (c.raw ? '<button type="button" data-a="photo">Start over from the photo…</button>' : '') : '') +
       '<button type="button" data-a="comment">Comment\u2026</button>' +
       (i > 0 ? '<button type="button" data-a="up">Move up</button>' : '') +
       (i < cbState.cartoons.length - 1 ? '<button type="button" data-a="down">Move down</button>' : '') +
@@ -26938,6 +27126,7 @@
     cbItemMenu.hidden = true;
     if (a === 'frame') { cbOpenFrame(c); return; }
     if (a === 'replace') { cbPick(c.id); return; }
+    if (a === 'photo') { cbRedoFromPhoto(c); return; }
     if (a === 'comment') { addCommentTo(c, 'cartoon ' + (i + 1), function () { cbPersist(); cbRenderList(); }); return; }
     // Delete… skips the archive; it can still be restored, to its old
     // place, from Recently deleted for RECOVER_DAYS.
@@ -26988,7 +27177,7 @@
     list.innerHTML = '';
     cbFmt('cbEmptyArchiveBtn').disabled = !cbState.archived.length;
     if (cbState.deleted.length) {
-      list.appendChild(recentlyDeletedSection(cbState.deleted, function (d) { return cbTypeset(d.cartoon.caption, d.cartoon.spoken) || 'A cartoon with no caption'; }, function (d) {
+      list.appendChild(recentlyDeletedSection(cbState.deleted, function (d) { return cbPlainCaption(cbTypeset(d.cartoon.caption, d.cartoon.spoken)) || 'A cartoon with no caption'; }, function (d) {
         cbState.deleted = cbState.deleted.filter(function (x) { return x !== d; });
         if (d.from === 'book') {
           cbState.cartoons.splice(typeof d.at === 'number' ? Math.min(d.at, cbState.cartoons.length) : cbState.cartoons.length, 0, d.cartoon);
@@ -27011,7 +27200,7 @@
       item.appendChild(thumb);
       var txt = document.createElement('div');
       txt.className = 'pb-archive-text';
-      txt.textContent = cbTypeset(c.caption, c.spoken) || '(no caption)';
+      txt.textContent = cbPlainCaption(cbTypeset(c.caption, c.spoken)) || '(no caption)';
       item.appendChild(txt);
       var restore = document.createElement('button');
       restore.type = 'button'; restore.className = 'btn btn-sm'; restore.textContent = 'Restore';
@@ -27067,7 +27256,10 @@
     var c = pg.c, m = 1 * s;
     var capPx = cbState.captionSize * pt, lh = capPx * 1.35;
     ctx.font = cbCaptionCss(cbState, capPx);
-    var caption = cbTypeset(c.caption, c.spoken);
+    // Underlined words (++…++) are drawn with a rule under them: `under`
+    // marks each character of the caption's words that's underlined.
+    var capRuns = parseInlineRuns(cbTypeset(c.caption, c.spoken)), caption = '', under = [];
+    capRuns.forEach(function (r) { caption += r.text; for (var k = 0; k < r.text.length; k++) under.push(!!r.underline); });
     var lines = caption ? pbWrapCanvas(ctx, caption, Math.min(W - 2 * m, 7 * s)) : [];
     var capH = lines.length * lh, gap = lines.length ? 0.28 * s : 0, numH = cbState.numbers ? 0.35 * s : 0;
     var el = c.img && pbImgEls[c.img];
@@ -27084,7 +27276,22 @@
     if (el) ctx.drawImage(el, (W - dw) / 2, top, dw, dh);
     else if (dw && placeholders) { ctx.fillStyle = '#EFECE6'; ctx.fillRect((W - dw) / 2, top, dw, dh); ctx.fillStyle = '#1B1A18'; }
     ctx.font = cbCaptionCss(cbState, capPx);
-    lines.forEach(function (l, i) { ctx.fillText(l, W / 2, top + dh + gap + i * lh + capPx); });
+    var from = 0;
+    lines.forEach(function (l, i) {
+      var y = top + dh + gap + i * lh + capPx;
+      ctx.fillText(l, W / 2, y);
+      var at = caption.indexOf(l, from);
+      if (at < 0 || !l) return;
+      from = at + l.length;
+      var x0 = W / 2 - ctx.measureText(l).width / 2;
+      for (var a = 0; a < l.length; a++) {
+        if (!under[at + a]) continue;
+        var b = a; while (b < l.length && under[at + b]) b++;
+        var u0 = x0 + ctx.measureText(l.slice(0, a)).width, u1 = x0 + ctx.measureText(l.slice(0, b)).width;
+        ctx.fillRect(u0, y + capPx * 0.12, u1 - u0, Math.max(1, capPx * 0.06));
+        a = b;
+      }
+    });
     if (cbState.numbers) {
       ctx.font = '400 ' + (10 * pt) + 'px ' + cbCaptionStack(cbState);
       ctx.fillStyle = '#57524A';
