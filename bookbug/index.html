@@ -6993,8 +6993,14 @@
   // starting on a page of its own. A part begins at a line that is only
   // a marker ("I.", "II", "3", "Part Two") standing at the top of the
   // poem or after a blank line. The parts stay plain lines of the poem.
+  // Poems and essays can be series (Jake, 2026-11-23: essays too, as a
+  // sequence in numbered parts).
+  function canBeSeries(poem, st) {
+    var ef = entryFormOf(poem, st);
+    return ef === 'collection' || ef === 'essays';
+  }
   function isSeriesOn(poem, st) {
-    return !!(poem && poem.series && !isSection(poem) && entryFormOf(poem, st) === 'collection');
+    return !!(poem && poem.series && !isSection(poem) && canBeSeries(poem, st));
   }
   // Indexes of the lines that start parts: markers standing alone (top
   // of the poem or after a blank line) that count 1, 2, 3… in order, so a
@@ -7912,6 +7918,16 @@
         if (renderLines.length) renderLines.push({ pagebreak: true });
       }
       if (line === undefined || line.trim() === '') { if (!indented) renderLines.push({ blank: true }); return; }
+      // In prose (an essay in parts), a part's number stands centered on
+      // its own line, its title under it, then the part's first paragraph
+      // full out.
+      if (partNo !== -1 && !verse) {
+        renderLines.push({ blank: false, text: line.replace(/^\t+/, ''), center: true, indent: 0, part: true });
+        pushPartTitle(true);
+        if ((noteSet.lines[li + 1] || '').trim()) renderLines.push({ blank: true, part: true });
+        fullOut = true;
+        return;
+      }
       if (indented && /^\s*(\*\s*){3}$|^\s*#\s*$/.test(line)) {
         renderLines.push({ blank: true }, { blank: false, text: '*   *   *', center: true, indent: 0 }, { blank: true });
         fullOut = true;
@@ -7944,7 +7960,7 @@
         // Openers are for novels and essays (a poetry book's prose poems
         // and a script's lines have none).
         var proseBook = bookFormOf(state) === 'novel' || bookFormOf(state) === 'essays';
-        var opening = proseBook && !paraNo && !renderLines.some(function (r) { return r.text; }) ? state.opener : null;
+        var opening = proseBook && !paraNo && !renderLines.some(function (r) { return r.text && !r.part; }) ? state.opener : null;
         var drop = opening === 'drop' ? dropCapFor(stripFormatMarkers(body), sizePt, lineHeight, state.bodyFontChoice) : null;
         if (drop) {
           var rr = parseInlineRuns(body), plainLen = rr.map(function (r) { return r.text; }).join('').length;
@@ -7966,10 +7982,16 @@
       fullOut = false;
       // A part's title, in italics on the line under its marker, with a
       // blank line before the part's words.
-      function pushPartTitle() {
+      function pushPartTitle(prose) {
         var title = partNo === -1 ? '' : partTitle(poem, partNo);
         if (!title) return;
         var t = /[*_+\\]/.test(title) ? title : '*' + title + '*';
+        if (prose) {
+          wrapFormatted(t, contentWidthPt, sizePt, state.bodyFontChoice, 0).forEach(function (w) {
+            renderLines.push({ blank: false, text: w.text, center: true, indent: 0, part: true });
+          });
+          return;
+        }
         wrapFormatted(t, contentWidthPt - tabPt, sizePt, state.bodyFontChoice, hangPt).forEach(function (w) {
           renderLines.push({ blank: false, text: w.text, indent: w.indent + tabPt });
         });
@@ -11088,7 +11110,7 @@
       if (pt) r.dataset.partTitle = pt; else delete r.dataset.partTitle;
       r.classList.toggle('is-later-part', pn > 0);
       var t = r.dataset.token ? '' : r.textContent.trim();
-      var brk = on && /^(\*\s*){3}$|^#$/.test(t);
+      var brk = on && (pn !== -1 || /^(\*\s*){3}$|^#$/.test(t));
       r.classList.toggle('is-break', brk);
       r.classList.toggle('is-full-out', on && !brk && fullOut);
       if (brk) fullOut = true; else if (t) fullOut = false;
@@ -11977,7 +11999,8 @@
     proseBtn.hidden = !poem || isSection(poem) || entryFormOf(poem) !== 'collection';
     proseBtn.textContent = poem && poem.prose ? 'Not a prose poem' : 'Prose poem';
     var seriesBtn = entryMenu.querySelector('[data-action="series"]');
-    seriesBtn.hidden = !poem || isSection(poem) || entryFormOf(poem) !== 'collection';
+    seriesBtn.hidden = !poem || isSection(poem) || !canBeSeries(poem);
+    seriesBtn.title = 'One ' + (entryFormOf(poem) === 'essays' ? 'essay' : 'poem') + ' in numbered parts (I., II., …), each part starting on a new page';
     seriesBtn.textContent = poem && poem.series ? 'Not a series' : 'Make a series';
     // Send to top / bottom of the book or of its section, each shown only
     // where it would actually move the entry. Entries before the first
@@ -12657,6 +12680,22 @@
     if (cur.length) out.push(cur);
     return out;
   }
+  // An essay's stretches between section breaks (a line of *** or #),
+  // blank lines at either end dropped and blank lines inside kept.
+  function essayStretches(lines) {
+    var out = [], cur = [];
+    function close() {
+      while (cur.length && !(cur[0] || '').trim()) cur.shift();
+      while (cur.length && !(cur[cur.length - 1] || '').trim()) cur.pop();
+      if (cur.length) out.push(cur);
+      cur = [];
+    }
+    (lines || []).forEach(function (l) {
+      if (/^\s*(\*\s*){3}$|^\s*#\s*$/.test(l || '')) close(); else cur.push(l);
+    });
+    close();
+    return out;
+  }
   // Make a series (Jake, 2026-11-09): a poem without parts of its own
   // gets one part per stanza, numbered I., II., III. (poem.seriesAuto),
   // so Not a series can take those numbers out again. A poem that already
@@ -12675,20 +12714,30 @@
       persist();
       renderAll();
     }
-    var auto = false;
+    var auto = false, essay = entryFormOf(poem) === 'essays';
     if (poem.series) {
       // Numbers Bookbug put in come out again; parts typed by hand stay.
       if (poem.seriesAuto && poem.seriesStyle) {
         var marks = partLineIndexes(poem.lines || [], poem.seriesStyle), drop = {};
         marks.forEach(function (i) { drop[i] = true; });
-        var kept = (poem.lines || []).filter(function (l, i) { return !drop[i]; });
+        // An essay's parts were its section breaks, so they go back to ***.
+        var kept = [];
+        (poem.lines || []).forEach(function (l, i) {
+          if (!drop[i]) kept.push(l);
+          else if (essay && i !== marks[0]) {
+            while (kept.length && !(kept[kept.length - 1] || '').trim()) kept.pop();
+            kept.push('***');
+          }
+        });
         while (kept.length && !(kept[0] || '').trim()) kept.shift();
         poem.lines = kept;
       }
       delete poem.series; delete poem.seriesAuto; delete poem.partTitles;
     } else {
       poem.series = true;
-      var stanzas = poemStanzas(poem.lines);
+      // A poem's parts are its stanzas; an essay's are the stretches
+      // between its section breaks (*** or #), never its paragraphs.
+      var stanzas = essay ? essayStretches(poem.lines) : poemStanzas(poem.lines);
       if (seriesParts(poem).length < 2 && stanzas.length > 1) {
         var style = poem.seriesStyle || { kind: 'roman', period: true, prefix: '' };
         var out = [];
@@ -12709,8 +12758,9 @@
     renderAll();
     var n = poem.series ? seriesParts(poem).length : 0;
     if (!poem.series) showToast(label + ' is no longer a series.', 'Undo', undo);
+    else if (auto && essay) showToast('Now a series: each stretch between section breaks is a part (' + n + '). Backspace over a part’s number to join it to the part before.', 'Undo', undo);
     else if (auto) showToast('Now a series: each stanza is a part (' + n + '). Backspace over a part’s number to join it to the part before.', 'Undo', undo);
-    else if (n < 2) showToast('Now a series. Use + Add part above the poem to add numbered parts; each begins a new page.', 'Undo', undo);
+    else if (n < 2) showToast('Now a series. Use + Add part above the ' + (essay ? 'essay' : 'poem') + ' to add numbered parts; each begins a new page.', 'Undo', undo);
     else showToast('Now a series: ' + n + ' parts, each starting a new page.', 'Undo', undo);
   }
 
