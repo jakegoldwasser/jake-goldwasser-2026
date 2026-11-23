@@ -327,7 +327,10 @@
      (pblank, print only). Pages are counted with the body laid out as it
      prints (.measuring), since Chrome ignores break-before: right. */
   .pblank { display: none; }
-  .printdoc.measuring { width: 6.9in; }
+  /* As wide as the text prints: Letter less 0.75in margins each side (7in).
+     Narrower, the lines wrapped sooner than in print and the preview broke
+     pages a line or two early. */
+  .printdoc.measuring { width: 7in; }
   .printdoc.measuring .pp { padding: 0; border: 0; margin: 0; }
   .printdoc.double .pp:not(.prub) .paper { line-height: 2.3; }
   /* On screen, the papers themselves are laid out out of sight, exactly as
@@ -338,7 +341,7 @@
   .psheet { flex: none; width: 8.5in; height: 11in; box-sizing: border-box; padding: .75in; background: #fff; color: #000; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 6px 22px rgba(0,0,0,.14); position: relative; }
   .psheet .pwin { position: relative; overflow: hidden; }
   .psheet.blank::after { content: 'Blank back of the sheet'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #aaa; font: 400 14px var(--ui); }
-  .psheet.full img { display: block; width: 6.9in; height: 9.4in; object-fit: contain; object-position: top center; }
+  .psheet.full img { display: block; width: 7in; height: 9.4in; object-fit: contain; object-position: top center; }
   #printPreview > .empty { width: 100%; }
   @media (max-width: 880px) { .psheet { zoom: .42; } }
   @media print { #printPreview { display: none !important; } }
@@ -622,6 +625,11 @@
   .stockdel { flex: none; width: 24px; height: 24px; margin-top: -2px; border: 0; border-radius: 50%; background: none; color: var(--muted); font: 600 16px/1 var(--ui); cursor: pointer; opacity: 0; }
   .stockitem:hover .stockdel, .stockdel:focus-visible { opacity: 1; }
   .stockdel:hover { background: var(--rule); color: var(--ink); }
+  .stockpen { font-size: 14px; }
+  .stockcat { display: flex; align-items: center; gap: 4px; }
+  .stockcat .stockdel { margin-top: 0; width: 22px; height: 22px; letter-spacing: 0; }
+  .stockcat:hover .stockdel { opacity: 1; }
+  .endwrap .stockinline { display: block; width: 100%; box-sizing: border-box; min-height: 0; margin: 2px 0; padding: 4px 10px; font: 400 14px/1.4 var(--ui); color: var(--ink); resize: none; overflow: hidden; }
   @media (hover: none) { .stockdel { opacity: 1; } }
   .stockgone { display: flex; gap: 10px; align-items: center; padding: 4px 0; font-size: 14px; color: var(--muted); }
   .stockgone span { flex: 1; }
@@ -1102,7 +1110,7 @@
     #printScreen .card > .head { display: none; }
     /* A PDF rubric's pages come trimmed of their own white margins
        (cropMargins) and fill ours. Nothing may be laid out wider than the
-       text (6.9in): Chrome would shrink the whole printout to fit. */
+       text (7in): Chrome would shrink the whole printout to fit. */
     .pp.prub.pdfrub img.rpage { width: 100%; height: 9.4in; max-width: none; max-height: none; object-fit: contain; object-position: top center; display: block; margin: 0; }
     #printBody { width: auto; max-width: 100%; }
     #printBody .pp { margin: 0; orphans: 1; widows: 1; }
@@ -1969,6 +1977,7 @@
       <span class="grow"></span>
       <span class="savestate" id="printStatus"></span>
       <button class="btn small ghost" id="printPdf" disabled>Save PDF <span class="q" tabindex="0" data-tip="Opens the print window: pick Save as PDF as the printer. The file is named for these papers.">?</span></button>
+      <button class="btn small ghost" id="printFiles" disabled>Export as separate files <span class="q" tabindex="0" data-tip="One PDF for each paper (with its rubric), named for the student, all in one zip file. Each page is a picture of the page as it prints, so its words can't be selected.">?</span></button>
       <button class="btn small" id="printGo" disabled>Print</button>
     </div>
     <div class="head"><h2 id="printTitle"></h2></div>
@@ -5928,6 +5937,7 @@
     if (data.prefs) { teacherPrefs = Object.assign({}, DEFAULT_PREFS, data.prefs); if (setTrog(teacherPrefs.trog)) lastDrawn = ''; }
     if (data.rubrics) { rubrics = data.rubrics; drawRubricList(); }
     if (data.extraTime) extraTime = data.extraTime;
+    if ('stock' in data) stockFromAccount(data.stock);
     examRoomsReady = true;
     if (examSent) setTimeout(examTakeSent, 0);
     if (!changed(data)) return;
@@ -8243,6 +8253,7 @@
     printBack: 'Goes back to the page you came from',
     printPdf: 'Opens the print window; choose Save as PDF there',
     printGo: 'Opens the print window to print these pages',
+    printFiles: 'Downloads a zip file with a PDF for each paper, named for the student',
     markClose: 'Closes grading (after the last save) and goes back to the page under it',
     markBack: 'Goes back',
     markPrev: 'Opens the paper before this one',
@@ -8256,7 +8267,7 @@
     markWlog: 'Opens this student’s writing log: how and when the writing came, minute by minute, with earlier versions',
     markDrive: 'Opens this paper’s copy in Google Drive, in a new tab',
     markPrint: 'Prints this paper with your comments in the margin',
-    stockEdit: 'Opens your stock comments as text to change, add or remove them (saved on this computer)',
+    stockEdit: 'Opens your stock comments as text to change, add or remove them all at once (saved to your account, for every paper)',
     sideUnread: 'Shows this student’s live comments as new again, and closes them',
     sideMin: 'Minimizes the live comments. Live comments in the bar brings them back',
     studentPrint: 'Prints this page: just your comments on this student’s papers',
@@ -8465,8 +8476,9 @@
     if (b.closest('#schedPick')) return 'They pick ' + b.textContent.trim().toLowerCase();
     if (b.closest('#pickDays')) return 'Shows the times you can pick on this day';
     if (b.closest('#pickSlots')) return 'Picks this time';
-    if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved on this computer; Undo brings it back). Papers it’s already on keep it';
-    if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved on this computer)';
+    if (b.matches('.stockpen')) return b.closest('.stockcat') ? 'Renames this category (saved to your account, for every paper)' : 'Edits the words of this stock comment (saved to your account, for every paper; you can also double-click the words). Other papers it’s already on keep the old words';
+    if (b.matches('.stockdel')) return 'Deletes this stock comment from your list (saved to your account, for every paper; Undo brings it back). Papers it’s already on keep it';
+    if (b.matches('.stockadd')) return 'Adds a stock comment of your own to this list, in a category you pick (saved to your account, for every paper)';
     if (b.closest('.stockgone') && k === 'undo') return 'Puts this stock comment back in your list';
     if (b.closest('.stockform')) return k === 'add' ? 'Adds this comment to your stock comments, at the end of its category' : 'Closes this without adding anything';
     if (b.matches('.odel')) return 'Deletes this comment on deleted words';
@@ -10499,8 +10511,11 @@
   // for Improvement. Checking one puts its goal in the "On the Next Essay"
   // section at the end of the end comment, under its kind's heading
   // (rewritten from the checked ones each time); what's checked is read
-  // back from that section. The list is the teacher's own, kept on this
-  // device (luddite.stock.<email>); STOCK_DEFAULT is where it starts.
+  // back from that section. The list is the teacher's own, kept with their
+  // account (`stock` from /luddite/assignments, PUT /luddite/stock; Jake,
+  // 2026-11-19: the same list on every paper, every computer and Luddite HM)
+  // and cached on the device (luddite.stock.<email>); STOCK_DEFAULT is where
+  // it starts.
   var STOCK_GOOD = [
     ['Thesis', 'A bold, arguable thesis.', 'Keep making bold claims someone could argue with.'],
     ['Thesis', 'A true, defensible thesis.', 'Keep making claims the text actually supports, and defending them with evidence.'],
@@ -10584,9 +10599,20 @@
   // Open unless the teacher folds it, remembered on the device.
   if (load('luddite.stockShut') === '1') $('stockBox').open = false;
   $('stockBox').addEventListener('toggle', function () { store('luddite.stockShut', $('stockBox').open ? null : '1'); });
+  // The grading window asks for the account's list when it draws (at most
+  // once a minute), since a session or paper opened from its link doesn't
+  // load Home's /luddite/assignments.
+  var stockAskedAt = 0;
+  function askStock() {
+    if (stockNoRoute || Date.now() - stockAskedAt < 60000) return;
+    stockAskedAt = Date.now();
+    api('/luddite/stock').then(function (d) { if (d && 'stock' in d) stockFromAccount(d.stock); },
+      function (e) { if (e && e.status === 404) stockNoRoute = true; });
+  }
   function drawStock() {
     var box = $('stockList');
     if (!box) return;
+    if (!reading) askStock();
     box.innerHTML = '';
     var goals = stockSplit(piece && piece.endComment).goals.map(function (g) { return g.text; }), list = stockList();
     STOCK_KINDS.forEach(function (k) {
@@ -10594,17 +10620,21 @@
       if (!items.length) return;
       box.appendChild(el('div', 'stockkind', k[1]));
       items.forEach(function (it) {
-        if (it[0] !== cat) { cat = it[0]; box.appendChild(el('div', 'stockcat', cat)); }
+        if (it[0] !== cat) { cat = it[0]; box.appendChild(stockCatRow(cat, k[0])); }
         var on = goals.indexOf(it[2]) !== -1;
         var row = el('label', 'stockitem' + (on ? ' on' : ''));
         var cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
         cb.addEventListener('change', function () { setStockGoal(it[2], k[0], cb.checked); });
         var tx = el('span');
         tx.appendChild(document.createTextNode(it[2]));
+        var ed = el('button', 'stockdel stockpen', '✎'); ed.type = 'button';
+        ed.setAttribute('aria-label', 'Edit this stock comment');
+        ed.addEventListener('click', function (e) { e.preventDefault(); editStock(it, row, tx); });
+        tx.addEventListener('dblclick', function (e) { e.preventDefault(); editStock(it, row, tx); });
         var del = el('button', 'stockdel', '×'); del.type = 'button';
         del.setAttribute('aria-label', 'Delete this stock comment');
         del.addEventListener('click', function (e) { e.preventDefault(); deleteStock(it); });
-        row.appendChild(cb); row.appendChild(tx); row.appendChild(del);
+        row.appendChild(cb); row.appendChild(tx); row.appendChild(ed); row.appendChild(del);
         box.appendChild(row);
         if (stockGone && stockSame(stockGone.after, it)) box.appendChild(stockGoneRow());
       });
@@ -10615,11 +10645,44 @@
     });
   }
   // Adding and deleting stock comments right in the list (Jake, 2026-10-29),
-  // saved on this device as Edit stock comments… does. A deleted one leaves an
+  // saved to the account as Edit stock comments… does. A deleted one leaves an
   // Undo in its place until the list is next changed.
   var stockGone = null;
   function stockSame(a, b) { return !!a && !!b && JSON.stringify(a) === JSON.stringify(b); }
-  function saveStock(list) { store(stockKey(), JSON.stringify(list)); }
+  // Saved on the device at once, then to the account. A change the server
+  // hasn't got yet (offline) is marked waiting, so the account's older list
+  // never replaces it; it goes up the next time Home loads.
+  function saveStock(list) {
+    store(stockKey(), list && list.length ? JSON.stringify(list) : null);
+    store(stockKey() + '.waiting', '1');
+    pushStock();
+  }
+  var stockPushing = null, stockNoRoute = false;
+  function pushStock() {
+    if (stockNoRoute) return;
+    var t = load(stockKey()), list = null;
+    if (t) { try { list = JSON.parse(t); } catch (e) {} }
+    var mine = stockPushing = api('/luddite/stock', { stock: list || [] }).then(function () {
+      if (stockPushing === mine && load(stockKey()) === t) store(stockKey() + '.waiting', null);
+    }, function (e) { if (e && e.status === 404) stockNoRoute = true; });
+    return mine;
+  }
+  // The account's list, from /luddite/assignments: it wins unless this device
+  // has a change waiting to go up. null means the account has never had one,
+  // so a device list from before lists were kept with the account goes up;
+  // [] means the teacher went back to Luddite's own list.
+  function stockFromAccount(list) {
+    if (load(stockKey() + '.waiting') === '1') { pushStock(); return; }
+    if (!Array.isArray(list)) {
+      if (load(stockKey())) pushStock();
+      return;
+    }
+    var t = list.length ? JSON.stringify(list) : null;
+    if (t === load(stockKey())) return;
+    store(stockKey(), t);
+    stockGone = null;
+    if (!stockEditing) drawStock();
+  }
   function deleteStock(it) {
     var list = stockList().slice(), i = -1;
     list.forEach(function (x, j) { if (i === -1 && stockSame(x, it)) i = j; });
@@ -10642,6 +10705,77 @@
       drawStock();
     });
     row.appendChild(undo);
+    return row;
+  }
+  // Editing in place (Jake, 2026-11-19): ✎ (or a double-click on the words)
+  // turns a comment into a box; Enter or clicking away saves, Esc puts it back.
+  // A category's ✎ renames it. Saved to the account like every other change;
+  // on this paper a checked comment stays checked with its new words, and
+  // other papers it's already on keep theirs.
+  var stockEditing = false;
+  function stockInline(holder, value, onSave, area) {
+    var inp = el(area ? 'textarea' : 'input', 'field stockinline');
+    inp.value = value;
+    if (area) {
+      inp.rows = 1;
+      var fit = function () { inp.style.height = 'auto'; inp.style.height = inp.scrollHeight + 2 + 'px'; };
+      inp.addEventListener('input', fit);
+      setTimeout(fit, 0);
+    }
+    var done = false;
+    function finish(save) {
+      if (done) return;
+      done = true; stockEditing = false;
+      var v = inp.value.replace(/\s+/g, ' ').trim();
+      if (save && v && v !== value) onSave(v); else drawStock();
+    }
+    inp.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); });
+    inp.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('blur', function () { finish(true); });
+    stockEditing = true;
+    holder.replaceWith(inp);
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+    return inp;
+  }
+  function editStock(it, row, tx) {
+    stockInline(row, it[2], function (text) {
+      var list = stockList().slice(), i = -1;
+      list.forEach(function (x, j) { if (i === -1 && stockSame(x, it)) i = j; });
+      if (i === -1) { drawStock(); return; }
+      var kind = stockKind(it);
+      list[i] = kind ? [it[0], text, text, kind] : [it[0], text, text];
+      stockGone = null;
+      saveStock(list);
+      if (piece && !reading) {
+        var sp = stockSplit(piece.endComment);
+        if (sp.goals.some(function (g) { return g.text === it[2]; })) { setStockGoal(it[2], kind, false); setStockGoal(text, kind, true); return; }
+      }
+      drawStock();
+    }, true);
+  }
+  function stockCatRow(cat, kind) {
+    var row = el('div', 'stockcat');
+    row.appendChild(el('span', '', cat));
+    var ed = el('button', 'stockdel stockpen', '✎'); ed.type = 'button';
+    ed.setAttribute('aria-label', 'Rename this category');
+    ed.addEventListener('click', function (e) {
+      e.preventDefault();
+      stockInline(row, cat, function (name) {
+        var list = stockList().map(function (x) {
+          if (stockKind(x) !== kind || x[0] !== cat) return x;
+          var y = x.slice(); y[0] = name; return y;
+        });
+        stockGone = null;
+        saveStock(list);
+        drawStock();
+      });
+    });
+    row.appendChild(ed);
     return row;
   }
   // The form under a kind: a category (one of the kind's, or a new one) and
@@ -10712,7 +10846,7 @@
         lines.push(it[2]);
       });
     });
-    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each line under it one comment, as the student will read it. Saved on this computer. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
+    var t = await ask({ title: 'Stock Comments', text: '“## Keep Up the Good Work” and “## Room for Improvement” start the two kinds, “# Category” a category, and each line under it one comment, as the student will read it. Saved to your account, for every paper. Empty it to get Luddite’s list back.', input: 'area', value: lines.join('\n'), ok: 'Save' });
     if (t === null) return;
     var out = [], c = 'Comments', kind = '';
     t.split('\n').forEach(function (l) {
@@ -10723,8 +10857,8 @@
       var parts = l.split('=>'), say = (parts.length > 1 ? parts.slice(1).join('=>') : l).trim();
       if (say) out.push(kind ? [c, say, say, kind] : [c, say, say]);
     });
-    store(stockKey(), out.length ? JSON.stringify(out) : null);
     stockGone = null;
+    saveStock(out);
     drawStock();
   });
 
@@ -11371,6 +11505,7 @@
     if (seq !== printDrawSeq) return;
     papers.forEach(function (p) {
       var paperBox = staticPaper(p);
+      paperBox.dataset.file = who(p.name, p.email) + (p.draftLabel ? ' - ' + p.draftLabel : '');
       body.appendChild(paperBox);
       if (withRubrics && paperRubric(p)) {
         var r = rubricPage(p);
@@ -11390,7 +11525,7 @@
     if (seq !== printDrawSeq) return;
     layoutForPrint();
     $('printStatus').textContent = status;
-    $('printGo').disabled = $('printPdf').disabled = !printDrawn.length;
+    $('printGo').disabled = $('printPdf').disabled = $('printFiles').disabled = !printDrawn.length;
   }
   // Two-sided printing: counts each paper's pages (with its rubric) as they
   // will print on Letter with 0.75in margins, and puts a blank page after
@@ -11435,14 +11570,16 @@
   function blockPages(box) { return pageSlices(box).length; }
   // The preview: a Letter sheet for every page that prints.
   function drawPreview() {
-    var body = $('printBody'), pv = $('printPreview');
+    var body = $('printBody'), pv = $('printPreview'), packet = -1, file = '';
     pv.innerHTML = '';
     Array.prototype.forEach.call(body.children, function (box) {
       if (box.classList.contains('pblank')) { pv.appendChild(el('div', 'psheet blank')); return; }
       if (!box.classList.contains('pp')) { pv.appendChild(box.cloneNode(true)); return; }
+      if (!box.classList.contains('prub') || packet < 0) { packet++; file = box.dataset.file || ''; }
+      var appendSheet = function (sh) { sh.dataset.packet = packet; sh.dataset.file = file; pv.appendChild(sh); };
       var imgs = box.querySelectorAll('img.rpage');
       if (imgs.length) {
-        imgs.forEach(function (im) { var sh = el('div', 'psheet full'); sh.appendChild(im.cloneNode(true)); pv.appendChild(sh); });
+        imgs.forEach(function (im) { var sh = el('div', 'psheet full'); sh.appendChild(im.cloneNode(true)); appendSheet(sh); });
         return;
       }
       var top = box.getBoundingClientRect().top;
@@ -11453,7 +11590,7 @@
         c.style.cssText = 'position:absolute;left:0;right:0;top:' + (top - sl.t) + 'px';
         win.appendChild(c);
         sh.appendChild(win);
-        pv.appendChild(sh);
+        appendSheet(sh);
       });
     });
   }
@@ -11613,7 +11750,7 @@
     $('printPreview').innerHTML = '';
     $('printRubricsRow').hidden = true;
     $('printReflectRow').hidden = true;
-    $('printGo').disabled = $('printPdf').disabled = true;
+    $('printGo').disabled = $('printPdf').disabled = $('printFiles').disabled = true;
     drawPrintOpts();
     printDrawn = []; printDrawSeq++; printDraftInfo = {}; printDraftCache = {};
     $('printStatus').textContent = ids.length ? 'Loading 0 of ' + ids.length + '…' : '';
@@ -11647,6 +11784,118 @@
     window.print();
     document.title = prev;
   });
+  // Export as separate files: a PDF for each paper (and its rubric), named for
+  // the student, in one zip. Each page is a picture of its preview sheet,
+  // which is laid out page for page as it prints (html2canvas and jsPDF from
+  // cdnjs, loaded the first time).
+  var H2C_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+  var JSPDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  var scriptsLoaded = {};
+  function loadScript(src) {
+    if (!scriptsLoaded[src]) scriptsLoaded[src] = new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = src;
+      sc.onload = resolve;
+      sc.onerror = function () { scriptsLoaded[src] = null; reject(new Error('script')); };
+      document.head.appendChild(sc);
+    });
+    return scriptsLoaded[src];
+  }
+  var CRC_TABLE = null;
+  function crc32(u) {
+    if (!CRC_TABLE) { CRC_TABLE = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC_TABLE[n] = c >>> 0; } }
+    var crc = 0xFFFFFFFF;
+    for (var i = 0; i < u.length; i++) crc = CRC_TABLE[(crc ^ u[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+  // A zip of the files as they are (stored, not compressed: PDFs of
+  // pictures hardly shrink), names in UTF-8.
+  function makeZip(files) {
+    var enc = new TextEncoder(), parts = [], central = [], offset = 0, d = new Date();
+    var time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    var date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    files.forEach(function (f) {
+      var name = enc.encode(f.name), data = f.data, crc = crc32(data);
+      var h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint16(10, time, true); h.setUint16(12, date, true); h.setUint32(14, crc, true);
+      h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+      parts.push(h.buffer, name, data);
+      var c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+      c.setUint16(12, time, true); c.setUint16(14, date, true); c.setUint32(16, crc, true);
+      c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true);
+      c.setUint32(42, offset, true);
+      central.push(c.buffer, name);
+      offset += 30 + name.length + data.length;
+    });
+    var size = central.reduce(function (a, b) { return a + b.byteLength; }, 0);
+    var e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+    e.setUint32(12, size, true); e.setUint32(16, offset, true);
+    return new Blob(parts.concat(central, [e.buffer]), { type: 'application/zip' });
+  }
+  function fileSafe(name) { return String(name).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'Paper'; }
+  function downloadBlob(blob, name) {
+    var a = document.createElement('a'), url = URL.createObjectURL(blob);
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+  // html2canvas draws a highlighted (or struck, or bold-marked) span that
+  // wraps onto a second line in the wrong place, so in its copy each such
+  // span becomes one span per word, which it draws right.
+  function splitForCanvas(doc) {
+    doc.querySelectorAll('.psheet').forEach(function (x) { x.style.boxShadow = 'none'; x.style.zoom = '1'; });
+    doc.querySelectorAll('.psheet .paper span[class]').forEach(function (sp) {
+      if (sp.children.length || /\b(pmn|mnum|circ)\b/.test(sp.className) || !/\S\s+\S/.test(sp.textContent)) return;
+      var frag = doc.createDocumentFragment();
+      sp.textContent.match(/\s*\S+\s*|\s+/g).forEach(function (w) { var s2 = doc.createElement('span'); s2.className = sp.className; s2.textContent = w; frag.appendChild(s2); });
+      sp.replaceWith(frag);
+    });
+  }
+  async function exportSeparateFiles() {
+    var btn = $('printFiles'), status = $('printStatus'), before = status.textContent;
+    var sheets = Array.prototype.filter.call($('printPreview').children, function (sh) { return sh.dataset && sh.dataset.packet != null; });
+    if (!sheets.length) return;
+    var packets = [];
+    sheets.forEach(function (sh) {
+      var i = Number(sh.dataset.packet);
+      if (!packets[i]) packets[i] = { file: sh.dataset.file, sheets: [] };
+      packets[i].sheets.push(sh);
+    });
+    packets = packets.filter(Boolean);
+    btn.disabled = true;
+    status.textContent = 'Getting ready…';
+    try {
+      await Promise.all([loadScript(H2C_SRC), loadScript(JSPDF_SRC)]);
+      try { await document.fonts.ready; } catch (e) {}
+      var files = [], used = {};
+      for (var i = 0; i < packets.length; i++) {
+        status.textContent = 'Making file ' + (i + 1) + ' of ' + packets.length + '…';
+        var pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait', compress: true });
+        for (var j = 0; j < packets[i].sheets.length; j++) {
+          var sh = packets[i].sheets[j];
+          var canvas = await window.html2canvas(sh, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true,
+            onclone: splitForCanvas });
+          if (j) pdf.addPage('letter', 'portrait');
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 8.5, 11, undefined, 'FAST');
+        }
+        var base = fileSafe(packets[i].file), name = base, n = 2;
+        while (used[name.toLowerCase()]) name = base + ' (' + n++ + ')';
+        used[name.toLowerCase()] = 1;
+        files.push({ name: name + '.pdf', data: new Uint8Array(pdf.output('arraybuffer')) });
+      }
+      var title = fileSafe($('printTitle').textContent || 'Papers');
+      if (files.length === 1) downloadBlob(new Blob([files[0].data], { type: 'application/pdf' }), files[0].name);
+      else downloadBlob(makeZip(files), title + '.zip');
+      status.textContent = before;
+    } catch (e) {
+      status.textContent = 'Couldn’t make the files. Check the connection and try again.';
+    }
+    btn.disabled = !printDrawn.length;
+  }
+  $('printFiles').addEventListener('click', exportSeparateFiles);
   $('printAllRoom').addEventListener('click', function () {
     var room = teacherRoom;
     var ids = latestPerStudent(room.submissions).filter(function (x) { return x.stored; }).map(function (x) { return x.id; });

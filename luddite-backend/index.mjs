@@ -193,6 +193,22 @@ function cleanExtraTime(x) {
   });
   return out;
 }
+// A teacher's stock comments (the marking page's list), kept with the teacher
+// so every paper, every computer and Luddite HM get the same list (Jake,
+// 2026-11-19). Each is [category, comment, goal] or [..., 'good']; null when
+// the teacher has never saved a list, [] when they went back to Luddite's own.
+const MAX_STOCK = 400;
+function cleanStock(x) {
+  if (!Array.isArray(x)) return null;
+  const str = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const out = x.slice(0, MAX_STOCK).map((it) => {
+    if (!Array.isArray(it)) return null;
+    const cat = str(it[0], 80) || 'Comments', say = str(it[1], 600), goal = str(it[2], 600) || say;
+    if (!goal) return null;
+    return it[3] === 'good' ? [cat, say || goal, goal, 'good'] : [cat, say || goal, goal];
+  }).filter(Boolean);
+  return out;
+}
 // A request that a student pick their own time (Jake, 2026-10-29): for extra
 // time or a make-up, a whole period or a half, between two days.
 const SCHED_PERIOD_MS = 45 * 60000;
@@ -1643,6 +1659,7 @@ async function routeLuddite(event, method, path, info) {
       classes: await classesOf(state),
       prefs: cleanPrefs(state && state.prefs),
       extraTime: cleanExtraTime(state && state.extraTime),
+      stock: cleanStock(state && state.stock),
       rubrics: (state && state.rubrics) || [],
       drive: await driveStatus(me.sub),
       displayName: (state && state.displayName) || (role === 'owner' ? OWNER_DISPLAY_NAME : me.name || me.email)
@@ -1661,6 +1678,21 @@ async function routeLuddite(event, method, path, info) {
       return { ...(t || { rooms: [] }), extraTime: x };
     });
     return respond(200, { extraTime: cleanExtraTime(saved.extraTime) });
+  }
+
+  // GET /luddite/stock -- this teacher's stock comments (null: never saved).
+  if (path === '/luddite/stock' && method === 'GET') {
+    const { state } = await readItem('luddite:teacher:' + me.sub);
+    return respond(200, { stock: cleanStock(state && state.stock) });
+  }
+
+  // PUT /luddite/stock { stock: [[category, comment, goal, 'good'?], ...] } --
+  // this teacher's stock comments; an empty list goes back to Luddite's own.
+  if (path === '/luddite/stock' && method === 'PUT') {
+    const stock = cleanStock(body.stock);
+    if (!stock) throw new HttpError(400, 'need_stock');
+    await mutate('luddite:teacher:' + me.sub, (t) => ({ ...(t || { rooms: [] }), stock }));
+    return respond(200, { stock });
   }
 
   // PUT /luddite/prefs { spellcheck, lockOnLeave, blockPaste, showCount, autoHandIn, trog }
